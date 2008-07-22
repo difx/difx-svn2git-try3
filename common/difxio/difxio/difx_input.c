@@ -1000,10 +1000,22 @@ static DifxInput *parseDifxInputDataStreamTable(DifxInput *D,
 		{
 			r = DifxParametersfind1(ip, r+1,
 				"INPUT BAND %d POL", i);
+			if(r < 0)
+			{
+				printf("parseDifxInputDataStreamTable: "
+					"INPUT BAND %d POL not found\n", i);
+				return 0;
+			}
 			D->datastream[e].RCpolName[i] = 
 				DifxParametersvalue(ip, r)[0];
 			r = DifxParametersfind1(ip, r+1,
 				"INPUT BAND %d INDEX", i);
+			if(r < 0)
+			{
+				printf("parseDifxInputDataStreamTable: "
+					"INPUT BAND %d INDEX not found\n", i);
+				return 0;
+			}
 			a = atoi(DifxParametersvalue(ip, r));
 			D->datastream[e].RCfreqId[i] = D->datastream[e].freqId[a];
 		}
@@ -2925,6 +2937,7 @@ DifxInput *loadDifxCalc(const char *filePrefix)
 	if(!D)
 	{
 		deleteDifxInput(DSave);
+		return 0;
 	}
 	
 	deleteDifxParameters(ip);
