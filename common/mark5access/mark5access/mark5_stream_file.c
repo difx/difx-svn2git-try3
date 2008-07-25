@@ -152,9 +152,11 @@ static int mark5_stream_file_next(struct mark5_stream *ms)
 		F->end = F->buffer + F->fetchsize;
 		F->last = F->end;
 
+/* FIXME -- there is still an issue here -- is the 0 below a 1? */
+
 		/* back up stream a bit to load whole frames */
 		lseek(F->in, F->offset + ms->frameoffset + F->fetchsize 
-				- ms->framebytes, SEEK_SET);
+				- 0*ms->framebytes, SEEK_SET);
 	}
 
 	/* usually this is all that needs to be done */
@@ -167,7 +169,6 @@ static int mark5_stream_file_next(struct mark5_stream *ms)
 		status = mark5_stream_file_fill(ms);
 		if(status < 0)
 		{
-			printf("VVV\n");
 			return -1;
 		}
 	}
@@ -175,7 +176,6 @@ static int mark5_stream_file_next(struct mark5_stream *ms)
 	if(ms->frame + ms->framebytes > F->last)
 	{
 		ms->readposition = -1;
-		printf("VVVV\n");
 		return -1;
 	}
 
