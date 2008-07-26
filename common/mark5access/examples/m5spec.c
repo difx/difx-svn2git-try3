@@ -17,9 +17,11 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <complex.h>
 #include <stdlib.h>
 #include <complex.h>
 #include <fftw3.h>
+#include <math.h>
 #include "../mark5access/mark5_stream.h"
 
 const char program[] = "m5spec";
@@ -54,7 +56,7 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 {
 	struct mark5_stream *ms;
 	double **data, **spec;
-	fftw_complex *zdata;
+	fftw_complex **zdata, *z12;
 	int c, i, j, k, status;
 	int chunk;
 	long long total, unpacked;
@@ -62,6 +64,7 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 	fftw_plan *plan;
 	double re, im;
 	double f, sum;
+	double x, y;
 
 	chunk = 2*nchan;
 
@@ -79,14 +82,17 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 
 	data = (double **)malloc(ms->nchan*sizeof(double *));
 	spec = (double **)malloc(ms->nchan*sizeof(double *));
-	zdata = (fftw_complex *)malloc((nchan+1)*sizeof(fftw_complex));
+	zdata = (fftw_complex **)malloc(ms->nchan*sizeof(fftw_complex *));
 	plan = (fftw_plan *)malloc(ms->nchan*sizeof(fftw_plan));
+	z12 = (fftw_complex *)calloc((nchan+1), sizeof(fftw_complex));
 	for(i = 0; i < ms->nchan; i++)
 	{
 		data[i] = (double *)malloc((chunk+2)*sizeof(double));
 		spec[i] = (double *)calloc(nchan,    sizeof(double));
+		zdata[i] = (fftw_complex *)malloc(
+			(nchan+1)*sizeof(fftw_complex));
 		plan[i] = fftw_plan_dft_r2c_1d(nchan*2, data[i],
-			(fftw_complex *)zdata, FFTW_MEASURE);
+			(fftw_complex *)zdata[i], FFTW_MEASURE);
 	}
 
 	mark5_stream_print(ms);
@@ -110,13 +116,21 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 		{
 			/* FFT */
 			fftw_execute(plan[c]);
+		}
 
+		for(c = 0; c < ms->nchan; c++)
+		{
 			for(i = 0; i < nchan; i++)
 			{
-				re = creal(zdata[i]);
-				im = cimag(zdata[i]);
+				re = creal(zdata[c][i]);
+				im = cimag(zdata[c][i]);
 				spec[c][i] += re*re + im*im;
 			}
+		}
+
+		for(i = 0; i < nchan; i++)
+		{
+			z12[i] += zdata[0][i]*~zdata[1][i];
 		}
 	}
 
@@ -143,7 +157,9 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 		{
 			fprintf(out, " %f", f*spec[j][i]);
 		}
-		fprintf(out, "\n");
+		x = creal(z12[i])*f;
+		y = cimag(z12[i])*f;
+		fprintf(out, " %f %f %f %f\n", x, y, sqrt(x*x+y*y), atan2(y, x));
 	}
 
 	fclose(out);
@@ -151,9 +167,11 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 	for(i = 0; i < ms->nchan; i++)
 	{
 		free(data[i]);
+		free(zdata[i]);
 		free(spec[i]);
 		fftw_destroy_plan(plan[i]);
 	}
+	free(z12);
 	free(data);
 	free(zdata);
 	free(spec);
