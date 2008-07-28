@@ -120,6 +120,11 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 			unpacked += status;
 		}
 
+		if(ms->consecutivefails > 5)
+		{
+			break;
+		}
+
 		for(i = 0; i < nif; i++)
 		{
 			/* FFT */

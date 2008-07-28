@@ -21,6 +21,9 @@
 #define _GNU_SOURCE
 #endif
 
+#define _LARGEFILE64_SOURCE
+#define __USE_FILE_OFFSET64
+#include <sys/types.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -128,7 +131,7 @@ static int mark5_stream_file_init(struct mark5_stream *ms)
 	F->buffer = 0;
 	F->end = 0;
 	F->fetchsize = 0;
-	lseek(F->in, F->offset, SEEK_SET);
+	lseek64(F->in, F->offset, SEEK_SET);
 	F->buffer = (uint8_t *)calloc(1, F->buffersize);
 	ms->datawindow = F->buffer;
 	ms->datawindowsize = F->buffersize;
@@ -141,12 +144,13 @@ static int mark5_stream_file_init(struct mark5_stream *ms)
 static int mark5_stream_file_next(struct mark5_stream *ms)
 {
 	struct mark5_stream_file *F;
-	int nframes, status;
+	int nframes, status, nf;
 
 	F = (struct mark5_stream_file *)(ms->inputdata);
 
 	if(F->fetchsize == 0)	/* finish some initialization */
 	{
+		nf = (F->buffersize-ms->frameoffset)/ms->framebytes;
 		nframes = (F->buffersize)/ms->framebytes; 
 		F->fetchsize = nframes*ms->framebytes;
 		F->end = F->buffer + F->fetchsize;
@@ -155,8 +159,9 @@ static int mark5_stream_file_next(struct mark5_stream *ms)
 /* FIXME -- there is still an issue here -- is the 0 below a 1? */
 
 		/* back up stream a bit to load whole frames */
-		lseek(F->in, F->offset + ms->frameoffset + F->fetchsize 
-				- 0*ms->framebytes, SEEK_SET);
+		lseek64(F->in, 
+			F->offset + ms->frameoffset + nf*ms->framebytes, 
+			SEEK_SET);
 	}
 
 	/* usually this is all that needs to be done */
@@ -224,7 +229,7 @@ static int mark5_stream_file_seek(struct mark5_stream *ms, int64_t framenum)
 	F->last = F->end;
 	ms->frame = F->buffer;
 
-	lseek(F->in, pos, SEEK_SET);
+	lseek64(F->in, pos, SEEK_SET);
 
 	status = mark5_stream_file_fill(ms);
 	if(status < 0)

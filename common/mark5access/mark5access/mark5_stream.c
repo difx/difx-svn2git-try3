@@ -51,10 +51,12 @@ int mark5_stream_next_frame(struct mark5_stream *ms)
 		if(!v)
 		{
 			ms->nvalidatefail++;
+			ms->consecutivefails++;
 		}
 		else
 		{
 			ms->nvalidatepass++;
+			ms->consecutivefails = 0;
 		}
 	}
 	

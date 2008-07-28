@@ -269,13 +269,14 @@ static int mark5_format_mark4_validate(const struct mark5_stream *ms)
 	{
 		if(data[t] != 0xFFFFFFFFUL)
 		{
+//			printf("<%s %x %x %d>", ms->streamname, data[t], data[t+ntrack], t);
 			e++;
 		}
 	}
 
 	if(e > 0)
 	{
-		printf("mark5_format_mark4_validate: e=%d\n", e);
+//		printf("mark5_format_mark4_validate: e=%d\n", e);
 		return 0;
 	}
 
@@ -293,10 +294,10 @@ static int mark5_format_mark4_validate(const struct mark5_stream *ms)
 
 		if(mjd_t != mjd_d || sec_t != sec_d || ns_t != ns_d)
 		{
-			printf("Mark4 validate[%lld]: %d %d %d : %d %d %lld\n", 
-				ms->framenum, 
-				mjd_d, sec_d, ns_d, 
-				mjd_t, sec_t, ns_t);
+//			printf("Mark4 validate[%lld]: %d %d %d : %d %d %lld\n", 
+//				ms->framenum, 
+//				mjd_d, sec_d, ns_d, 
+//				mjd_t, sec_t, ns_t);
 			return 0;
 		}
 	}

@@ -87,6 +87,7 @@ struct mark5_stream
 	int decimation;		/* decimation factor */
 	int nvalidatefail;	/* number of times frame validation failed */
 	int nvalidatepass;	/* number of times frame validation passed */
+	int consecutivefails;	/* number of validations failed in a row */
 
 	/* internal state parameters -- not to be used by users */
 	uint8_t *frame;
