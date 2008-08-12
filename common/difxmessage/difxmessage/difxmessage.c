@@ -16,7 +16,10 @@ const char Mk5StateStrings[][24] =
 	"Initializing",
 	"Resetting",
 	"Rebooting",
-	"PowerOff"
+	"PowerOff",
+	"NoData",
+	"NoMoreData",
+	"PlayInvalid"
 };
 
 /* Note! Keep this in sync with enum DifxStatus in difxmessage.h */
@@ -43,5 +46,5 @@ const char DifxMessageTypeStrings[][24] =
 	"DifxStatusMessage",
 	"DifxInfoMessage",
 	"DifxDatastreamMessage",
-	"DifxCommand",
+	"DifxCommand"
 };
