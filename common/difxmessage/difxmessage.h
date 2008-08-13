@@ -41,6 +41,7 @@ enum Mk5State
 	MARK5_STATE_NODATA,
 	MARK5_STATE_NOMOREDATA,
 	MARK5_STATE_PLAYINVALID,
+	MARK5_STATE_START,
 	NUM_MARK5_STATES	/* this needs to be the last line of enum */
 };
 

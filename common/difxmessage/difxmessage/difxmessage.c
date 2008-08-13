@@ -19,7 +19,8 @@ const char Mk5StateStrings[][24] =
 	"PowerOff",
 	"NoData",
 	"NoMoreData",
-	"PlayInvalid"
+	"PlayInvalid",
+	"PlayStart"
 };
 
 /* Note! Keep this in sync with enum DifxStatus in difxmessage.h */
