@@ -4,6 +4,7 @@ AM_CONFIG_HEADER(config.h)
 
 AC_C_BIGENDIAN
 
+AM_PROG_CC_C_O
 
 #shared library versioning
 LIBRARY_VERSION=0:0:0
