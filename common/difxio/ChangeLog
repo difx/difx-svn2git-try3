@@ -3,6 +3,8 @@
 * Fix mapping of autocorrelation frequency ids
 * Revamp antenna indexing
 * support for different ordering of telescopes in the input files
+* make summary versions of printing functions
+* make fprintf versions of all printing functions
 * This is the version for NRAO-DiFX 1.1
 
 2.2
