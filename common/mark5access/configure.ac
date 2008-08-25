@@ -4,8 +4,6 @@ AM_CONFIG_HEADER(config.h)
 
 AC_C_BIGENDIAN
 
-AM_PROG_CC_C_O
-
 #shared library versioning
 LIBRARY_VERSION=0:0:0
 #               | | |
@@ -28,6 +26,7 @@ AC_SUBST([LIBRARY_VERSION])
 AM_INIT_AUTOMAKE
 
 AC_PROG_CC
+AM_PROG_CC_C_O
 AM_PROG_LIBTOOL
 AM_SANITY_CHECK
 
