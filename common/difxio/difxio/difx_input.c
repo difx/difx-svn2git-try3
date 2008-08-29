@@ -1758,6 +1758,10 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	{
 		D->specAvg = atoi(DifxParametersvalue(cp, row));
 	}
+	else
+	{
+		D->specAvg = 1;
+	}
 	row = DifxParametersfind(cp, 0, "OUTPUT CHANNELS");
 	if(row >= 0)
 	{
