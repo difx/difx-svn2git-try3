@@ -70,13 +70,13 @@ int writeDifxRate(const DifxInput *D, const char *filename)
 		writeDifxLine1(out, "TELESCOPE %d NAME", a, D->antenna[a].name);
 		writeDifxLine1(out, "TELESCOPE %d MOUNT", a, 
 			D->antenna[a].mount);
-		sprintf(value, "%6.4f", D->antenna[a].offset[0]);
+		sprintf(value, "%8.6f", D->antenna[a].offset[0]);
 		writeDifxLine1(out, "TELESCOPE %d OFFSET (m)", a, value);
-		sprintf(value, "%6.4f", D->antenna[a].X);
+		sprintf(value, "%8.6f", D->antenna[a].X);
 		writeDifxLine1(out, "TELESCOPE %d X (m)", a, value);
-		sprintf(value, "%6.4f", D->antenna[a].Y);
+		sprintf(value, "%8.6f", D->antenna[a].Y);
 		writeDifxLine1(out, "TELESCOPE %d Y (m)", a, value);
-		sprintf(value, "%6.4f", D->antenna[a].Z);
+		sprintf(value, "%8.6f", D->antenna[a].Z);
 		writeDifxLine1(out, "TELESCOPE %d Z (m)", a, value);
 	}
 
@@ -91,9 +91,9 @@ int writeDifxRate(const DifxInput *D, const char *filename)
 		writeDifxLineInt1(out, "SCAN %d START PT", s,
 			scan->startPoint);
 		writeDifxLine1(out, "SCAN %d SRC NAME", s, config->name);
-		sprintf(value, "%12.10f", source->ra);
+		sprintf(value, "%17.15f", source->ra);
 		writeDifxLine1(out, "SCAN %d SRC RA", s, value);
-		sprintf(value, "%12.10f", source->dec);
+		sprintf(value, "%17.15f", source->dec);
 		writeDifxLine1(out, "SCAN %d SRC DEC", s, value);
 		for(i = -1; i <= scan->nPoint+1; i++)
 		{
@@ -102,7 +102,7 @@ int writeDifxRate(const DifxInput *D, const char *filename)
 			for(a = 0; a < D->nAntenna; a++)
 			{
 				l += sprintf(value+l, 
-					"%12.10f\t%14.12f\t%14.12f\t", 
+					"%17.15f\t%17.15f\t%17.15f\t", 
 					scan->model[a][i].dt,
 					scan->model[a][i].dry,
 					scan->model[a][i].wet);
