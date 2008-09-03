@@ -2260,9 +2260,6 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 	interval = atoi(DifxParametersvalue(mp, r));
 	D->job->polyInterval = interval;
 	
-	
-	r = DifxParametersfind(mp, 0, "NUM TELESCOPES");
-
 	r = DifxParametersfind(mp, 0, "ABERRATION CORR");
 	if(r < 0)
 	{
