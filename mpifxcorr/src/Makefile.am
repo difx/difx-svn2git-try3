@@ -7,6 +7,8 @@ mark5_files = \
 	nativemk5_stubs.cpp
 endif
 
+INCLUDES = -I/users/adeller/intel/ipp/6.0.0.063/em64t/include
+
 bin_PROGRAMS = mpifxcorr
 mpifxcorr_SOURCES = \
 	mpifxcorr.cpp \
@@ -36,8 +38,8 @@ noinst_HEADERS = \
 	nativemk5.h \
 	alert.h
 
-mpifxcorr_LDADD = \
-	-lipps -lguide -lippvm 
+mpifxcorr_LDADD = -L/users/adeller/intel/ipp/6.0.0.063/em64t/sharedlib \
+	-lippsem64t -lguide -lippvmem64t -liomp5 -lippcoreem64t
 
 lib_LIBRARIES = libmpifxcorr.a
 libmpifxcorr_a_SOURCES = \

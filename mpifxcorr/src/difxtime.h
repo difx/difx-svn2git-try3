@@ -13,10 +13,10 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difxtime.h 857 2008-11-06 00:39:49Z AdamDeller $
-// $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/branches/adeller-time/src/difxtime.h $
-// $LastChangedRevision: 857 $
-// $Author: AdamDeller $
-// $LastChangedDate: 2008-11-05 17:39:49 -0700 (Wed, 05 Nov 2008) $
+// $Id$
+// $HeadURL: $
+// $LastChangedRevision$
+// $Author$
+// $LastChangedDate$
 //
 //============================================================================
