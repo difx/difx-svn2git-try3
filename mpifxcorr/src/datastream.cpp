@@ -22,7 +22,6 @@
 #include "datastream.h"
 #include "core.h"
 #include "fxmanager.h"
-#include "mpifxcorr.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

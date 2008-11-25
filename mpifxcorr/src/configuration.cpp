@@ -27,7 +27,8 @@
 #include "nativemk5.h"
 #include "alert.h"
 
-Configuration::Configuration(const char * configfile)
+Configuration::Configuration(const char * configfile, int id)
+  : mpiid(id)
 {
   //open the file
   ifstream * input = new ifstream(configfile);
@@ -104,6 +105,11 @@ Configuration::Configuration(const char * configfile)
   input->close();
   delete input;
   consistencyok = consistencyCheck();
+  commandthreadinitialised = false;
+  dumpsta = false;
+  dumplta = false;
+  stadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
+  ltadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
 //  cinfo << "Finished processing input file!!!" << endl;
 }
 

@@ -25,7 +25,6 @@
 #include "math.h"
 #include "architecture.h"
 #include "datastream.h"
-#include "mpifxcorr.h"
 #include "alert.h"
 
 //using namespace std;

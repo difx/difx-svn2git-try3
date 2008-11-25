@@ -29,6 +29,7 @@
 #include "polyco.h"
 #include "uvw.h"
 #include "mark5access.h"
+#include "mpifxcorr.h"
 
 //forward declaration of class Mode
 class Mode;
@@ -62,7 +63,7 @@ public:
   * Constructor: Reads and stores the information in the input file
   * @param configfile The filename of the input file containing configuration information to be read
   */
-  Configuration(const char * configfile);
+  Configuration(const char * configfile, int id);
 
   ~Configuration();
 
@@ -70,6 +71,7 @@ public:
   * These methods simply allow other objects access to the configuration information held in tables in the input file for the correlation
   */
 //@{
+  inline int getMPIId() { return mpiid; }
   inline int getVisBufferLength() { return visbufferlength; }
   inline bool consistencyOK() {return consistencyok; }
   inline int getNumConfigs() { return numconfigs; }
@@ -206,6 +208,19 @@ public:
     { return telescopetable[telescopeindex].name; }
   inline int getTelescopeTableLength()
     { return telescopetablelength; }
+  inline bool isCoreProcess() { return mpiid >= fxcorr::FIRSTTELESCOPEID + numdatastreams; }
+  inline bool isDatastreamProcess() { return mpiid >= fxcorr::FIRSTTELESCOPEID && mpiid < fxcorr::FIRSTTELESCOPEID + numdatastreams; }
+  inline void setCommandThreadInitialised() { commandthreadinitialised = true; }
+  inline bool commandThreadInitialised() { return commandthreadinitialised; }
+  inline void setDumpSTAState(bool setval) { dumpsta = setval; }
+  inline void setDumpLTAState(bool setval) { dumplta = setval; }
+  inline bool dumpSTA() { return dumpsta; }
+  inline bool dumpLTA() { return dumplta; }
+  inline void setSTADumpChannels(int setval) { stadumpchannels = setval; }
+  inline void setLTADumpChannels(int setval) { ltadumpchannels = setval; }
+  inline int getSTADumpChannels() { return stadumpchannels; }
+  inline int getLTADumpChannels() { return ltadumpchannels; }
+
 //@}
 
  /**
@@ -548,10 +563,13 @@ private:
   ///The length of keywords in all input files
   static const int HEADER_LENGTH = 21;
 
+  /// Constant for the default number of channels for visibilities sent to monitor (STA or LTA)
+  static const int DEFAULT_MONITOR_NUMCHANNELS = 32;
+
   char header[HEADER_LENGTH];
-  bool commonread, configread, datastreamread, consistencyok;
+  bool commonread, configread, datastreamread, consistencyok, commandthreadinitialised, dumpsta, dumplta;
   int visbufferlength;
-  int executeseconds, startmjd, startseconds, startns, numdatastreams, numbaselines, numconfigs, defaultconfigindex, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, databufferfactor, numdatasegments, numcoreconfs, maxnumchannels, maxnumpulsarbins, numindependentchannelconfigs;
+  int mpiid, executeseconds, startmjd, startseconds, startns, numdatastreams, numbaselines, numconfigs, defaultconfigindex, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, databufferfactor, numdatasegments, numcoreconfs, maxnumchannels, maxnumpulsarbins, numindependentchannelconfigs, stadumpchannels, ltadumpchannels;
   string delayfilename, uvwfilename, coreconffilename, outputfilename;
   int * numprocessthreads;
   int * firstnaturalconfigindices;

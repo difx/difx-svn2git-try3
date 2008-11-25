@@ -21,7 +21,6 @@
 //============================================================================
 #include "core.h"
 #include "fxmanager.h"
-#include "mpifxcorr.h"
 #include "alert.h"
 
 Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
@@ -129,6 +128,9 @@ Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
   datastreamids = new int[numdatastreams];
   for(int i=0;i<numdatastreams;i++)
     datastreamids[i] = dids[i];
+
+  //initialise the binary message infrastructure
+  difxMessageInitBinary();
 }
 
 
@@ -275,8 +277,8 @@ void * Core::launchNewProcessThread(void * tdata)
 
 void Core::loopprocess(int threadid)
 {
-  int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos,  numchan, maxbins, maxchan, maxpolycos, maxfreqs;
-  bool pulsarbin, somepulsarbin, scrunch = false;
+  int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos,  numchan, maxbins, maxchan, maxpolycos, maxfreqs, stadumpchannels;
+  bool pulsarbin, somepulsarbin, scrunch, dumpingsta, nowdumpingsta;
   Polyco ** polycos=0;
   Polyco * currentpolyco=0;
   Mode ** modes;
@@ -284,9 +286,12 @@ void Core::loopprocess(int threadid)
   cf32 * threadresults = vectorAlloc_cf32(maxresultlength);
   cf32 * pulsarscratchspace=0;
   cf32 ***** pulsaraccumspace=0;
-  
+  DifxMessageSTARecord * starecord = 0;
+
   pulsarbin = false;
   somepulsarbin = false;
+  scrunch = false;
+  dumpingsta = false;
   maxpolycos = 0;
   maxchan = 0;
   maxfreqs = config->getMaxNumFreqs();
@@ -362,8 +367,24 @@ void Core::loopprocess(int threadid)
       currentpolyco->setTime(startmjd, double(startseconds + procslots[numprocessed%RECEIVE_RING_LENGTH].offsets[0] + double(procslots[numprocessed%RECEIVE_RING_LENGTH].offsets[1])/1000000000.0)/86400.0);
     }
 
+    //if necessary, allocate/reallocate space for the STAs
+    nowdumpingsta = config->dumpSTA();
+    if(nowdumpingsta != dumpingsta) {
+      if (starecord != 0) {
+        delete starecord;
+        starecord = 0;
+      }
+      if(nowdumpingsta) {
+        stadumpchannels = config->getSTADumpChannels();
+        starecord = (DifxMessageSTARecord*)malloc(sizeof(DifxMessageSTARecord) + sizeof(f32)*stadumpchannels);
+        starecord->threadId = threadid;
+        starecord->nChan = stadumpchannels;
+      }
+      dumpingsta = nowdumpingsta;
+    }
+
     //process our section of responsibility for this time range
-    processdata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, threadresults, bins, pulsarscratchspace, pulsaraccumspace);
+    processdata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, threadresults, bins, pulsarscratchspace, pulsaraccumspace, starecord);
 
     //if the configuration changes from this segment to the next, change our setup accordingly
     if(procslots[numprocessed%RECEIVE_RING_LENGTH].configindex != lastconfigindex)
@@ -410,6 +431,9 @@ void Core::loopprocess(int threadid)
     }
   }
   vectorFree(threadresults);
+  if(starecord != 0) {
+    delete starecord;
+  }
 
   cinfo << "PROCESS " << mpiid << "/" << threadid << " process thread exiting!!!" << endl;
 }
@@ -477,15 +501,16 @@ void Core::receivedata(int index, bool * terminate)
   }
 }
 
-void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32***** pulsaraccumspace)
+void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord)
 {
-  int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel;
+  int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel, channelinc;
   double offsetmins;
   float * dsweights = new float[numdatastreams];
   Mode * m1, * m2;
   s32 *** polycobincounts;
   cf32 * vis1;
   cf32 * vis2;
+  f32 * acdata;
   bool writecrossautocorrs;
 
   writecrossautocorrs = modes[0]->writeCrossAutoCorrs();
@@ -656,6 +681,30 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
             }
           }
         }
+      }
+    }
+  }
+
+  //if required, send off a message with the STA results
+  if(starecord != 0) {
+    starecord->sec = procslots[index].offsets[0];
+    starecord->ns = ((int)(1000.0*((double)(procslots[index].offsets[1]+procslots[index].numchannels))/
+        (config->getConfigBandwidth(procslots[index].configindex))+ 0.5));
+    for (int i=0;i<numdatastreams;i++) {
+      starecord->antId = i;
+      for (int j=0;j<config->getDNumInputBands(procslots[index].configindex, i);j++) {
+        starecord->bandId = j;
+        int nyquistoffset = (config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, i, j)))?1:0;
+        acdata = (f32*)(modes[i]->getAutocorrelation(false, j));
+        if(procslots[index].numchannels < starecord->nChan)
+          starecord->nChan = procslots[index].numchannels;
+        channelinc = procslots[index].numchannels/starecord->nChan;
+        for (int k=0;k<starecord->nChan;k++) {
+          starecord->data[k] = acdata[2*(k*channelinc + nyquistoffset)];
+          for (int l=1;l<channelinc;l++)
+            starecord->data[k] += acdata[2*(k*channelinc+l+nyquistoffset)];
+        }
+        difxMessageSendBinary((const char *)starecord, sizeof(DifxMessageSTARecord) + sizeof(f32)*config->getSTADumpChannels());
       }
     }
   }
