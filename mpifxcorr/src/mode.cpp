@@ -262,13 +262,24 @@ float Mode::unpack(int sampleoffset)
 
 float Mode::process(int index)  //frac sample error, fringedelay and wholemicroseconds are in microseconds 
 {
-  double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance;
-  f32 phaserotationfloat, fracsampleerror;
+  double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance, LOOffset;
+  f32 phaserotationfloat, fracsampleerror, timesec, LOOffsetPhase;
   int status, count, nearestsample, integerdelay, sidebandoffset;
   cf32* fftptr;
   f32* currentchannelfreqptr;
   int indices[10];
-  
+
+  //Hack to add local offset of 2Hz for Efflesberg
+  //This will correct for a +ve 2Hz offset.
+  //e.g. if the observation was made at 8000.000002 MHz instead of 8000.0 MHz
+  if (config->getDStationName(configindex, datastreamindex) == "EFLSBERG")
+    LOOffset = 2.0;
+  //else if (config->getDStationName(configindex, datastreamindex) == "MEDICINA")
+  //  LOOffset = 1.0;
+  else
+    LOOffset = 0.0;
+
+ 
   if(datalengthbytes == 0 || !(delays[index] > MAX_NEGATIVE_DELAY) || !(delays[index+1] > MAX_NEGATIVE_DELAY))
   {
     for(int i=0;i<numinputbands;i++)
@@ -307,6 +318,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
 
   nearestsampletime = nearestsample*sampletime;
   fracsampleerror = float(starttime - nearestsampletime);
+
 
   if(postffringerot)
   {
@@ -367,6 +379,27 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       csevere << startl << "Error in frac sample correction!!!" << status << endl;
 
     lofreq = config->getDFreq(configindex, datastreamindex, i);
+
+    if(LOOffset != 0.0)
+    {
+    /* Correct for an offset frequency
+     *
+     * sampletime is in microseconds
+     * offsetns is in nanoseconds
+     * timesec is in seconds
+     * LOOffset is in Hz
+     */
+      
+      timesec = (double)offsetseconds + (double)(offsetns / 1e9) + ((index * 2.0 * numchannels * sampletime) / 1e6);
+      LOOffsetPhase = (f32)(TWO_PI*((timesec * LOOffset) - int(timesec * LOOffset)));
+      // int(timesec * LOOffset) should remove whole turns (multiples of TWO_PI)
+      status = vectorAddC_f32_I(LOOffsetPhase, fracmult, numchannels+1);
+      //cout <<"LOOffset " << LOOffset << "\ttimesec " << timesec << "\tLOOffsetPhase " << LOOffsetPhase << endl;
+      if(status != vecNoErr)
+        cerr << "Error LO offset phase addition!!!" << status << endl;
+    }
+
+
     if(postffringerot)
     {
       //work out the phase rotation to apply
