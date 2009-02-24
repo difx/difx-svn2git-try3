@@ -27,8 +27,8 @@
 const double Polyco::BIN_TOLERANCE = 0.01;
 const double Polyco::DM_CONSTANT_SECS = 1.0/0.000241;
 
-Polyco::Polyco(string filename, int subcount, int confindex, int nbins, int nchans, double * bphases, double * bweights, double calcmins)
-  : configindex(confindex), numbins(nbins), numchannels(nchans), numfreqs(-1), calclengthmins(calcmins)
+Polyco::Polyco(string filename, int subcount, int confindex, int nbins, int maxchans, double * bphases, double * bweights, double calcmins)
+  : configindex(confindex), numbins(nbins), maxchannels(maxchans), numfreqs(-1), calclengthmins(calcmins)
 {
   int status;
 
@@ -39,7 +39,7 @@ Polyco::Polyco(string filename, int subcount, int confindex, int nbins, int ncha
   else
   {
     //allocate the phase and weight arrays
-    absolutephases = vectorAlloc_f64(numchannels + 1);
+    absolutephases = vectorAlloc_f64(maxchannels + 1);
 
     binphases = vectorAlloc_f64(numbins);
     status = vectorCopy_f64(bphases, binphases, numbins);
@@ -55,9 +55,8 @@ Polyco::Polyco(string filename, int subcount, int confindex, int nbins, int ncha
   }
 }
 
-// FIXME: WFB: dt0 not copied -- is that OK?
 Polyco::Polyco(const Polyco & tocopy)
-  : pulsarname(tocopy.pulsarname), configindex(tocopy.configindex), numbins(tocopy.numbins), numchannels(tocopy.numchannels), numfreqs(tocopy.numfreqs), observatory(tocopy.observatory), timespan(tocopy.timespan), numcoefficients(tocopy.numcoefficients), mjd(tocopy.mjd), mjdfraction(tocopy.mjdfraction), dm(tocopy.dm), dopplershift(tocopy.dopplershift), logresidual(tocopy.logresidual), refphase(tocopy.refphase), f0(tocopy.f0), obsfrequency(tocopy.obsfrequency), binaryphase(tocopy.binaryphase), minbinwidth(tocopy.minbinwidth), bandwidth(tocopy.bandwidth), calclengthmins(tocopy.calclengthmins)
+  : pulsarname(tocopy.pulsarname), configindex(tocopy.configindex), numbins(tocopy.numbins), numfreqs(tocopy.numfreqs), observatory(tocopy.observatory), timespan(tocopy.timespan), numcoefficients(tocopy.numcoefficients), mjd(tocopy.mjd), mjdfraction(tocopy.mjdfraction), dm(tocopy.dm), dopplershift(tocopy.dopplershift), logresidual(tocopy.logresidual), refphase(tocopy.refphase), f0(tocopy.f0), obsfrequency(tocopy.obsfrequency), binaryphase(tocopy.binaryphase), minbinwidth(tocopy.minbinwidth), calclengthmins(tocopy.calclengthmins), maxchannels(tocopy.maxchannels), dt0(tocopy.dt0)
 {
   int status;
   cinfo << startl << "Started copying a polyco" << endl;
@@ -73,7 +72,7 @@ Polyco::Polyco(const Polyco & tocopy)
   if(status != vecNoErr)
     csevere << startl << "Error copying binweights in Polyco!!" << endl;
   
-  absolutephases = vectorAlloc_f64(numchannels + 1);
+  absolutephases = vectorAlloc_f64(maxchannels + 1);
   coefficients = new double[numcoefficients];
   freqcoefficientarray = vectorAlloc_f64(numcoefficients);
   phasecoefficientarray = vectorAlloc_f64(numcoefficients);
@@ -89,14 +88,20 @@ Polyco::Polyco(const Polyco & tocopy)
   if(numfreqs > 0)
   {
     lofrequencies = vectorAlloc_f32(numfreqs);
+    bandwidths    = vectorAlloc_f32(numfreqs);
+    numchannels   = new int[numfreqs];
+    computefor    = new bool[numfreqs];
     dmPhaseOffsets = new double*[numfreqs];
     channeldmdelays = new double*[numfreqs];
     for(int i=0;i<numfreqs;i++)
     {
       lofrequencies[i] = tocopy.lofrequencies[i];
-      dmPhaseOffsets[i] = vectorAlloc_f64(numchannels+1);
-      channeldmdelays[i] = vectorAlloc_f64(numchannels+1);
-      for(int j=0;j<numchannels+1;j++)
+      bandwidths[i] = tocopy.bandwidths[i];
+      numchannels[i] = tocopy.numchannels[i];
+      computefor[i] = tocopy.computefor[i];
+      dmPhaseOffsets[i] = vectorAlloc_f64(numchannels[i]+1);
+      channeldmdelays[i] = vectorAlloc_f64(numchannels[i]+1);
+      for(int j=0;j<numchannels[i]+1;j++)
       {
         channeldmdelays[i][j] = tocopy.channeldmdelays[i][j];
       }
@@ -107,8 +112,8 @@ Polyco::Polyco(const Polyco & tocopy)
       currentbincounts[i] = new int*[numfreqs];
       for(int j=0;j<numfreqs;j++)
       {
-        currentbincounts[i][j] = vectorAlloc_s32(numchannels+1);
-        for(int k=0;k<numchannels+1;k++)
+        currentbincounts[i][j] = vectorAlloc_s32(numchannels[i]+1);
+        for(int k=0;k<numchannels[i]+1;k++)
           currentbincounts[i][j][k] = tocopy.currentbincounts[i][j][k];
       }
     }
@@ -154,7 +159,7 @@ void Polyco::incrementBinCount()
     {
         for(int j=0;j<numfreqs;j++)
         {
-            for(int k=0;k<numchannels+1;k++)
+            for(int k=0;k<numchannels[i]+1;k++)
                 currentbincounts[i][j][k] = 0;
         }
     }
@@ -169,66 +174,75 @@ void Polyco::getBins(double offsetmins, int **bins)
     //calculate the average phase for this time
     for(int i=1;i<numcoefficients;i++)
     {
-        timepowerarray[i] = dt*timepowerarray[i-1];
+      timepowerarray[i] = dt*timepowerarray[i-1];
     }
     status = vectorDotProduct_f64(timepowerarray, phasecoefficientarray, numcoefficients, &averagephase);
     if(status != vecNoErr)
-        csevere << startl << "Error!!! Problem calculating vector dot product in polyco::getBins" << endl;
+      csevere << startl << "Error!!! Problem calculating vector dot product in polyco::getBins" << endl;
 
     //loop through all the frequencies and subtract the phase offsets for this frequency
     for(int i=0;i<numfreqs;i++)
     {
+      if(computefor[i])
+      {
         //now subtract the dmphaseoffsets for this observing frequency
-        status = vectorAddC_f64(dmPhaseOffsets[i], averagephase, absolutephases, numchannels + 1);
+        status = vectorAddC_f64(dmPhaseOffsets[i], averagephase, absolutephases, numchannels[i] + 1);
         if(status != vecNoErr)
-            csevere << startl << "Error!!! Problem adding dmPhaseOffsets to average phase!!!" << endl;
+          csevere << startl << "Error!!! Problem adding dmPhaseOffsets to average phase!!!" << endl;
 
         //now work out the modulophase for each element and thence its bin
-        for(int j=0;j<numchannels+1;j++)
+        for(int j=0;j<numchannels[i]+1;j++)
         {
-            modulophase = absolutephases[j] - floor(absolutephases[j]);
-            if(modulophase < binphases[0] || modulophase >= binphases[numbins-1])
+          modulophase = absolutephases[j] - floor(absolutephases[j]);
+          if(modulophase < binphases[0] || modulophase >= binphases[numbins-1])
+          {
+            bins[i][j] = 0;
+            currentbincounts[0][i][j]++;
+          }
+          else
+          {
+            for(int k=numbins-1;k>0;k--)
             {
-                bins[i][j] = 0;
-                currentbincounts[0][i][j]++;
+              if(modulophase < binphases[k] && modulophase >= binphases[k-1])
+              {
+                bins[i][j] = k;
+                currentbincounts[k][i][j]++;
+              }
             }
-            else
-            {
-                for(int k=numbins-1;k>0;k--)
-                {
-                    if(modulophase < binphases[k] && modulophase >= binphases[k-1])
-                    {
-                        bins[i][j] = k;
-                        currentbincounts[k][i][j]++;
-                    }
-                }
-            }
+          }
         }
+      }
     }
 }
 
-bool Polyco::setFrequencyValues(int nfreqs, double * freqs, double bw)
+bool Polyco::setFrequencyValues(int nfreqs, double * freqs, double * bws, int * nchans, bool * compute)
 {
     double channelfreq;
     bool ok = true;
 
     numfreqs = nfreqs;
-    bandwidth = bw;
 
     lofrequencies = vectorAlloc_f32(numfreqs);
-    for(int i=0;i<numfreqs;i++)
+    bandwidths    = vectorAlloc_f32(numfreqs);
+    numchannels   = new int[numfreqs];
+    computefor    = new bool[numfreqs];
+    for(int i=0;i<numfreqs;i++) {
       lofrequencies[i] = freqs[i];
+      bandwidths[i]    = bws[i];
+      numchannels[i]   = nchans[i];
+      computefor[i]    = compute[i];
+    }
 
     //create the phase offsets and channeldmdelay arrays
     dmPhaseOffsets = new double*[numfreqs];
     channeldmdelays = new double*[numfreqs];
     for(int i=0;i<numfreqs;i++)
     {
-        dmPhaseOffsets[i] = vectorAlloc_f64(numchannels+1);
-        channeldmdelays[i] = vectorAlloc_f64(numchannels+1);
-        for(int j=0;j<numchannels+1;j++)
+        dmPhaseOffsets[i] = vectorAlloc_f64(numchannels[i]+1);
+        channeldmdelays[i] = vectorAlloc_f64(numchannels[i]+1);
+        for(int j=0;j<numchannels[i]+1;j++)
         {
-            channelfreq = lofrequencies[i] + j*bandwidth/double(numchannels);
+            channelfreq = lofrequencies[i] + j*bandwidths[i]/double(numchannels[i]);
             channeldmdelays[i][j] = -dm*DM_CONSTANT_SECS/(channelfreq*channelfreq) + dm*DM_CONSTANT_SECS/(obsfrequency*obsfrequency);
         }
     }
@@ -254,8 +268,8 @@ bool Polyco::setFrequencyValues(int nfreqs, double * freqs, double bw)
         currentbincounts[i] = new int*[numfreqs];
         for(int j=0;j<numfreqs;j++)
         {
-            currentbincounts[i][j] = vectorAlloc_s32(numchannels+1);
-            for(int k=0;k<numchannels+1;k++)
+            currentbincounts[i][j] = vectorAlloc_s32(numchannels[i]+1);
+            for(int k=0;k<numchannels[i]+1;k++)
                 currentbincounts[i][j][k] = 0;
         }
     }
@@ -346,7 +360,7 @@ void Polyco::calculateDMPhaseOffsets(double offsetmins)
     //work out the phase offset due to dispersion at each channel of each frequency
     for(int i=0;i<numfreqs;i++)
     {
-        status = vectorMulC_f64(channeldmdelays[i], currentfreq, dmPhaseOffsets[i], numchannels + 1);
+        status = vectorMulC_f64(channeldmdelays[i], currentfreq, dmPhaseOffsets[i], numchannels[i] + 1);
         if(status != vecNoErr)
           csevere << startl << "Error!!! Problem calculating dmPhaseOffsets!!!" << endl;
     }

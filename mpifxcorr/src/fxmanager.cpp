@@ -29,9 +29,6 @@
 #include <unistd.h>    /* standard unix functions, like getpid()         */
 #include <sys/types.h> /* various type definitions, like pid_t           */
 #include <signal.h>
-#ifdef HAVE_RPFITS
-#include <RPFITS.h>
-#endif
 #ifdef HAVE_DIFXMESSAGE
 #include <difxmessage.h>
 #endif
@@ -100,11 +97,8 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
     cwarn << startl << "WARNING!!! Fractional start time of " << startseconds << " seconds plus " << startns << " ns was specified, but the start time corresponded to a configuration not specified in the input file and hence we are skipping " << skipseconds << " seconds ahead! The ns offset will be set to 0!!!" << endl;
     startns = 0;
   }
-  halfsampleseconds = 1.0/(config->getDBandwidth(currentconfigindex, 0, 0)*4000000.0);
   inttime = config->getIntTime(currentconfigindex);
-  nsincrement = int(1000.0*(config->getBlocksPerSend(currentconfigindex)*config->getNumChannels(currentconfigindex))/(config->getDBandwidth(currentconfigindex, 0, 0))+ 0.5);
-  //numchannels = config->getNumChannels(currentconfigindex);
-  //samplespersecond = int(2000000*config->getDBandwidth(currentconfigindex, 0, 0) + 0.5);
+  nsincrement = config->getSubintNS(currentconfigindex);
 
   numbaselines = (numdatastreams*(numdatastreams-1))/2;
   resultlength = config->getMaxResultLength();
@@ -135,7 +129,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
   bufferlock = new pthread_mutex_t[config->getVisBufferLength()];
   islocked = new bool[config->getVisBufferLength()];
   if(config->circularPolarisations())
-    polnames = ((config->getMaxProducts() == 1)&&(config->getDBandPol(0,0,0)=='L'))?LL_CIRCULAR_POL_NAMES:CIRCULAR_POL_NAMES;
+    polnames = ((config->getMaxProducts() == 1)&&(config->getDRecordedBandPol(0,0,0)=='L'))?LL_CIRCULAR_POL_NAMES:CIRCULAR_POL_NAMES;
   else
     polnames = LINEAR_POL_NAMES;
   for(int i=0;i<config->getVisBufferLength();i++)
@@ -352,10 +346,7 @@ void FxManager::sendData(int data[], int coreindex)
     {
       currentconfigindex = configindex;
       inttime = config->getIntTime(currentconfigindex);
-      nsincrement = int(1000.0*(config->getBlocksPerSend(currentconfigindex)*config->getNumChannels(currentconfigindex))/(config->getDBandwidth(currentconfigindex, 0, 0))+ 0.5);
-      halfsampleseconds = 1.0/(config->getDBandwidth(currentconfigindex, 0, 0)*4000000.0);
-      //numchannels = config->getNumChannels(currentconfigindex);
-      //samplespersecond = int(2000000*config->getDBandwidth(currentconfigindex, 0, 0) + 0.5);
+      nsincrement = config->getSubintNS(currentconfigindex);
     }
   }
   //cinfo << startl << "FXMANAGER has finished sending data" << endl;
@@ -470,50 +461,21 @@ void * FxManager::launchNewWriteThread(void * thismanager)
 
   me->initialiseOutput();
   me->loopwrite();
-  me->finaliseOutput();
 
   return 0;
 }
 
 void FxManager::initialiseOutput()
 {
-  int flag = -2; //open a new file
-  if(config->getOutputFormat() == Configuration::RPFITS)  //if its RPFITS output create the file
-  {
-#ifdef HAVE_RPFITS
-    writeheader();
-    rpfitsout_(&flag, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    if(flag < 0)
-    {
-      cfatal << startl << "Error - could not open output file " << config->getOutputFilename() << " - aborting!!!" << endl;
-      MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-#else
-    cfatal << startl << "RPFITS not compiled in.  quitting" << endl;
-    MPI_Abort(MPI_COMM_WORLD, 1);
-#endif
-  }
-  else if(config->getOutputFormat() == Configuration::DIFX)
+  if(config->getOutputFormat() == Configuration::DIFX)
   {
     //create the directory - if that doesn't work, abort as we can't guarantee no overwriting data
-    flag = mkdir(config->getOutputFilename().c_str(), 0775);
+    int flag = mkdir(config->getOutputFilename().c_str(), 0775);
     if(flag < 0) {
       cfatal << startl << "Error trying to create directory " << config->getOutputFilename() << ": " << flag << ", ABORTING!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
   }
-}
-
-void FxManager::finaliseOutput()
-{
-#ifdef HAVE_RPFITS
-  int flag = 1;
-  if(config->getOutputFormat() == Configuration::RPFITS)  //only if its RPFITS output do we need to do anything
-  {
-    //close the RPFits file
-    rpfitsout_(&flag, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-  }
-#endif
 }
 
 void FxManager::loopwrite()
@@ -542,9 +504,6 @@ void FxManager::loopwrite()
     if(visbuffer[atsegment]->getCurrentConfig() != lastconfigindex)
     {
       lastconfigindex = visbuffer[atsegment]->getCurrentConfig();
-#ifdef HAVE_RPFITS
-      param_.intbase = float(config->getIntTime(lastconfigindex));
-#endif
     }
     visbuffer[atsegment]->writedata();
     visbuffer[atsegment]->multicastweights();
@@ -566,132 +525,22 @@ void FxManager::loopwrite()
   }
 }
 
-void FxManager::writeheader()
-{
-#ifdef HAVE_RPFITS
-  int numproducts, maxfrequencies, year, month, day, uindex;
-  char obsdate[12];
-  
-  config->mjd2ymd(startmjd, year, month, day);
-  sprintf(obsdate, "%04u-%02u-%02u", year, month, day);
-
-  //set up the outputfilename
-  config->makeFortranString(config->getOutputFilename(), 256, names_.file);
-  
-  //set up the parameters
-  param_.write_wt = 0; //don't write weights
-  param_.ncard = 0;
-  param_.intbase = float(config->getIntTime(config->getConfigIndex(0)));
-  param_.data_format = 2; //for complex visibilities, no weights
-  doubles_.x_array = 0.0;
-  doubles_.y_array = 0.0;
-  doubles_.z_array = 0.0;
-  config->makeFortranString("J2000", 8, names_.coord);
-  config->makeFortranString("ATLBA", 16, names_.instrument);
-  config->makeFortranString(string(obsdate), 12, names_.datobs); 
-
-  //set up the antenna info
-  anten_.nant = config->getTelescopeTableLength();
-  cinfo << startl << "Number of antennas is " << anten_.nant << endl;
-  for(int i=0;i<anten_.nant;i++)
-  {
-    anten_.ant_num[i] = i+1;
-    config->makeFortranString(config->getTelescopeName(i), ANTENNA_NAME_LENGTH, &(names_.sta[i*ANTENNA_NAME_LENGTH]));
-    config->makeFortranString("R", 2, &(names_.feed_type[i*4]));
-    config->makeFortranString("L", 2, &(names_.feed_type[i*4 + 2]));
-
-    uindex = -1;
-    //work out the index of the telescope in the uvw file
-    for(int j=0;j<uvw->getNumStations();j++)
-    {
-      if(config->getTelescopeName(i) == uvw->getStationName(j))
-        uindex = j;
-    }
-    if(uindex < 0)
-    {
-      cerror << startl << "Error - could not find station " << config->getTelescopeName(i) << " in the uvw file when making rpfits header!!!" << endl;
-      if(config->stationUsed(i))
-      {
-        cfatal << startl << "This station is used in the correlation so I will abort!!!" << endl;
-        MPI_Abort(MPI_COMM_WORLD, 1);
-      }
-      else
-      {
-        cerror << startl << "Station is not used in this correlation so its parameters will be initialised to 0!!!" << endl;
-        anten_.ant_mount[i] = 1;
-        doubles_.x[i] = 0.0;
-        doubles_.y[i] = 0.0;
-        doubles_.z[i] = 0.0;
-      }
-    }
-    else
-    {
-      anten_.ant_mount[i] = uvw->getStationMount(uindex);
-      doubles_.x[i] = uvw->getStationX(uindex);
-      doubles_.y[i] = uvw->getStationY(uindex);
-      doubles_.z[i] = uvw->getStationZ(uindex);
-      doubles_.axis_offset[i] = 0.0; //THIS IS AN OVERSIGHT THAT NEEDS TO BE CORRECTED SOON!
-    }
-  }
-
-  //set up the IF info
-  numproducts = config->getMaxProducts();
-  maxfrequencies = config->getFreqTableLength();
-  if_.n_if = maxfrequencies*config->getNumIndependentChannelConfigs();
-  cinfo << startl << "Number of IFs is " << if_.n_if*config->getNumIndependentChannelConfigs() << endl;
-  string blank = "  ";
-  for(int j=0;j<config->getNumIndependentChannelConfigs();j++)
-  {
-    for(int i=0;i<maxfrequencies;i++)
-    {
-      if_.if_invert[i] = 1; //should never be inverted as the correlator can invert any inverted bands
-      if_.if_nfreq[i] = config->getNumChannels(config->getFirstNaturalConfigIndex(j)) + 1;
-      if_.if_nstok[i] = numproducts;
-      if_.if_num[i] = i+1 + j*maxfrequencies;
-      if_.if_sampl[i] = config->getDNumBits(0, 0);
-      if_.if_simul[i] = 1; //don't know what these do...?
-      if_.if_chain[i] = 1;
-      doubles_.if_bw[i] = config->getFreqTableBandwidth(i)*1000000; //convert from MHz to Hz
-      doubles_.if_ref[i] = (config->getFreqTableLowerSideband(i))?config->getNumChannels(config->getFirstNaturalConfigIndex(j))+1.0:1.0;
-      doubles_.if_freq[i] = config->getFreqTableFreq(i)*1000000; //convert from MHz to Hz
-      for(int j=0;j<numproducts;j++)
-        config->makeFortranString((config->circularPolarisations())?CIRCULAR_POL_NAMES[j]:LINEAR_POL_NAMES[j], STOKES_NAME_LENGTH, &(names_.if_cstok[(4*i + j)*STOKES_NAME_LENGTH]));
-      for(int j=numproducts;j<4;j++)
-        config->makeFortranString(blank, STOKES_NAME_LENGTH, &(names_.if_cstok[(4*i + j)*STOKES_NAME_LENGTH]));
-    }
-  }
-
-  //set up the source info
-  su_.n_su = uvw->getNumSources();
-  for(int i=0;i<su_.n_su;i++)
-  {
-    su_.su_num[i] = i+1;
-    doubles_.su_ra[i] = uvw->getSourceRA(i);
-    doubles_.su_dec[i] = uvw->getSourceDec(i);
-    doubles_.su_pra[i] = uvw->getSourceRA(i);
-    doubles_.su_pdec[i] = uvw->getSourceDec(i);
-    config->makeFortranString(uvw->getSourceName(i), SOURCE_NAME_LENGTH, &(names_.su_name[i*SOURCE_NAME_LENGTH]));
-    config->makeFortranString(blank, SOURCE_CALCODE_LENGTH, &(names_.su_cal[i*SOURCE_CALCODE_LENGTH]));
-  }
-
-  //set up the proper motion
-  proper_.pm_epoch = 2000.0;
-#endif
-}
-
 int FxManager::locateVisIndex(int coreid)
 {
   bool tooold = true;
   int perr, count;
-  double difference;
+  s64 difference;
+  int coresec = coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][0];
+  int corens = coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][1] + config->getSubintNS(config->getConfigIndex(coresec))/2;
 
   for(int i=0;i<=(newestlockedvis-oldestlockedvis+config->getVisBufferLength())%config->getVisBufferLength();i++)
   {
-    difference = visbuffer[(oldestlockedvis+i)%config->getVisBufferLength()]->timeDifference(coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][0], coretimes[(numsent[coreid]+extrareceived[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1]);
-    if(difference > halfsampleseconds)
+    difference = visbuffer[(oldestlockedvis+i)%config->getVisBufferLength()]->timeDifference(coresec, corens);
+    //cout << "For visibility with time " << coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][0] << ", " << coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][1] << " we got a difference of " << difference << endl;
+    if(difference >= 0)
     {
       tooold = false;
-      if(difference - inttime < halfsampleseconds) //we have found the correct Visibility
+      if(difference < (s64)(inttime*1000000000.0)) //we have found the correct Visibility
       {
         return (oldestlockedvis+i)%config->getVisBufferLength();
       }
@@ -711,8 +560,8 @@ int FxManager::locateVisIndex(int coreid)
         csevere << startl << "Error in fxmanager locking visibility " << newestlockedvis << endl;
       islocked[newestlockedvis] = true;
       //check if its good
-      difference = visbuffer[newestlockedvis]->timeDifference(coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][0], coretimes[(numsent[coreid]+extrareceived[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1]);
-      if(difference <= inttime)
+      difference = visbuffer[newestlockedvis]->timeDifference(coresec, corens);
+      if(difference < (s64)(inttime*1000000000.0))
         return newestlockedvis;
     }
     //d'oh - its newer than we can handle - have to drop old data until we catch up
@@ -737,8 +586,8 @@ int FxManager::locateVisIndex(int coreid)
         if(perr != 0)
           csevere << startl << "Error in fxmanager locking visibility " << newestlockedvis << endl;
         islocked[newestlockedvis] = true;
-        difference = visbuffer[newestlockedvis]->timeDifference(coretimes[(numsent[coreid])% Core::RECEIVE_RING_LENGTH][coreid][0], coretimes[(numsent[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1]);
-        if(difference <= inttime) //we've finally caught up
+        difference = visbuffer[newestlockedvis]->timeDifference(coresec, corens);
+        if(difference < (s64)(inttime*1000000000.0)) //we've finally caught up
           break;
       }
     }

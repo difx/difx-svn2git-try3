@@ -65,34 +65,14 @@ dnl **********************************************************
 
 
 dnl **********************************************************
-dnl **** Look for RPFITS                                  ****
-dnl **********************************************************
-rpfits_enabled=true
-PWD=`pwd`
-AC_CHECK_HEADER([$DIFXROOT/include/RPFITS.h],
-		[AC_DEFINE([HAVE_RPFITS], 1, [1=has RPFITS])],
-		[rpfits_enabled=false])
-if test ${rpfits_enabled} = true; then
-	RPFITS_CFLAGS="-I$DIFXROOT/include"
-	RPFITS_LIBS=" -lrpfits -lg2c"
-dnl *** Alternative if gfotran used
-dnl	RPFITS_LIBS=" -lrpfits -lgfortran"  
-else
-RPFITS_CFLAGS=""
-RPFITS_LIBS=""
-fi
-dnl **********************************************************
-
-
-dnl **********************************************************
 dnl **** Find mark5access library                         ****
 dnl **********************************************************
 PKG_CHECK_MODULES(M5ACCESS, mark5access)
 dnl **********************************************************
 
 
-CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${IPP_CFLAGS} ${RPFITS_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${CFLAG_QUIET}"
-LIBS="${M5ACCESS_LIBS} ${SS_LIBS} ${IPP_LIBS} ${RPFITS_LIBS} ${DIFXMESSAGE_LIBS}"
+CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${IPP_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${CFLAG_QUIET}"
+LIBS="${M5ACCESS_LIBS} ${SS_LIBS} ${IPP_LIBS} ${DIFXMESSAGE_LIBS}"
 
 echo "CXXFLAGS = ${CXXFLAGS}"
 echo "LIBS = ${LIBS}"

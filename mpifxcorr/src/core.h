@@ -73,10 +73,9 @@ private:
     u8 ** databuffer;
     double ** controlbuffer;
     cf32 * results;
-    s32 *** bincounts;
+    //s32 *** bincounts;
     int resultlength;
     int * datalengthbytes;
-    int numchannels;
     int resultsvalid;
     int configindex;
     int offsets[2]; //0=seconds, 1=nanoseconds
@@ -143,9 +142,8 @@ private:
   * @param modes The Mode objects that will be used to do the station-based processing for this configuration
   * @param polycos The polyco objects to be used with this configuration (null if not pulsar binning)
   * @param first Whether this is the first time the config has been updated (ie do the arrays exist already and need to be deallocated)
-  * @param bins Space to store the bins [#freqs][#channels+1] for this configuration (null if not pulsar binning)
   */
-  void updateconfig(int oldconfigindex, int configindex, int threadid, int & startblock, int & numblocks, int & numpolycos, bool & pulsarbin, Mode ** modes, Polyco ** polycos, bool first, s32 *** bins);
+  void updateconfig(int oldconfigindex, int configindex, int threadid, int & startblock, int & numblocks, int & numpolycos, bool & pulsarbin, Mode ** modes, Polyco ** polycos, bool first);
 
   int mpiid;
   Configuration * config;

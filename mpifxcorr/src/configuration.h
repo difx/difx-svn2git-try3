@@ -26,6 +26,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <iostream>
+#include <math.h>
 #include "polyco.h"
 #include "uvw.h"
 #include "mark5access.h"
@@ -48,7 +49,7 @@ to this configuration information to the other objects which actually perform th
 class Configuration{
 public:
   /// Enumeration for the kind of output than can be produced
-  enum outputformat {RPFITS, ASCII, DIFX};
+  enum outputformat {ASCII, DIFX};
 
   /// Supported types of recorded data format
   enum dataformat {LBASTD, LBAVSOP, NZ, K5, MKIV, VLBA, MARK5B};
@@ -76,13 +77,7 @@ public:
   inline bool consistencyOK() {return consistencyok; }
   inline int getNumConfigs() { return numconfigs; }
   inline int getNumIndependentChannelConfigs() { return numindependentchannelconfigs; }
-  inline int getFirstNaturalConfigIndex(int independentchannelindex) { return firstnaturalconfigindices[independentchannelindex]; }
-  inline int getIndependentChannelIndex(int naturalconfigindex) { return configs[naturalconfigindex].independentchannelindex; }
-  inline int getNumChannels(int configindex) { return configs[configindex].numchannels; }
   inline int getBlocksPerSend(int configindex) { return configs[configindex].blockspersend; }
-  inline int getGuardBlocks(int configindex) { return configs[configindex].guardblocks; }
-  inline int getOversampleFactor(int configindex) { return configs[configindex].oversamplefactor; }
-  inline int getDecimationFactor(int configindex) { return configs[configindex].decimationfactor; }
   inline double getIntTime(int configindex) { return configs[configindex].inttime; }
   inline bool writeAutoCorrs(int configindex) { return configs[configindex].writeautocorrs; }
   inline outputformat getOutputFormat() { return outformat; }
@@ -92,30 +87,49 @@ public:
   inline int getNumPulsarBins(int configindex) { return configs[configindex].numbins; }
   inline int getNumPolycos(int configindex) { return configs[configindex].numpolycos; }
   inline Polyco ** getPolycos(int configindex) { return configs[configindex].polycos; }
-  inline bool matchingBand(int configindex, int configdatastreamindex, int datastreamfreqindex, int datastreaminputbandindex)
-    { return datastreamfreqindex == datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].inputbandlocalfreqindices[datastreaminputbandindex]; }
+  inline bool matchingRecordedBand(int configindex, int configdatastreamindex, int datastreamfreqindex, int datastreamrecordedbandindex)
+    { return datastreamfreqindex == datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedbandlocalfreqindices[datastreamrecordedbandindex]; }
   inline int getDDataBufferFactor() { return databufferfactor; }
   inline int getDNumDataSegments() { return numdatasegments; }
   inline int getDTelescopeIndex(int configindex, int configdatastreamindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex; }
-  inline int getDNumFreqs(int configindex, int configdatastreamindex)
-    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numfreqs; }
+  inline int getDNumRecordedFreqs(int configindex, int configdatastreamindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numrecordedfreqs; }
+  inline int getDNumZoomFreqs(int configindex, int configdatastreamindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numzoomfreqs; }
   inline double getDClockOffset(int configindex, int configdatastreamindex)
     { return telescopetable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex].clockdelay; }
   inline double getDClockRate(int configindex, int configdatastreamindex)
     { return telescopetable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex].clockrate; }
+  inline int getDOversampleFactor(int configindex, int configdatastreamindex) 
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[0]].oversamplefactor; }
+  inline int getDDecimationFactor(int configindex, int configdatastreamindex) 
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[0]].decimationfactor; }
   inline string getDStationName(int configindex, int configdatastreamindex) 
     { return telescopetable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex].name; }
   inline double getDTsys(int configindex, int configdatastreamindex) 
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].tsys; }
   inline int getDNumBits(int configindex, int configdatastreamindex) 
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numbits; }
-  inline int getDFreqIndex(int configindex, int configdatastreamindex, int datastreambandindex)
-    { datastreamdata ds = datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]]; return ds.freqtableindices[ds.inputbandlocalfreqindices[datastreambandindex]]; }
-  inline int getDLocalFreqIndex(int configindex, int configdatastreamindex, int datastreambandindex)
-    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].inputbandlocalfreqindices[datastreambandindex]; }
-  inline char getDBandPol(int configindex, int configdatastreamindex, int datastreambandindex)
-    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].inputbandpols[datastreambandindex]; }
+  inline int getDRecordedFreqIndex(int configindex, int configdatastreamindex, int datastreamrecordedbandindex)
+    { datastreamdata ds = datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]]; return ds.recordedfreqtableindices[ds.recordedbandlocalfreqindices[datastreamrecordedbandindex]]; }
+  inline int getDZoomFreqIndex(int configindex, int configdatastreamindex, int datastreamzoombandindex)
+    { datastreamdata ds = datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]];   return ds.zoomfreqtableindices[ds.zoombandlocalfreqindices[datastreamzoombandindex]]; }
+  inline int getDTotalFreqIndex(int configindex, int configdatastreamindex, int datastreamtotalbandindex)
+    { datastreamdata ds = datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]];
+    if (datastreamtotalbandindex < ds.numrecordedbands)
+      return ds.recordedfreqtableindices[ds.recordedbandlocalfreqindices[datastreamtotalbandindex]];
+    else
+      return ds.zoomfreqtableindices[ds.zoombandlocalfreqindices[datastreamtotalbandindex-ds.numrecordedfreqs]];
+    }
+  inline int getDLocalRecordedFreqIndex(int configindex, int configdatastreamindex, int datastreamrecordedbandindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedbandlocalfreqindices[datastreamrecordedbandindex]; }
+  inline int getDLocalZoomFreqIndex(int configindex, int configdatastreamindex, int datastreamzoombandindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].zoombandlocalfreqindices[datastreamzoombandindex]; }
+  inline char getDRecordedBandPol(int configindex, int configdatastreamindex, int datastreamrecordedbandindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedbandpols[datastreamrecordedbandindex]; }
+  inline char getDZoomBandPol(int configindex, int configdatastreamindex, int datastreamzoombandindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].zoombandpols[datastreamzoombandindex]; }
   inline int getDBytesPerSampleNum(int configindex, int configdatastreamindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].bytespersamplenum; }
   inline int getDBytesPerSampleDenom(int configindex, int configdatastreamindex)
@@ -126,18 +140,30 @@ public:
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].portnumber; }
   inline int getDTCPWindowSizeKB(int configindex, int configdatastreamindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].tcpwindowsizekb; }
-  inline int getDNumOutputBands(int configindex, int configdatastreamindex)
-    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numoutputbands; }
-  inline int getDNumInputBands(int configindex, int configdatastreamindex)
-    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numinputbands; }
+  inline int getDNumRecordedBands(int configindex, int configdatastreamindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numrecordedbands; }
+  inline int getDNumZoomBands(int configindex, int configdatastreamindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numzoombands; }
+  inline int getDNumTotalBands(int configindex, int configdatastreamindex)
+    {  return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numzoombands + datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numrecordedbands; }
   inline string * getDDataFileNames(int configindex, int configdatastreamindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].datafilenames; }
-  inline double getDFreq(int configindex, int configdatastreamindex, int datastreamfreqindex)
-    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].freqtableindices[datastreamfreqindex]].bandedgefreq; }
-  inline double getDBandwidth(int configindex, int configdatastreamindex, int datastreamfreqindex)
-    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].freqtableindices[datastreamfreqindex]].bandwidth; }
-  inline bool getDLowerSideband(int configindex, int configdatastreamindex, int datastreamfreqindex)
-    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].freqtableindices[datastreamfreqindex]].lowersideband; }
+  inline double getDRecordedFreq(int configindex, int configdatastreamindex, int datastreamrecordedfreqindex)
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[datastreamrecordedfreqindex]].bandedgefreq; }
+  inline double getDZoomFreq(int configindex, int configdatastreamindex, int datastreamzoomfreqindex)
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].zoomfreqtableindices[datastreamzoomfreqindex]].bandedgefreq; }
+  inline double getDRecordedBandwidth(int configindex, int configdatastreamindex, int datastreamrecordedfreqindex)
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[datastreamrecordedfreqindex]].bandwidth; }
+  inline double getDZoomBandwidth(int configindex, int configdatastreamindex, int datastreamzoomfreqindex)
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].zoomfreqtableindices[datastreamzoomfreqindex]].bandwidth; }
+  inline bool getDRecordedLowerSideband(int configindex, int configdatastreamindex, int datastreamrecordedfreqindex)
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[datastreamrecordedfreqindex]].lowersideband; }
+  inline bool getDZoomLowerSideband(int configindex, int configdatastreamindex, int datastreamzoomfreqindex)
+    { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].zoomfreqtableindices[datastreamzoomfreqindex]].lowersideband; }
+  inline int getDZoomFreqChannelOffset(int configindex, int configdatastreamindex, int datastreamzoomfreqindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].zoomfreqchanneloffset[datastreamzoomfreqindex]; }
+  inline int getDZoomFreqParentFreqIndex(int configindex, int configdatastreamindex, int datastreamzoomfreqindex)
+    {  return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].zoomfreqparentdfreqindices[datastreamzoomfreqindex]; }
   inline int getBDataStream1Index(int configindex, int configbaselineindex)
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].datastream1index; }
   inline int getBDataStream2Index(int configindex, int configbaselineindex)
@@ -149,7 +175,7 @@ public:
   inline int getBNumFreqs(int configindex, int configbaselineindex)
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].numfreqs; }
   inline int getBFreqIndex(int configindex, int configbaselineindex, int baselinefreqindex)
-    {  baselinedata b = baselinetable[configs[configindex].baselineindices[configbaselineindex]]; datastreamdata ds = datastreamtable[b.datastream1index]; return ds.freqtableindices[ds.inputbandlocalfreqindices[b.datastream1bandindex[baselinefreqindex][0]]];
+  {  return baselinetable[configs[configindex].baselineindices[configbaselineindex]].freqtableindices[baselinefreqindex];
     }
   inline int getBNumPolProducts(int configindex, int configbaselineindex, int baselinefreqindex)
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].numpolproducts[baselinefreqindex]; }
@@ -158,7 +184,15 @@ public:
   inline int getBDataStream2BandIndex(int configindex, int configbaselineindex, int baselinefreqindex, int baselinefreqdatastream2index)
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].datastream2bandindex[baselinefreqindex][baselinefreqdatastream2index]; }
   inline void getBPolPair(int configindex, int configbaselineindex, int baselinefreqindex, int freqpolindex, char polpair[3])
-    { baselinedata b = baselinetable[configs[configindex].baselineindices[configbaselineindex]]; polpair[0] = datastreamtable[b.datastream1index].inputbandpols[b.datastream1bandindex[baselinefreqindex][freqpolindex]]; polpair[1] = datastreamtable[b.datastream2index].inputbandpols[b.datastream2bandindex[baselinefreqindex][freqpolindex]];
+    { char * tpp = baselinetable[configs[configindex].baselineindices[configbaselineindex]].polpairs[baselinefreqindex][freqpolindex]; polpair[0] = tpp[0]; polpair[1] = tpp[1];
+    }
+  inline char getOppositePol(char pol) 
+    {
+      if (pol == 'R') return 'L';
+      if (pol == 'L') return 'R';
+      if (pol == 'X') return 'Y';
+      if (pol == 'Y') return 'X';
+      return 'X';
     }
   inline int getBNumber(int configindex, int configbaselineindex)
     { return (datastreamtable[baselinetable[(configs[configindex].baselineindices[configbaselineindex])].datastream1index].telescopeindex + 1)*256 + (datastreamtable[baselinetable[(configs[configindex].baselineindices[configbaselineindex])].datastream2index].telescopeindex + 1); }
@@ -170,13 +204,20 @@ public:
   inline int getStartMJD() { return startmjd; }
   inline int getStartSeconds() { return startseconds; }
   inline int getStartNS() { return startns; }
+  inline int getSubintNS(int configindex) { return configs[configindex].subintns; }
+  inline int getGuardNS(int configindex) { return configs[configindex].guardns; }
   inline string getDelayFileName() { return delayfilename; }
   inline int getFreqTableLength() { return freqtablelength; }
   inline double getFreqTableFreq(int index) { return freqtable[index].bandedgefreq; }
   inline double getFreqTableBandwidth(int index) { return freqtable[index].bandwidth; }
   inline bool getFreqTableLowerSideband(int index) { return freqtable[index].lowersideband; }
+  inline int getFNumChannels(int index) { return freqtable[index].numchannels; }
+  inline int getFMatchingWiderBandIndex(int index) { return freqtable[index].matchingwiderbandindex; }
+  inline int getFMatchingWiderBandOffset(int index) { return freqtable[index].matchingwiderbandoffset; }
+  inline bool isFrequencyUsed(int configindex, int freqindex) 
+    { return configs[configindex].frequsedbybaseline[freqindex]; }
   inline bool circularPolarisations() 
-    { return datastreamtable[0].inputbandpols[0] == 'R' || datastreamtable[0].inputbandpols[0] == 'L'; }
+    { return datastreamtable[0].recordedbandpols[0] == 'R' || datastreamtable[0].recordedbandpols[0] == 'L'; }
   inline int getSourceIndex(int mjd, int sec) { return uvw->getSourceIndex(mjd, sec); }
   inline bool isReadFromFile(int configindex, int configdatastreamindex) 
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].source != EVLBI; }
@@ -202,8 +243,6 @@ public:
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].format; }
   inline datasource getDataSource(int configindex, int configdatastreamindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].source; }
-  inline double getConfigBandwidth(int configindex) 
-    { return freqtable[datastreamtable[configs[configindex].datastreamindices[0]].freqtableindices[0]].bandwidth; }
   inline string getTelescopeName(int telescopeindex)
     { return telescopetable[telescopeindex].name; }
   inline int getTelescopeTableLength()
@@ -293,12 +332,12 @@ public:
   * @param configindex The index of the configuration being used (from the table in the input file)
   * @return The maximum number of frequencies being used by any datastream during this configuration
   */
-  int getMaxNumFreqs(int configindex);
+  int getMaxNumRecordedFreqs(int configindex);
 
  /**
   * @return The maximum number of frequencies being used by any datastream during any configuration
   */
-  int getMaxNumFreqs();
+  int getMaxNumRecordedFreqs();
 
  /**
   * @param configindex The index of the configuration being used (from the table in the input file)
@@ -323,9 +362,9 @@ public:
   int getMaxDataBytes(int datastreamindex);
 
  /**
-  * @return The maximum number of blocks sent in a single message (blocks + guard), for any configuration
+  * @return The maximum number of whole blocks sent for any configuration (excluding guard time)
   */
-  int getMaxSendBlocks();
+  int getMaxBlocksPerSend();
 
  /**
   * @return The maximum number of products (1, 2 or 4) for any baseline in any configuration
@@ -427,6 +466,12 @@ private:
     double bandedgefreq;
     double bandwidth;
     bool lowersideband;
+    int numchannels;
+    int channelstoaverage;
+    int oversamplefactor;
+    int decimationfactor;
+    int matchingwiderbandindex;
+    int matchingwiderbandoffset;
   } freqdata;
 
   ///Storage struct for data from the baseline table of the input file
@@ -435,22 +480,20 @@ private:
     int datastream2index;
     int numfreqs;
     int totalbands;
+    int * freqtableindices;
     int * numpolproducts;
     int ** datastream1bandindex;
     int ** datastream2bandindex;
+    char *** polpairs;
   } baselinedata;
 
   ///Storage struct for data from the config table of the input file
   typedef struct {
     string sourcename;
     double inttime;
-    int numchannels;
-    int channelstoaverage;
-    int oversamplefactor;
-    int decimationfactor;
-    int independentchannelindex;
     int blockspersend;
-    int guardblocks;
+    int subintns;
+    int guardns;
     bool postffringerot;
     bool quadraticdelayinterp;
     bool writeautocorrs;
@@ -463,6 +506,7 @@ private:
     int * datastreamindices;
     int * ordereddatastreamindices;
     int * baselineindices;
+    bool * frequsedbybaseline;
   } configdata;
 
   ///Storage struct for data from the telescope table of the input file
@@ -485,14 +529,21 @@ private:
     int framebytes;
     int framens;
     bool filterbank;
-    int numfreqs;
-    int * freqpols;
-    int * freqtableindices;
-    double * freqclockoffsets;
-    int numinputbands;
-    int numoutputbands;
-    char * inputbandpols;
-    int * inputbandlocalfreqindices;
+    int numrecordedfreqs;
+    int numzoomfreqs;
+    int * recordedfreqpols;
+    int * recordedfreqtableindices;
+    double * recordedfreqclockoffsets;
+    int * zoomfreqpols;
+    int * zoomfreqtableindices;
+    int * zoomfreqparentdfreqindices;
+    int * zoomfreqchanneloffset;
+    int numrecordedbands;
+    int numzoombands;
+    char * recordedbandpols;
+    int * recordedbandlocalfreqindices;
+    char * zoombandpols;
+    int * zoombandlocalfreqindices;
     int numdatafiles;
     string * datafilenames;
     int portnumber;
@@ -586,12 +637,11 @@ private:
 
   int mpiid;
   char header[HEADER_LENGTH];
-  bool commonread, configread, datastreamread, consistencyok, commandthreadinitialised, dumpsta, dumplta;
+  bool commonread, configread, datastreamread, freqread, consistencyok, commandthreadinitialised, dumpsta, dumplta;
   int visbufferlength;
   int executeseconds, startmjd, startseconds, startns, numdatastreams, numbaselines, numconfigs, defaultconfigindex, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, databufferfactor, numdatasegments, numcoreconfs, maxnumchannels, maxnumpulsarbins, numindependentchannelconfigs, stadumpchannels, ltadumpchannels;
   string delayfilename, uvwfilename, coreconffilename, outputfilename;
   int * numprocessthreads;
-  int * firstnaturalconfigindices;
   configdata * configs;
   freqdata * freqtable;
   telescopedata * telescopetable;

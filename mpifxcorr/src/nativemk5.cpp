@@ -145,16 +145,16 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 	int doUpdate = 0;
 	char *mk5dirpath;
 	char formatname[64];
-	int nbits, ninputbands, framebytes;
+	int nbits, nrecordedbands, framebytes;
 	Configuration::dataformat format;
 	double bw;
 
 	format = config->getDataFormat(configindex, streamnum);
 	nbits = config->getDNumBits(configindex, streamnum);
-	ninputbands = config->getDNumInputBands(configindex, streamnum);
+	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
 	framebytes = config->getFrameBytes(configindex, streamnum);
-	bw = config->getConfigBandwidth(configindex);
-	fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, framebytes, config->getDecimationFactor(configindex), formatname);
+        bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, framebytes, config->getDDecimationFactor(configindex, streamnum), formatname);
         if(fanout < 0)
           MPI_Abort(MPI_COMM_WORLD, 1);
 

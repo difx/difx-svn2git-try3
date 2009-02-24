@@ -48,14 +48,14 @@ public:
   * @param conf The configuration object, containing all information about the duration and setup of this correlation
   * @param confindex The index of the configuration this Mode is for
   * @param dsindex The index of the datastream this Mode is for
-  * @param nchan The number of channels per subband
+  * @param recordedbandchan The number of channels for each recorded subband
   * @param bpersend The number of FFT blocks to be processed in a message
-  * @param gblocks The number of additional guard blocks at the end of a message
-  * @param nfreqs The number of frequencies for this Mode
-  * @param bw The bandwidth of each of these IFs
-  * @param freqclkoffsets The time offsets in microseconds to be applied post-F for each of the frequencies
-  * @param ninputbands The total number of subbands recorded
-  * @param noutputbands The total number of subbands after prefiltering - not currently used (must be = numinputbands)
+  * @param gsamples The number of additional guard samples at the end of a message
+  * @param nrecordedfreqs The number of recorded frequencies for this Mode
+  * @param recordedbw The bandwidth of each of these IFs
+  * @param recordedfreqclkoffsets The time offsets in microseconds to be applied post-F for each of the frequencies
+  * @param nrecordedbands The total number of subbands recorded
+  * @param nzoombands The number of subbands to be taken from withing the recorded bands - can be zero
   * @param nbits The number of bits per sample
   * @param unpacksamp The number of samples to unpack in one hit
   * @param fbank Whether to use a polyphase filterbank to channelise (instead of FFT)
@@ -64,7 +64,7 @@ public:
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param bclock The recorder clock-out frequency in MHz ("block clock")
   */
-  Mode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * freqclkoffsets, int ninputbands, int noutputbands, int nbits, int unpacksamp, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, double bclock);
+  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffsets, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, double bclock);
 
  /**
   * Stores the delay information for the current block series
@@ -105,11 +105,6 @@ public:
   * @param outputband The band index
   */
   inline cf32* getAutocorrelation(bool crosspol, int outputband) { return autocorrelations[(crosspol)?1:0][outputband]; }
-
- /**
-  * @return The number of bands for this Mode
-  */
-  inline int getNumOutputBands() { return numoutputbands; }
 
  /**
   * Gets the expected decorrelation ("van Vleck correction" ) for a given number of bits.
@@ -160,13 +155,13 @@ protected:
   virtual float unpack(int sampleoffset);
   
   Configuration * config;
-  int configindex, datastreamindex, numchannels, blockspersend, guardblocks, twicenumchannels, numfreqs, numinputbands, numoutputbands, numbits, bytesperblocknumerator, bytesperblockdenominator, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, bufferseconds, unpackstartsamples, datalengthbytes;
-  double bandwidth, blockclock, sampletime, processtime, a, b, c, centredelay, toaddfirst, toaddlast; //MHz, microseconds
+  int configindex, datastreamindex, recordedbandchannels, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, bufferseconds, unpackstartsamples, datalengthbytes;
+  double recordedbandwidth, blockclock, sampletime, processtime, a, b, c, centredelay, toaddfirst, toaddlast; //MHz, microseconds
   double buffermicroseconds;
   f32 dataweight;
   int samplesperblock, samplesperlookup, numlookups, delaylength, autocorrwidth;
   bool filterbank, calccrosspolautocorrs, postffringerot, fractionalLoFreq, quadraticdelayinterp, dolinearinterp, initok;
-  double * freqclockoffsets;
+  double * recordedfreqclockoffsets;
   u8 * data;
   s16 * lookup;
   s16 * linearunpacked;

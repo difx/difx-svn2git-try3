@@ -44,12 +44,12 @@ public:
   * @param subcount The index of the polyco in the file to load
   * @param confindex The configuration index which this polyco relates to (ie which pulsar)
   * @param nbins The number of pulsar bins to use
-  * @param nchans The number of spectral points per band
+  * @param maxchans The number of spectral points per band
   * @param bphases The phases of the endpoints of each pulsar bin
   * @param bweights The weights associated with each pulsar bin
   * @param calcmins The period of time over which a given set of phase offsets is expected to be accurate
   */
-  Polyco(string filename, int subcount, int confindex, int nbins, int nchans, double * bphases, double * bweights, double calcmins);
+  Polyco(string filename, int subcount, int confindex, int nbins, int maxchans, double * bphases, double * bweights, double calcmins);
 
  /**
   * Copy constructor - performs deep copy of provided Polyco
@@ -79,10 +79,12 @@ public:
   * Sets the frequency band information and allocates the necessary arrays for bin calculation
   * @param nfreqs The number of frequencies to calculate for
   * @param freqs Array of frequency values, in MHz
-  * @param bw The bandwidth of the bands, in MHz
+  * @param bws Array of bandwidths, in MHz
+  * @param nchans Array of number of channels
+  * @param compute Array specifying which frequencies should actually be computed
   * @return Whether bin values are legal or not (should abort if not legal)
   */
-  bool setFrequencyValues(int nfreqs, double * freqs, double bw);
+  bool setFrequencyValues(int nfreqs, double * freqs, double * bws, int * nchans, bool * compute);
 
  /**
   * Sets the active time (from which subsequent offsets will refer to) to the given values
@@ -160,13 +162,16 @@ protected:
   void calculateDMPhaseOffsets(double offsetmins);
 
   string pulsarname;
-  int configindex, numbins, numchannels, numfreqs, observatory, timespan, numcoefficients, mjd;
-  double mjdfraction, dt0, dm, dopplershift, logresidual, refphase, f0, obsfrequency, binaryphase, minbinwidth, bandwidth, calclengthmins;
+  int configindex, numbins, maxchannels, numfreqs, observatory, timespan, numcoefficients, mjd;
+  double mjdfraction, dt0, dm, dopplershift, logresidual, refphase, f0, obsfrequency, binaryphase, minbinwidth, calclengthmins;
   bool readok;
   double * coefficients;
   f64 * binphases;
   f64 * binweights;
   f32 * lofrequencies;
+  f32 * bandwidths;
+  int * numchannels;
+  bool * computefor;
   f64 * freqcoefficientarray;
   f64 * phasecoefficientarray;
   f64 * timepowerarray;

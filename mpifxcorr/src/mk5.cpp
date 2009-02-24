@@ -141,7 +141,7 @@ void Mk5DataStream::updateConfig(int segmentindex)
   //take care of the case where an integral number of frames is not an integral number of blockspersend - ensure sendbytes is long enough
 
   //note below, the math should produce a pure integer, but add 0.5 to make sure that the fuzziness of floats doesn't cause an off-by-one error
-  bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getBlocksPerSend(bufferinfo[segmentindex].configindex)))/(config->getBlocksPerSend(bufferinfo[segmentindex].configindex) + config->getGuardBlocks(bufferinfo[segmentindex].configindex)) + 0.5));
+  bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getSubintNS(bufferinfo[segmentindex].configindex)))/(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex)) + 0.5));
 }
 
 void Mk5DataStream::initialiseFile(int configindex, int fileindex)
@@ -149,26 +149,26 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   int offset;
   char formatname[64];
   struct mark5_stream *mark5stream;
-  int nbits, ninputbands, framebytes, fanout;
+  int nbits, nrecordedbands, framebytes, fanout;
   Configuration::dataformat format;
   double bw;
 
   format = config->getDataFormat(configindex, streamnum);
   nbits = config->getDNumBits(configindex, streamnum);
-  ninputbands = config->getDNumInputBands(configindex, streamnum);
+  nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
   framebytes = config->getFrameBytes(configindex, streamnum);
-  bw = config->getConfigBandwidth(configindex);
+  bw = config->getDRecordedBandwidth(configindex, mpiid, 0);
 
-  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, framebytes, config->getDecimationFactor(configindex), formatname);
+  fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, framebytes, config->getDDecimationFactor(configindex, streamnum), formatname);
   if (fanout < 0)
     MPI_Abort(MPI_COMM_WORLD, 1);
 
   mark5stream = new_mark5_stream(
     new_mark5_stream_file(datafilenames[configindex][fileindex].c_str(), 0),
     new_mark5_format_generic_from_string(formatname) );
-  if(mark5stream->nchan != config->getDNumInputBands(configindex, streamnum))
+  if(mark5stream->nchan != config->getDNumRecordedBands(configindex, streamnum))
   {
-    cerror << startl << "Error - number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with MkV file " << datafilenames[configindex][fileindex] << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
+    cerror << startl << "Error - number of recorded bands for datastream " << streamnum << " (" << nrecordedbands << ") does not match with MkV file " << datafilenames[configindex][fileindex] << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
   }
 
   // resolve any day ambiguities
@@ -445,17 +445,17 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
   char formatname[64];
   char *ptr;
   struct mark5_stream *mark5stream;
-  int nbits, ninputbands, fanout;
+  int nbits, nrecordedbands, fanout;
   Configuration::dataformat format;
   double bw;
 
   format = config->getDataFormat(configindex, streamnum);
   nbits = config->getDNumBits(configindex, streamnum);
-  ninputbands = config->getDNumInputBands(configindex, streamnum);
+  nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
   framebytes = config->getFrameBytes(configindex, streamnum);
-  bw = config->getConfigBandwidth(configindex);
+  bw = config->getDRecordedBandwidth(configindex, mpiid, 0);
 
-  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, framebytes, config->getDecimationFactor(configindex), formatname);
+  fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, framebytes, config->getDDecimationFactor(configindex, streamnum), formatname);
   if (fanout < 0)
     MPI_Abort(MPI_COMM_WORLD, 1);
 
@@ -473,9 +473,9 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
     // We don't need to actually set the time - it ill just be deadreckoned from that last segment. As there is no good data this does not matter
   } else {
 
-    if(mark5stream->nchan != config->getDNumInputBands(configindex, streamnum))
+    if(mark5stream->nchan != config->getDNumRecordedBands(configindex, streamnum))
     {
-      cerror << startl << "Number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with MkV data " << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
+      cerror << startl << "Number of recorded bands for datastream " << streamnum << " (" << nrecordedbands << ") does not match with MkV data " << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
     }
 
     // resolve any day ambiguities

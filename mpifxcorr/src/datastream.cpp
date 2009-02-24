@@ -75,7 +75,7 @@ void DataStream::initialise()
   //cinfo << startl << "******DATASTREAM " << mpiid << ": Initialise. bufferbytes=" << bufferbytes << "  numdatasegments=" << numdatasegments << "  readbytes=" << readbytes << endl;
 
   for(int i=0;i<config->getNumConfigs();i++) {
-    currentoverflowbytes = int((((long long)config->getDataBytes(i,streamnum))*((long long)(config->getBlocksPerSend(i) + config->getGuardBlocks(i))))/config->getBlocksPerSend(i));
+    currentoverflowbytes = int((((long long)config->getDataBytes(i,streamnum))*((long long)(config->getSubintNS(i) + config->getGuardNS(i))))/config->getSubintNS(i));
     if(currentoverflowbytes > overflowbytes)
       overflowbytes = currentoverflowbytes;
   }
@@ -118,14 +118,14 @@ void DataStream::initialise()
     //set up all the parameters in this bufferinfo slot
     updateConfig(i);
     bufferinfo[i].numsent = 0;
-    bufferinfo[i].seconds = 0;
+    bufferinfo[i].seconds = -9999;
     bufferinfo[i].nanoseconds = 0;
     bufferinfo[i].validbytes = 0;
     bufferinfo[i].datarequests = new MPI_Request[maxsendspersegment];
     bufferinfo[i].controlrequests = new MPI_Request[maxsendspersegment];
     bufferinfo[i].controlbuffer = new f64*[maxsendspersegment];
     for(int j=0;j<maxsendspersegment;j++)
-      bufferinfo[i].controlbuffer[j] = vectorAlloc_f64(config->getMaxSendBlocks() + 1);
+      bufferinfo[i].controlbuffer[j] = vectorAlloc_f64(config->getMaxBlocksPerSend() + 2);
   }
 
   filesread = new int[config->getNumConfigs()];
@@ -331,6 +331,10 @@ void DataStream::initialiseFile(int configindex, int fileindex)
   //set readseconds, accounting for the intclockseconds
   readseconds = 86400*(filestartday-corrstartday) + (filestartseconds-corrstartseconds) + intclockseconds;
   readnanoseconds = 0;
+  if(readnanoseconds < 0) {
+    readnanoseconds += 1000000000;
+    readseconds--;
+  }
 }
 
 //the returned value MUST be between 0 and bufferlength
@@ -343,7 +347,7 @@ int DataStream::calculateControlParams(int offsetsec, int offsetns)
   calculateQuadraticParameters(intdelayseconds, offsetns);
   firstoffsetns = offsetns - static_cast<int>(quadinterpolatedelay(intdelayseconds, offsetns)*1000);
   lastoffsetns = offsetns + int(bufferinfo[atsegment].numchannels*2*bufferinfo[atsegment].sampletimens - 1000*quadinterpolatedelay(intdelayseconds, offsetns+int(bufferinfo[atsegment].numchannels*2*bufferinfo[atsegment].sampletimens+0.5)) + 0.5);
-  if(lastoffsetns < 0)
+  while(lastoffsetns < 0)
   {
     offsetsec -= 1;
     intdelayseconds -= 1;
@@ -351,16 +355,10 @@ int DataStream::calculateControlParams(int offsetsec, int offsetns)
     firstoffsetns += 1000000000;
     lastoffsetns += 1000000000;
   }
-  if(lastoffsetns < 0)
-  {
-    cerror << startl << "lastoffsetns less than 0 still! =" << lastoffsetns << endl;
-  }
 
   //while we have passed the first of our two locked sections, unlock that and lock the next - have two tests so sample difference can't overflow
   waitForSendComplete();
-
-  if(offsetsec < bufferinfo[atsegment].seconds - 1) //coarse test to see if its all bad
-    //if(offsetsec < bufferinfo[atsegment].seconds - 1 || bufferinfo[atsegment].seconds < 0) //coarse test to see if its all bad
+  if(offsetsec < bufferinfo[atsegment].seconds - 1 || bufferinfo[atsegment].seconds < 0) //coarse test to see if its all bad
   {
     for(int i=0;i<bufferinfo[atsegment].controllength;i++)
       bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][i] = MAX_NEGATIVE_DELAY;
@@ -552,12 +550,12 @@ void DataStream::updateConfig(int segmentindex)
   }
 
   //set everything as directed by the config object
-  bufferinfo[segmentindex].sendbytes = int((((long long)config->getDataBytes(bufferinfo[segmentindex].configindex,streamnum))*((long long)(config->getBlocksPerSend(bufferinfo[segmentindex].configindex) + config->getGuardBlocks(bufferinfo[segmentindex].configindex))))/ config->getBlocksPerSend(bufferinfo[segmentindex].configindex));
-  bufferinfo[segmentindex].controllength = config->getBlocksPerSend(bufferinfo[segmentindex].configindex) + config->getGuardBlocks(bufferinfo[segmentindex].configindex) + 1; //extra one for the start time
+  bufferinfo[segmentindex].sendbytes = int((((long long)config->getDataBytes(bufferinfo[segmentindex].configindex,streamnum))*((long long)(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex))))/ config->getSubintNS(bufferinfo[segmentindex].configindex));
+  bufferinfo[segmentindex].controllength = config->getBlocksPerSend(bufferinfo[segmentindex].configindex) + 2; //one extra for start time, plus one more for guard
   bufferinfo[segmentindex].bytespersamplenum = config->getDBytesPerSampleNum(bufferinfo[segmentindex].configindex, streamnum);
   bufferinfo[segmentindex].bytespersampledenom = config->getDBytesPerSampleDenom(bufferinfo[segmentindex].configindex, streamnum);
-  bufferinfo[segmentindex].numchannels = config->getNumChannels(bufferinfo[segmentindex].configindex);
-  bufferinfo[segmentindex].sampletimens = 500.0/config->getDBandwidth(bufferinfo[segmentindex].configindex,streamnum,0);
+  bufferinfo[segmentindex].numchannels = config->getFNumChannels(config->getDRecordedFreqIndex(bufferinfo[segmentindex].configindex, streamnum, 0));
+  bufferinfo[segmentindex].sampletimens = 500.0/config->getDRecordedBandwidth(bufferinfo[segmentindex].configindex,streamnum,0);
   bufferinfo[segmentindex].nsinc = int((bufferinfo[segmentindex].sampletimens*(bufferbytes/numdatasegments)*bufferinfo[segmentindex].bytespersampledenom)/(bufferinfo[segmentindex].bytespersamplenum) + 0.5);
   portnumber = config->getDPortNumber(bufferinfo[segmentindex].configindex, streamnum);
   tcpwindowsizebytes = config->getDTCPWindowSizeKB(bufferinfo[segmentindex].configindex, streamnum)*1024;
@@ -885,9 +883,8 @@ int DataStream::openframe()
     return(0);
   }
 
-  // Check to see if this is an old style header first
-  ntoread = sizeof(long long) + sizeof(long long);
-  status = readnetwork(socketnumber, buf, ntoread, &nread);
+  // Read file header and extract time from it
+  status = readnetwork(socketnumber, buf, LBA_HEADER_LENGTH, &nread);
   if (status==-1) { // Error reading socket
     cerror << startl << "Error reading socket" << endl;
     keepreading=false;
@@ -895,27 +892,10 @@ int DataStream::openframe()
   } else if (status==0) {  // Socket closed remotely
     keepreading=false;
     return(0);
-  } else if (nread!=ntoread) { // This should never happen
+  } else if (nread!=LBA_HEADER_LENGTH) { // This should never happen
     keepreading=false;
     cerror << startl << "Error file header" << endl;
     return(0);
-  }
-  
-  if (buf[8] != ':') {
-    // Read file header and extract time from it
-    status = readnetwork(socketnumber, &(buf[16]), LBA_HEADER_LENGTH - 16, &nread);
-    if (status==-1) { // Error reading socket
-      cerror << startl << "Error reading socket" << endl;
-      keepreading=false;
-      return(0);
-    } else if (status==0) {  // Socket closed remotely
-      keepreading=false;
-      return(0);
-    } else if (nread!=LBA_HEADER_LENGTH-16) { // This should never happen
-      keepreading=false;
-      cerror << startl << "Error file header" << endl;
-      return(0);
-    }
   }
 
   status = initialiseFrame(buf);
@@ -934,26 +914,22 @@ int DataStream::initialiseFrame(char * frameheader)
   string inputline;
 
   at = frameheader;
-  if (at[8] != ':') {
-    while (strncmp(at,"TIME",4)!=0)
-    {
-      endline = index(at, '\n');
-      if (endline==NULL || endline-frameheader>=LBA_HEADER_LENGTH-1) {
-        cerror << startl << "Could not parse file header" << endl;
-        keepreading=false;
-        return -1;
-      }
-      at = endline+1;
-    }
+  while (strncmp(at,"TIME",4)!=0)
+  {
     endline = index(at, '\n');
-    *endline = 0;
-    at += 5;  // Skip over "TIME"
-    inputline = at;
-  } else {
-    inputline = string(at, 15);
+    if (endline==NULL || endline-frameheader>=LBA_HEADER_LENGTH-1) {
+      cerror << startl << "Could not parse file header" << endl;
+      keepreading=false;
+      return -1;
+    }
+    at = endline+1;
   }
+  endline = index(at, '\n');
+  *endline = 0;
+  at += 5;  // Skip over "TIME"
 
-  cinfo << startl << "DATASTREAM " << mpiid << " read a header line of " << inputline << "!" << endl;
+  inputline = at;
+
   year = atoi((inputline.substr(0,4)).c_str());
   month = atoi((inputline.substr(4,2)).c_str());
   day = atoi((inputline.substr(6,2)).c_str());
@@ -967,7 +943,11 @@ int DataStream::initialiseFrame(char * frameheader)
 
   readseconds = 86400*(filestartday-corrstartday) + (filestartseconds-corrstartseconds) + intclockseconds;
   readnanoseconds = 0;
-  
+  if(readnanoseconds < 0) {
+    readnanoseconds += 1000000000;
+    readseconds--;
+  }
+
   return 0;
 }
 

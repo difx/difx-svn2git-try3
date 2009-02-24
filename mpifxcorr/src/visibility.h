@@ -85,18 +85,18 @@ public:
   inline int getCurrentConfig() { return currentconfigindex; }
 
  /**
-  * Calculates the time difference between the specified time and the centre of the present integration period
+  * Calculates the time difference between the specified time and the start of the present integration period
   * @param seconds The comparison time in whole seconds
   * @param ns The offset from the whole seconds in nanoseconds
-  * @return Difference between specified time and centre of current integration period, in seconds
+  * @return Difference between specified time and start of current integration period, in nanoseconds
   */
-  inline double timeDifference(int seconds, int ns)
-    { return double(seconds-currentstartseconds) + double(ns)/1000000000.0 - double(currentstartsamples - subintsamples/2)/samplespersecond; }
+  inline s64 timeDifference(int seconds, int ns)
+  { return ((s64)(seconds-currentstartseconds))*1000000000 + (s64)ns - (s64)currentstartns; }
 
  /**
   * @return The time at the start of the current integration period
   */
-  inline double getTime() { return double(currentstartseconds) + double(currentstartsamples)/double(samplespersecond); }
+  inline double getTime() { return double(currentstartseconds) + double(currentstartns)/1000000000.0; }
 
 /**
   * Send a difxmessage containing integration time and antenna weights
@@ -141,11 +141,6 @@ private:
   void writeascii();
 
 /**
-  * Writes the visibilities to disk in rpfits format
-  */
-  void writerpfits();
-
-/**
   * Writes the visibilities to disk in DiFX format (binary with inserted ascii headers)
   */
   void writedifx();
@@ -156,7 +151,7 @@ private:
   void writeDiFXHeader(ofstream * output, int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, float buvw[3]);
 
   Configuration * config;
-  int visID, expermjd, experseconds, integrationsamples, currentstartseconds, currentstartsamples, offset, offsetperintegration, subintsthisintegration, subintsamples, numvisibilities, numdatastreams, numbaselines, numchannels, currentsubints, resultlength, currentconfigindex, samplespersecond, maxproducts, executeseconds, autocorrincrement;
+  int visID, expermjd, experseconds, currentstartseconds, currentstartns, offsetns, offsetnsperintegration, subintsthisintegration, subintns, numvisibilities, numdatastreams, numbaselines, currentsubints, resultlength, currentconfigindex, maxproducts, executeseconds, autocorrwidth;
   double fftsperintegration, meansubintsperintegration;
   const string * polnames;
   bool first, monitor, pulsarbinon, configuredok;
@@ -165,21 +160,15 @@ private:
   int * mon_socket;
   int monitor_skip;
   cf32 ** autocorrcalibs;
-  f32 ** autocorrweights;
+  f32 *** autocorrweights;
   f32 *** baselineweights;
   std::string * telescopenames;
-  //cf32 *** results;
   cf32 * results;
-#ifdef HAVE_RPFITS
-  cf32 * rpfitsarray;
-#endif
   f32 *** binweightsums;
   cf32 *** binscales;
   f32 * binweightdivisor;
   int ** pulsarbins;
   Polyco * polyco;
-  int *** baselinepoloffsets;
-  int *** datastreampolbandoffsets;
 };
 
 #endif
