@@ -24,8 +24,8 @@
 #include "mk5.h"
 #include "alert.h"
 
-Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffsets, int nrecordedbands, int nzoombands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
-  : Mode(conf, confindex, dsindex, recordedbandchan, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffsets, nrecordedbands, nzoombands, nbits, recordedbandchan*2+4, fbank, postffringe, quaddelayinterp, cacorrs, recordedbw*2)
+Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
+  : Mode(conf, confindex, dsindex, recordedbandchan, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, recordedbandchan*2+4, fbank, postffringe, quaddelayinterp, cacorrs, recordedbw*2)
 {
   char formatname[64];
 

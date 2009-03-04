@@ -53,7 +53,8 @@ public:
   * @param gsamples The number of additional guard samples at the end of a message
   * @param nrecordedfreqs The number of recorded frequencies for this Mode
   * @param recordedbw The bandwidth of each of these IFs
-  * @param recordedfreqclkoffsets The time offsets in microseconds to be applied post-F for each of the frequencies
+  * @param recordedfreqclkoffs The time offsets in microseconds to be applied post-F for each of the frequencies
+  * @param recordedfreqlooffs The LO offsets in Hz for each recorded frequency
   * @param nrecordedbands The total number of subbands recorded
   * @param nzoombands The number of subbands to be taken from withing the recorded bands - can be zero
   * @param nbits The number of bits per sample
@@ -64,7 +65,7 @@ public:
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param bclock The recorder clock-out frequency in MHz ("block clock")
   */
-  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffsets, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, double bclock);
+  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, double bclock);
 
  /**
   * Stores the delay information for the current block series
@@ -162,6 +163,7 @@ protected:
   int samplesperblock, samplesperlookup, numlookups, delaylength, autocorrwidth;
   bool filterbank, calccrosspolautocorrs, postffringerot, fractionalLoFreq, quadraticdelayinterp, dolinearinterp, initok;
   double * recordedfreqclockoffsets;
+  double * recordedfreqlooffsets;
   u8 * data;
   s16 * lookup;
   s16 * linearunpacked;
@@ -217,7 +219,8 @@ public:
   * @param gblocks The number of additional guard blocks at the end of a message
   * @param nfreqs The number of frequencies for this Mode
   * @param bw The bandwidth of each of these IFs
-  * @param freqclkoffsets The time offsets in microseconds to be applied post-F for each of the frequencies
+  * @param recordedfreqclkoffs The time offsets in microseconds to be applied post-F for each of the frequencies
+  * @param recordedfreqlooffs The LO offsets in Hz for each recorded frequency
   * @param ninputbands The total number of subbands recorded
   * @param noutputbands The total number of subbands after prefiltering - not currently used (must be = numinputbands)
   * @param nbits The number of bits per sample
@@ -227,7 +230,7 @@ public:
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param unpackvalues 4 element array containing floating point unpack values for the four possible two bit values
   */
-    LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * freqclkoffsets, int ninputbands, int noutputbands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, const s16* unpackvalues);
+    LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, const s16* unpackvalues);
 
     ///unpack mapping for "standard" recording modes
     static const s16 stdunpackvalues[];

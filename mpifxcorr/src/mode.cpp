@@ -31,8 +31,8 @@
 const float Mode::TINY = 0.000000001;
 
 
-Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffsets, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, double bclock)
-  : config(conf), configindex(confindex), datastreamindex(dsindex), recordedbandchannels(recordedbandchan), blockspersend(bpersend), guardsamples(gsamples), twicerecordedbandchannels(recordedbandchan*2), numrecordedfreqs(nrecordedfreqs), numrecordedbands(nrecordedbands), numzoombands(nzoombands), numbits(nbits), unpacksamples(unpacksamp), recordedbandwidth(recordedbw), blockclock(bclock), filterbank(fbank), calccrosspolautocorrs(cacorrs), postffringerot(postffringe), quadraticdelayinterp(quaddelayinterp), recordedfreqclockoffsets(recordedfreqclkoffsets)
+Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, double bclock)
+  : config(conf), configindex(confindex), datastreamindex(dsindex), recordedbandchannels(recordedbandchan), blockspersend(bpersend), guardsamples(gsamples), twicerecordedbandchannels(recordedbandchan*2), numrecordedfreqs(nrecordedfreqs), numrecordedbands(nrecordedbands), numzoombands(nzoombands), numbits(nbits), unpacksamples(unpacksamp), recordedbandwidth(recordedbw), blockclock(bclock), filterbank(fbank), calccrosspolautocorrs(cacorrs), postffringerot(postffringe), quadraticdelayinterp(quaddelayinterp), recordedfreqclockoffsets(recordedfreqclkoffs), recordedfreqlooffsets(recordedfreqlooffs)
 {
   int status, localfreqindex;
   int decimationfactor = config->getDDecimationFactor(configindex, datastreamindex);
@@ -278,7 +278,7 @@ float Mode::unpack(int sampleoffset)
 
 float Mode::process(int index)  //frac sample error, fringedelay and wholemicroseconds are in microseconds 
 {
-  double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance;
+  double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance, walltimesecs;
   f32 phaserotationfloat, fracsampleerror;
   int status, count, nearestsample, integerdelay, sidebandoffset;
   cf32* fftptr;
@@ -302,6 +302,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   averagedelay = (delays[index] + delays[index+1])/2.0;
   starttime = (offsetseconds-bufferseconds)*1000000.0 + (double(offsetns)/1000.0 + index*twicerecordedbandchannels*sampletime - buffermicroseconds) - averagedelay;
   nearestsample = int(starttime/sampletime + 0.5);
+  walltimesecs = offsetseconds + ((double)offsetns)/1000000000.0 + index*twicerecordedbandchannels*sampletime;
 
   //if we need to, unpack some more data - first check to make sure the pos is valid at all
   if(nearestsample < -1 || (((nearestsample + twicerecordedbandchannels)/samplesperblock)*bytesperblocknumerator)/bytesperblockdenominator > datalengthbytes)
@@ -389,11 +390,12 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       phaserotation = (averagedelay-integerdelay)*lofreq;
       if(fractionalLoFreq)
         phaserotation += integerdelay*(lofreq-int(lofreq));
-      phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation + 0.5)));
+      phaserotation -= walltimesecs*recordedfreqlooffsets[i];
+      phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
 
       status = vectorAddC_f32_I(phaserotationfloat, fracmult, recordedbandchannels+1);
       if(status != vecNoErr)
-        csevere << startl << "Error in post-f phase rotation addition!!!" << status << endl;
+        csevere << startl << "Error in post-f phase rotation addition (and maybe LO offset correction)!!!" << status << endl;
     }
     else //need to work out the time domain modulation
     {
@@ -415,6 +417,16 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       status = vectorSinCos_f32(rotateargument, sinrotated, cosrotated, twicerecordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error in sin/cos of rotate argument!!! Status = " << status << endl;
+
+      //take care of an LO offset if present\
+      if(recordedfreqlooffsets[i] > 0.0 || recordedfreqlooffsets[i] < 0.0)
+      {
+        phaserotation = -walltimesecs*recordedfreqlooffsets[i];
+        phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
+        status = vectorAddC_f32_I(phaserotationfloat, fracmult, recordedbandchannels+1);
+        if(status != vecNoErr)
+          csevere << startl << "Error in LO offset correction!!!" << status << endl;
+      }
     }
 
     status = vectorSinCos_f32(fracmult, fracmultsin, fracmultcos, recordedbandchannels + 1);
@@ -567,8 +579,8 @@ void Mode::setData(u8 * d, int dbytes, double btime)
 const float Mode::decorrelationpercentage[] = {0.63662, 0.88, 0.94, 0.96, 0.98, 0.99, 0.996, 0.998}; //note these are just approximate!!!
 
 
-LBAMode::LBAMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffsets, int nrecordedbands, int nzoombands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, const s16* unpackvalues)
-    : Mode(conf,confindex,dsindex,recordedbandchan,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffsets,nrecordedbands,nzoombands,nbits,recordedbandchan*2,fbank,postffringe,quaddelayinterp,cacorrs,(recordedbw<16.0)?recordedbw*2.0:32.0)
+LBAMode::LBAMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, const s16* unpackvalues)
+    : Mode(conf,confindex,dsindex,recordedbandchan,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,recordedbandchan*2,fbank,postffringe,quaddelayinterp,cacorrs,(recordedbw<16.0)?recordedbw*2.0:32.0)
 {
   int shift, outputshift;
   int count = 0;

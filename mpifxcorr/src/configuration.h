@@ -534,6 +534,7 @@ private:
     int * recordedfreqpols;
     int * recordedfreqtableindices;
     double * recordedfreqclockoffsets;
+    double * recordedfreqlooffsets;
     int * zoomfreqpols;
     int * zoomfreqtableindices;
     int * zoomfreqparentdfreqindices;

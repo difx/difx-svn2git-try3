@@ -421,7 +421,6 @@ void Visibility::writedata()
     //that cheekily used Nyquist channel imaginary component of the results array
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) {
       freqchannels = config->getFNumChannels(config->getBFreqIndex(currentconfigindex, i, j));
-      cout << "Looking for weight of baseline " << i << ", freq " << j << endl;
       //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event 
       //that one datastream has USB and the other has LSB
       nyquistchannel = freqchannels;
@@ -443,7 +442,6 @@ void Visibility::writedata()
       {
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
         if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
-          cout << "Looking for weight of datastream " << i << ", band " << k << endl;
           freqchannels = config->getFNumChannels(freqindex);
           nyquistchannel = freqchannels;
           if(config->getFreqTableLowerSideband(freqindex))
@@ -463,7 +461,6 @@ void Visibility::writedata()
       }
     }
   }
-  cout << "Finished grabbing weights" << endl;
   count = 0;
   for(int i=0;i<numbaselines;i++) //do each baseline
   {

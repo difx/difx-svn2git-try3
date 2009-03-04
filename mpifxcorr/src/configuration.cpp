@@ -590,19 +590,19 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
     case LBASTD:
       if(stream.numbits != 2)
         cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::stdunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::stdunpackvalues);
       break;
     case LBAVSOP:
       if(stream.numbits != 2)
         cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::vsopunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::vsopunpackvalues);
       break;
     case MKIV:
     case VLBA:
     case MARK5B:
       framesamples = getFramePayloadBytes(configindex, datastreamindex)*8/(getDNumBits(configindex, datastreamindex)*getDNumRecordedBands(configindex, datastreamindex)*streamdecimationfactor);
       framebytes = getFrameBytes(configindex, datastreamindex);
-      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     default:
       cerror << startl << "Error - unknown Mode!!!" << endl;
@@ -921,6 +921,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     datastreamtable[i].recordedfreqpols = new int[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqtableindices = new int[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqclockoffsets = new double[datastreamtable[i].numrecordedfreqs];
+    datastreamtable[i].recordedfreqlooffsets = new double[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].numrecordedbands = 0;
     for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
     {
@@ -928,6 +929,8 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].recordedfreqtableindices[j] = atoi(line.c_str());
       getinputline(input, &line, "CLK OFFSET ", j);
       datastreamtable[i].recordedfreqclockoffsets[j] = atof(line.c_str());
+      getinputline(input, &line, "FREQ OFFSET ", j); //Freq offset is positive if recorded LO frequency was higher than the frequency in the frequency table
+      datastreamtable[i].recordedfreqlooffsets[j] = atof(line.c_str());
       getinputline(input, &line, "NUM POLS ", j);
       datastreamtable[i].recordedfreqpols[j] = atoi(line.c_str());
       datastreamtable[i].numrecordedbands += datastreamtable[i].recordedfreqpols[j];
@@ -986,9 +989,6 @@ bool Configuration::processDatastreamTable(ifstream * input)
           if (freqtable[datastreamtable[i].zoomfreqtableindices[j]].lowersideband)
             datastreamtable[i].zoomfreqchanneloffset[j] += freqtable[datastreamtable[i].zoomfreqtableindices[j]].numchannels;
         }
-      }
-      if(mpiid == 0) {
-        cout << "For datastream " << i << ", zoom freq " << j << ", the parent freq is " << datastreamtable[i].zoomfreqparentdfreqindices[j] << " and the channel offset is " << datastreamtable[i].zoomfreqchanneloffset[j] << endl;
       }
     }
     datastreamtable[i].zoombandpols = new char[datastreamtable[i].numzoombands];

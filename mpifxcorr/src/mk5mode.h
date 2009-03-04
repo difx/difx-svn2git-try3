@@ -42,7 +42,8 @@ class Mk5Mode : public Mode
    * @param gsamples The number of additional guard samples at the end of a message
    * @param nrecordedfreqs The number of recorded frequencies for this Mode
    * @param recordedbw The bandwidth of each of these IFs
-   * @param recordedfreqclkoffsets The time offsets in microseconds to be applied post-F for each of the frequencies
+   * @param recordedfreqclkoffs The time offsets in microseconds to be applied post-F for each of the frequencies
+   * @param recordedfreqlooffs The LO offsets in Hz for each recorded frequency
    * @param nrecordedbands The total number of subbands recorded
    * @param nzoombands The number of subbands to be taken from withing the recorded bands - can be zero
    * @param nbits The number of bits per sample
@@ -52,7 +53,7 @@ class Mk5Mode : public Mode
    * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
    * @param fsamples The number of samples in a frame per channel
   */
-    Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffsets, int nrecordedbands, int nzoombands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format);
+    Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format);
     virtual ~Mk5Mode();
 
   protected:
