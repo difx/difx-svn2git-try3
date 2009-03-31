@@ -55,6 +55,9 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  --average <nchan>\n");
 	fprintf(stderr, "  -a        <nchan>   Average <nchan> channels\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --time-average <nInt>\n");
+	fprintf(stderr, "  -t        <nInt>    Average <nInt> time integrations\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "  --bin        <bin>\n");
 	fprintf(stderr, "  -B           <bin>  Select on this pulsar bin number\n");
 	fprintf(stderr, "\n");
@@ -85,6 +88,11 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  -x                  Don't produce sniffer output\n");
 	fprintf(stderr, "\n");
 #endif
+	fprintf(stderr, "  --uv-shift <baseFilename2>\n");
+	fprintf(stderr, "  -u <baseFilename2>  Shift all sources to the coordinates"
+			" found in the \n" 
+			"                      files beginnng with <baseFilename2>\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "  --verbose\n");
 	fprintf(stderr, "  -v                  Be verbose.  -v -v for more!\n");
 	fprintf(stderr, "\n");
@@ -98,11 +106,13 @@ struct CommandLineOptions
 {
 	char *fitsFile;
 	char *baseFile[MAX_INPUT_FILES];
+	char *shiftFile;
 	int nBaseFile;
 	int writemodel;
 	int pretend;
 	double scale;
 	int verbose;
+	int timeAvg;
 	/* some overrides */
 	int specAvg;
 	int doalldifx;
@@ -144,6 +154,10 @@ void deleteCommandLineOptions(struct CommandLineOptions *opts)
 		if(opts->fitsFile)
 		{
 			free(opts->fitsFile);
+		}
+		if(opts->shiftFile)
+		{
+			free(opts->shiftFile);
 		}
 		free(opts);
 	}
@@ -228,6 +242,17 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					i++;
 					opts->specAvg = atoi(argv[i]);
 				}
+				else if(strcmp(argv[i], "--time-average") == 0 ||
+				        strcmp(argv[i], "-t") == 0)
+				{
+					i++;
+					opts->timeAvg = atoi(argv[i]);
+					printf("Averaging each %d time integrations.\n", 
+						opts->timeAvg);
+					fprintf(stderr, "Error -- Time Averaging not yet supported\n");
+					deleteCommandLineOptions(opts);
+					return 0;
+				}
 				else if(strcmp(argv[i], "--bin") == 0 ||
 					strcmp(argv[i], "-B") == 0)
 				{
@@ -245,6 +270,17 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 				{
 					i++;
 					opts->startChan = atof(argv[i]);
+				}
+				else if(strcmp(argv[i], "--uvshift") == 0 ||
+				        strcmp(argv[i], "-u") == 0)
+				{
+					i++;
+					opts->shiftFile = strdup(argv[i]);
+					printf("Shifting coordinates to those found in %s.*\n", 
+						opts->shiftFile);
+					fprintf(stderr, "Error -- UV shift not yet supported\n");
+					deleteCommandLineOptions(opts);
+					return 0;
 				}
 				else
 				{
