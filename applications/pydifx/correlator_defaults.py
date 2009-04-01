@@ -5,29 +5,30 @@
 # Therefore if you need to make many experiment-specific changes, they
 # they can be made in the experiment-specific observation.py
 from logging import DEBUG
+from os import getenv
+difxroot = getenv('DIFXROOT')
+if not difxroot:
+    difxroot = ''
+mpiroot = getenv('MPIROOT')
+if not mpiroot:
+    mpiroot = ''
+difxbin = difxroot + '/bin'
 
 #######################################################################
 #executables
 #######################################################################
 # mpirun
-mpi = '/irasoft/difx/mpich/mpich-1.2.7p1/util/mpirun'
+mpi = mpiroot + '/bin/mpirun'
 # mpifxcorr
-mpifxcorr = '/irasoft/difx/tools/bin/mpifxcorr'
+mpifxcorr = difxbin = '/mpifxcorr'
 # difx2fits
-difx2fits = 'difx2fits'
+difx2fits = difxbin = '/difx2fits'
 #remote shell used to connect to machines (used by killdifx)
 rsh = 'ssh'
 # checkCalcServer host
-checkCalc = 'checkCalcServer localhost'
+checkCalc = difxbin + '/checkCalcServer localhost'
 # startCalcServer
-startCalc = 'startCalcServer'
-
-#######################################################################
-# Log file locations
-#######################################################################
-logpath = '/irasoft/difx/log'
-logname = 'log'
-logfile_level = DEBUG
+startCalc = difxbin + '/startCalcServer'
 
 #######################################################################
 # calcif
@@ -44,7 +45,7 @@ difx2fits_delete = False
 #######################################################################
 # eop.py
 #######################################################################
-eop_path = "/irasoft/difx/tools/calc"
+eop_path = difxroot + "/calc"
 iat_path = eop_path
 # can get TAI-UTC from here but they seem to be out of date
 # http://gemini.gsfc.nasa.gov/500/oper/solve_apriori_files/ut1ls.dat
@@ -63,7 +64,7 @@ killdifx_options = ''
 #######################################################################
 # Cluster path (used by machinegen)
 #######################################################################
-cluster_path = "/irasoft/difx/tools/share/grid.cluster"
+cluster_path = difxroot + "/share/grid.cluster"
 
 #######################################################################
 # calc file defaults
