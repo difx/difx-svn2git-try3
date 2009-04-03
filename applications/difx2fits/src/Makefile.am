@@ -1,5 +1,4 @@
 bin_PROGRAMS = difx2fits
-
 if WITH_FFTW
 fftw_sources = \
 	sniffer.c \

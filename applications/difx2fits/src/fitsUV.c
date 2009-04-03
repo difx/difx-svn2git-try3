@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <math.h>
+#include <complex.h>
 #include "config.h"
 #include "fitsUV.h"
 #ifdef HAVE_FFTW
@@ -17,6 +19,8 @@
 #define BAND_ID_ERROR		-6
 #define POL_ID_ERROR		-7
 #define NFLOAT_ERROR		-8
+#define C_LIGHT         299792458. /* Speed of light; m/s */
+#define TWO_PI              2*M_PI
 
 static int DifxVisInitData(DifxVis *dv)
 {
@@ -620,6 +624,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	}
 
 	return changed;
+
 }
 
 int DifxVisCollectRandomParams(const DifxVis *dv)
@@ -692,13 +697,18 @@ static int RecordIsZero(const DifxVis *dv)
 
 	for(i = 0; i < n; i++)
 	{
+		if(i % dv->nComplex == 0)
+		{
+			printf("\n");
+		}
+		printf("%e\t", d[i]);
 		/* don't look at weight in deciding whether data is valid */
 		if((d[i] != 0.0) && (i % dv->nComplex != 2))
 		{
 			invalid = 0;
 		}
 	}
-	
+	printf("\n");
 	return invalid;
 }
 
@@ -843,7 +853,56 @@ static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 	return 0;
 }
 
-static int DifxVisConvert(const DifxInput *D, 
+/*
+int printDifxVis(DifxVis *dv)
+{
+	int i;
+	float *vis = dv->data;
+
+	for(i = 0; i < dv->nData / dv->nComplex; i++)
+	{
+		printf("%e\t%e\n", vis[0], vis[1]);
+		vis += dv->nComplex;
+	}
+	return(0);
+}
+*/
+
+int addPhase(DifxVis *dv, float phase)
+{
+	/* add a phase in radians to an entire visibility*
+	 * testing only, this will be useless for the final
+	 * version as we will have to apply a different 
+	 * phase to each frequency
+	 */ 
+	int i, n, inc;
+	float real, imag, preal, pimag; 
+	const float *d;
+
+	d = dv->data;
+	inc = dv->nComplex;
+	n = dv->nData;
+
+	/*here call function to convert delay to a range of frequencies
+	 */
+
+	preal = cos(phase); 
+	pimag = sin(phase);
+
+	for(i = 0; i < n; i+= inc)
+	{
+		printf("%e\t%e\t", d[i], d[i+1]);
+		printf("%e\t%e\t", preal, pimag);
+		real = d[i] * preal - d[i+1] * pimag;
+		imag = d[i] * pimag + d[i+1] * preal;
+		dv->data[i] = real;
+		dv->data[i+1] = imag;
+		printf("%e\t%e\n", d[i], d[i+1]);
+	}
+	return(0);
+}
+
+static int DifxVisConvert(const DifxInput *D, DifxInput *NewModel,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, 
 	double s, int verbose, double sniffTime, int pulsarBin)
 {
@@ -999,6 +1058,10 @@ static int DifxVisConvert(const DifxInput *D,
 
 	nJob = D->nJob;
 
+	/* below opens each of the jobs and works through them 
+	 * always checking which has the earliest data
+	 * this will all have to be rewritten so we're only
+	 * buffering a single job at a time */
 	/* First prime each structure with some data */
 	for(j = 0; j < nJob; j++)
 	{
@@ -1043,6 +1106,10 @@ static int DifxVisConvert(const DifxInput *D,
 		}
 		else
 		{
+			if(NewModel != D)
+			{
+				addPhase(dv, 0.125*TWO_PI);
+			}
 #ifdef HAVE_FFTW
 			feedSnifferFITS(S, dv->record);
 #endif
@@ -1100,7 +1167,7 @@ static int DifxVisConvert(const DifxInput *D,
 	return 0;
 }
 
-const DifxInput *DifxInput2FitsUV(const DifxInput *D,
+const DifxInput *DifxInput2FitsUV(const DifxInput *D, const DifxInput *NewModel,
 	struct fits_keywords *p_fits_keys,
 	struct fitsPrivate *out, double scale,
 	int verbose, double sniffTime, int pulsarBin)
@@ -1110,7 +1177,7 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D,
 		return 0;
 	}
 
-	DifxVisConvert(D, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin);
+	DifxVisConvert(D, NewModel, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin);
 
 	return D;
 }

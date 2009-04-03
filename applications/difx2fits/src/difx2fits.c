@@ -249,7 +249,7 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					opts->timeAvg = atoi(argv[i]);
 					printf("Averaging each %d time integrations.\n", 
 						opts->timeAvg);
-					fprintf(stderr, "Error -- Time Averaging not yet supported\n");
+					fprintf(stderr, "Error -- Time Averaging not yet supported!\n");
 					deleteCommandLineOptions(opts);
 					return 0;
 				}
@@ -278,10 +278,8 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					opts->shiftFile = strdup(argv[i]);
 					printf("Shifting coordinates to those found in %s.*\n", 
 						opts->shiftFile);
-					fprintf(stderr, "Error -- UV shift not yet supported\n");
-					deleteCommandLineOptions(opts);
-					return 0;
 				}
+
 				else
 				{
 					printf("Unknown param %s\n", argv[i]);
@@ -350,6 +348,20 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 		deleteCommandLineOptions(opts);
 		return 0;
 	}
+	
+	if(opts->shiftFile && opts->pulsarBin)
+	{
+		printf("Error -- UV shift not yet compatible with pulsar binning\n");
+		deleteCommandLineOptions(opts);
+		return 0;
+	}
+
+	if(opts->shiftFile && opts->nBaseFile > 1)
+	{
+		printf("Error -- UV shift not yet compatible with multiple input files\n");
+		deleteCommandLineOptions(opts);
+		return 0;
+	}
 
 	/* if input file ends in .difx, trim it */
 	for(i = 0; i < opts->nBaseFile; i++)
@@ -409,7 +421,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 	return 0;
 }
 
-static const DifxInput *DifxInput2FitsTables(const DifxInput *D, 
+static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput *NewModel,
 	struct fitsPrivate *out, int write_model, double scale, int verbose,
 	double sniffTime, int pulsarBin)
 {
@@ -491,7 +503,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  UV -- visibility          \n");
 	fflush(stdout);
-	D = DifxInput2FitsUV(D, &keys, out, scale, verbose, sniffTime, pulsarBin);
+	D = DifxInput2FitsUV(D, NewModel, &keys, out, scale, verbose, sniffTime, pulsarBin);
 	printf("                            ");
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
@@ -534,7 +546,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 int convertFits(struct CommandLineOptions *opts, int passNum)
 {
-	DifxInput *D, *D1, *D2;
+	DifxInput *D, *D1, *D2, *NewModel;
 	struct fitsPrivate outfile;
 	char outFitsName[256];
 	int i;
@@ -548,6 +560,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	}
 
 	D = 0;
+	NewModel = 0;
 
 	for(i = 0; i < opts->nBaseFile; i++)
 	{
@@ -629,12 +642,34 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		return 0;
 	}
 
+	if(opts->shiftFile)
+	{
+		if(opts->verbose > 1)
+		{
+			printf("Loading %s\n", opts->shiftFile);
+		}
+		NewModel = loadDifxInput(opts->shiftFile);
+		if(!NewModel)
+		{
+			fprintf(stderr, "loadDifxInput failed on <%s>.\n",
+				opts->shiftFile);
+			return 0;
+		}
+	}
 
 	if(opts->verbose > 2)
 	{
 		printDifxInput(D);
+		if(NewModel)
+		{
+			//FIXME is there any difference in the output? 
+			printf("shifted input\n");
+			printDifxInput(NewModel);
+		}
 	}
 
+	D = updateDifxInput(D);
+	//FIXME is this necessary?
 	D = updateDifxInput(D);
 
 	if(!D)
@@ -657,6 +692,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			{
 				fprintf(stderr, "Not converting.\n");
 				deleteDifxInput(D);
+				deleteDifxInput(NewModel);
 				return 0;
 			}
 		}
@@ -664,6 +700,29 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	else if(!D->job->difxVersion[0])
 	{
 		fprintf(stderr, "Warning -- working on unversioned job\n");
+	}
+
+	if(NewModel && NewModel->job->difxVersion[0] != D->job->difxVersion[0])
+	{
+		if(strncmp(difxVersion, D->job->difxVersion, 63))
+		{
+			fprintf(stderr, "Job made for version %s with uvshift input made for %s \n", NewModel->job->difxVersion, D->job->difxVersion);
+			if(opts->overrideVersion)
+			{
+				fprintf(stderr, "Continuing because of --override-version but not setting a version\n");
+				D->job->difxVersion[0] = 0;
+			}
+			else
+			{
+				fprintf(stderr, "Not converting.\n");
+				deleteDifxInput(D);
+				return 0;
+			}
+		}
+	}
+	else if(NewModel && !NewModel->job->difxVersion[0])
+	{
+		fprintf(stderr, "Warning -- UV Shift input is unversioned\n");
 	}
 
 	if(opts->verbose > 1)
@@ -714,21 +773,33 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		if(!opts->keepOrder)
 		{
 			DifxInputSortAntennas(D, opts->verbose);
+			DifxInputSortAntennas(NewModel, opts->verbose);
 		}
 
 		if(opts->verbose > 2)
 		{
 			printDifxInput(D);
+			if(NewModel != D)
+			{
+				printf("shifted input");
+				printDifxInput(NewModel);
+			}
 		}
 
 		if(fitsWriteOpen(&outfile, outFitsName) < 0)
 		{
 			deleteDifxInput(D);
+			deleteDifxInput(NewModel);
 			fprintf(stderr, "Cannot open output file\n");
 			return 0;
 		}
 
-		if(DifxInput2FitsTables(D, &outfile, opts->writemodel, 
+		if(!NewModel)
+		{
+			NewModel = D;
+		}
+
+		if(DifxInput2FitsTables(D, NewModel, &outfile, opts->writemodel, 
 			opts->scale, opts->verbose, opts->sniffTime,
 			opts->pulsarBin) == D)
 		{
@@ -739,6 +810,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	}
 
 	deleteDifxInput(D);
+	deleteDifxInput(NewModel);
 
 	return nConverted;
 }

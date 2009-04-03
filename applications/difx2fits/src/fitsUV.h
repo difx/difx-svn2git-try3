@@ -1,8 +1,6 @@
 #ifndef __FITS_UV_H__
 #define __FITS_UV_H__
 
-#include <complex.h>
-#include <math.h>
 #include <glob.h>
 #include <sys/types.h>
 #include "difxio/parsedifx.h"
@@ -60,6 +58,6 @@ void deleteDifxVis(DifxVis *dv);
 int DifxVisNextFile(DifxVis *dv);
 int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin);
 int DifxVisCollectRandomParams(const DifxVis *dv);
-
+int addPhase(DifxVis *dv, float phase);
 
 #endif
