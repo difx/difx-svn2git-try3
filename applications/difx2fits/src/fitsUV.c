@@ -19,8 +19,9 @@
 #define BAND_ID_ERROR		-6
 #define POL_ID_ERROR		-7
 #define NFLOAT_ERROR		-8
-#define C_LIGHT         299792458. /* Speed of light; m/s */
-#define TWO_PI              2*M_PI
+
+const double TWO_PI=2*M_PI;
+const double cLight=2.99792458e8;	/* speed of light in m/s */
 
 static int DifxVisInitData(DifxVis *dv)
 {
@@ -103,7 +104,7 @@ int DifxVisNextFile(DifxVis *dv)
 	return 0;
 }
 
-DifxVis *newDifxVis(const DifxInput *D, int jobId)
+DifxVis *newDifxVis(const DifxInput *D, const DifxInput *OldModel, int jobId)
 {
 	DifxVis *dv;
 	int i, c, v;
@@ -127,6 +128,7 @@ DifxVis *newDifxVis(const DifxInput *D, int jobId)
 	
 	dv->jobId = jobId;
 	dv->D = D;
+	dv->OldModel = OldModel;
 	dv->curFile = -1;
 	DifxVisStartGlob(dv);
 	dv->configId = -1;
@@ -134,6 +136,7 @@ DifxVis *newDifxVis(const DifxInput *D, int jobId)
 	dv->scanId = -1;
 	dv->baseline = -1;
 	dv->scale = 1.0;
+	dv->shiftDelay = 0;
 
 	/* For now, the difx format only provides 1 weight for the entire
 	 * vis record, so we don't need weights per channel */
@@ -557,6 +560,41 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 					scanId, n, aa1, aa2, mjd, dt, u, dv->U, v, dv->V, w, dv->W);
 			}
 		}
+		if (dv->D != dv->OldModel)
+		{
+			/* FIXME should we skip autocorrs? (they'll cancel to zero anyway)
+			 * Above doesn't seem to bother */
+			double delay1, delayOld1;
+			double delay2, delayOld2;
+			const DifxPolyModel *imOld1, *imOld2;
+			int n, nOld, termsOld1, termsOld2;
+
+			n = getDifxScanIMIndex(scan, mjd, &dt);
+			nOld = getDifxScanIMIndex(dv->OldModel->scan, mjd, &dt);
+
+			imOld1 = dv->OldModel->scan->im[aa1];
+			imOld2 = dv->OldModel->scan->im[aa2];
+			termsOld1 = imOld1->order + 1;
+			termsOld2 = imOld2->order + 1;
+			/*
+			delay    = evalPoly(im2[n].delay, terms2, dt) 
+				  -evalPoly(im1[n].delay, terms1, dt);
+			delayOld = evalPoly(imOld2[nOld].delay, termsOld2, dt) 
+				  -evalPoly(imOld1[nOld].delay, termsOld1, dt);
+			*/
+			delay2    = evalPoly(im2[n].delay, terms2, dt);
+			delay1    = evalPoly(im1[n].delay, terms1, dt);
+			delayOld2 = evalPoly(imOld2[nOld].delay, termsOld2, dt);
+			delayOld1 = evalPoly(imOld1[nOld].delay, termsOld1, dt);
+
+			//dv->shiftDelay = delayOld - delay;
+
+			printf("aa1+1: %d\taa2+1: %d\n", aa1+1, aa2+1);
+			printf("mjd: %f\tdelay1    %f\tdelay2    %f\n", dv->mjd, delay1, delay2);
+			printf("mjd: %f\tdelayOld1 %f\tdelayOld2 %f\n", dv->mjd, delayOld1, delayOld2);
+			dv->shiftDelay = (delay2 - delay1) - (delayOld2 - delayOld1);
+			printf("mjd: %f\tshiftDelay\t\t            %e\n", dv->mjd, dv->shiftDelay);
+		}
 	}
 
 	if(configId != dv->configId)
@@ -629,7 +667,6 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 
 int DifxVisCollectRandomParams(const DifxVis *dv)
 {
-	const double cLight=2.99792458e8;	/* speed of light in m/s */
 	
 	dv->record->U		= dv->U/cLight;
 	dv->record->V		= dv->V/cLight;
@@ -697,18 +734,12 @@ static int RecordIsZero(const DifxVis *dv)
 
 	for(i = 0; i < n; i++)
 	{
-		if(i % dv->nComplex == 0)
-		{
-			printf("\n");
-		}
-		printf("%e\t", d[i]);
 		/* don't look at weight in deciding whether data is valid */
 		if((d[i] != 0.0) && (i % dv->nComplex != 2))
 		{
 			invalid = 0;
 		}
 	}
-	printf("\n");
 	return invalid;
 }
 
@@ -778,6 +809,121 @@ static double getDifxScaleFactor(const DifxInput *D, double s, int verbose)
 	return scale;
 }
 
+int testShiftPhase(DifxVis *dv)
+{
+	if(dv->shiftDelay == 0)
+	{
+		return(0);
+	}
+	/*shift phase for a single spectrum (subband)*/
+	int i, index, nInChan, nChan, startChan, isUSB;
+	float real, imag, preal, pimag; 
+	float *d;
+	double *shift;
+	double bandFreq, chanBW;
+
+	printf("MJD %f\tIF %d\n", dv->mjd, dv->bandId + 1);
+
+	startChan = dv->D->startChan;
+	nChan = dv->D->nOutChan*dv->D->specAvg;
+
+	d = dv->spectrum;
+	shift = calloc(nChan*sizeof(double), 1);
+	nInChan = dv->D->nInChan;
+	
+	bandFreq = dv->D->config[dv->configId].IF[dv->bandId].freq;
+	isUSB = dv->D->config[dv->configId].IF[dv->bandId].sideband == 'U';
+	chanBW = (dv->D->config[dv->configId].IF[dv->bandId].bw/nInChan); /*in MHz*/
+
+	
+	for(i = 0; i < nChan; i++)
+	{
+		shift[i] = TWO_PI/8; 
+	}
+
+	printf("chan\tunshifted   \t\t\tphase multiplier\t\tshifted\n");
+	for(i = 0; i < nChan; i++)
+	{
+		index = (i + startChan)*dv->nComplex;
+		preal = cos(shift[i]); 
+		pimag = sin(shift[i]);
+		printf("%d\t", i+1);
+		printf("%e\t%e\t", d[index], d[index+1]);
+		printf("%e\t%e\t", preal, pimag);
+		real = d[index] * preal - d[index+1] * pimag;
+		imag = d[index] * pimag + d[index+1] * preal;
+		d[index] = real;
+		d[index+1] = imag;
+		printf("%e\t%e\n", d[i], d[i+1]);
+	}
+	free(shift);
+	return(0);
+}
+
+int shiftPhase(DifxVis *dv)
+{
+	/*
+	if(dv->shiftDelay == 0)
+	{
+		return(0);
+	}
+	*/
+	/*shift phase for a single spectrum (subband)*/
+	int i, index, nInChan, nChan, startChan, isUSB;
+	float real, imag, preal, pimag; 
+	float *d;
+	double *freq;
+	double bandFreq, chanBW, shift;
+
+	startChan = dv->D->startChan;
+	nChan = dv->D->nOutChan*dv->D->specAvg;
+
+	d = dv->spectrum;
+	freq = calloc(nChan*sizeof(double), 1);
+	nInChan = dv->D->nInChan;
+	
+	bandFreq = dv->D->config[dv->configId].IF[dv->bandId].freq;
+	isUSB = dv->D->config[dv->configId].IF[dv->bandId].sideband == 'U';
+	chanBW = (dv->D->config[dv->configId].IF[dv->bandId].bw/nInChan); /*in MHz*/
+	printf("IF: %d Delay: %f us; bandFreq %f MHz; Phase Turns at bandFreq: %f fraction: %f nComplex: %d\n", dv->bandId + 1, dv->shiftDelay, bandFreq, bandFreq*dv->shiftDelay, fmod(bandFreq*dv->shiftDelay, 1.0), dv->nComplex);
+
+	/* At some point we'll probably want to move this loop into its own function
+	 * maybe in difxio. It certainly doesn't need to be repeated for every
+	 * timestep! */
+	for(i = 0; i < nChan; i++)
+	{
+		if(isUSB)
+		{
+			freq[i] = bandFreq + (i+startChan) * chanBW;
+		}
+		else
+		{
+			freq[i] = bandFreq - (i+startChan) * chanBW;
+		}
+	}
+
+	printf("chan\tfreq\t unshifted   \t\t\tphase multiplier\t\tshifted\n");
+	for(i = 0; i < nChan; i++)
+	{
+		index = (startChan + i) * 2;
+		shift = TWO_PI * fmod(freq[i] * dv->shiftDelay, 1.0);/* us and MHz cancel*/
+		preal = cos(shift); 
+		pimag = sin(shift);
+		printf("%03d ", i+1);
+		printf("%.3f\t", freq[i]);
+		printf("%+.2e %+.2e ", d[index], d[index+1]);
+		//printf("%+f ", shift);
+		printf("%+.2f ", shift * 360.0/ TWO_PI);
+		real = d[index] * preal - d[index+1] * pimag;
+		imag = d[index] * pimag + d[index+1] * preal;
+		d[index] = real;
+		d[index+1] = imag;
+		printf("%+.2e %+.2e\n", d[index], d[index+1]);
+	}
+	free(freq);
+	return(0);
+}
+
 static int storevis(DifxVis *dv)
 {
 	const DifxInput *D;
@@ -800,6 +946,8 @@ static int storevis(DifxVis *dv)
 	dv->weight[D->nPolar*dv->bandId + dv->polId] = 
 		dv->recweight;
 	
+	shiftPhase(dv);
+
 	for(i = startChan; i < stopChan; i++)
 	{
 		if(isLSB)
@@ -815,6 +963,7 @@ static int storevis(DifxVis *dv)
 				(i-startChan)/D->specAvg)*
 				D->nPolar+dv->polId)*dv->nComplex;
 		}
+
 		for(k = 0; k < dv->nComplex; k++)
 		{
 			/* swap phase/uvw for FITS-IDI conformance */
@@ -853,56 +1002,8 @@ static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 	return 0;
 }
 
-/*
-int printDifxVis(DifxVis *dv)
-{
-	int i;
-	float *vis = dv->data;
 
-	for(i = 0; i < dv->nData / dv->nComplex; i++)
-	{
-		printf("%e\t%e\n", vis[0], vis[1]);
-		vis += dv->nComplex;
-	}
-	return(0);
-}
-*/
-
-int addPhase(DifxVis *dv, float phase)
-{
-	/* add a phase in radians to an entire visibility*
-	 * testing only, this will be useless for the final
-	 * version as we will have to apply a different 
-	 * phase to each frequency
-	 */ 
-	int i, n, inc;
-	float real, imag, preal, pimag; 
-	const float *d;
-
-	d = dv->data;
-	inc = dv->nComplex;
-	n = dv->nData;
-
-	/*here call function to convert delay to a range of frequencies
-	 */
-
-	preal = cos(phase); 
-	pimag = sin(phase);
-
-	for(i = 0; i < n; i+= inc)
-	{
-		printf("%e\t%e\t", d[i], d[i+1]);
-		printf("%e\t%e\t", preal, pimag);
-		real = d[i] * preal - d[i+1] * pimag;
-		imag = d[i] * pimag + d[i+1] * preal;
-		dv->data[i] = real;
-		dv->data[i+1] = imag;
-		printf("%e\t%e\n", d[i], d[i+1]);
-	}
-	return(0);
-}
-
-static int DifxVisConvert(const DifxInput *D, DifxInput *NewModel,
+static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, 
 	double s, int verbose, double sniffTime, int pulsarBin)
 {
@@ -955,7 +1056,7 @@ static int DifxVisConvert(const DifxInput *D, DifxInput *NewModel,
 	dvs = (DifxVis **)calloc(D->nJob, sizeof(DifxVis *));
 	for(j = 0; j < D->nJob; j++)
 	{
-		dvs[j] = newDifxVis(D, j);
+		dvs[j] = newDifxVis(D, OldModel, j);
 		if(!dvs[j])
 		{
 			fprintf(stderr, "Error allocating DifxVis[%d/%d]\n",
@@ -1106,10 +1207,6 @@ static int DifxVisConvert(const DifxInput *D, DifxInput *NewModel,
 		}
 		else
 		{
-			if(NewModel != D)
-			{
-				addPhase(dv, 0.125*TWO_PI);
-			}
 #ifdef HAVE_FFTW
 			feedSnifferFITS(S, dv->record);
 #endif
@@ -1167,7 +1264,7 @@ static int DifxVisConvert(const DifxInput *D, DifxInput *NewModel,
 	return 0;
 }
 
-const DifxInput *DifxInput2FitsUV(const DifxInput *D, const DifxInput *NewModel,
+const DifxInput *DifxInput2FitsUV(const DifxInput *D, const DifxInput *OldModel,
 	struct fits_keywords *p_fits_keys,
 	struct fitsPrivate *out, double scale,
 	int verbose, double sniffTime, int pulsarBin)
@@ -1177,8 +1274,7 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D, const DifxInput *NewModel,
 		return 0;
 	}
 
-	DifxVisConvert(D, NewModel, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin);
+	DifxVisConvert(D, OldModel, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin);
 
 	return D;
 }
-

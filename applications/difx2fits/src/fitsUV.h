@@ -22,7 +22,7 @@ typedef struct
 {
 	glob_t globbuf;
 	int curFile, nFile;
-	const DifxInput *D;
+	const DifxInput *D, *OldModel;
 	DifxParameters *dp;
 	FILE *in;
 	double U, V, W;
@@ -51,9 +51,10 @@ typedef struct
 	int first;
 	double scale;
 	int flagTransition;
+	double shiftDelay;
 } DifxVis;
 
-DifxVis *newDifxVis(const DifxInput *D, int jobId);
+DifxVis *newDifxVis(const DifxInput *D, const DifxInput *OldModel, int jobId);
 void deleteDifxVis(DifxVis *dv);
 int DifxVisNextFile(DifxVis *dv);
 int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin);

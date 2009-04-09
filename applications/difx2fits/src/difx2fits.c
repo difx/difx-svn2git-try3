@@ -421,7 +421,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 	return 0;
 }
 
-static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput *NewModel,
+static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput *OldModel,
 	struct fitsPrivate *out, int write_model, double scale, int verbose,
 	double sniffTime, int pulsarBin)
 {
@@ -503,7 +503,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput
 
 	printf("  UV -- visibility          \n");
 	fflush(stdout);
-	D = DifxInput2FitsUV(D, NewModel, &keys, out, scale, verbose, sniffTime, pulsarBin);
+	D = DifxInput2FitsUV(D, OldModel, &keys, out, scale, verbose, sniffTime, pulsarBin);
 	printf("                            ");
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
@@ -546,7 +546,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput
 
 int convertFits(struct CommandLineOptions *opts, int passNum)
 {
-	DifxInput *D, *D1, *D2, *NewModel;
+	DifxInput *D, *D1, *D2, *OldModel, *NewModel;
 	struct fitsPrivate outfile;
 	char outFitsName[256];
 	int i;
@@ -560,7 +560,6 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	}
 
 	D = 0;
-	NewModel = 0;
 
 	for(i = 0; i < opts->nBaseFile; i++)
 	{
@@ -655,16 +654,27 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 				opts->shiftFile);
 			return 0;
 		}
+		if (!D->scan->im || !NewModel->scan->im)
+		{
+			printf("Error -- Both Models must have an .im file!");
+			return 0;
+		}
+		OldModel = D;
+		D = NewModel;
+	}
+	else
+	{
+		OldModel = D;
 	}
 
 	if(opts->verbose > 2)
 	{
 		printDifxInput(D);
-		if(NewModel)
+		if(OldModel)
 		{
 			//FIXME is there any difference in the output? 
-			printf("shifted input\n");
-			printDifxInput(NewModel);
+			printf("unshifted input\n");
+			printDifxInput(OldModel);
 		}
 	}
 
@@ -692,7 +702,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			{
 				fprintf(stderr, "Not converting.\n");
 				deleteDifxInput(D);
-				deleteDifxInput(NewModel);
+				deleteDifxInput(OldModel);
 				return 0;
 			}
 		}
@@ -702,11 +712,11 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		fprintf(stderr, "Warning -- working on unversioned job\n");
 	}
 
-	if(NewModel && NewModel->job->difxVersion[0] != D->job->difxVersion[0])
+	if(OldModel && OldModel->job->difxVersion[0] != D->job->difxVersion[0])
 	{
 		if(strncmp(difxVersion, D->job->difxVersion, 63))
 		{
-			fprintf(stderr, "Job made for version %s with uvshift input made for %s \n", NewModel->job->difxVersion, D->job->difxVersion);
+			fprintf(stderr, "Job made for version %s with uvshift input made for %s \n", OldModel->job->difxVersion, D->job->difxVersion);
 			if(opts->overrideVersion)
 			{
 				fprintf(stderr, "Continuing because of --override-version but not setting a version\n");
@@ -720,9 +730,9 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			}
 		}
 	}
-	else if(NewModel && !NewModel->job->difxVersion[0])
+	else if(OldModel && !OldModel->job->difxVersion[0])
 	{
-		fprintf(stderr, "Warning -- UV Shift input is unversioned\n");
+		fprintf(stderr, "Warning -- Original input is unversioned\n");
 	}
 
 	if(opts->verbose > 1)
@@ -773,33 +783,33 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		if(!opts->keepOrder)
 		{
 			DifxInputSortAntennas(D, opts->verbose);
-			DifxInputSortAntennas(NewModel, opts->verbose);
+			DifxInputSortAntennas(OldModel, opts->verbose);
 		}
 
 		if(opts->verbose > 2)
 		{
 			printDifxInput(D);
-			if(NewModel != D)
+			if(OldModel != D)
 			{
 				printf("shifted input");
-				printDifxInput(NewModel);
+				printDifxInput(OldModel);
 			}
 		}
 
 		if(fitsWriteOpen(&outfile, outFitsName) < 0)
 		{
 			deleteDifxInput(D);
-			deleteDifxInput(NewModel);
+			deleteDifxInput(OldModel);
 			fprintf(stderr, "Cannot open output file\n");
 			return 0;
 		}
 
-		if(!NewModel)
+		if(!OldModel)
 		{
-			NewModel = D;
+			OldModel = D;
 		}
 
-		if(DifxInput2FitsTables(D, NewModel, &outfile, opts->writemodel, 
+		if(DifxInput2FitsTables(D, OldModel, &outfile, opts->writemodel, 
 			opts->scale, opts->verbose, opts->sniffTime,
 			opts->pulsarBin) == D)
 		{
@@ -809,8 +819,11 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		fitsWriteClose(&outfile);
 	}
 
+	if(OldModel != D)
+	{
+		deleteDifxInput(OldModel);
+	}
 	deleteDifxInput(D);
-	deleteDifxInput(NewModel);
 
 	return nConverted;
 }
