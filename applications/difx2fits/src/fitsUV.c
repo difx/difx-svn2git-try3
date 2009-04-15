@@ -349,7 +349,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	int freqNum;
 	int configId;
 	const DifxConfig *config;
-	const DifxScan *scan;
+	const DifxScan *scan, *oldScan;
 	const DifxPolyModel *im1, *im2;
 	int terms1, terms2;
 	int d1, d2, aa1, aa2;	/* FIXME -- temporary */
@@ -551,12 +551,13 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 				}
 			}
 
-			if((fabs(u - dv->U) > 10.0 ||
+			if((dv->D == dv->OldModel) && /* We could check against OldModel instead?*/
+			   (fabs(u - dv->U) > 10.0 ||
 			    fabs(v - dv->V) > 10.0 ||
 			    fabs(w - dv->W) > 10.0) && 
 			    !dv->flagTransition) 
 			{
-				printf("Warning: UVW diff: %d %d %d-%d %f %f  %f %f  %f %f  %f %f\n", 
+				printf("Warning: UVW diff: %d %d %d-%d %f %f (%f %f)(%f %f)(%f %f)\n", 
 					scanId, n, aa1, aa2, mjd, dt, u, dv->U, v, dv->V, w, dv->W);
 			}
 		}
@@ -569,26 +570,19 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			const DifxPolyModel *imOld1, *imOld2;
 			int n, nOld, termsOld1, termsOld2;
 
+                        oldScan = dv->OldModel->scan + dv->scanId;
+			
 			n = getDifxScanIMIndex(scan, mjd, &dt);
-			nOld = getDifxScanIMIndex(dv->OldModel->scan, mjd, &dt);
+			nOld = getDifxScanIMIndex(oldScan, mjd, &dt);
 
-			imOld1 = dv->OldModel->scan->im[aa1];
-			imOld2 = dv->OldModel->scan->im[aa2];
+			imOld1 = oldScan->im[aa1];
+			imOld2 = oldScan->im[aa2];
 			termsOld1 = imOld1->order + 1;
 			termsOld2 = imOld2->order + 1;
-			/*
-			delay    = evalPoly(im2[n].delay, terms2, dt) 
-				  -evalPoly(im1[n].delay, terms1, dt);
-			delayOld = evalPoly(imOld2[nOld].delay, termsOld2, dt) 
-				  -evalPoly(imOld1[nOld].delay, termsOld1, dt);
-			*/
 			delay2    = evalPoly(im2[n].delay, terms2, dt);
 			delay1    = evalPoly(im1[n].delay, terms1, dt);
 			delayOld2 = evalPoly(imOld2[nOld].delay, termsOld2, dt);
 			delayOld1 = evalPoly(imOld1[nOld].delay, termsOld1, dt);
-
-			//dv->shiftDelay = delayOld - delay;
-
 			printf("aa1+1: %d\taa2+1: %d\n", aa1+1, aa2+1);
 			printf("mjd: %f\tdelay1    %f\tdelay2    %f\n", dv->mjd, delay1, delay2);
 			printf("mjd: %f\tdelayOld1 %f\tdelayOld2 %f\n", dv->mjd, delayOld1, delayOld2);
@@ -809,65 +803,12 @@ static double getDifxScaleFactor(const DifxInput *D, double s, int verbose)
 	return scale;
 }
 
-int testShiftPhase(DifxVis *dv)
+int shiftPhase(DifxVis *dv, int verbose)
 {
 	if(dv->shiftDelay == 0)
 	{
 		return(0);
 	}
-	/*shift phase for a single spectrum (subband)*/
-	int i, index, nInChan, nChan, startChan, isUSB;
-	float real, imag, preal, pimag; 
-	float *d;
-	double *shift;
-	double bandFreq, chanBW;
-
-	printf("MJD %f\tIF %d\n", dv->mjd, dv->bandId + 1);
-
-	startChan = dv->D->startChan;
-	nChan = dv->D->nOutChan*dv->D->specAvg;
-
-	d = dv->spectrum;
-	shift = calloc(nChan*sizeof(double), 1);
-	nInChan = dv->D->nInChan;
-	
-	bandFreq = dv->D->config[dv->configId].IF[dv->bandId].freq;
-	isUSB = dv->D->config[dv->configId].IF[dv->bandId].sideband == 'U';
-	chanBW = (dv->D->config[dv->configId].IF[dv->bandId].bw/nInChan); /*in MHz*/
-
-	
-	for(i = 0; i < nChan; i++)
-	{
-		shift[i] = TWO_PI/8; 
-	}
-
-	printf("chan\tunshifted   \t\t\tphase multiplier\t\tshifted\n");
-	for(i = 0; i < nChan; i++)
-	{
-		index = (i + startChan)*dv->nComplex;
-		preal = cos(shift[i]); 
-		pimag = sin(shift[i]);
-		printf("%d\t", i+1);
-		printf("%e\t%e\t", d[index], d[index+1]);
-		printf("%e\t%e\t", preal, pimag);
-		real = d[index] * preal - d[index+1] * pimag;
-		imag = d[index] * pimag + d[index+1] * preal;
-		d[index] = real;
-		d[index+1] = imag;
-		printf("%e\t%e\n", d[i], d[i+1]);
-	}
-	free(shift);
-	return(0);
-}
-
-int shiftPhase(DifxVis *dv)
-{
-	/*
-	if(dv->shiftDelay == 0)
-	{
-		return(0);
-	}
-	*/
 	/*shift phase for a single spectrum (subband)*/
 	int i, index, nInChan, nChan, startChan, isUSB;
 	float real, imag, preal, pimag; 
@@ -885,7 +826,10 @@ int shiftPhase(DifxVis *dv)
 	bandFreq = dv->D->config[dv->configId].IF[dv->bandId].freq;
 	isUSB = dv->D->config[dv->configId].IF[dv->bandId].sideband == 'U';
 	chanBW = (dv->D->config[dv->configId].IF[dv->bandId].bw/nInChan); /*in MHz*/
+	if(verbose >= 2)
+	{
 	printf("IF: %d Delay: %f us; bandFreq %f MHz; Phase Turns at bandFreq: %f fraction: %f nComplex: %d\n", dv->bandId + 1, dv->shiftDelay, bandFreq, bandFreq*dv->shiftDelay, fmod(bandFreq*dv->shiftDelay, 1.0), dv->nComplex);
+	}
 
 	/* At some point we'll probably want to move this loop into its own function
 	 * maybe in difxio. It certainly doesn't need to be repeated for every
@@ -902,29 +846,29 @@ int shiftPhase(DifxVis *dv)
 		}
 	}
 
-	printf("chan\tfreq\t unshifted   \t\t\tphase multiplier\t\tshifted\n");
+	//printf("chan\tfreq\t unshifted   \t\t\tphase multiplier\t\tshifted\n");
 	for(i = 0; i < nChan; i++)
 	{
 		index = (startChan + i) * 2;
 		shift = TWO_PI * fmod(freq[i] * dv->shiftDelay, 1.0);/* us and MHz cancel*/
 		preal = cos(shift); 
 		pimag = sin(shift);
-		printf("%03d ", i+1);
-		printf("%.3f\t", freq[i]);
-		printf("%+.2e %+.2e ", d[index], d[index+1]);
+		//printf("%03d ", i+1);
+		//printf("%.3f\t", freq[i]);
+		//printf("%+.2e %+.2e ", d[index], d[index+1]);
 		//printf("%+f ", shift);
-		printf("%+.2f ", shift * 360.0/ TWO_PI);
+		//printf("%+.2f ", shift * 360.0/ TWO_PI);
 		real = d[index] * preal - d[index+1] * pimag;
 		imag = d[index] * pimag + d[index+1] * preal;
 		d[index] = real;
 		d[index+1] = imag;
-		printf("%+.2e %+.2e\n", d[index], d[index+1]);
+		//printf("%+.2e %+.2e\n", d[index], d[index+1]);
 	}
 	free(freq);
 	return(0);
 }
 
-static int storevis(DifxVis *dv)
+static int storevis(DifxVis *dv, int verbose)
 {
 	const DifxInput *D;
 	int isLSB;
@@ -946,7 +890,7 @@ static int storevis(DifxVis *dv)
 	dv->weight[D->nPolar*dv->bandId + dv->polId] = 
 		dv->recweight;
 	
-	shiftPhase(dv);
+	shiftPhase(dv, verbose);
 
 	for(i = startChan; i < stopChan; i++)
 	{
@@ -994,7 +938,7 @@ static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 	{
 		if(!dv->first && dv->changed >= 0)
 		{
-			storevis(dv);
+			storevis(dv, verbose);
 		}
 		dv->changed = DifxVisNewUVData(dv, verbose, pulsarBin);
 	}
