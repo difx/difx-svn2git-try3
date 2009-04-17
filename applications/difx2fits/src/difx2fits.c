@@ -654,10 +654,32 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 				opts->shiftFile);
 			return 0;
 		}
-		if (!D->scan->im || !NewModel->scan->im)
+		if (!D->scan->im ||!NewModel->scan->im)
 		{
 			printf("Error -- Both Models must have an .im file!");
 			return 0;
+		}
+		/* FIXME copied straight from above. Decide if it's necessary
+		 * if so put it in a function*/
+		if(opts->specAvg)
+		{
+			NewModel->specAvg = opts->specAvg;
+		}
+		if(opts->nOutChan >= 1)
+		{
+			NewModel->nOutChan = opts->nOutChan;
+		}
+		else if(opts->nOutChan > 0.0) // interpret in fractional sense 
+		{
+			NewModel->nOutChan = NewModel->config[0].nChan*opts->nOutChan/NewModel->specAvg;
+		}
+		if(opts->startChan >= 1)
+		{
+			NewModel->startChan = opts->startChan;
+		}
+		else if(opts->startChan > 0.0)
+		{
+			NewModel->startChan = (NewModel->config[0].nChan*opts->startChan) + 0.5;
 		}
 		OldModel = D;
 		D = NewModel;
@@ -670,7 +692,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	if(opts->verbose > 2)
 	{
 		printDifxInput(D);
-		if(OldModel)
+		if(D != OldModel)
 		{
 			//FIXME is there any difference in the output? 
 			printf("unshifted input\n");
@@ -680,8 +702,10 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 
 	D = updateDifxInput(D);
 	//FIXME is this necessary?
-	D = updateDifxInput(D);
-
+	if(D != OldModel)
+		{
+		OldModel = updateDifxInput(OldModel);
+		}
 	if(!D)
 	{
 		fprintf(stderr, "updateDifxInput failed.  Aborting\n");
@@ -712,7 +736,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		fprintf(stderr, "Warning -- working on unversioned job\n");
 	}
 
-	if(OldModel && OldModel->job->difxVersion[0] != D->job->difxVersion[0])
+	if(OldModel->job->difxVersion[0] != D->job->difxVersion[0])
 	{
 		if(strncmp(difxVersion, D->job->difxVersion, 63))
 		{
@@ -726,11 +750,12 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			{
 				fprintf(stderr, "Not converting.\n");
 				deleteDifxInput(D);
+				deleteDifxInput(OldModel);
 				return 0;
 			}
 		}
 	}
-	else if(OldModel && !OldModel->job->difxVersion[0])
+	else if((D != OldModel) && (!OldModel->job->difxVersion[0]))
 	{
 		fprintf(stderr, "Warning -- Original input is unversioned\n");
 	}

@@ -583,11 +583,15 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			delay1    = evalPoly(im1[n].delay, terms1, dt);
 			delayOld2 = evalPoly(imOld2[nOld].delay, termsOld2, dt);
 			delayOld1 = evalPoly(imOld1[nOld].delay, termsOld1, dt);
+/*
 			printf("aa1+1: %d\taa2+1: %d\n", aa1+1, aa2+1);
 			printf("mjd: %f\tdelay1    %f\tdelay2    %f\n", dv->mjd, delay1, delay2);
 			printf("mjd: %f\tdelayOld1 %f\tdelayOld2 %f\n", dv->mjd, delayOld1, delayOld2);
+*/
 			dv->shiftDelay = (delay2 - delay1) - (delayOld2 - delayOld1);
+/*
 			printf("mjd: %f\tshiftDelay\t\t            %e\n", dv->mjd, dv->shiftDelay);
+*/
 		}
 	}
 
@@ -826,10 +830,12 @@ int shiftPhase(DifxVis *dv, int verbose)
 	bandFreq = dv->D->config[dv->configId].IF[dv->bandId].freq;
 	isUSB = dv->D->config[dv->configId].IF[dv->bandId].sideband == 'U';
 	chanBW = (dv->D->config[dv->configId].IF[dv->bandId].bw/nInChan); /*in MHz*/
+/*
 	if(verbose >= 2)
 	{
 	printf("IF: %d Delay: %f us; bandFreq %f MHz; Phase Turns at bandFreq: %f fraction: %f nComplex: %d\n", dv->bandId + 1, dv->shiftDelay, bandFreq, bandFreq*dv->shiftDelay, fmod(bandFreq*dv->shiftDelay, 1.0), dv->nComplex);
 	}
+*/
 
 	/* At some point we'll probably want to move this loop into its own function
 	 * maybe in difxio. It certainly doesn't need to be repeated for every
