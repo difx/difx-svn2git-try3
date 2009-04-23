@@ -78,6 +78,7 @@
 #define vecNoErr                 ippStsNoErr
 #define vecFFTSpecR_f32          IppsFFTSpec_R_32f
 #define vecFFTSpecC_f32          IppsFFTSpec_C_32f
+#define vecFFTSpecC_cf32         IppsFFTSpec_C_32fc
 #define vecFFTSpec_s16           IppsFFTSpec_R_16s
 #define vecHintAlg               IppHintAlgorithm
 #define vecRndZero               ippRndZero
@@ -104,6 +105,7 @@
 #define vectorFree(memptr)       ippsFree(memptr)
 
 #define vectorAdd_f32_I(src, srcdest, length)                               ippsAdd_32f_I(src, srcdest, length)
+#define vectorAdd_f64_I(src, srcdest, length)                               ippsAdd_64f_I(src, srcdest, length)
 #define vectorAdd_s16_I(src, srcdest, length)                               ippsAdd_16s_I(src, srcdest, length)
 #define vectorAdd_s32_I(src, srcdest, length)                               ippsAdd_32s_ISfs(src, srcdest, length, 0)
 #define vectorAdd_cf32_I(src, srcdest, length)                              ippsAdd_32fc_I(src, srcdest, length)
@@ -139,17 +141,20 @@
 
 #define vectorInitFFTR_f32(fftspec, order, flag, hint)                      ippsFFTInitAlloc_R_32f(fftspec, order, flag, hint)
 #define vectorInitFFTC_f32(fftspec, order, flag, hint)                      ippsFFTInitAlloc_C_32f(fftspec, order, flag, hint)
+#define vectorInitFFTC_cf32(fftspec, order, flag, hint)                     ippsFFTInitAlloc_C_32fc(fftspec, order, flag, hint)
 //#define vectorInitFFT_f32(fftspec, order, flag, hint)                       ippsDFTInitAlloc_R_32f(fftspec, order, flag, hint)
 #define vectorInitFFT_s16(fftspec, order, flag, hint)                       ippsFFTInitAlloc_R_16s(fftspec, order, flag, hint)
 #define vectorGetFFTBufSizeR_f32(fftspec, buffersize)                       ippsFFTGetBufSize_R_32f(fftspec, buffersize)
 #define vectorGetFFTBufSizeC_f32(fftspec, buffersize)                       ippsFFTGetBufSize_C_32f(fftspec, buffersize)
+#define vectorGetFFTBufSizeC_cf32(fftspec, buffersize)                      ippsFFTGetBufSize_C_32fc(fftspec, buffersize)
 //#define vectorGetFFTBufSize_f32(fftspec, buffersize)                        ippsDFTGetBufSize_R_32f(fftspec, buffersize)
 #define vectorGetFFTBufSize_s16(fftspec, buffersize)                        ippsFFTGetBufSize_R_16s(fftspec, buffersize)
 #define vectorFreeFFTR_f32(fftspec)                                         ippsFFTFree_R_32f(fftspec)
 #define vectorFreeFFTC_f32(fftspec)                                         ippsFFTFree_C_32f(fftspec)
-//#define vectorFreeFFT_f32(fftspec)                                          ippsDFTFree_R_32f(pFFTSpec)
+#define vectorFreeFFTC_cf32(fftspec)                                        ippsFFTFree_C_32fc(fftspec)
 #define vectorFFT_RtoC_f32(src, dest, fftspec, fftbuffer)                   ippsFFTFwd_RToCCS_32f(src, dest, fftspec, fftbuffer)
 #define vectorFFT_CtoC_f32(srcre, srcim, destre, destim, fftspec, fftbuff)  ippsFFTFwd_CToC_32f(srcre, srcim, destre, destim, fftspec, fftbuff)
+#define vectorFFT_CtoC_cf32(src, dest, fftspec, fftbuff)                    ippsFFTFwd_CToC_32fc(src, dest, fftspec, fftbuff)
 //#define vectorFFT_RtoC_f32(src, dest, fftspec, fftbuffer)                   ippsDFTFwd_RToCCS_32f(src, dest, fftspec, fftbuffer)
 #define vectorScaledFFT_RtoC_s16(src, dest, fftspec, fftbuffer, scale)      ippsFFTFwd_RToCCS_16s_Sfs(src, dest, fftspec, fftbuffer, scale)
 
@@ -167,6 +172,7 @@
 #define vectorMulC_cs16_I(val, srcdest, length)                             ippsMulC_16sc_ISfs(val, srcdest, length, 0)
 #define vectorMulC_f32_I(val, srcdest, length)                              ippsMulC_32f_I(val, srcdest, length)
 #define vectorMulC_cf32_I(val, srcdest, length)                             ippsMulC_32fc_I(val, srcdest, length)
+#define vectorMulC_cf32(src, val, dest, length)                             ippsMulC_32fc(src, val, dest, length)
 #define vectorMulC_f64_I(val, srcdest, length)                              ippsMulC_64f_I(val, srcdest, length)
 #define vectorMulC_f64(src, val, dest, length)                              ippsMulC_64f(src, val, dest, length)
 

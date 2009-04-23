@@ -67,11 +67,29 @@ class Model{
     inline bool isPointingCentreCorrelated(int scan) { return scantable[scan].pointingcentrecorrelated; }
 
     /**
-     * Returns the delay, in microseconds, for the specified antenna pointing centre
+     * Fills in the UVW values, in metres, for the specified antenna pointing centre
      * at the specified time
-     * @return Delay in microseconds
+     * @param scanindex The scan
+     * @param offsettime Offset in seconds from the start of the scan
+     * @param antennaindex The antenna
+     * @param scansourceindex The source index within the scan
+     * @param uvw The uvw values to fill in
      */
-    double getDelay(int scanindex, double offsettime, int antennaindex, int scansourceindex);
+    void interpolateUVW(int scanindex, double offsettime, int antennaindex, int scansourceindex, double* uvw);
+
+    /**
+     * Calculates coefficients for a 0th, 1st or second order interpolation of delay for one
+     * pointing centre of a given antenna at a given time
+     * @param scanindex The scan
+     * @param offsettime Offset in seconds from the start of the scan, to start of timespan
+     * @param timespan Timespan the interpolation should attempt to match, in seconds
+     * @param numincrement The number of increments across timespan (ie the x value range, 0->numincrements)
+     * @param antennaindex The antenna
+     * @param scansourceindex The source index within the scan
+     * @param order The order of the interpolator (0, 1, or 2)
+     * @param delaycoeffs The coefficients, to be filled in
+     */
+    void calculateDelayIntepolator(int scanindex, f64 offsettime, f64 timespan, int increments, int antennaindex, int scansourceindex, int order, f64 * delaycoeffs);
 
     /**
      * Returns the number of phase centres to be correlated for this scan
@@ -102,12 +120,12 @@ class Model{
       int numphasecentres;
       bool pointingcentrecorrelated;
       source ** phasecentres;
-      double **** u;
-      double **** v;
-      double **** w;
-      double **** delay;
-      double **** wet;
-      double **** dry;
+      f64 **** u;
+      f64 **** v;
+      f64 **** w;
+      f64 **** delay;
+      f64 **** wet;
+      f64 **** dry;
     } scan;
 
     typedef struct {
@@ -129,6 +147,7 @@ class Model{
     int modelmjd, modelstartseconds, numstations, numsources, numscans, numeops;
     int polyorder, modelincsecs;
     bool opensuccess;
+    f64 * tpowerarray;
     Configuration * config;
     station * stationtable;
     source * sourcetable;

@@ -46,6 +46,89 @@ Model::Model(Configuration * conf, string modelfilename)
     opensuccess = readEOPTable(input);
   if(opensuccess)
     opensuccess = readScanTable(input);
+
+  tpowerarray = vectorAlloc_f64(polyorder+1);
+}
+
+void Model::interpolateUVW(int scanindex, double offsettime, int antennaindex, int scansourceindex, double* uvw)
+{
+  int scansample;
+  double deltat;
+  double * coeffs;
+
+  //work out the correct sample and offset from that sample
+  scansample = int(offsettime/double(modelincsecs));
+  deltat = offsettime - scansample*modelincsecs;
+  tpowerarray[0] = 1.0;
+  for(int i=0;i<polyorder;i++)
+    tpowerarray[i+1] = tpowerarray[i]*deltat;
+
+  //calculate the uvw values
+  coeffs = scantable[scanindex].u[scansample][antennaindex][scansourceindex];
+  vectorDotProduct_f64(tpowerarray, coeffs, polyorder+1, &(uvw[0]));
+  coeffs = scantable[scanindex].v[scansample][antennaindex][scansourceindex];
+  vectorDotProduct_f64(tpowerarray, coeffs, polyorder+1, &(uvw[1]));
+  coeffs = scantable[scanindex].w[scansample][antennaindex][scansourceindex];
+  vectorDotProduct_f64(tpowerarray, coeffs, polyorder+1, &(uvw[2]));
+}
+
+void Model::calculateDelayIntepolator(int scanindex, f64 offsettime, f64 timespan, int numincrements, int antennaindex, int scansourceindex, int order, f64 * delaycoeffs)
+{
+  int scansample, status;
+  double deltat;
+  double delaysamples[3];
+
+  //check that order is ok
+  if(order < 0 || order > 2) {
+    csevere << startl << "Model delay interpolator asked to produce " << order << "th order output - can only do 0, 1 or 2! Setting order to 1, but chaos is likely..." << endl;
+    order = 1;
+  } 
+
+  //work out the correct sample and offset for the midrange of the timespan
+  scansample = int(offsettime/double(modelincsecs));
+  deltat = offsettime + timespan/2.0 - scansample*modelincsecs;
+  tpowerarray[0] = 1.0;
+  for(int i=0;i<polyorder;i++)
+    tpowerarray[i+1] = tpowerarray[i]*deltat;
+  
+  //zero-th order interpolation - the simplest case
+  if(order==0) {
+    status = vectorDotProduct_f64(tpowerarray, scantable[scanindex].delay[scansample][antennaindex][scansourceindex], polyorder+1, delaycoeffs);
+    if (status != vecNoErr)
+      cerror << startl << "Error calculating zero-th order interpolation in Model" << endl;
+    return; //note return
+  }
+
+  //If not 0th order interpolation, need to fill out all 3 spots
+  vectorDotProduct_f64(tpowerarray, scantable[scanindex].delay[scansample][antennaindex][scansourceindex], polyorder+1, &(delaysamples[1]));
+  if (status != vecNoErr)
+    cerror << startl << "Error calculating sample 1 for interpolation in Model" << endl;
+  deltat = offsettime - scansample*modelincsecs;
+  for(int i=0;i<polyorder;i++)
+    tpowerarray[i+1] = tpowerarray[i]*deltat;
+  vectorDotProduct_f64(tpowerarray, scantable[scanindex].delay[scansample][antennaindex][scansourceindex], polyorder+1, &(delaysamples[0]));
+  if (status != vecNoErr)
+    cerror << startl << "Error calculating sample 0 for interpolation in Model" << endl;
+  deltat = offsettime + timespan - scansample*modelincsecs;
+  for(int i=0;i<polyorder;i++)
+    tpowerarray[i+1] = tpowerarray[i]*deltat;
+  vectorDotProduct_f64(tpowerarray, scantable[scanindex].delay[scansample][antennaindex][scansourceindex], polyorder+1, &(delaysamples[2]));
+  if (status != vecNoErr)
+    cerror << startl << "Error calculating sample 2 for interpolation in Model" << endl;
+ 
+  //linear interpolation
+  if(order==1) {
+    delaycoeffs[0] = (delaysamples[2]-delaysamples[0])/numincrements;
+    delaycoeffs[1] = delaysamples[0] + (delaysamples[1] - (delaycoeffs[0]*numincrements/2.0 + delaysamples[0]))/3.0;
+    return; //note return
+  }
+
+  //quadratic interpolation
+  if(order==2) {
+    delaycoeffs[0] = (2.0*delaysamples[0]-4.0*delaysamples[1]+2.0*delaysamples[2])/(numincrements*numincrements);
+    delaycoeffs[1] = (-3.0*delaysamples[0]+4.0*delaysamples[1]-delaysamples[2])/numincrements;
+    delaycoeffs[2] = delaysamples[0];
+  }
 }
 
 bool Model::readInfoTable(ifstream * input)
@@ -186,28 +269,28 @@ bool Model::readScanTable(ifstream * input)
     }
     config->getinputline(input, &line, "SCAN");
     scantable[i].nummodelsamples = atoi(line.c_str());
-    scantable[i].u = new double***[scantable[i].nummodelsamples];
-    scantable[i].v = new double***[scantable[i].nummodelsamples];
-    scantable[i].w = new double***[scantable[i].nummodelsamples];
-    scantable[i].delay = new double***[scantable[i].nummodelsamples];
-    scantable[i].wet = new double***[scantable[i].nummodelsamples];
-    scantable[i].dry = new double***[scantable[i].nummodelsamples];
+    scantable[i].u = new f64***[scantable[i].nummodelsamples];
+    scantable[i].v = new f64***[scantable[i].nummodelsamples];
+    scantable[i].w = new f64***[scantable[i].nummodelsamples];
+    scantable[i].delay = new f64***[scantable[i].nummodelsamples];
+    scantable[i].wet = new f64***[scantable[i].nummodelsamples];
+    scantable[i].dry = new f64***[scantable[i].nummodelsamples];
     for(int j=0;j<scantable[i].nummodelsamples;j++) {
-      scantable[i].u[j] = new double**[numstations];
-      scantable[i].v[j] = new double**[numstations];
-      scantable[i].w[j] = new double**[numstations];
-      scantable[i].delay[j] = new double**[numstations];
-      scantable[i].wet[j] = new double**[numstations];
-      scantable[i].dry[j] = new double**[numstations];
+      scantable[i].u[j] = new f64**[numstations];
+      scantable[i].v[j] = new f64**[numstations];
+      scantable[i].w[j] = new f64**[numstations];
+      scantable[i].delay[j] = new f64**[numstations];
+      scantable[i].wet[j] = new f64**[numstations];
+      scantable[i].dry[j] = new f64**[numstations];
       for(int k=0;k<numstations;k++) {
-        scantable[i].u[j][k] = new double*[sourcestoread];
-        scantable[i].v[j][k] = new double*[sourcestoread];
-        scantable[i].w[j][k] = new double*[sourcestoread];
-        scantable[i].delay[j][k] = new double*[sourcestoread];
-        scantable[i].wet[j][k] = new double*[sourcestoread];
-        scantable[i].dry[j][k] = new double*[sourcestoread];
+        scantable[i].u[j][k] = new f64*[sourcestoread];
+        scantable[i].v[j][k] = new f64*[sourcestoread];
+        scantable[i].w[j][k] = new f64*[sourcestoread];
+        scantable[i].delay[j][k] = new f64*[sourcestoread];
+        scantable[i].wet[j][k] = new f64*[sourcestoread];
+        scantable[i].dry[j][k] = new f64*[sourcestoread];
         for(int l=0;l<sourcestoread;l++) {
-          scantable[i].u[j][k][l] = new double[polyorder+1];
+          scantable[i].u[j][k][l] = vectorAlloc_f64(polyorder+1);
           config->getinputline(input, &line, "SCAN");
           at = 0;
           for(int m=0;m<polyorder+1;m++) {
@@ -215,7 +298,7 @@ bool Model::readScanTable(ifstream * input)
             scantable[i].u[j][k][l][m] = atof((line.substr(at, next-at)).c_str());
             at = next+1;
           }
-          scantable[i].v[j][k][l] = new double[polyorder+1];
+          scantable[i].v[j][k][l] = vectorAlloc_f64(polyorder+1);
           config->getinputline(input, &line, "SCAN");
           at = 0;
           for(int m=0;m<polyorder+1;m++) {
@@ -223,7 +306,7 @@ bool Model::readScanTable(ifstream * input)
             scantable[i].v[j][k][l][m] = atof((line.substr(at, next-at)).c_str());
             at = next+1;
           }
-          scantable[i].w[j][k][l] = new double[polyorder+1];
+          scantable[i].w[j][k][l] = vectorAlloc_f64(polyorder+1);
           config->getinputline(input, &line, "SCAN");
           at = 0;
           for(int m=0;m<polyorder+1;m++) {
@@ -231,7 +314,7 @@ bool Model::readScanTable(ifstream * input)
             scantable[i].w[j][k][l][m] = atof((line.substr(at, next-at)).c_str());
             at = next+1;
           }
-          scantable[i].delay[j][k][l] = new double[polyorder+1];
+          scantable[i].delay[j][k][l] = vectorAlloc_f64(polyorder+1);
           config->getinputline(input, &line, "SCAN");
           at = 0;
           for(int m=0;m<polyorder+1;m++) {
@@ -239,7 +322,7 @@ bool Model::readScanTable(ifstream * input)
             scantable[i].delay[j][k][l][m] = atof((line.substr(at, next-at)).c_str());
             at = next+1;
           }
-          scantable[i].wet[j][k][l] = new double[polyorder+1];
+          scantable[i].wet[j][k][l] = vectorAlloc_f64(polyorder+1);
           config->getinputline(input, &line, "SCAN");
           at = 0;
           for(int m=0;m<polyorder+1;m++) {
@@ -247,7 +330,7 @@ bool Model::readScanTable(ifstream * input)
             scantable[i].wet[j][k][l][m] = atof((line.substr(at, next-at)).c_str());
             at = next+1;
           }
-          scantable[i].dry[j][k][l] = new double[polyorder+1];
+          scantable[i].dry[j][k][l] = vectorAlloc_f64(polyorder+1);
           config->getinputline(input, &line, "SCAN");
           at = 0;
           for(int m=0;m<polyorder+1;m++) {

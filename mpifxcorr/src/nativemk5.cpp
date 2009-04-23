@@ -34,7 +34,6 @@
 
 static void dirCallback(int scan, int nscan, int status, void *data)
 {
-#ifdef HAVE_DIFXMESSAGE
 	DifxMessageMk5Status *mk5status;
 
 	mk5status = (DifxMessageMk5Status *)data;
@@ -42,18 +41,6 @@ static void dirCallback(int scan, int nscan, int status, void *data)
 	mk5status->position = nscan;
 	sprintf(mk5status->scanName, "%s", Mark5DirDescription[status]);
 	difxMessageSendMark5Status(mk5status);
-#else
-	char progressSymbols[] = "@?!.";
-	
-	if(status == 3)
-	{
-		cout << "." << flush;
-	}
-	else
-	{
-		cout << progressSymbols[status] << "[" << scan << "]" << flush;
-	}
-#endif
 }
 
 NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum, 
@@ -69,9 +56,7 @@ NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum,
 
 	executeseconds = conf->getExecuteSeconds();
 
-#ifdef HAVE_DIFXMESSAGE
 	sendMark5Status(MARK5_STATE_OPENING, 0, 0, 0.0, 0.0);
-#endif
 
 	cinfo << startl << "Opening Streamstor" << endl;
 	xlrRC = XLROpen(1, &xlrDevice);
@@ -116,9 +101,75 @@ NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum,
 	invalidtime = 0;
 	invalidstart = 0;
 	newscan = 0;
-#ifdef HAVE_DIFXMESSAGE
+	lastrate = 0.0;
+	nrate = 0;
 	sendMark5Status(MARK5_STATE_OPEN, 0, 0, 0.0, 0.0);
-#endif
+}
+
+static void setDiscModuleState(SSHANDLE xlrDevice, const char *newState)
+{
+	XLR_RETURN_CODE xlrRC;
+	char label[XLR_LABEL_LENGTH];
+	int labelLength = 0, rs = 0;
+	xlrRC = XLRGetLabel(xlrDevice, label);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		cerror << startl << "Cannot XLRGetLabel" << endl;
+		return;
+	}
+
+	for(labelLength = 0; labelLength < XLR_LABEL_LENGTH; labelLength++)
+	{
+		if(!label[labelLength])
+		{
+			break;
+		}
+	}
+	if(labelLength >= XLR_LABEL_LENGTH)
+	{
+		cwarn << startl << "Module label is not terminated!" << endl;
+		return;
+	}
+
+	for(rs = 0; rs < labelLength; rs++)
+	{
+		if(label[rs] == 30)	// ASCII "RS" == "Record separator"
+		{
+			break;
+		}
+	}
+	if(rs >= labelLength)
+	{
+		cwarn << startl << "Module label record separator not found!" << endl;
+	}
+
+	label[rs] = 0;
+	cverbose << startl << "Module extended VSN is " << label << " Previous DMS is " << label+rs+1 << endl;
+
+	if(strcmp(label+rs+1, newState) == 0)
+	{
+		// Nothing to do here
+		return;
+	}
+
+	xlrRC = XLRClearWriteProtect(xlrDevice);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		cerror << startl << "Cannot clear write protect" << endl;
+	}
+	cinfo << startl << "Setting module DMS to Played" << endl;
+	label[rs] = 30;	// ASCII "RS" == "Record separator"
+	strcpy(label+rs+1, newState);
+	xlrRC = XLRSetLabel(xlrDevice, label, strlen(label));
+	if(xlrRC != XLR_SUCCESS)
+	{
+		cerror << startl << "Cannot XLRSetLabel" << endl;
+	}
+	XLRSetWriteProtect(xlrDevice);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		cerror << startl << "Cannot set write protect" << endl;
+	}
 }
 
 NativeMk5DataStream::~NativeMk5DataStream()
@@ -174,9 +225,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 
 	startmjd = corrstartday + corrstartseconds/86400.0;
 
-#ifdef HAVE_DIFXMESSAGE
 	sendMark5Status(MARK5_STATE_GETDIR, 0, 0, startmjd, 0.0);
-#endif
 
 	if(module.nscans < 0)
 	{
@@ -194,11 +243,12 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 			dataremaining = false;
 			return;
 		}
+
+		// Set the module state to "Played"
+		setDiscModuleState(xlrDevice, "Played");
 	}
 
-#ifdef HAVE_DIFXMESSAGE
 	sendMark5Status(MARK5_STATE_GOTDIR, 0, 0, startmjd, 0.0);
-#endif
 
 	// find starting position
   
@@ -215,9 +265,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 			scan = 0;
 			dataremaining = false;
 			keepreading = false;
-#ifdef HAVE_DIFXMESSAGE
 			sendMark5Status(MARK5_STATE_NOMOREDATA, 0, 0, 0.0, 0.0);
-#endif
 			return;
 		}
 		scanns = int(1000000000.0*scan->framenuminsecond/scan->framespersecond + 0.1);
@@ -236,9 +284,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 			scan = 0;
 			dataremaining = false;
 			keepreading = false;
-#ifdef HAVE_DIFXMESSAGE
 			sendMark5Status(MARK5_STATE_NOMOREDATA, 0, 0, 0.0, 0.0);
-#endif
 			return;
 		}
 	}
@@ -291,9 +337,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 		cinfo << startl << "Scan info. start = " << scan->start << " off = " << scan->frameoffset << " size = " << scan->framebytes << endl;
 	}
 
-#ifdef HAVE_DIFXMESSAGE
 	sendMark5Status(MARK5_STATE_GOTDIR, scan-module.scans+1, readpointer, scan->mjd+(scan->sec+scanns*1.e-9)/86400.0, 0.0);
-#endif
 
 	newscan = 1;
 
@@ -411,6 +455,9 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 			xlrEC = XLRGetLastError();
 			XLRGetErrorMessage(errStr, xlrEC);
 			cerror << startl << "XLRReadImmed returns FAIL.  Read error at position=" << readpointer << ", length=" << bytes << ", error=" << errStr << endl;
+
+			double errorTime = corrstartday + (readseconds + corrstartseconds + readnanoseconds*1.0e-9)/86400.0;
+			sendMark5Status(MARK5_STATE_ERROR, scan-module.scans+1, readpointer, errorTime, 0.0);
 			break;
 		}
 
@@ -435,12 +482,12 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 			}
 			if(i % 10000 == 0)
 			{
-				cinfo << startl << "[" << mpiid << "] Waited " << i << " ms  state="; 
+				cinfo << startl << "Waited " << i << " ms  state="; 
 				if(xlrRS == XLR_READ_WAITING)
 				{
 					cinfo << "XLR_READ_WAITING" << endl;
 				}
-				if(xlrRS == XLR_READ_RUNNING)
+				else if(xlrRS == XLR_READ_RUNNING)
 				{
 					cinfo << "XLR_READ_RUNNING" << endl;
 				}
@@ -457,9 +504,6 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 		}
 		else if(t == 0)
 		{
-			cinfo << startl << "[" << mpiid << "] XLRClose() being called!" << endl;
-			XLRClose(xlrDevice);
-			
 			cinfo << startl << "[" << mpiid << "] XLRCardReset() being called!" << endl;
 			xlrRC = XLRCardReset(1);
 			cinfo << startl << "[" << mpiid << "] XLRCardReset() called! " << xlrRC << endl;
@@ -480,6 +524,7 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	}
 
 	bufferinfo[buffersegment].validbytes = bytes;
+	bufferinfo[buffersegment].readto = true;
 	lastval = buf[bytes/4-1];
 
 	// Check for validity
@@ -522,6 +567,8 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 				newscan = 0;
 				state = MARK5_STATE_START;
 				rate = 0.0;
+				lastrate = 0.0;
+				nrate = 0;
 				fmjd2 = scan->mjd + (scan->sec + (float)scan->framenuminsecond/scan->framespersecond)/86400.0;
 				if(fmjd2 > fmjd)
 				{
@@ -532,16 +579,21 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 			{
 				state = MARK5_STATE_PLAY;
 				rate = (double)(readpointer + bytes - lastpos)*8.0/1000000.0;
+				if(nrate > 1)
+				{
+					rate = (nrate*lastrate + 4*rate)/(nrate+4);
+				}
+				lastrate = rate;
+				nrate++;
 			}
 			else
 			{
 				state = MARK5_STATE_PLAYINVALID;
 				rate = invalidtime;
+				nrate = 0;
 			}
 
-#ifdef HAVE_DIFXMESSAGE
 			sendMark5Status(state, scan-module.scans+1, readpointer, fmjd, rate);
-#endif
 		}
 		lastpos = readpointer + bytes;
 	}
@@ -644,7 +696,6 @@ void NativeMk5DataStream::loopfileread()
   cinfo << startl << "DATASTREAM " << mpiid << "'s readthread is exiting!!! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
 }
 
-#ifdef HAVE_DIFXMESSAGE
 int NativeMk5DataStream::sendMark5Status(enum Mk5State state, int scanNum, long long position, double dataMJD, float rate)
 {
 	int v = 0;
@@ -751,4 +802,3 @@ int NativeMk5DataStream::sendMark5Status(enum Mk5State state, int scanNum, long 
 
 	return v;
 }
-#endif

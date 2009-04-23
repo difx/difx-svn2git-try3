@@ -162,6 +162,7 @@ Configuration::~Configuration()
       delete [] configs[i].datastreamindices;
       delete [] configs[i].baselineindices;
       delete [] configs[i].ordereddatastreamindices;
+      delete [] configs[i].frequsedbybaseline;
     }
     delete [] configs;
   }
@@ -169,29 +170,19 @@ Configuration::~Configuration()
   {
     for(int i=0;i<datastreamtablelength;i++)
     {
-      for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
-      {
-        delete [] datastreamtable[i].recordedfreqtableindices;
-        delete [] datastreamtable[i].recordedfreqpols;
-        delete [] datastreamtable[i].recordedfreqclockoffsets;
-      }
-      for(int j=0;j<datastreamtable[i].numzoomfreqs;j++)
-      {
-        delete [] datastreamtable[i].zoomfreqtableindices;
-        delete [] datastreamtable[i].zoomfreqpols;
-      }
-      for(int j=0;j<datastreamtable[i].numrecordedbands;j++)
-      {
-        delete [] datastreamtable[i].recordedbandpols;
-        delete [] datastreamtable[i].recordedbandlocalfreqindices;
-      }
-      for(int j=0;j<datastreamtable[i].numzoombands;j++)
-      {
-        delete [] datastreamtable[i].zoombandpols;
-        delete [] datastreamtable[i].zoombandlocalfreqindices;
-      }
-      for(int j=0;j<datastreamtable[i].numdatafiles;j++)
-        delete [] datastreamtable[i].datafilenames;
+      delete [] datastreamtable[i].recordedfreqtableindices;
+      delete [] datastreamtable[i].recordedfreqpols;
+      delete [] datastreamtable[i].recordedfreqclockoffsets;
+      delete [] datastreamtable[i].recordedfreqlooffsets;
+      delete [] datastreamtable[i].zoomfreqtableindices;
+      delete [] datastreamtable[i].zoomfreqpols;
+      delete [] datastreamtable[i].zoomfreqparentdfreqindices;
+      delete [] datastreamtable[i].zoomfreqchanneloffset;
+      delete [] datastreamtable[i].recordedbandpols;
+      delete [] datastreamtable[i].recordedbandlocalfreqindices;
+      delete [] datastreamtable[i].zoombandpols;
+      delete [] datastreamtable[i].zoombandlocalfreqindices;
+      delete [] datastreamtable[i].datafilenames;
     }
     delete [] datastreamtable;
   }
@@ -203,12 +194,17 @@ Configuration::~Configuration()
   {
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
+      for(int k=0;k<baselinetable[i].numpolproducts[j];k++)
+        delete [] baselinetable[i].polpairs[j][k];
+      delete [] baselinetable[i].polpairs[j];
       delete [] baselinetable[i].datastream1bandindex[j];
       delete [] baselinetable[i].datastream2bandindex[j];
     }
     delete [] baselinetable[i].datastream1bandindex;
     delete [] baselinetable[i].datastream2bandindex;
     delete [] baselinetable[i].numpolproducts;
+    delete [] baselinetable[i].freqtableindices;
+    delete [] baselinetable[i].polpairs;
   }
   delete [] baselinetable;
   delete [] numprocessthreads;
@@ -590,19 +586,19 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
     case LBASTD:
       if(stream.numbits != 2)
         cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::stdunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
       break;
     case LBAVSOP:
       if(stream.numbits != 2)
         cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::vsopunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
       break;
     case MKIV:
     case VLBA:
     case MARK5B:
       framesamples = getFramePayloadBytes(configindex, datastreamindex)*8/(getDNumBits(configindex, datastreamindex)*getDNumRecordedBands(configindex, datastreamindex)*streamdecimationfactor);
       framebytes = getFrameBytes(configindex, datastreamindex);
-      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     default:
       cerror << startl << "Error - unknown Mode!!!" << endl;
@@ -788,15 +784,10 @@ bool Configuration::processConfig(ifstream * input)
     configs[i].subintns = atoi(line.c_str());
     getinputline(input, &line, "GUARD NANOSECONDS");
     configs[i].guardns = atoi(line.c_str());
-    getinputline(input, &line, "POST-F FRINGE ROT");
-    configs[i].postffringerot = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
-    getinputline(input, &line, "QUAD DELAY INTERP");
-    configs[i].quadraticdelayinterp = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
-    if(configs[i].postffringerot && configs[i].quadraticdelayinterp)
-    {
-      cfatal << startl << "ERROR - cannot quad interpolate delays with post-f fringe rotation - aborting!!!" << endl;
-      return false;
-    }
+    getinputline(input, &line, "FRINGE ROTN ORDER");
+    configs[i].fringerotationorder = atoi(line.c_str());
+    getinputline(input, &line, "ARRAY STRIDE LEN");
+    configs[i].arraystridelen = atoi(line.c_str());
     getinputline(input, &line, "WRITE AUTOCORRS");
     configs[i].writeautocorrs = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
     getinputline(input, &line, "PULSAR BINNING");
@@ -1294,6 +1285,23 @@ bool Configuration::consistencyCheck()
   int numscrunchconfigs = 0;
   for(int i=0;i<numconfigs;i++)
   {
+    //check the fringe rotation settings
+    if(configs[i].fringerotationorder < 0 || configs[i].fringerotationorder > 2) {
+      cerror << startl << "Error - fringe rotation order must be 0, 1 or 2 for all configurations - aborting!" << endl;
+      return false;
+    }
+    //check that arraystridelen is ok
+    for(int j=0;j<numdatastreams;j++) {
+      for(int k=0;k<datastreamtable[configs[i].datastreamindices[j]].numrecordedfreqs;k++) {
+        if(freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[k]].numchannels % configs[i].arraystridelen != 0) {
+    //for(int j=0;j<freqtablelength;j++) {
+      //if(freqtable[j].numchannels % configs[i].arraystridelen != 0) {
+          cerror << startl << "Error - config[" << i << "] has a stride length of " << configs[i].arraystridelen << " which is not an integral divisor of the number of channels in frequency[" << j << "] (which is " << freqtable[j].numchannels << ") - aborting!" << endl;
+          return false;
+        }
+      }
+    }
+
     //work out the ordereddatastreamindices
     count = 0;
     for(int j=0;j<datastreamtablelength;j++)

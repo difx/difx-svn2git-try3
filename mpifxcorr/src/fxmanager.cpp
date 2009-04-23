@@ -533,6 +533,20 @@ int FxManager::locateVisIndex(int coreid)
   int coresec = coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][0];
   int corens = coretimes[(numsent[coreid]+extrareceived[coreid]) % Core::RECEIVE_RING_LENGTH][coreid][1] + config->getSubintNS(config->getConfigIndex(coresec))/2;
 
+  if((newestlockedvis-oldestlockedvis+config->getVisBufferLength())%config->getVisBufferLength() >= config->getVisBufferLength()/2) 
+  { 
+    cerror << startl << "Error - data was received which is too recent (" << coretimes[(numsent[coreid])% Core::RECEIVE_RING_LENGTH][coreid][0] << "sec + " << coretimes[(numsent[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1] << "ns)!  Will force write-out of oldest Visibility" << endl; 
+    //abandon the oldest vis, even though it hasn't been filled yet 
+    perr = pthread_mutex_unlock(&(bufferlock[oldestlockedvis])); 
+    if(perr != 0) 
+      csevere << startl << "Error in fxmanager unlocking visibility " << oldestlockedvis << endl; 
+    islocked[oldestlockedvis] = false; 
+    while(!islocked[oldestlockedvis]) 
+    { 
+      oldestlockedvis = (oldestlockedvis+1)%config->getVisBufferLength(); 
+    } 
+  } 
+
   for(int i=0;i<=(newestlockedvis-oldestlockedvis+config->getVisBufferLength())%config->getVisBufferLength();i++)
   {
     difference = visbuffer[(oldestlockedvis+i)%config->getVisBufferLength()]->timeDifference(coresec, corens);

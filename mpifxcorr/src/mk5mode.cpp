@@ -24,8 +24,8 @@
 #include "mk5.h"
 #include "alert.h"
 
-Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
-  : Mode(conf, confindex, dsindex, recordedbandchan, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, recordedbandchan*2+4, fbank, postffringe, quaddelayinterp, cacorrs, recordedbw*2)
+Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
+  : Mode(conf, confindex, dsindex, recordedbandchan, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, recordedbandchan*2+4, fbank, fringerotorder, arraystridelen, cacorrs, recordedbw*2)
 {
   char formatname[64];
 
@@ -72,21 +72,21 @@ Mk5Mode::~Mk5Mode()
 float Mk5Mode::unpack(int sampleoffset)
 {
   int framesin, goodsamples;
-
-  // FIXME -- I think we can use mark5stream->samplegranularity instead of fanout below and fewer samples will be lost in those rare cases.  --WFB
+  int mungedoffset;
 
   //work out where to start from
   framesin = (sampleoffset/framesamples);
-  unpackstartsamples = sampleoffset - (sampleoffset % fanout);
+  unpackstartsamples = sampleoffset - (sampleoffset % mark5stream->samplegranularity);
 
   //unpack one frame plus one FFT size worth of samples
   goodsamples = mark5_unpack_with_offset(mark5stream, data, unpackstartsamples, unpackedarrays, samplestounpack);
-  if(fanout > 1)
+  if(mark5stream->samplegranularity > 1)
   {
-    for(int i = 0; i < sampleoffset % fanout; i++)
+    mungedoffset = sampleoffset % mark5stream->samplegranularity;
+    for(int i = 0; i < mungedoffset; i++)
       if(unpackedarrays[0][i] != 0.0)
         goodsamples--;
-    for(int i = unpacksamples + sampleoffset % fanout; i < samplestounpack; i++)
+    for(int i = unpacksamples + mungedoffset; i < samplestounpack; i++)
       if(unpackedarrays[0][i] != 0.0)
         goodsamples--;
   }

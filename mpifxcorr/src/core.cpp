@@ -185,13 +185,12 @@ void Core::execute()
         csevere << startl << "Error waiting on receivethreadinitialised condition!!!!" << endl;
     }
   }
-  delete [] threadinfos;
 
   while(!terminate) //the data is valid, so keep processing
   {
     //increment and receive some more data
     receivedata(numreceived++ % RECEIVE_RING_LENGTH, &terminate);
-    
+
     //send the results back
     MPI_Ssend(procslots[numreceived%RECEIVE_RING_LENGTH].results, procslots[numreceived%RECEIVE_RING_LENGTH].resultlength*2, MPI_FLOAT, fxcorr::MANAGERID, procslots[numreceived%RECEIVE_RING_LENGTH].resultsvalid, return_comm);
 
@@ -239,6 +238,7 @@ void Core::execute()
     if(perr != 0)
       csevere << startl << "Error in Core " << mpiid << " attempt to join processthread " << i << endl;
   }
+  delete [] threadinfos;
 
 //  cinfo << startl << "CORE " << mpiid << " terminating" << endl;
 }
@@ -431,7 +431,6 @@ void Core::receivedata(int index, bool * terminate)
   if(*terminate)
     return; //don't try to read, we've already finished
 
-  //cinfo << startl << "Core is about to receive from manager" << endl; 
   //Get the instructions on the time offset from the FxManager node
   MPI_Recv(&(procslots[index].offsets), 2, MPI_INT, fxcorr::MANAGERID, MPI_ANY_TAG, return_comm, &mpistatus);
   if(mpistatus.MPI_TAG == CR_TERMINATE)
@@ -468,20 +467,19 @@ void Core::receivedata(int index, bool * terminate)
     //also receive the offsets and rates
     MPI_Irecv(procslots[index].controlbuffer[i], controllength, MPI_DOUBLE, datastreamids[i], CR_PROCESSCONTROL, MPI_COMM_WORLD, &controlrequests[i]);
   }
-  //cinfo << startl << "Core is about to wait for all" << endl;
+
   //wait for everything to arrive, store the length of the messages
   MPI_Waitall(numdatastreams, datarequests, msgstatuses);
   for(int i=0;i<numdatastreams;i++)
     MPI_Get_count(&(msgstatuses[i]), MPI_UNSIGNED_CHAR, &(procslots[index].datalengthbytes[i]));
   MPI_Waitall(numdatastreams, controlrequests, msgstatuses);
-  //cinfo << startl << "Core finished waiting for all!" << endl;
 
   //lock the next slot, unlock the one we just finished with
   for(int i=0;i<numprocessthreads;i++)
   {
     perr = pthread_mutex_lock(&(procslots[(index+1)%RECEIVE_RING_LENGTH].slotlocks[i]));
     if(perr != 0)
-      csevere << startl << "CORE " << mpiid << " error trying lock mutex " << (index+1)%RECEIVE_RING_LENGTH << endl;;
+      csevere << startl << "CORE " << mpiid << " error trying lock mutex " << (index+1)%RECEIVE_RING_LENGTH << endl;
 
     perr = pthread_mutex_unlock(&(procslots[index].slotlocks[i]));
     if(perr != 0)
@@ -709,38 +707,52 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     //cout << "Finished doing some STA stuff" << endl;
   }
 
+  //cout << "About to lock copylock for " << index << endl;
+
   //lock the thread "copy" lock, meaning we're the only one adding to the result array
   perr = pthread_mutex_lock(&(procslots[index].copylock));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying lock copy mutex!!!" << endl;
+
+  //cout << "Copylock done for " << index << ", now to copy results" << endl;
 
   //copy the baseline results
   status = vectorAdd_cf32_I(threadresults, procslots[index].results, resultindex);
   if(status != vecNoErr)
     csevere << startl << "Error trying to add thread results to final results!!!" << endl;
 
+  //cout << "Results done for " << index << ", now to copy autocorrelations" << endl;
+
   //copy the autocorrelations
   for(int j=0;j<numdatastreams;j++)
   {
     for(int k=0;k<config->getDNumTotalBands(procslots[index].configindex, j);k++)
     {
+      //cout << "About to do band " << k << endl;
       freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
+      //cout << "Freq index is " << freqindex << endl;
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex)) {
         freqchannels = config->getFNumChannels(freqindex);
+        //cout << "This band is used, freqchannels is " << freqchannels << endl;
         //put autocorrs in resultsbuffer
+        //cout << "About to put into resultindex " << resultindex << ", where max is " << maxresultlength << endl;
         status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[resultindex], freqchannels+1);
         if(status != vecNoErr)
           csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << endl;
+        //cout << "About to check if this is a zoom band" << endl;
         if(k>=config->getDNumRecordedBands(procslots[index].configindex, j)) {
           //need to get the weight from the parent band
           if(config->getFreqTableLowerSideband(freqindex))
             nyquistchannel = 0;
           else
             nyquistchannel = freqchannels;
+          //cout << "It is - nyquist channel is " << nyquistchannel << endl;
           int parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, freqindex);
+          //cout << "Parent freq index is " << parentfreqindex << endl;
           for(int l=0;l<config->getDNumRecordedBands(procslots[index].configindex, j);l++) {
-            if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l))
+            if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l)) {
               procslots[index].results[resultindex+nyquistchannel].im = modes[j]->getAutocorrelation(false, l)[nyquistchannel].im;
+            }
           }
         }
         resultindex += freqchannels+1;
@@ -750,23 +762,35 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     {
       for(int k=0;k<config->getDNumTotalBands(procslots[index].configindex, j);k++)
       {
+        //cout << "Doing cross autocorrelation for band " << k << endl;
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
+        //cout << "Freqindex is " << freqindex << endl;
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex)) {
+          //cout << "This frequency is used" << endl;
           freqchannels = config->getFNumChannels(freqindex);
+          //cout << "Freqchannels is " << freqchannels << endl;
+          //cout << "About to copy to position " << resultindex << ", whereresultlength is " <<  maxresultlength << endl;
           //put autocorrs in resultsbuffer
           status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[resultindex], freqchannels+1);
           if(status != vecNoErr)
             csevere << startl << "Error copying cross-polar autocorrelations for datastream " << j << ", band " << k << endl;
+          //cout << "About to check if this comes from a parent band" << endl;
           if(k>=config->getDNumRecordedBands(procslots[index].configindex, j)) {
+            //cout << "Yes it is" << endl;
           //need to get the weight from the parent band
             if(config->getFreqTableLowerSideband(freqindex))
               nyquistchannel = 0;
             else
               nyquistchannel = freqchannels;
+            //cout << "Nyquist channel is " << nyquistchannel << endl;
             int parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, freqindex);
+            //cout << "Parent freq index is " << parentfreqindex << endl; 
             for(int l=0;l<config->getDNumRecordedBands(procslots[index].configindex, j);l++) {
-              if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l))
+              if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l)) {
+                //cout << "Found a matching band " << l << ", about to put in weight " << endl;
                 procslots[index].results[resultindex+nyquistchannel].im = modes[j]->getAutocorrelation(true, l)[nyquistchannel].im;
+                //cout << "done" << endl;
+              }
             }
           }
           resultindex += freqchannels+1;
@@ -792,6 +816,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   perr = pthread_mutex_unlock(&(procslots[index].slotlocks[threadid]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying unlock mutex " << index << endl; 
+
   delete [] dsweights;
 }
 
@@ -853,6 +878,13 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
   startblock = 0;
   numblocks = 0;
 
+  //figure out what section we are responsible for
+  for(int i=0;i<=threadid;i++)
+  {
+    startblock += numblocks;
+    numblocks = blockspersend/numprocessthreads + ((i < blockspersend%numprocessthreads)?1:0);
+  }
+
   if(!first) //need to delete the old stuff
   {
     for(int i=0;i<numdatastreams;i++)
@@ -883,13 +915,6 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
       polycos[i] = (threadid==0)?currentpolycos[i]:new Polyco(*currentpolycos[i]);
     }
     cinfo << startl << "Core " << mpiid << " thread " << threadid << ": polycos created/copied successfully!"  << endl;
-  }
-
-  //figure out what section we are responsible for
-  for(int i=0;i<=threadid;i++)
-  {
-    startblock += numblocks;
-    numblocks = blockspersend/numprocessthreads + ((i < blockspersend%numprocessthreads)?1:0);
   }
 }
 

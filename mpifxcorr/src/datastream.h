@@ -79,6 +79,7 @@ protected:
     int configindex;
     int validbytes;
     int sendbytes;
+    bool readto;
     int controllength;
     int bytespersamplenum;
     int bytespersampledenom;

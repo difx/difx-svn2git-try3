@@ -60,12 +60,12 @@ public:
   * @param nbits The number of bits per sample
   * @param unpacksamp The number of samples to unpack in one hit
   * @param fbank Whether to use a polyphase filterbank to channelise (instead of FFT)
-  * @param postffringe Whether fringe rotation takes place after channelisation
-  * @param quaddelayinterp Whether delay interpolataion from FFT start to FFT end is quadratic (if false, linear is used)
+  * @param fringerotorder The interpolation order across an FFT (Oth, 1st or 2nd order; 0th = post-F)
+  * @param arraystridelen The number of samples to stride when doing complex multiplies to implement sin/cos operations efficiently
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param bclock The recorder clock-out frequency in MHz ("block clock")
   */
-  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, double bclock);
+  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, double bclock);
 
  /**
   * Stores the delay information for the current block series
@@ -157,11 +157,13 @@ protected:
   
   Configuration * config;
   int configindex, datastreamindex, recordedbandchannels, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, bufferseconds, unpackstartsamples, datalengthbytes;
-  double recordedbandwidth, blockclock, sampletime, processtime, a, b, c, centredelay, toaddfirst, toaddlast; //MHz, microseconds
-  double buffermicroseconds;
+  int fringerotationorder, arraystridelength, numstrides;
+  double recordedbandwidth, blockclock, sampletime; //MHz, microseconds
+  double a0, b0, c0, a, b, c, quadadd1, quadadd2;
+  double buffermicroseconds, fftstartmicrosec, fftdurationmicrosec;
   f32 dataweight;
   int samplesperblock, samplesperlookup, numlookups, delaylength, autocorrwidth;
-  bool filterbank, calccrosspolautocorrs, postffringerot, fractionalLoFreq, quadraticdelayinterp, dolinearinterp, initok;
+  bool filterbank, calccrosspolautocorrs, fractionalLoFreq, initok;
   double * recordedfreqclockoffsets;
   double * recordedfreqlooffsets;
   u8 * data;
@@ -170,30 +172,65 @@ protected:
   f32** unpackedarrays;
   cf32** fftoutputs;
   cf32** conjfftoutputs;
-  f32* fracmult;
-  f32* fracmultsin;
-  f32* fracmultcos;
-  f32* channelfreqs;
-  f32* lsbchannelfreqs;
-  cf32* complexfracmult;
+  //f32* fracmult;
+  //f32* fracmultsin;
+  //f32* fracmultcos;
+  //f32* channelfreqs;
+  //f32* lsbchannelfreqs;
+  //cf32* complexfracmult;
   f64 * delays;
-  f64 * xoffset;
-  f64 * xval;
   cf32*** autocorrelations;
   vecFFTSpecR_f32 * pFFTSpecR;
-  vecFFTSpecC_f32 * pFFTSpecC;
+  vecFFTSpecC_cf32 * pFFTSpecC;
   u8 * fftbuffer;
   vecHintAlg hint;
 
-  //pref fringe rotation variables
-  f32* rotateargument;
-  f32* cosrotated;
-  f32* cosrotatedoutput;
-  f32* sinrotated;
-  f32* sinrotatedoutput;
-  f32* realfftd;
-  f32* imagfftd;
-  f64* fringedelayarray;
+  //new arrays for strided complex multiply for fringe rotation and fractional sample correction
+  cf32 * complexrotator;
+  cf32 * complexunpacked;
+  cf32 * fracsamprotator;
+  cf32 * fftd;
+
+  f64 * subxoff;
+  f64 * subxval;
+  f64 * subphase;
+  f32 * subarg;
+  f32 * subsin;
+  f32 * subcos;
+
+  f64 * stepxoff;
+  f64 * stepxval;
+  f64 * stepphase;
+  f32 * steparg;
+  f32 * stepsin;
+  f32 * stepcos;
+  cf32 * stepcplx;
+
+  f32 * subchannelfreqs;
+  f32 * lsbsubchannelfreqs;
+  f32 * subfracsamparg;
+  f32 * subfracsampsin;
+  f32 * subfracsampcos;
+
+  f32 * stepchannelfreqs;
+  f32 * lsbstepchannelfreqs;
+  f32 * stepfracsamparg;
+  f32 * stepfracsampsin;
+  f32 * stepfracsampcos;
+  cf32 * stepfracsampcplx;
+
+  //extras necessary for quadratic (order == 2)
+  cf32 * piecewiserotator;
+  cf32 * quadpiecerotator;
+
+  f64 * subquadxval;
+  f64 * subquadphase;
+  f32 * subquadarg;
+  f32 * subquadsin;
+  f32 * subquadcos;
+
+  f64 * stepxoffsquared;
+  f64 * tempstepxval;
 
 private:
   ///Array containing decorrelation percentages for a given number of bits
@@ -225,12 +262,12 @@ public:
   * @param noutputbands The total number of subbands after prefiltering - not currently used (must be = numinputbands)
   * @param nbits The number of bits per sample
   * @param fbank Whether to use a polyphase filterbank to channelise (instead of FFT)
-  * @param postffringe Whether fringe rotation takes place after channelisation
-  * @param quaddelayinterp Whether delay interpolataion from FFT start to FFT end is quadratic (if false, linear is used)
+  * @param fringerotorder The interpolation order across an FFT (Oth, 1st or 2nd order; 0th = post-F)
+  * @param arraystridelen The number of samples to stride when doing complex multiplies to implement sin/cos operations efficiently
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param unpackvalues 4 element array containing floating point unpack values for the four possible two bit values
   */
-    LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, const s16* unpackvalues);
+    LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, const s16* unpackvalues);
 
     ///unpack mapping for "standard" recording modes
     static const s16 stdunpackvalues[];

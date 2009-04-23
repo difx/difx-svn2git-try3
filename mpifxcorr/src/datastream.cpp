@@ -118,9 +118,10 @@ void DataStream::initialise()
     //set up all the parameters in this bufferinfo slot
     updateConfig(i);
     bufferinfo[i].numsent = 0;
-    bufferinfo[i].seconds = -9999;
+    bufferinfo[i].seconds = 0;
     bufferinfo[i].nanoseconds = 0;
     bufferinfo[i].validbytes = 0;
+    bufferinfo[i].readto = false;
     bufferinfo[i].datarequests = new MPI_Request[maxsendspersegment];
     bufferinfo[i].controlrequests = new MPI_Request[maxsendspersegment];
     bufferinfo[i].controlbuffer = new f64*[maxsendspersegment];
@@ -331,10 +332,6 @@ void DataStream::initialiseFile(int configindex, int fileindex)
   //set readseconds, accounting for the intclockseconds
   readseconds = 86400*(filestartday-corrstartday) + (filestartseconds-corrstartseconds) + intclockseconds;
   readnanoseconds = 0;
-  if(readnanoseconds < 0) {
-    readnanoseconds += 1000000000;
-    readseconds--;
-  }
 }
 
 //the returned value MUST be between 0 and bufferlength
@@ -347,7 +344,7 @@ int DataStream::calculateControlParams(int offsetsec, int offsetns)
   calculateQuadraticParameters(intdelayseconds, offsetns);
   firstoffsetns = offsetns - static_cast<int>(quadinterpolatedelay(intdelayseconds, offsetns)*1000);
   lastoffsetns = offsetns + int(bufferinfo[atsegment].numchannels*2*bufferinfo[atsegment].sampletimens - 1000*quadinterpolatedelay(intdelayseconds, offsetns+int(bufferinfo[atsegment].numchannels*2*bufferinfo[atsegment].sampletimens+0.5)) + 0.5);
-  while(lastoffsetns < 0)
+  if(lastoffsetns < 0)
   {
     offsetsec -= 1;
     intdelayseconds -= 1;
@@ -355,10 +352,26 @@ int DataStream::calculateControlParams(int offsetsec, int offsetns)
     firstoffsetns += 1000000000;
     lastoffsetns += 1000000000;
   }
+  if(lastoffsetns < 0)
+  {
+    cerror << startl << "lastoffsetns less than 0 still! =" << lastoffsetns << endl;
+  }
+
+  //if(mpiid == 2) {
+  //  cout << "Bufferinfo[atsegment].seconds is " << bufferinfo[atsegment].seconds << ", offsetseconds is " << offsetsec << ",  Bufferinfo[atsegment].validbytes is " << bufferinfo[atsegment].validbytes << endl;
+  //}
 
   //while we have passed the first of our two locked sections, unlock that and lock the next - have two tests so sample difference can't overflow
   waitForSendComplete();
-  if(offsetsec < bufferinfo[atsegment].seconds - 1 || bufferinfo[atsegment].seconds < 0) //coarse test to see if its all bad
+
+  if(!bufferinfo[atsegment].readto) //can only occur when *all* datastream files bad, hence no good data, ever
+  {
+    for(int i=0;i<bufferinfo[atsegment].controllength;i++)
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][i] = MAX_NEGATIVE_DELAY;
+    return 0; //note exit here!!!!
+  }
+
+  if(offsetsec < bufferinfo[atsegment].seconds - 1) //coarse test to see if its all bad
   {
     for(int i=0;i<bufferinfo[atsegment].controllength;i++)
       bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][i] = MAX_NEGATIVE_DELAY;
@@ -883,8 +896,9 @@ int DataStream::openframe()
     return(0);
   }
 
-  // Read file header and extract time from it
-  status = readnetwork(socketnumber, buf, LBA_HEADER_LENGTH, &nread);
+  // Check to see if this is an old style header first
+  ntoread = sizeof(long long) + sizeof(long long);
+  status = readnetwork(socketnumber, buf, ntoread, &nread);
   if (status==-1) { // Error reading socket
     cerror << startl << "Error reading socket" << endl;
     keepreading=false;
@@ -892,10 +906,27 @@ int DataStream::openframe()
   } else if (status==0) {  // Socket closed remotely
     keepreading=false;
     return(0);
-  } else if (nread!=LBA_HEADER_LENGTH) { // This should never happen
+  } else if (nread!=ntoread) { // This should never happen
     keepreading=false;
     cerror << startl << "Error file header" << endl;
     return(0);
+  }
+
+  if (buf[8] != ':') {
+    // Read file header and extract time from it
+    status = readnetwork(socketnumber, &(buf[16]), LBA_HEADER_LENGTH - 16, &nread);
+    if (status==-1) { // Error reading socket
+      cerror << startl << "Error reading socket" << endl;
+      keepreading=false;
+      return(0);
+    } else if (status==0) {  // Socket closed remotely
+      keepreading=false;
+      return(0);
+    } else if (nread!=LBA_HEADER_LENGTH-16) { // This should never happen
+      keepreading=false;
+      cerror << startl << "Error file header" << endl;
+      return(0);
+    }
   }
 
   status = initialiseFrame(buf);
@@ -914,21 +945,24 @@ int DataStream::initialiseFrame(char * frameheader)
   string inputline;
 
   at = frameheader;
-  while (strncmp(at,"TIME",4)!=0)
-  {
-    endline = index(at, '\n');
-    if (endline==NULL || endline-frameheader>=LBA_HEADER_LENGTH-1) {
-      cerror << startl << "Could not parse file header" << endl;
-      keepreading=false;
-      return -1;
+  if (at[8] != ':') { //not an old style LBA file
+    while (strncmp(at,"TIME",4)!=0)
+    {
+      endline = index(at, '\n');
+      if (endline==NULL || endline-frameheader>=LBA_HEADER_LENGTH-1) {
+        cerror << startl << "Could not parse file header" << endl;
+        keepreading=false;
+        return -1;
+      }
+      at = endline+1;
     }
-    at = endline+1;
+    endline = index(at, '\n');
+    *endline = 0;
+    at += 5;  // Skip over "TIME"
+    inputline = at;
+  } else {
+    inputline = string(at, 15);
   }
-  endline = index(at, '\n');
-  *endline = 0;
-  at += 5;  // Skip over "TIME"
-
-  inputline = at;
 
   year = atoi((inputline.substr(0,4)).c_str());
   month = atoi((inputline.substr(4,2)).c_str());
@@ -943,10 +977,6 @@ int DataStream::initialiseFrame(char * frameheader)
 
   readseconds = 86400*(filestartday-corrstartday) + (filestartseconds-corrstartseconds) + intclockseconds;
   readnanoseconds = 0;
-  if(readnanoseconds < 0) {
-    readnanoseconds += 1000000000;
-    readseconds--;
-  }
 
   return 0;
 }
@@ -977,6 +1007,7 @@ void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
   } else {
     bufferinfo[buffersegment].validbytes = nread;
     framebytesremaining -= nread;
+    bufferinfo[buffersegment].readto = true;
   }
 
   if (framebytesremaining<=0) {
@@ -1077,6 +1108,7 @@ void DataStream::diskToMemory(int buffersegment)
   //read some data
   input.read((char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)], readbytes);
   bufferinfo[buffersegment].validbytes = input.gcount();
+  bufferinfo[buffersegment].readto = true;
   readnanoseconds += bufferinfo[buffersegment].nsinc;
   readseconds += readnanoseconds/1000000000;
   readnanoseconds %= 1000000000;

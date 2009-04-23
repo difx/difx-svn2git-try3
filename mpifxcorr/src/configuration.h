@@ -29,6 +29,7 @@
 #include <math.h>
 #include "polyco.h"
 #include "uvw.h"
+#include "model.h"
 #include "mark5access.h"
 #include "mpifxcorr.h"
 
@@ -120,7 +121,7 @@ public:
     if (datastreamtotalbandindex < ds.numrecordedbands)
       return ds.recordedfreqtableindices[ds.recordedbandlocalfreqindices[datastreamtotalbandindex]];
     else
-      return ds.zoomfreqtableindices[ds.zoombandlocalfreqindices[datastreamtotalbandindex-ds.numrecordedfreqs]];
+      return ds.zoomfreqtableindices[ds.zoombandlocalfreqindices[datastreamtotalbandindex-ds.numrecordedbands]];
     }
   inline int getDLocalRecordedFreqIndex(int configindex, int configdatastreamindex, int datastreamrecordedbandindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedbandlocalfreqindices[datastreamrecordedbandindex]; }
@@ -300,6 +301,11 @@ public:
   * @return The UVW object which contains geometric model information
   */
   inline Uvw * getUVW() { return uvw; }
+
+ /**
+  * @return The Model object which contains geometric model information
+  */
+  inline Model * getModel() { return model; }
 
  /**
   * Loads the UVW information from file into memory
@@ -494,8 +500,8 @@ private:
     int blockspersend;
     int subintns;
     int guardns;
-    bool postffringerot;
-    bool quadraticdelayinterp;
+    int fringerotationorder;
+    int arraystridelen;
     bool writeautocorrs;
     bool pulsarbin;
     int numpolycos;
@@ -649,6 +655,7 @@ private:
   baselinedata * baselinetable;
   datastreamdata * datastreamtable;
   Uvw * uvw;
+  Model * model;
   outputformat outformat;
 };
 

@@ -36,6 +36,7 @@ library_include_HEADERS = \
 	mk5.h \
 	mk5mode.h \
         model.h \
+        mode.h \
 	polyco.h \
 	mark5dir.h \
 	nativemk5.h \
