@@ -54,7 +54,8 @@ libmpifxcorr_a_SOURCES = \
 	fxmanager.cpp \
 	uvw.cpp \
 	visibility.cpp \
-	alert.cpp 
+	alert.cpp \
+	$(mark5_files)
 
 libfxcorr_a_SOURCES = \
 	configuration.cpp \
