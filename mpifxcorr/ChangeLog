@@ -37,3 +37,7 @@ the first written channel is the DC channel and for lower sideband data
 the last written channel is the DC channel.  The Nyquist channel is always
 dropped.
 
+Nomenclature still version 1.5 - full name now 1.5.0 - 02 June 2009
+
+  * Many bugfixes have been made and this version is now committed as the 
+  "official" 1.5 branch release
