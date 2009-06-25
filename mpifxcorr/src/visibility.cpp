@@ -461,12 +461,16 @@ void Visibility::writedata()
       nyquistchannel = numchannels;
       if(config->getFreqTableLowerSideband(config->getBFreqIndex(currentconfigindex, i, j)))
         nyquistchannel = 0;
-      for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) {
-        baselineweights[i][j][k] = results[skip + nyquistchannel].im/fftsperintegration;
-        results[skip + nyquistchannel].im = 0.0;
-        skip += numchannels+1;
+      for(int b=0;b<binloop;b++) {
+        for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) {
+          if(binloop>1)
+            baselineweights[i][j][b][k] = results[skip + nyquistchannel]. im/(fftsperintegration*polyco->getBinWidth(b));
+          else
+            baselineweights[i][j][b][k] = results[skip + nyquistchannel].im/fftsperintegration;
+          results[skip + nyquistchannel].im = 0.0;
+          skip += numchannels+1;
+        }
       }
-      skip += (numchannels+1)*config->getBNumPolProducts(currentconfigindex, i, j)*(binloop-1);
     }
   }
   for(int i=0;i<numdatastreams;i++)
@@ -506,36 +510,37 @@ void Visibility::writedata()
     ds2 = config->getBOrderedDataStream2Index(currentconfigindex, i);
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) //do each frequency
     {
-      for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) //do each product of this frequency eg RR,LL,RL,LR
+      for(int b=0;b<binloop;b++)
       {
-        ds1bandindex = config->getBDataStream1BandIndex(currentconfigindex, i, j, k);
-        ds2bandindex = config->getBDataStream2BandIndex(currentconfigindex, i, j, k);
-        divisor = (Mode::getDecorrelationPercentage(config->getDNumBits(currentconfigindex, ds1)))*(Mode::getDecorrelationPercentage(config->getDNumBits(currentconfigindex, ds2)))*autocorrcalibs[ds1][ds1bandindex].re*autocorrcalibs[ds2][ds2bandindex].re;
-        if(divisor > 0.0) //only do it if there is something to calibrate with
-          scale = sqrt(config->getDTsys(currentconfigindex, ds1)*config->getDTsys(currentconfigindex, ds2)/divisor);
-        else
-          scale = 0.0;
-        for(int b=0;b<binloop;b++)
+        for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) //do each product of this frequency eg RR,LL,RL,LR
         {
-          //amplitude calibrate the data
-          if(scale > 0.0)
+          ds1bandindex = config->getBDataStream1BandIndex(currentconfigindex, i, j, k);
+          ds2bandindex = config->getBDataStream2BandIndex(currentconfigindex, i, j, k);
+          if(config->getDTsys(currentconfigindex, ds1) > 0.0 && config->getDTsys(currentconfigindex, ds2) > 0.0)
           {
-            status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(numchannels+1));
-            if(status != vecNoErr)
-              csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
+            divisor = (Mode::getDecorrelationPercentage(config->getDNumBits(currentconfigindex, ds1)))*(Mode::getDecorrelationPercentage(config->getDNumBits(currentconfigindex, ds2)))*autocorrcalibs[ds1][ds1bandindex].re*autocorrcalibs[ds2][ds2bandindex].re;
+            if(divisor > 0.0) //only do it if there is something to calibrate with
+              scale = sqrt(config->getDTsys(currentconfigindex, ds1)*config->getDTsys(currentconfigindex, ds2)/divisor);
+            else
+              scale = 0.0;
           }
           else
           {
             //We want normalised correlation coefficients, so scale by number of contributing
             //samples rather than datastream tsys and decorrelation correction
-            if(baselineweights[i][j][k] > 0.0)
-            {
-              //scale = 1.0/(((float)(subintsthisintegration))*((float)(config->getBlocksPerSend(currentconfigindex)*2*numchannels)));
-              scale = 1.0/(baselineweights[i][j][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*numchannels)));
-              status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(numchannels+1));
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
-            }
+            if(baselineweights[i][j][b][k] > 0.0)
+              scale = 1.0/(baselineweights[i][j][b][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*numchannels)));
+            else
+              scale = 0.0;
+            if(binloop > 1)
+              scale = scale / polyco->getBinWidth(b);
+          }
+          if(scale > 0.0)
+          {
+            //amplitude calibrate the data
+            status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(numchannels+1));
+            if(status != vecNoErr)
+              csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
           }
           count += numchannels+1;
         }
@@ -583,6 +588,9 @@ void Visibility::writedata()
   }
 
   //if necessary, work out the scaling factors for pulsar binning
+  //turned off - do no scaling according to number of samples, just hope
+  //it averages out over tim
+  /*
   if(pulsarbinon) {
     int numsubints;
     int mjd = expermjd + (experseconds + currentstartseconds)/86400;
@@ -618,8 +626,10 @@ void Visibility::writedata()
     cinfo << startl << "Done calculating weight sums" << endl;
     for(int i=0;i<config->getFreqTableLength();i++) {
       for(int j=0;j<config->getNumChannels(currentconfigindex)+1;j++) {
-        for(int k=0;k<binloop;k++)
-            binscales[i][k][j].re = binscales[i][k][j].im = binweightsums[i][j][k] / binweightdivisor[k];
+        for(int k=0;k<binloop;k++) {
+          binscales[i][k][j].re = 1.0/binweightsums[i][j][k];
+          binscales[i][k][j].im = binscales[i][k][j].re;
+        }
       }
     }
     cinfo << startl << "Done calculating scales" << endl;
@@ -644,6 +654,7 @@ void Visibility::writedata()
     }
     cinfo << startl << "Done the in-place multiplication" << endl;
   }
+  */
   
   //all calibrated, now just need to write out
   if(config->getOutputFormat() == Configuration::RPFITS)
@@ -883,7 +894,7 @@ void Visibility::writedifx()
 
           //open the file for appending in ascii and write the ascii header
           output.open(filename, ios::app);
-          writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][k], buvw);
+          writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][b][k], buvw);
 
           //close, reopen in binary and write the binary data, then close again
           output.close();
@@ -1015,6 +1026,7 @@ void Visibility::changeConfig(int configindex)
   char polpair[3];
   bool found;
   polpair[2] = 0;
+  int pulsarwidth;
   
   if(first) 
   {
@@ -1022,7 +1034,7 @@ void Visibility::changeConfig(int configindex)
     first = false;
     autocorrcalibs = new cf32*[numdatastreams];
     autocorrweights = new f32*[numdatastreams];
-    baselineweights = new f32**[numbaselines];
+    baselineweights = new f32***[numbaselines];
     baselinepoloffsets = new int**[numbaselines];
     datastreampolbandoffsets = new int**[numdatastreams];
     binweightsums = new f32**[config->getFreqTableLength()];
@@ -1031,6 +1043,9 @@ void Visibility::changeConfig(int configindex)
   }
   else
   {
+    pulsarwidth = 1;
+    if(pulsarbinon && !config->scrunchOutputOn(currentconfigindex))
+      pulsarwidth = config->getNumPulsarBins(currentconfigindex);
     cverbose << startl << "Starting to delete some old arrays" << endl;
     //need to delete the old arrays before allocating the new ones
     for(int i=0;i<numdatastreams;i++) {
@@ -1044,6 +1059,8 @@ void Visibility::changeConfig(int configindex)
     {
       for(int j=0;j<config->getBNumFreqs(currentconfigindex, i);j++) {
         delete [] baselinepoloffsets[i][j];
+        for(int k=0;k<pulsarwidth;k++)
+          delete [] baselineweights[i][j][k];
         delete [] baselineweights[i][j];
       }
       delete [] baselinepoloffsets[i];
@@ -1071,6 +1088,9 @@ void Visibility::changeConfig(int configindex)
   //get the new parameters for this configuration from the config object
   currentconfigindex = configindex;
   pulsarbinon = config->pulsarBinOn(configindex);
+  pulsarwidth = 1;
+  if(pulsarbinon && !config->scrunchOutputOn(currentconfigindex))
+    pulsarwidth = config->getNumPulsarBins(currentconfigindex);
   numchannels = config->getNumChannels(configindex);
   samplespersecond = int(2000000*config->getDBandwidth(configindex, 0, 0) + 0.5);
   integrationsamples = int(2000000*config->getDBandwidth(configindex, 0, 0)*config->getIntTime(configindex) + 0.5);
@@ -1087,11 +1107,13 @@ void Visibility::changeConfig(int configindex)
   for(int i=0;i<numbaselines;i++)
   {
     baselinepoloffsets[i] = new int*[config->getBNumFreqs(configindex, i)];
-    baselineweights[i] = new f32*[config->getBNumFreqs(configindex, i)];
+    baselineweights[i] = new f32**[config->getBNumFreqs(configindex, i)];
     for(int j=0;j<config->getBNumFreqs(configindex, i);j++)
     {
       baselinepoloffsets[i][j] = new int[config->getBNumPolProducts(configindex, i, j)];
-      baselineweights[i][j] = new f32[config->getBNumPolProducts(configindex, i, j)];
+      baselineweights[i][j] = new f32*[pulsarwidth];
+      for(int k=0;k<pulsarwidth;k++)
+        baselineweights[i][j][k] = new f32[config->getBNumPolProducts(configindex, i, j)];
       for(int k=0;k<config->getBNumPolProducts(configindex, i, j);k++)
       {
         config->getBPolPair(configindex, i, j, k, polpair);

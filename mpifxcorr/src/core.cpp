@@ -517,6 +517,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 {
   int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel, channelinc;
   double offsetmins;
+  f32 bweight;
   float * dsweights = new float[numdatastreams];
   Mode * m1, * m2;
   s32 *** polycobincounts;
@@ -595,23 +596,24 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
             //if scrunching, add into temp accumulate space, otherwise add into normal space
             if(procslots[index].scrunchoutput)
             {
+              bweight = dsweights[ds1index]*dsweights[ds2index];
               for(int l=0;l<procslots[index].numchannels+1;l++)
               {
                 pulsaraccumspace[j][k][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].re += pulsarscratchspace[l].re;
                 pulsaraccumspace[j][k][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].im += pulsarscratchspace[l].im;
               }
-              pulsaraccumspace[j][k][p][0][nyquistchannel].im += dsweights[ds1index]*dsweights[ds2index];
+              pulsaraccumspace[j][k][p][0][nyquistchannel].im += bweight;
             }
             else
             {
+              bweight = dsweights[ds1index]*dsweights[ds2index]/(procslots[index].numchannels+1);
               for(int l=0;l<procslots[index].numchannels+1;l++)
               {
                 cindex = resultindex + bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]*config->getBNumPolProducts(procslots[index].configindex,j,k)*(procslots[index].numchannels+1) + p*(procslots[index].numchannels+1) + l;
                 threadresults[cindex].re += pulsarscratchspace[l].re;
                 threadresults[cindex].im += pulsarscratchspace[l].im;
+                threadresults[cindex-l+nyquistchannel].im += bweight;
               }
-              cindex = resultindex + p*(procslots[index].numchannels+1) + nyquistchannel;
-              threadresults[cindex].im += dsweights[ds1index]*dsweights[ds2index];
             }
           }
           else
@@ -631,12 +633,12 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     }
   }
 
-  //grab the bin counts if necessary
-  if(procslots[index].pulsarbin)
-    polycobincounts = currentpolyco->getBinCounts();
+  //grab the bin counts if necessary - not any more
+  //if(procslots[index].pulsarbin)
+  //  polycobincounts = currentpolyco->getBinCounts();
 
-  //if we are pulsar binning, do the necessary scaling (from scratch space to results if scrunching, otherwise in-place)
-  if(procslots[index].pulsarbin)
+  //if we are pulsar scrunching, do the necessary scaling
+  if(procslots[index].pulsarbin  && procslots[index].scrunchoutput)
   {
     resultindex = 0;
     f64 * binweights = currentpolyco->getBinWeights();
@@ -651,32 +653,29 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         nyquistchannel = procslots[index].numchannels;
         if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, i, j)))
           nyquistchannel = 0;
-        if(procslots[index].scrunchoutput)
+        for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
         {
-          for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
+          float baselineweight = pulsaraccumspace[i][j][k][0][nyquistchannel].im;
+          for(int l=0;l<procslots[index].numpulsarbins;l++)
           {
-            float baselineweight = pulsaraccumspace[i][j][k][0][nyquistchannel].im;
-            for(int l=0;l<procslots[index].numpulsarbins;l++)
-            {
-              //Scale the accumulation space, and scrunch it into the results vector
-              status = vectorMulC_f32_I((f32)(binweights[l]), (f32*)(pulsaraccumspace[i][j][k][l]), 2*procslots[index].numchannels+2);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to scale for scrunch!!!" << endl;
-              status = vectorAdd_cf32_I(pulsaraccumspace[i][j][k][l], &(threadresults[resultindex]), procslots[index].numchannels+1);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to accumulate for scrunch!!!" << endl;
-  
-              //zero the accumulation space for next time
-              status = vectorZero_cf32(pulsaraccumspace[i][j][k][l], procslots[index].numchannels+1);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
-            }
-            //store the correct weight
-            threadresults[resultindex + nyquistchannel].im = baselineweight;
-            resultindex += procslots[index].numchannels+1;
+            //Scale the accumulation space, and scrunch it into the results vector
+            status = vectorMulC_f32_I((f32)(binweights[l]), (f32*)(pulsaraccumspace[i][j][k][l]), 2*procslots[index].numchannels+2);
+            if(status != vecNoErr)
+              csevere << startl << "Error trying to scale for scrunch!!!" << endl;
+            status = vectorAdd_cf32_I(pulsaraccumspace[i][j][k][l], &(threadresults[resultindex]), procslots[index].numchannels+1);
+            if(status != vecNoErr)
+              csevere << startl << "Error trying to accumulate for scrunch!!!" << endl;
+
+            //zero the accumulation space for next time
+            status = vectorZero_cf32(pulsaraccumspace[i][j][k][l], procslots[index].numchannels+1);
+            if(status != vecNoErr)
+              csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
           }
+          //store the correct weight
+          threadresults[resultindex + nyquistchannel].im = baselineweight;
+          resultindex += procslots[index].numchannels+1;
         }
-        else
+        /*else
         {
           for(int k=0;k<procslots[index].numpulsarbins;k++)
           {
@@ -692,7 +691,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
               resultindex += procslots[index].numchannels+1;
             }
           }
-        }
+        }*/
       }
     }
   }

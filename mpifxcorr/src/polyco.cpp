@@ -113,6 +113,10 @@ Polyco::Polyco(const Polyco & tocopy)
       }
     }
   }
+  else
+  {
+    cwarn << startl << "Copying a polyco with no frequency information!" << endl;
+  }
   
   //cinfo << startl << "Finished copying a polyco!" << endl;
 }
@@ -407,6 +411,7 @@ bool Polyco::loadPolycoFile(string filename, int subcount)
       //get the refphase, reference frequency, observatory, timespan, number of coefficients, observing frequency and binary phase
       input.get(buffer, 21);
       refphase = atof(buffer);
+      refphase = refphase - floor(refphase);
 
       input.get(buffer, 19);
       f0 = atof(buffer);
@@ -462,7 +467,7 @@ bool Polyco::loadPolycoFile(string filename, int subcount)
     freqcoefficientarray[0] = f0 + coefficients[1]/60.0;
     freqcoefficientarray[numcoefficients-1] = 0.0;
     for(int i=1;i<numcoefficients-1;i++)
-        freqcoefficientarray[i] = (i+1)*coefficients[i+1];
+        freqcoefficientarray[i] = (i+1)*coefficients[i+1]/60.0;
 
     phasecoefficientarray = vectorAlloc_f64(numcoefficients);
     phasecoefficientarray[0] = refphase + coefficients[0];

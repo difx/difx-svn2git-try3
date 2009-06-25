@@ -166,7 +166,7 @@ private:
   int monitor_skip;
   cf32 ** autocorrcalibs;
   f32 ** autocorrweights;
-  f32 *** baselineweights;
+  f32 **** baselineweights;
   std::string * telescopenames;
   //cf32 *** results;
   cf32 * results;
