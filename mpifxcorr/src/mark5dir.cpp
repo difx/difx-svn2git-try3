@@ -1,25 +1,31 @@
 /***************************************************************************
- *   Copyright (C) 2007 by Walter Brisken                                  *
+ *   Copyright (C) 2009 by Walter Brisken                                  *
  *                                                                         *
- *   This program is free for non-commercial use: see the license file     *
- *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
- *   details.                                                              *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.                  *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-//===========================================================================
-// SVN properties (DO NOT CHANGE)
-//
-// $Id$
-// $HeadURL$
-// $LastChangedRevision$
-// $Author$
-// $LastChangedDate$
-//
-//============================================================================
-
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id:$
+ * $HeadURL:$
+ * $LastChangedRevision:$
+ * $Author:$
+ * $LastChangedDate:$
+ *
+ *==========================================================================*/
 
 #include <iostream>
 #include <stdio.h>
@@ -28,6 +34,16 @@
 #include <stdlib.h>
 #include <mark5access.h>
 #include "mark5dir.h"
+#include "../config.h"
+
+#ifdef WORDS_BIGENDIAN
+#define MARK5_FILL_WORD32 0x44332211UL
+#define MARK5_FILL_WORD64 0x4433221144332211ULL
+#else
+#define MARK5_FILL_WORD32 0x11223344UL
+#define MARK5_FILL_WORD64 0x1122334411223344ULL
+#endif
+
 
 using namespace std;
 
@@ -36,8 +52,27 @@ char Mark5DirDescription[][20] =
 	"Short scan",
 	"XLR Read error",
 	"Decode error",
-	"Decoded"
+	"Decoded",
+	"Decoded WR"
 };
+
+void countReplaced(const unsigned long *data, int len, 
+	long long *wGood, long long *wBad)
+{
+	int i;
+	int nBad=0;
+
+	for(i = 0; i < len; i++)
+	{
+		if(data[i] == MARK5_FILL_WORD32)
+		{
+			nBad++;
+		}
+	}
+
+	*wGood += (len-nBad);
+	*wBad += nBad;
+}
 
 /* returns active bank, or -1 if none */
 int Mark5BankGet(SSHANDLE xlrDevice)
@@ -109,13 +144,12 @@ int Mark5BankSetByVSN(SSHANDLE xlrDevice, const char *vsn)
 	return b;
 }
 
-int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref, 
-	void (*callback)(int, int, int, void *), void *data)
+static int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref, 
+	int (*callback)(int, int, int, void *), void *data, float *replacedFrac)
 {
 	XLR_RETURN_CODE xlrRC;
 	Mark5Directory m5dir;
 	int len, i, n;
-	unsigned int j;
 	struct mark5_format *mf;
 	Mark5Scan *scan;
 	char label[XLR_LABEL_LENGTH];
@@ -124,6 +158,9 @@ int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref,
 	unsigned long *buffer;
 	int bufferlen;
 	unsigned int x, signature;
+	int die = 0;
+	long long wGood, wBad;
+	long long wGoodSum=0, wBadSum=0;
 
 	/* allocate a bit more than the minimum needed */
 	bufferlen = 20160*8*5;
@@ -156,9 +193,9 @@ int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref,
 
 	/* the adventurous would use md5 here */
 	signature = 1;
-	for(j = 0; j < sizeof(struct Mark5Directory)/4; j++)
+	for(i = 0; i < sizeof(struct Mark5Directory)/4; i++)
 	{
-		x = ((unsigned int *)(&m5dir))[j] + 1;
+		x = ((unsigned int *)(&m5dir))[i] + 1;
 		signature = signature ^ x;
 	}
 
@@ -184,6 +221,7 @@ int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref,
 
 	for(i = 0; i < module->nscans; i++)
 	{
+		wGood = wBad = 0;
 		scan = module->scans + i;
 
 		strncpy(scan->name, m5dir.scanName[i], MAXLENGTH);
@@ -193,9 +231,14 @@ int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref,
 		{
 			if(callback)
 			{
-				callback(i, module->nscans, MARK5_DIR_SHORT_SCAN, data);
+				die = callback(i, module->nscans, MARK5_DIR_SHORT_SCAN, data);
 			}
 			continue;
+		}
+
+		if(die)
+		{
+			break;
 		}
 
 		if(scan->start & 4)
@@ -213,9 +256,17 @@ int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref,
 		{
 			if(callback)
 			{
-				callback(i, module->nscans, MARK5_DIR_READ_ERROR, data);
+				die = callback(i, module->nscans, MARK5_DIR_READ_ERROR, data);
 			}
+			scan->format = -2;
 			continue;
+		}
+
+		countReplaced(buffer, bufferlen/4, &wGood, &wBad);
+
+		if(die)
+		{
+			break;
 		}
 
 		mf = new_mark5_format_from_stream(new_mark5_stream_memory(buffer, bufferlen));
@@ -224,11 +275,17 @@ int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref,
 		{
 			if(callback)
 			{
-				callback(i, module->nscans, MARK5_DIR_DECODE_ERROR, data);
+				die = callback(i, module->nscans, MARK5_DIR_DECODE_ERROR, data);
 			}
+			scan->format = -1;
 			continue;
 		}
 		
+		if(die)
+		{
+			break;
+		}
+
 		scan->mjd = mf->mjd;
 		scan->sec = mf->sec;
 		n = (mjdref - scan->mjd + 500) / 1000;
@@ -247,14 +304,43 @@ int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref,
 
 		if(callback)
 		{
-			callback(i, module->nscans, MARK5_DIR_DECODE_SUCCESS, data);
+			enum Mark5DirStatus s;
+
+			if(wBad > 8)
+			{
+				s = MARK5_DIR_DECODE_WITH_REPLACEMENTS;
+			}
+			else
+			{
+				s = MARK5_DIR_DECODE_SUCCESS;
+			}
+			die = callback(i, module->nscans, s, data);
 		}
-		continue;
+
+		wGoodSum += wGood;
+		wBadSum += wBad;
+
+		if(die)
+		{
+			break;
+		}
+	}
+
+	if(replacedFrac)
+	{
+		if(wGood > 0)
+		{
+			*replacedFrac = (double)wBad/(double)wGood;
+		}
+		else
+		{
+			*replacedFrac = 0;
+		}
 	}
 
 	free(buffer);
 
-	return 0;
+	return -die;
 }
 
 void printMark5Module(const struct Mark5Module *module)
@@ -433,7 +519,8 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
  */
 int getCachedMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
-	void (*callback)(int, int, int, void *), void *data)
+	int (*callback)(int, int, int, void *), void *data,
+	float *replacedFrac)
 {
 	char filename[256];
 	int v, curbank;
@@ -448,7 +535,7 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice,
 	
 	v = loadMark5Module(module, filename);
 
-	v = getMark5Module(module, xlrDevice, mjdref, callback, data);
+	v = getMark5Module(module, xlrDevice, mjdref, callback, data, replacedFrac);
 
 	if(v >= 0)
 	{
@@ -456,4 +543,19 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice,
 	}
 
 	return v;
+}
+
+int sanityCheckModule(const struct Mark5Module *module)
+{
+	int i;
+
+	for(i = 0; i < module->nscans; i++)
+	{
+		if(module->scans[i].format < 0)
+		{
+			return -1;
+		}
+	}
+
+	return 0;
 }
