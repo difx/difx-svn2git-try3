@@ -145,13 +145,15 @@ const DifxInput *DifxInput2FitsSU(const DifxInput *D,
 		}
 
 		source = D->source + sourceId;
-		configId = source->configId;
-		if(configId < 0 || configId >= D->nConfig)
-		{
-			fprintf(stderr, "Error: configId out of range = %d\n",
-				configId);
-			continue;
-		}
+		configId = 0;
+		printf("Setting configId to 0 for all sources - needs to be fixed!!!\n");
+		//configId = source->configId;
+		//if(configId < 0 || configId >= D->nConfig)
+		//{
+		//	fprintf(stderr, "Error: configId out of range = %d\n",
+		//		configId);
+		//	continue;
+		//}
 
 		config = D->config + configId;
 

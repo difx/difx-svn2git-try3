@@ -113,6 +113,7 @@ struct CommandLineOptions
 	int overrideVersion;
 	double sniffTime;
 	int pulsarBin;
+	int phaseCentre;
 };
 
 struct CommandLineOptions *newCommandLineOptions()
@@ -124,6 +125,7 @@ struct CommandLineOptions *newCommandLineOptions()
 	
 	opts->writemodel = 1;
 	opts->sniffTime = 30.0;
+	opts->phaseCentre = 0;
 
 	return opts;
 }
@@ -246,6 +248,11 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					i++;
 					opts->startChan = atof(argv[i]);
 				}
+				else if(strcmp(argv[i], "--phasecentre") == 0)
+				{
+					i++;
+					opts->phaseCentre = atoi(argv[i]);
+				}
 				else
 				{
 					printf("Unknown param %s\n", argv[i]);
@@ -334,6 +341,9 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 
 static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 {
+	int i,j,band,fqindex;
+	DifxDatastream * dds;
+
 	strcpy(keys->obscode, D->job->obsCode);
 	keys->no_stkd = D->nPolar;
 	switch(D->polPair[0])
@@ -356,10 +366,43 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 			exit(0);
 	}
 	keys->no_band = D->nIF;
-	keys->no_chan = D->nOutChan;
+	keys->no_chan = -1;
+	for(i=0;i<D->nBaseline;i++)
+	{
+		for(j=0;j<D->baseline[i].nFreq;j++)
+		{
+			band = D->baseline[i].recChanA[j][0];
+			dds = &(D->datastream[D->baseline[i].dsA]);
+			if(band >= dds->nRecBand)
+			{
+				fqindex = dds->zoomBandFreqId[band - dds->nRecBand];
+				fqindex = dds->zoomFreqId[fqindex];
+			}
+			else
+			{
+				fqindex = dds->recBandFreqId[band];
+				fqindex = dds->recFreqId[fqindex];
+			}
+			if(keys->no_chan == -1)
+			{
+				keys->no_chan = D->freq[fqindex].nChan/D->freq[fqindex].specAvg;
+			}
+			else if(D->freq[fqindex].nChan/D->freq[fqindex].specAvg != keys->no_chan)
+			{
+				fprintf(stderr, "Error - not all used frequencies have the same "
+				"number of output channels - aborting!\n");
+				exit(0);
+			}
+		}
+	}
+	if(keys->no_chan == -1)
+	{
+		fprintf(stderr, "Didn't find any used frequencies - what the?? Aborting\n");
+		exit(0);
+	}
 	keys->ref_freq = D->refFreq*1.0e6;
 	keys->ref_date = D->mjdStart;
-	keys->chan_bw = 1.0e6*D->chanBW*D->specAvg/D->nInChan;
+	keys->chan_bw = 1.0e6*D->freq[fqindex].bw*D->freq[fqindex].specAvg/D->freq[fqindex].nChan;
 	keys->ref_pixel = 0.5 + 1.0/(2.0*D->specAvg);
 	if(D->nPolar > 1)
 	{
@@ -375,7 +418,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 
 static const DifxInput *DifxInput2FitsTables(const DifxInput *D, 
 	struct fitsPrivate *out, int write_model, double scale, int verbose,
-	double sniffTime, int pulsarBin)
+	double sniffTime, int pulsarBin, int phasecentre)
 {
 	struct fits_keywords keys;
 	long long last_bytes = 0;
@@ -418,7 +461,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 	{
 		printf("  ML -- model               ");
 		fflush(stdout);
-		D = DifxInput2FitsML(D, &keys, out);
+		D = DifxInput2FitsML(D, &keys, out, phasecentre);
 		printf("%lld bytes\n", out->bytes_written - last_bytes);
 		last_bytes = out->bytes_written;
 	}
@@ -431,7 +474,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  MC -- model components    ");
 	fflush(stdout);
-	D = DifxInput2FitsMC(D, &keys, out);
+	D = DifxInput2FitsMC(D, &keys, out, phasecentre);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
@@ -455,7 +498,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  UV -- visibility          \n");
 	fflush(stdout);
-	D = DifxInput2FitsUV(D, &keys, out, scale, verbose, sniffTime, pulsarBin);
+	D = DifxInput2FitsUV(D, &keys, out, scale, verbose, sniffTime, pulsarBin, phasecentre);
 	printf("                            ");
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
@@ -468,13 +511,13 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  TS -- system temperature  ");
 	fflush(stdout);
-	D = DifxInput2FitsTS(D, &keys, out);
+	D = DifxInput2FitsTS(D, &keys, out, phasecentre);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
 	printf("  PH -- phase cal           ");
 	fflush(stdout);
-	D = DifxInput2FitsPH(D, &keys, out);
+	D = DifxInput2FitsPH(D, &keys, out, phasecentre);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
@@ -524,7 +567,9 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		{
 			printf("Loading %s\n", opts->baseFile[i]);
 		}
+		printf("About to load difxinput %s\n", opts->baseFile[i]);
 		D2 = loadDifxInput(opts->baseFile[i]);
+		printf("Loaded difxinput %s\n", opts->baseFile[i]);
 		if(!D2)
 		{
 			fprintf(stderr, "loadDifxInput failed on <%s>.\n",
@@ -541,7 +586,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		}
 		else if(opts->nOutChan > 0.0) /* interpret in fractional sense */
 		{
-			D2->nOutChan = D2->config[0].nChan*opts->nOutChan/D2->specAvg;
+			D2->nOutChan = D2->freq[0].nChan*opts->nOutChan/D->freq[0].specAvg;
 		}
 		if(opts->startChan >= 1)
 		{
@@ -549,7 +594,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		}
 		else if(opts->startChan > 0.0)
 		{
-			D2->startChan = (D2->config[0].nChan*opts->startChan) + 0.5;
+			D2->startChan = (D2->freq[0].nChan*opts->startChan) + 0.5;
 		}
 
 		if(D)
@@ -694,7 +739,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 
 		if(DifxInput2FitsTables(D, &outfile, opts->writemodel, 
 			opts->scale, opts->verbose, opts->sniffTime,
-			opts->pulsarBin) == D)
+			opts->pulsarBin, opts->phaseCentre) == D)
 		{
 			printf("\nConversion successful\n\n");
 		}

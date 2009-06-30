@@ -5,7 +5,8 @@
 #include "difx2fits.h"
 
 const DifxInput *DifxInput2FitsMC(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
+	int phasecentre)
 {
 	char bandFormFloat[4];
 
@@ -51,7 +52,6 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	const DifxConfig *config;
 	const DifxScan *scan;
 	const DifxJob *job;
-	const DifxModel *M;
 	const DifxPolyModel *P;
 	double time, deltat;      
 	double delay, delayRate;
@@ -90,7 +90,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	fitsWriteBinTable(out, nColumn, columns, nRowBytes, "MODEL_COMPS");
 	arrayWriteKeys(p_fits_keys, out);
 	fitsWriteInteger(out, "NO_POL", nPol, "");
-	fitsWriteInteger(out, "FFT_SIZE", D->nFFT, "");
+	fitsWriteInteger(out, "FFT_SIZE", D->nInChan*2, "");
 	fitsWriteInteger(out, "OVERSAMP", 0, "");
 	fitsWriteInteger(out, "ZERO_PAD", 0, "");
 	fitsWriteInteger(out, "FFT_TWID", 1, 
@@ -119,7 +119,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	   }
 	   config = D->config + configId;
 	   freqId1 = config->freqId + 1;
-	   sourceId1 = D->source[scan->sourceId].fitsSourceId + 1;
+	   sourceId1 = D->source[scan->phsCentreSrcs[phasecentre]].fitsSourceId + 1;
 	   jobId = D->scan[s].jobId;
 	   job = D->job + jobId;
 
@@ -129,7 +129,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	   }
 	   else
 	   {
-	   	np = scan->nPoint;
+	   	fprintf(stderr, "No im table available - aborting MC file creation\n");
+		continue;
 	   }
 
 	   for(p = 0; p < np; p++)
@@ -153,7 +154,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		    continue;
 		  }
 
-		  P = scan->im[ant] + p;
+		  P = scan->im[ant][phasecentre] + p;
 
 		  time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
 		  deltat = (P->mjd - D->mjdStart)*86400.0 + P->sec;
@@ -169,24 +170,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		}
 		else	   /* use tabulated model */
 		{
-		  if(scan->model[ant] == 0)
-		  {
-		    continue;
-		  }
-
-		  M = scan->model[ant] + p;
-	          
-		  time = scan->mjdStart - (int)D->mjdStart + job->modelInc*p/86400.0;
-		  deltat = job->modelInc*p;
-
-		  /* in general, convert from (us) to (sec) */
-		  atmosDelay = (M->dry  + M->wet)*1.0e-6;
-		  atmosRate  = (M->ddry + M->dwet)*1.0e-6;
-		  
-		  /* here correct the sign of delay, and remove atmospheric
-		   * portion of it. */
-		  delay     = -M->t*1.0e-6  - atmosDelay;
-		  delayRate = -M->dt*1.0e-6 - atmosRate;
+		  fprintf(stderr, "No IM info available - skipping MC creation!\n");
+		  continue;
 		}
 		
 		clockRate = D->antenna[ant].rate*1.0e-6;

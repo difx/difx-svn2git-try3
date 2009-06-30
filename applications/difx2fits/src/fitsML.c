@@ -38,7 +38,8 @@ void calcPolynomial(double gpoly[array_N_POLY],
 }
 
 const DifxInput *DifxInput2FitsML(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
+	int phasecentre)
 {
 	char bandFormDouble[4];
 	char bandFormFloat[4];
@@ -92,11 +93,9 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	const DifxScan *scan;
 	const DifxJob *job;
 	const DifxConfig *config;
-	const DifxModel *M;
-	const DifxPolyModel *P;
+		const DifxPolyModel *P;
 	float dispDelay;
 	float dispDelayRate;
-	double modelInc;
 	double start;
 	double deltat;
 	double freq;
@@ -184,9 +183,8 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 
 	   config = D->config + configId;
 	   freqId1 = config->freqId + 1;
-	   sourceId1 = D->source[scan->sourceId].fitsSourceId + 1;
+	   sourceId1 = D->source[scan->phsCentreSrcs[phasecentre]].fitsSourceId + 1;
 
-	   modelInc = job->modelInc;
 	   start = D->scan[s].mjdStart - (int)(D->mjdStart);
 	   
 	   if(scan->im)
@@ -196,8 +194,8 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	   }
 	   else
 	   {
-	   	np = scan->nPoint;
-	   	timeInt = modelInc / 86400.0;
+		fprintf(stderr, "No IM info available - skipping generation of ML table\n");
+		continue;
 	   }
 
 	   for(p = 0; p < np; p++)
@@ -229,7 +227,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		      continue;
 		  }
 	       
-		  P = scan->im[a] + p;
+		  P = scan->im[a][phasecentre] + p;
 
 	          time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
 		  deltat = (P->mjd - D->mjdStart)*86400.0 + P->sec;
@@ -241,25 +239,8 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		}
 		else	   /* use tabulated model */
 		{
-		  if(scan->model[a] == 0)
-		  {
-		      if(skip[antId] == 0)
-		      {
-		        printf("\n    Warning : skipping antId %d", antId);
-		        skip[antId]++;
-		        printed++;
-		        skipped++;
-		      }
-		      continue;
-		  }
-	       	
-		  M = scan->model[a] + p;
-
-		  time = start + timeInt*p;
-		  deltat = modelInc*p;
-
-		  calcPolynomial(gpoly,
-			-M[-1].t, -M[0].t, -M[1].t, -M[2].t, modelInc);
+		  fprintf(stderr, "No IM info available - skipping ML creation\n");
+		  continue;
 		}
 
 		clockRate = D->antenna[antId].rate*1.0e-6;

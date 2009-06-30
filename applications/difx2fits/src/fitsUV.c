@@ -296,7 +296,7 @@ static double evalPoly(const double *p, int n, double x)
 }
 
 	
-int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
+int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 {
 	const char difxKeys[][MAX_DIFX_KEY_LEN] = 
 	{
@@ -477,11 +477,12 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	if(verbose >= 1 && scanId != dv->scanId)
 	{
 		printf("        MJD=%11.5f jobId=%d scanId=%d Source=%s  FITS SourceId=%d\n", 
-			mjd, dv->jobId, scanId, scan->name, dv->D->source[scan->sourceId].fitsSourceId+1);
+			mjd, dv->jobId, scanId, scan->obsModeName, 
+			dv->D->source[scan->phsCentreSrcs[phasecentre]].fitsSourceId+1);
 	}
 
 	dv->scanId = scanId;
-	dv->sourceId = scan->sourceId;
+	dv->sourceId = scan->phsCentreSrcs[phasecentre];
 	dv->freqId = config->freqId;
 	dv->bandId = config->baselineFreq2IF[aa1][aa2][freqNum];
 	dv->polId  = getPolProdId(dv, DifxParametersvalue(dv->dp, rows[6]));
@@ -522,8 +523,8 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			w = dv->W;
 
 			/* use .difx/ antenna indices for model tables */
-			im1 = scan->im[aa1];
-			im2 = scan->im[aa2];
+			im1 = scan->im[aa1][phasecentre];
+			im2 = scan->im[aa2][phasecentre];
 			if(im1 && im2)
 			{
 				if(n < 0)
@@ -824,7 +825,7 @@ static int storevis(DifxVis *dv)
 	return 0;
 }
 
-static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
+static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 {
 	/* blank array */
 	memset(dv->data, 0, dv->nData*sizeof(float));
@@ -837,7 +838,7 @@ static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 		{
 			storevis(dv);
 		}
-		dv->changed = DifxVisNewUVData(dv, verbose, pulsarBin);
+		dv->changed = DifxVisNewUVData(dv, verbose, pulsarBin, phasecentre);
 	}
 
 	return 0;
@@ -845,7 +846,8 @@ static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 
 static int DifxVisConvert(const DifxInput *D, 
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, 
-	double s, int verbose, double sniffTime, int pulsarBin)
+	double s, int verbose, double sniffTime, int pulsarBin,
+	int phasecentre)
 {
 	int i, j, l, v;
 	float visScale = 1.0;
@@ -1002,7 +1004,7 @@ static int DifxVisConvert(const DifxInput *D,
 	/* First prime each structure with some data */
 	for(j = 0; j < nJob; j++)
 	{
-		readvisrecord(dvs[j], verbose, pulsarBin);
+		readvisrecord(dvs[j], verbose, pulsarBin, phasecentre);
 	}
 
 	/* Now loop until done, looking at */
@@ -1076,7 +1078,7 @@ static int DifxVisConvert(const DifxInput *D,
 				return -3;
 			}
 
-			readvisrecord(dv, verbose, pulsarBin);
+			readvisrecord(dv, verbose, pulsarBin, phasecentre);
 		}
 	}
 
@@ -1103,14 +1105,15 @@ static int DifxVisConvert(const DifxInput *D,
 const DifxInput *DifxInput2FitsUV(const DifxInput *D,
 	struct fits_keywords *p_fits_keys,
 	struct fitsPrivate *out, double scale,
-	int verbose, double sniffTime, int pulsarBin)
+	int verbose, double sniffTime, int pulsarBin,
+	int phasecentre)
 {
 	if(D == 0)
 	{
 		return 0;
 	}
 
-	DifxVisConvert(D, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin);
+	DifxVisConvert(D, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin, phasecentre);
 
 	return D;
 }

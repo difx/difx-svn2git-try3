@@ -289,10 +289,10 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 				hasData[p][i] = 0;
 			}
 		}
-		for(c = 0; c < ds->nRecChan; c++)
+		for(c = 0; c < ds->nRecBand; c++)
 		{
-			polName = ds->RCpolName[c];
-			freqNum = ds->RCfreqId[c];
+			polName = ds->recBandPolName[c];
+			freqNum = ds->recBandFreqId[c];
 			i = dc->freqId2IF[freqNum];
 			if(polName == dc->pol[0])
 			{

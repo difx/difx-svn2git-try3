@@ -54,7 +54,8 @@ static int parsePulseCal(const char *line,
 	float pulseCalRe[2][array_MAX_TONES], 
 	float pulseCalIm[2][array_MAX_TONES], 
 	float stateCount[2][array_MAX_TONES], 
-	int refDay, const DifxInput *D, int *configId)
+	int refDay, const DifxInput *D, int *configId, 
+	int phasecentre)
 {
 	int np, nb, nt, ns;
 	int nRecChan, recChan;
@@ -107,7 +108,7 @@ static int parsePulseCal(const char *line,
 		return -3;
 	}
 
-	*sourceId = D->scan[scanId].sourceId;
+	*sourceId = D->scan[scanId].phsCentreSrcs[phasecentre];
 	*configId = D->scan[scanId].configId;
 	if(*sourceId < 0 || *configId < 0)	/* not in scan */
 	{
@@ -215,7 +216,8 @@ static int parsePulseCal(const char *line,
 }
 
 const DifxInput *DifxInput2FitsPH(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
+	int phasecentre)
 {
 	char stateFormFloat[4];
 	char toneFormDouble[4];
@@ -349,7 +351,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		{
 			v = parsePulseCal(line, &antId, &sourceId, &time, &timeInt, 
 				&cableCal, freqs, pulseCalRe, pulseCalIm,
-				stateCount, refDay, D, &configId);
+				stateCount, refDay, D, &configId, phasecentre);
 			if(v < 0)
 			{
 				continue;

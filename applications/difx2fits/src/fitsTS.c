@@ -33,7 +33,8 @@ static int parseTsys(const char *line, char *antName,
 }
 
 const DifxInput *DifxInput2FitsTS(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
+	int phasecentre)
 {
 	char bandFormFloat[4];
 	
@@ -172,7 +173,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 			}
 			scan = D->scan + scanId;
 
-			sourceId = scan->sourceId;
+			sourceId = scan->phsCentreSrcs[phasecentre];
 			if(sourceId < 0 || mjd < D->mjdStart || 
 				mjd > D->mjdStop)
 			{

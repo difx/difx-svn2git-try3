@@ -23,26 +23,27 @@ const DifxInput *DifxInput2FitsFR(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
 
 const DifxInput *DifxInput2FitsML(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, int phasecentre);
 
 const DifxInput *DifxInput2FitsCT(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
 
 const DifxInput *DifxInput2FitsMC(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, int phasecentre);
 
 const DifxInput *DifxInput2FitsUV(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, 
-	double scale, int verbose, double sniffTime, int pulsarBin);
+	double scale, int verbose, double sniffTime, int pulsarBin,
+	int phasecentre);
 
 const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
 
 const DifxInput *DifxInput2FitsTS(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, int phasecentre);
 
 const DifxInput *DifxInput2FitsPH(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, int phasecentre);
 
 const DifxInput *DifxInput2FitsWR(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out);
