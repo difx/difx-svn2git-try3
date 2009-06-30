@@ -38,8 +38,10 @@ Configuration::Configuration(const char * configfile, int id)
   datastreamread = false;
   configread = false;
   freqread = false;
+  ruleread = false;
+  baselineread = false;
   maxnumchannels = 0;
-  uvw = NULL;
+  model = NULL;
   
   //open the file
   ifstream * input = new ifstream(configfile);
@@ -66,10 +68,18 @@ Configuration::Configuration(const char * configfile, int id)
           consistencyok = false;
         }
         else
-          consistencyok = consistencyok && processConfig(input);
+          consistencyok = processConfig(input);
+        break;
+      case RULE:
+        if(!configread) {
+          cfatal << startl << "Error - input file out of order!  Attempted to read rule details without knowledge of configurations - aborting!!!" << endl;
+          consistencyok = false;
+        }
+        else
+          consistencyok = processRuleTable(input);
         break;
       case FREQ:
-        processFreqTable(input);
+        consistencyok = processFreqTable(input);
         break;
       case TELESCOPE:
         processTelescopeTable(input);
@@ -81,10 +91,10 @@ Configuration::Configuration(const char * configfile, int id)
           consistencyok = false;
         }
         else
-          consistencyok = consistencyok && processDatastreamTable(input);
+          consistencyok = processDatastreamTable(input);
         break;
       case BASELINE:
-        consistencyok = consistencyok && processBaselineTable(input);
+        consistencyok = processBaselineTable(input);
         break;
       case DATA:
         if(!datastreamread)
@@ -109,9 +119,9 @@ Configuration::Configuration(const char * configfile, int id)
     }
     currentheader = getSectionHeader(input);
   }
-  if(!configread)
+  if(!configread || !ruleread || !commonread || !datastreamread || !freqread)
   {
-    cfatal << startl << "Error - no config section in input file - aborting!!!" << endl;
+    cfatal << startl << "Error - no one or more sections missing from input file - aborting!!!" << endl;
     consistencyok = false;
   }
   input->close();
@@ -142,7 +152,19 @@ Configuration::Configuration(const char * configfile, int id)
         consistencyok = setPolycoFreqInfo(i);
     }
   }
-  if (consistencyok)
+  cout << "About to open the Model, consistencyok is " << consistencyok << endl;
+  if(consistencyok) {
+    model = new Model(this, calcfilename);
+    consistencyok = model->openSuccess();
+  }
+  cout << "About to populateScanConfigList(), consistencyok is " << consistencyok << endl;
+  if(consistencyok)
+    consistencyok = populateScanConfigList();
+  if(consistencyok)
+    consistencyok = populateModelDatastreamMap();
+  if(consistencyok)
+    consistencyok = populateResultLengths();
+  if(consistencyok)
     consistencyok = consistencyCheck();
   commandthreadinitialised = false;
   dumpsta = false;
@@ -186,8 +208,8 @@ Configuration::~Configuration()
     }
     delete [] datastreamtable;
   }
-  if(uvw)
-    delete uvw;
+  if(model)
+    delete model;
   delete [] freqtable;
   delete [] telescopetable;
   for(int i=0;i<baselinetablelength;i++)
@@ -222,7 +244,7 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
       fanout = framebytes*8/(20000*nbits*nchan);
       if(fanout*20000*nbits*nchan != framebytes*8)
       {
-        cfatal << "genMk5FormatName : MKIV format : framebytes = " << framebytes << " is not allowed\n";
+        cfatal << startl << "genMk5FormatName : MKIV format : framebytes = " << framebytes << " is not allowed\n";
         return -1;
       }
       if(decimationfactor > 1)	// Note, this conditional is to ensure compatibility with older mark5access versions
@@ -234,7 +256,7 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
       fanout = framebytes*8/(20160*nbits*nchan);
       if(fanout*20160*nbits*nchan != framebytes*8)
       {
-        cfatal << "genMk5FormatName : VLBA format : framebytes = " << framebytes << " is not allowed\n";
+        cfatal << startl << "genMk5FormatName : VLBA format : framebytes = " << framebytes << " is not allowed\n";
         return -1;
       }
       if(decimationfactor > 1)
@@ -309,21 +331,6 @@ int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex
 
   // This will always work out to be an integer 
   return int(samplerate*nchan*qb*decimationfactor/(8*payloadsize) + 0.5);
-}
-
-int Configuration::getMaxResultLength()
-{
-  int length;
-  int maxlength = getResultLength(0);
-
-  for(int i=1;i<numconfigs;i++)
-  {
-    length = getResultLength(i);
-    if(length > maxlength)
-      maxlength = length;
-  }
-
-  return maxlength;
 }
 
 int Configuration::getMaxDataBytes()
@@ -418,36 +425,16 @@ int Configuration::getMaxNumFreqDatastreamIndex(int configindex)
   return maxindex;
 }
 
-int Configuration::getResultLength(int configindex)
+int Configuration::getMaxPhaseCentres(int configindex)
 {
-  datastreamdata currentdatastream;
-  int len = 0;
-  int bandsperautocorr = (configs[configindex].writeautocorrs)?2:1;
-
-  //add up all the bands in the baselines
-  for(int i=0;i<numbaselines;i++) {
-    for(int j=0;j<getBNumFreqs(configindex, i);j++)
-      len += getBNumPolProducts(configindex, i, j)*(getFNumChannels(getBFreqIndex(configindex, i, j))+1);
-  }
-
-  //multiply this by number of pulsar bins if necessary
-  if(configs[configindex].pulsarbin && !configs[configindex].scrunchoutput)
-    len *= configs[configindex].numbins;
-
-  //add all the bands from all the datastreams
-  for(int i=0;i<numdatastreams;i++)
-  {
-    for(int j=0;j<getDNumRecordedBands(configindex, i);j++) {
-      if(isFrequencyUsed(configindex, getDRecordedFreqIndex(configindex, i, j)))
-        len += (getFNumChannels(getDRecordedFreqIndex(configindex, i, j))+1)*bandsperautocorr;
-    }
-    for(int j=0;j<getDNumZoomBands(configindex, i);j++) {
-      if(isFrequencyUsed(configindex, getDZoomFreqIndex(configindex, i, j)))
-        len += (getFNumChannels(getDZoomFreqIndex(configindex, i, j))+1)*bandsperautocorr;
+  int maxphasecentres = 1;
+  for(int i=0;i<model->getNumScans();i++) {
+    if(scanconfigindices[i] == configindex) {
+      if(model->getNumPhaseCentres(i) > maxphasecentres)
+        maxphasecentres = model->getNumPhaseCentres(i);
     }
   }
-
-  return len;
+  return maxphasecentres;
 }
 
 int Configuration::getDataBytes(int configindex, int datastreamindex)
@@ -528,12 +515,6 @@ int Configuration::getCNumProcessThreads(int corenum)
   return 1;
 }
 
-bool Configuration::loaduvwinfo(bool sourceonly)
-{
-  uvw = new Uvw(this, uvwfilename, sourceonly);
-  return uvw->openSuccess();
-}
-
 bool Configuration::stationUsed(int telescopeindex)
 {
   bool toreturn = false;
@@ -550,28 +531,6 @@ bool Configuration::stationUsed(int telescopeindex)
   return toreturn;
 }
 
-int Configuration::getConfigIndex(int offsetseconds)
-{
-  int currentconfigindex;
-  string currentsourcename;
-
-  if(!uvw)
-  {
-    cfatal << startl << "UVW HAS NOT BEEN CREATED!!!" << endl;
-    return -1; //nasty, but this should never happen except in a programmer error.  Caller will probably crash.
-  }
-
-  uvw->getSourceName(startmjd, startseconds + offsetseconds, currentsourcename);
-  currentconfigindex = defaultconfigindex;
-  for(int i=0;i<numconfigs;i++)
-  {
-    if(configs[i].sourcename == currentsourcename.substr(0, (configs[i].sourcename).length()))
-      currentconfigindex = i;
-  }
-
-  return currentconfigindex;
-}
-
 Mode* Configuration::getMode(int configindex, int datastreamindex)
 {
   configdata conf = configs[configindex];
@@ -580,25 +539,27 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
   int guardsamples = (int)(conf.guardns/(1000.0/(freqtable[stream.recordedfreqtableindices[0]].bandwidth*2.0)) + 0.5);
   int streamrecbandchan = freqtable[stream.recordedfreqtableindices[0]].numchannels;
   int streamdecimationfactor = freqtable[stream.recordedfreqtableindices[0]].decimationfactor;
+  int streamchanstoaverage = freqtable[stream.recordedfreqtableindices[0]].channelstoaverage;
+  double streamrecbandwidth = freqtable[stream.recordedfreqtableindices[0]].bandwidth;
 
   switch(stream.format)
   {
     case LBASTD:
       if(stream.numbits != 2)
         cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth,  stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
       break;
     case LBAVSOP:
       if(stream.numbits != 2)
         cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
       break;
     case MKIV:
     case VLBA:
     case MARK5B:
       framesamples = getFramePayloadBytes(configindex, datastreamindex)*8/(getDNumBits(configindex, datastreamindex)*getDNumRecordedBands(configindex, datastreamindex)*streamdecimationfactor);
       framebytes = getFrameBytes(configindex, datastreamindex);
-      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, conf.blockspersend, guardsamples, stream.numrecordedfreqs, freqtable[stream.recordedfreqtableindices[0]].bandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     default:
       cerror << startl << "Error - unknown Mode!!!" << endl;
@@ -618,6 +579,8 @@ Configuration::sectionheader Configuration::getSectionHeader(ifstream * input)
     return COMMON;
   if(line.substr(0, 16) == "# CONFIGURATIONS")
     return CONFIG;
+  if(line.substr(0, 7) == "# RULES")
+    return RULE;
   if(line.substr(0, 12) == "# FREQ TABLE")
     return FREQ;
   if(line.substr(0, 17) == "# TELESCOPE TABLE")
@@ -716,6 +679,7 @@ bool Configuration::processBaselineTable(ifstream * input)
       baselinetable[i].datastream2bandindex = tempintptr;
     }
   }
+  baselineread = true;
   return true;
 }
 
@@ -723,8 +687,7 @@ void Configuration::processCommon(ifstream * input)
 {
   string line;
 
-  getinputline(input, &delayfilename, "DELAY FILENAME");
-  getinputline(input, &uvwfilename, "UVW FILENAME");
+  getinputline(input, &calcfilename, "CALC FILENAME");
   getinputline(input, &coreconffilename, "CORE CONF FILENAME");
   getinputline(input, &line, "EXECUTE TIME (SEC)");
   executeseconds = atoi(line.c_str());
@@ -769,15 +732,12 @@ bool Configuration::processConfig(ifstream * input)
   getinputline(input, &line, "NUM CONFIGURATIONS");
   numconfigs = atoi(line.c_str());
   configs = new configdata[numconfigs];
-  defaultconfigindex = -1;
   for(int i=0;i<numconfigs;i++)
   {
     found = false;
     configs[i].datastreamindices = new int[numdatastreams];
     configs[i].baselineindices = new int [numbaselines];
-    getinputline(input, &(configs[i].sourcename), "CONFIG SOURCE");
-    if(configs[i].sourcename == "DEFAULT")
-      defaultconfigindex = i;
+    getinputline(input, &(configs[i].name), "CONFIG NAME");
     getinputline(input, &line, "INT TIME (SEC)");
     configs[i].inttime = atof(line.c_str());
     getinputline(input, &line, "SUBINT NANOSECONDS");
@@ -806,10 +766,6 @@ bool Configuration::processConfig(ifstream * input)
       getinputline(input, &line, "BASELINE ", j);
       configs[i].baselineindices[j] = atoi(line.c_str());
     }
-  }
-  if(defaultconfigindex < 0)
-  {
-//    cinfo << startl << "Warning - no default config found - sources which were not specified will not be correlated!!!" << endl;
   }
 
   configread = true;
@@ -843,6 +799,9 @@ bool Configuration::processDatastreamTable(ifstream * input)
   {
     int configindex=-1;
     int decimationfactor = 1;
+    datastreamtable[i].numdatafiles = 0; //default in case its a network datastream
+    datastreamtable[i].tcpwindowsizekb = 0; //default in case its a file datastream
+    datastreamtable[i].portnumber = -1; //default in case its a file datastream
 
     //get configuration index for this datastream
     for(int c=0; c<numconfigs; c++)
@@ -898,7 +857,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].source = EVLBI;
     else
     {
-      cfatal << startl << "Unnkown data source " << line << " (case sensitive choices are FILE, MK5MODULE and EVLBI)" << endl;
+      cfatal << startl << "Unknown data source " << line << " (case sensitive choices are FILE, MK5MODULE and EVLBI)" << endl;
       return false;
     }
 
@@ -907,7 +866,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     if(datastreamtable[i].filterbank)
       cwarn << startl << "Error - filterbank not yet supported!!!" << endl;
 
-    getinputline(input, &line, "RECORDED FREQS");
+    getinputline(input, &line, "NUM RECORDED FREQS");
     datastreamtable[i].numrecordedfreqs = atoi(line.c_str());
     datastreamtable[i].recordedfreqpols = new int[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqtableindices = new int[datastreamtable[i].numrecordedfreqs];
@@ -916,13 +875,13 @@ bool Configuration::processDatastreamTable(ifstream * input)
     datastreamtable[i].numrecordedbands = 0;
     for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
     {
-      getinputline(input, &line, "FREQ TABLE INDEX ", j);
+      getinputline(input, &line, "REC FREQ INDEX ", j);
       datastreamtable[i].recordedfreqtableindices[j] = atoi(line.c_str());
       getinputline(input, &line, "CLK OFFSET ", j);
       datastreamtable[i].recordedfreqclockoffsets[j] = atof(line.c_str());
       getinputline(input, &line, "FREQ OFFSET ", j); //Freq offset is positive if recorded LO frequency was higher than the frequency in the frequency table
       datastreamtable[i].recordedfreqlooffsets[j] = atof(line.c_str());
-      getinputline(input, &line, "NUM POLS ", j);
+      getinputline(input, &line, "NUM REC POLS ", j);
       datastreamtable[i].recordedfreqpols[j] = atoi(line.c_str());
       datastreamtable[i].numrecordedbands += datastreamtable[i].recordedfreqpols[j];
     }
@@ -939,14 +898,14 @@ bool Configuration::processDatastreamTable(ifstream * input)
     datastreamtable[i].recordedbandlocalfreqindices = new int[datastreamtable[i].numrecordedbands];
     for(int j=0;j<datastreamtable[i].numrecordedbands;j++)
     {
-      getinputline(input, &line, "INPUT BAND ", j);
+      getinputline(input, &line, "REC BAND ", j);
       datastreamtable[i].recordedbandpols[j] = *(line.data());
-      getinputline(input, &line, "INPUT BAND ", j);
+      getinputline(input, &line, "REC BAND ", j);
       datastreamtable[i].recordedbandlocalfreqindices[j] = atoi(line.c_str());
       if(datastreamtable[i].recordedbandlocalfreqindices[j] >= datastreamtable[i].numrecordedfreqs)
         cerror << startl << "Error - attempting to refer to freq outside local table!!!" << endl;
     }
-    getinputline(input, &line, "ZOOM FREQS");
+    getinputline(input, &line, "NUM ZOOM FREQS");
     datastreamtable[i].numzoomfreqs = atoi(line.c_str());
     datastreamtable[i].zoomfreqtableindices = new int[datastreamtable[i].numzoomfreqs];
     datastreamtable[i].zoomfreqpols = new int[datastreamtable[i].numzoomfreqs];
@@ -1043,6 +1002,68 @@ bool Configuration::processDatastreamTable(ifstream * input)
   return true;
 }
 
+bool Configuration::processRuleTable(ifstream * input)
+{
+  int count=0;
+  string key, val;
+  getinputline(input, &key, "NUM RULES");
+  numrules = atoi(key.c_str());
+  rules = new ruledata[numrules];
+  for(int i=0;i<numrules;i++) {
+    rules[i].configindex = -1;
+    rules[i].sourcename = "";
+    rules[i].scanId = "";
+    rules[i].calcode = "";
+    rules[i].qual = -1;
+    rules[i].mjdStart = -999.9;
+    rules[i].mjdStop = -999.9;
+  }
+
+  while(count<numrules && !input->eof())
+  {
+    getinputkeyval(input, &key, &val);
+    if(key.find_first_of("CONFIG NAME") != std::string::npos) {
+      rules[count].configname = val;
+      count++;
+    }
+    else if(key.find_first_of("SOURCE NAME") != std::string::npos) {
+      rules[count].sourcename = val;
+    }
+    else if(key.find_first_of("SCAN ID") != std::string::npos) {
+      rules[count].scanId = val;
+    }
+    else if(key.find_first_of("CALCODE") != std::string::npos) {
+      rules[count].calcode = val;
+    }
+    else if(key.find_first_of("QUAL") != std::string::npos) {
+      rules[count].qual = atoi(val.c_str());
+    }
+    else if(key.find_first_of("MJD START") != std::string::npos) {
+      rules[count].mjdStart = atof(val.c_str());
+    }
+    else if(key.find_first_of("MJD STOP") != std::string::npos) {
+      rules[count].mjdStop = atof(val.c_str());
+    }
+    else {
+      cwarn << startl << "Received unknown key " << key << " with val " << val << " in rule table - ignoring!" << endl;
+    }
+  }
+
+  for(int i=0;i<numrules;i++) {
+    for(int j=0;j<numconfigs;j++) {
+      if(rules[i].configname.compare(configs[j].name) == 0) {
+        rules[i].configindex = j;
+      }
+    }
+    if(rules[i].configindex < 0) {
+      cfatal << startl << "Found a rule with config name " << rules[i].configname << " that doesn't match any configs - aborting!" << endl;
+      return false;
+    }
+  }
+  ruleread = true;
+  return true;
+}
+
 void Configuration::processDataTable(ifstream * input)
 {
   string line;
@@ -1057,7 +1078,7 @@ void Configuration::processDataTable(ifstream * input)
   }
 }
 
-void Configuration::processFreqTable(ifstream * input)
+bool Configuration::processFreqTable(ifstream * input)
 {
   string line;
 
@@ -1079,6 +1100,10 @@ void Configuration::processFreqTable(ifstream * input)
       maxnumchannels = freqtable[i].numchannels;
     getinputline(input, &line, "CHANS TO AVG ");
     freqtable[i].channelstoaverage = atoi(line.c_str());
+    if(freqtable[i].channelstoaverage <= 0 || (freqtable[i].channelstoaverage > 1 && freqtable[i].channelstoaverage%2 != 0)) {
+      cerror << startl << "Channels to average must be positive and a power of two - not the case for frequency entry " << i << "(" << freqtable[i].channelstoaverage << ") - aborting!!" << endl;
+      return false;
+    }
     getinputline(input, &line, "OVERSAMPLE FAC. ");
     freqtable[i].oversamplefactor = atoi(line.c_str());
     getinputline(input, &line, "DECIMATION FAC. ");
@@ -1108,6 +1133,7 @@ void Configuration::processFreqTable(ifstream * input)
     }
   }
   freqread = true;
+  return true;
 }
 
 void Configuration::processTelescopeTable(ifstream * input)
@@ -1139,6 +1165,152 @@ void Configuration::processNetworkTable(ifstream * input)
     getinputline(input, &line, "TCP WINDOW (KB) ", i);
     datastreamtable[i].tcpwindowsizekb = atoi(line.c_str());
   }
+}
+
+bool Configuration::populateScanConfigList()
+{
+  bool applies;
+  Model::source * src;
+  ruledata r;
+
+  scanconfigindices = new int[model->getNumScans()];
+  for(int i=0;i<model->getNumScans();i++) {
+    scanconfigindices[i] = -1;
+    for(int j=0;j<numrules;j++) {
+      applies = true;
+      r = rules[j];
+      if((r.scanId.compare("") != 0) && (r.scanId.compare(model->getScanIdentifier(i)) != 0))
+        applies = false;
+      if(r.mjdStart > 0 && r.mjdStart > model->getScanStartMJD(i))
+        applies = false;
+      if(r.mjdStop > 0 && r.mjdStop > model->getScanEndMJD(i))
+        applies = false;
+      //cout << "Looking at scan " << i+1 << "/" << model->getNumScans() << endl;
+      for(int k=0;k<model->getNumPhaseCentres(i);k++) {
+        //cout << "Looking at source " << k << " of scan " << i << endl;
+        src = model->getScanPhaseCentreSource(i, k);
+        if((r.sourcename.compare("") != 0) && (r.sourcename.compare(src->name) != 0))
+          applies = false;
+        if((r.calcode.compare("") != 0) && (r.calcode.compare(src->calcode) != 0))
+          applies = false;
+        if(r.qual >= 0 && r.qual != src->qual)
+          applies = false;
+      }
+      if(applies) {
+        if(scanconfigindices[i] < 0 || scanconfigindices[i] == r.configindex) {
+          scanconfigindices[i] = r.configindex;
+        }
+        else {
+          cfatal << startl << "Conflicting rules apply to scan " << i << " - aborting!!!" << endl;
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+bool Configuration::populateModelDatastreamMap()
+{
+  Model::station s;
+  string tname;
+
+  for(int i=0;i<datastreamtablelength;i++) {
+    datastreamtable[i].modelfileindex = -1;
+    tname = telescopetable[datastreamtable[i].telescopeindex].name;
+    for(int j=0;j<model->getNumStations();j++) {
+      s = model->getStation(j);
+      if(tname.compare(s.name) == 0)
+        datastreamtable[i].modelfileindex = j;
+    }
+  }
+
+  for(int i=0;i<numconfigs;i++) {
+    for(int j=0;j<numdatastreams;j++) {
+      if(datastreamtable[configs[i].datastreamindices[j]].modelfileindex < 0) {
+        cfatal << startl << "Couldn't find datastream " << telescopetable[datastreamtable[configs[i].datastreamindices[j]].telescopeindex].name << " in the model file - aborting!!!" << endl;
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool Configuration::populateResultLengths()
+{
+  datastreamdata currentdatastream;
+  bool found;
+  int len, postavlen, bandsperautocorr, freqindex, freqchans;
+
+  maxresultlength = 0;
+  maxpostavresultlength = 0;
+  configresultlengths = new int[numconfigs];
+  configpostavresultlengths = new int[numconfigs];
+  for(int c=0;c<numconfigs;c++)
+  {
+    len = 0;
+    postavlen = 0;
+    bandsperautocorr = (configs[c].writeautocorrs)?2:1;
+
+    //add up all the bands in the baselines
+    for(int i=0;i<numbaselines;i++) {
+      for(int j=0;j<getBNumFreqs(c, i);j++) {
+        //cout << "Looking at baseline " << i << "/" << numbaselines << ", frequency " << j << "/" << getBNumFreqs(c, i) << endl;
+        freqindex = getBFreqIndex(c, i, j);
+        freqchans = getFNumChannels(freqindex);
+        len += getBNumPolProducts(c, i, j)*(freqchans+1);
+        postavlen += getBNumPolProducts(c, i, j)*(freqchans/getFChannelsToAverage(freqindex)+1);
+      }
+    }
+
+    //multiply this by number of pulsar bins if necessary
+    if(configs[c].pulsarbin && !configs[c].scrunchoutput)
+      len *= configs[c].numbins;
+
+    found = false;
+    //find a scan that matches this config
+    for(int i=0;i<model->getNumScans();i++) {
+      if(scanconfigindices[i] == c) {
+        //multiply length by number of phase centres
+        len *= model->getNumPhaseCentres(i);
+        found = true;
+        break;
+      }
+    }
+    if(!found) {
+      csevere << "Did not find a scan matching config index " << c << endl;
+    }
+
+    //add all the bands from all the datastreams
+    for(int i=0;i<numdatastreams;i++)
+    {
+      for(int j=0;j<getDNumRecordedBands(c, i);j++) {
+        if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
+          freqindex = getDRecordedFreqIndex(c, i, j);
+          len += (getFNumChannels(freqindex)+1)*bandsperautocorr;
+          postavlen += (getFNumChannels(freqindex)/getFChannelsToAverage(freqindex)+1)*bandsperautocorr;
+        }
+      }
+      for(int j=0;j<getDNumZoomBands(c, i);j++) {
+        if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
+          freqindex = getDZoomFreqIndex(c, i, j);
+          len += (getFNumChannels(freqindex)+1)*bandsperautocorr;
+          postavlen += (getFNumChannels(freqindex)/getFChannelsToAverage(freqindex)+1)*bandsperautocorr;
+        }
+      }
+    }
+
+    configresultlengths[c] = len;
+    configpostavresultlengths[c] = postavlen;
+    if(len > maxresultlength)
+      maxresultlength = len;
+    if(postavlen > maxpostavresultlength)
+      maxpostavresultlength = postavlen;
+  }
+
+  return true;
 }
 
 bool Configuration::consistencyCheck()
@@ -1281,8 +1453,10 @@ bool Configuration::consistencyCheck()
   }
 
   //check entries in the config table, check that number of channels * sample time yields a whole number of nanoseconds and that the nanosecond increment is not too large for an int, and generate the ordered datastream indices array
+  //also check that guardns is large enough
   int numpulsarconfigs = 0;
   int numscrunchconfigs = 0;
+  double samplens;
   for(int i=0;i<numconfigs;i++)
   {
     //check the fringe rotation settings
@@ -1290,7 +1464,7 @@ bool Configuration::consistencyCheck()
       cerror << startl << "Error - fringe rotation order must be 0, 1 or 2 for all configurations - aborting!" << endl;
       return false;
     }
-    //check that arraystridelen is ok
+    //check that arraystridelen is ok, and guardns is ok
     for(int j=0;j<numdatastreams;j++) {
       for(int k=0;k<datastreamtable[configs[i].datastreamindices[j]].numrecordedfreqs;k++) {
         if(freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[k]].numchannels % configs[i].arraystridelen != 0) {
@@ -1299,6 +1473,11 @@ bool Configuration::consistencyCheck()
           cerror << startl << "Error - config[" << i << "] has a stride length of " << configs[i].arraystridelen << " which is not an integral divisor of the number of channels in frequency[" << j << "] (which is " << freqtable[j].numchannels << ") - aborting!" << endl;
           return false;
         }
+      }
+      samplens = 1000.0/freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].bandwidth;
+      if(configs[i].guardns < 4.0*samplens*datastreamtable[configs[i].datastreamindices[j]].bytespersampledenom) {
+        cerror << startl << "Error - config[" << i << "] has a guard ns which is potentially too short (" << configs[i].guardns << ").  To be safe (against backwards shuffling of the start of a Datastream send) guardns should be at least " << 4.0*samplens*datastreamtable[configs[i].datastreamindices[j]].bytespersampledenom << endl;
+        return false;
       }
     }
 
@@ -1542,19 +1721,42 @@ void Configuration::makeFortranString(string line, int length, char * destinatio
   }
 }
 
+void Configuration::getinputkeyval(ifstream * input, std::string * key, std::string * val)
+{
+  if(input->eof())
+    cerror << startl << "Error - trying to read past the end of file!!!" << endl;
+  getline(*input, *key);
+  while(key->length() > 0 && key->at(0) == COMMENT_CHAR) { // a comment
+    cinfo << startl << "Skipping comment " << key << endl;
+    getline(*input, *key);
+  }
+  int keylength = key->find_first_of(':') + 1;
+  if(keylength < DEFAULT_KEY_LENGTH)
+    keylength = DEFAULT_KEY_LENGTH;
+  *val = key->substr(keylength);
+  *key = key->substr(0, key->find_first_of(':'));
+}
+
 void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader)
 {
   if(input->eof())
     cerror << startl << "Error - trying to read past the end of file!!!" << endl;
-  input->get(header, HEADER_LENGTH);
-  if(strncmp(header, startofheader.c_str(), startofheader.length()) != 0) //not what we expected
-    cerror << startl << "Error - we thought we were reading something starting with '" << startofheader << "', when we actually got '" << header << "'" << endl;
   getline(*input,*line);
+  while(line->length() > 0 && line->at(0) == COMMENT_CHAR) { // a comment
+    cinfo << startl << "Skipping comment " << line << endl;
+    getline(*input, *line);
+  }
+  int keylength = line->find_first_of(':') + 1;
+  if(keylength < DEFAULT_KEY_LENGTH)
+    keylength = DEFAULT_KEY_LENGTH;
+  if(startofheader.compare((*line).substr(0, startofheader.length())) != 0) //not what we expected
+    cerror << startl << "Error - we thought we were reading something starting with '" << startofheader << "', when we actually got '" << (*line).substr(0, keylength) << "'" << endl;
+  *line = line->substr(keylength);
 }
 
 void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, int intval)
 {
-  char buffer[HEADER_LENGTH+1];
+  char buffer[MAX_KEY_LENGTH+1];
   sprintf(buffer, "%s%i", startofheader.c_str(), intval);
   getinputline(input, line, string(buffer));
 }

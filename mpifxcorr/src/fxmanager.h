@@ -27,7 +27,6 @@
 #include "architecture.h"
 #include "visibility.h"
 #include "core.h"
-#include "uvw.h"
 #include <pthread.h>
 
 /**
@@ -115,11 +114,11 @@ private:
   //variables
   Configuration * config;
   MPI_Comm return_comm;
-  int numcores, mpiid, numdatastreams, startmjd, startseconds, startns, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis, skipseconds;
+  int numcores, mpiid, numdatastreams, startmjd, startseconds, startns, startscan, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis;
   double inttime;
   bool keepwriting, circularpols, writethreadinitialised, visibilityconfigok;
-  int senddata[3]; //targetcoreid, offsetseconds, offsetnanoseconds
-  Uvw * uvw;
+  int senddata[4]; //targetcoreid, scan, scanoffsetseconds, scanoffsetnanoseconds
+  Model * model;
   int * datastreamids;
   int * coreids;
   int * numsent;

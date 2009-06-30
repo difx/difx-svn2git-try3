@@ -38,6 +38,7 @@ class Mk5Mode : public Mode
    * @param confindex The index of the configuration this Mode is for
    * @param dsindex The index of the datastream this Mode is for
    * @param recordedbandchan The number of channels for each recorded subband
+   * @param chanstoavg The number of channels to average for each subband
    * @param bpersend The number of FFT blocks to be processed in a message
    * @param gsamples The number of additional guard samples at the end of a message
    * @param nrecordedfreqs The number of recorded frequencies for this Mode
@@ -53,7 +54,7 @@ class Mk5Mode : public Mode
    * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
    * @param fsamples The number of samples in a frame per channel
   */
-    Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format);
+    Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format);
     virtual ~Mk5Mode();
 
   protected:

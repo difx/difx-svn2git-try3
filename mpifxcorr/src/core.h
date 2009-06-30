@@ -71,14 +71,15 @@ private:
   /// store data and results
   typedef struct {
     u8 ** databuffer;
-    double ** controlbuffer;
+    s32 ** controlbuffer;
     cf32 * results;
     //s32 *** bincounts;
-    int resultlength;
+    int preavresultlength;
+    int postavresultlength;
     int * datalengthbytes;
     int resultsvalid;
     int configindex;
-    int offsets[2]; //0=seconds, 1=nanoseconds
+    int offsets[3]; //0=scan, 1=seconds, 2=nanoseconds
     bool keepprocessing;
     int numpulsarbins;
     bool pulsarbin;
@@ -99,7 +100,7 @@ private:
   * @param newconfigindex The index of the config which is to be used
   * @param oldconfigindex The index of the config which was previously being used
   */
-  void createPulsarAccumSpace(cf32***** pulsaraccumspace, int newconfigindex, int oldconfigindex);
+  void createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfigindex, int oldconfigindex);
 
  /**
   * While the correlation is continuing, processes the given thread's share of the next element in the send/receive circular buffer
@@ -125,10 +126,10 @@ private:
   * @param threadresults Pre-allocated space for this thread to place its partial results (Nbaselines*nproducts*(numchannels+1) long)
   * @param bins Pre-allocated space for the bins for each subband/channel combination - null if not pulsar binning
   * @param pulsarscratchspace Room to perform the pulsar binning if required - null if not pulsar binning (numchannels + 1 long)
-  * @param pulsaraccumspace Room in which to accumulate the binned results ([#baselines][#frequencies][#polproducts][#bins][#channels+1])
+  * @param pulsaraccumspace Room in which to accumulate the binned results ([#baselines][#frequencies][#phasecentres][#polproducts][#bins][#channels+1])
   * @param starecord Message to be sent to a process listening for STA results
   */
-  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord);
+  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32****** pulsaraccumspace, DifxMessageSTARecord * starecord);
 
  /**
   * Updates all the parameters for processing thread when the configuration changes
@@ -151,12 +152,13 @@ private:
   MPI_Request * datarequests;
   MPI_Request * controlrequests;
   MPI_Status * msgstatuses;
-  int numdatastreams, numbaselines, databytes, controllength, numreceived, currentconfigindex, numprocessthreads, maxresultlength, startmjd, startseconds;
+  int numdatastreams, numbaselines, databytes, controllength, numreceived, currentconfigindex, numprocessthreads, maxpreavresultlength, maxpostavresultlength, startmjd, startseconds;
   int * datastreamids;
   processslot * procslots;
   pthread_t * processthreads;
   pthread_cond_t * processconds;
   bool * processthreadinitialised;
+  Model * model;
 };
 
 #endif

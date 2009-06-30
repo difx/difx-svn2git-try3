@@ -28,7 +28,6 @@
 #include <iostream>
 #include <math.h>
 #include "polyco.h"
-#include "uvw.h"
 #include "model.h"
 #include "mark5access.h"
 #include "mpifxcorr.h"
@@ -76,6 +75,10 @@ public:
   inline int getMPIId() { return mpiid; }
   inline int getVisBufferLength() { return visbufferlength; }
   inline bool consistencyOK() {return consistencyok; }
+  inline int getResultLength(int configindex) { return configresultlengths[configindex]; }
+  inline int getPostavResultLength(int configindex) { return configpostavresultlengths[configindex]; }
+  inline int getMaxResultLength() { return maxresultlength; }
+  inline int getMaxPostavResultLength() { return maxpostavresultlength; }
   inline int getNumConfigs() { return numconfigs; }
   inline int getNumIndependentChannelConfigs() { return numindependentchannelconfigs; }
   inline int getBlocksPerSend(int configindex) { return configs[configindex].blockspersend; }
@@ -94,6 +97,8 @@ public:
   inline int getDNumDataSegments() { return numdatasegments; }
   inline int getDTelescopeIndex(int configindex, int configdatastreamindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex; }
+  inline int getDModelFileIndex(int configindex, int configdatastreamindex)
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].modelfileindex; }
   inline int getDNumRecordedFreqs(int configindex, int configdatastreamindex)
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numrecordedfreqs; }
   inline int getDNumZoomFreqs(int configindex, int configdatastreamindex)
@@ -104,6 +109,7 @@ public:
     { return telescopetable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex].clockrate; }
   inline int getDOversampleFactor(int configindex, int configdatastreamindex) 
     { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[0]].oversamplefactor; }
+  inline int getDChannelsToAverage(int configindex, int configdatastreamindex) { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[0]].channelstoaverage; }
   inline int getDDecimationFactor(int configindex, int configdatastreamindex) 
     { return freqtable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqtableindices[0]].decimationfactor; }
   inline string getDStationName(int configindex, int configdatastreamindex) 
@@ -207,19 +213,18 @@ public:
   inline int getStartNS() { return startns; }
   inline int getSubintNS(int configindex) { return configs[configindex].subintns; }
   inline int getGuardNS(int configindex) { return configs[configindex].guardns; }
-  inline string getDelayFileName() { return delayfilename; }
   inline int getFreqTableLength() { return freqtablelength; }
   inline double getFreqTableFreq(int index) { return freqtable[index].bandedgefreq; }
   inline double getFreqTableBandwidth(int index) { return freqtable[index].bandwidth; }
   inline bool getFreqTableLowerSideband(int index) { return freqtable[index].lowersideband; }
   inline int getFNumChannels(int index) { return freqtable[index].numchannels; }
+  inline int getFChannelsToAverage(int index) { return freqtable[index].channelstoaverage; }
   inline int getFMatchingWiderBandIndex(int index) { return freqtable[index].matchingwiderbandindex; }
   inline int getFMatchingWiderBandOffset(int index) { return freqtable[index].matchingwiderbandoffset; }
   inline bool isFrequencyUsed(int configindex, int freqindex) 
     { return configs[configindex].frequsedbybaseline[freqindex]; }
   inline bool circularPolarisations() 
     { return datastreamtable[0].recordedbandpols[0] == 'R' || datastreamtable[0].recordedbandpols[0] == 'L'; }
-  inline int getSourceIndex(int mjd, int sec) { return uvw->getSourceIndex(mjd, sec); }
   inline bool isReadFromFile(int configindex, int configdatastreamindex) 
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].source != EVLBI; }
   inline bool isMkV(int datastreamindex) 
@@ -298,21 +303,9 @@ public:
   int genMk5FormatName(dataformat format, int nchan, double bw, int nbits, int framebytes, int decimationfactor, char *formatname);
 
  /**
-  * @return The UVW object which contains geometric model information
-  */
-  inline Uvw * getUVW() { return uvw; }
-
- /**
   * @return The Model object which contains geometric model information
   */
   inline Model * getModel() { return model; }
-
- /**
-  * Loads the UVW information from file into memory
-  * @param nameonly Whether to only load the scan names (true) or all model information (false)
-  * @return Whether the uvw object was created successfully
-  */
-  bool loaduvwinfo(bool nameonly);
 
  /**
   * Creates and returns the appropriate mode object
@@ -329,10 +322,10 @@ public:
   */
 
  /**
-  * @param offsetseconds The offset from the start of the correlation in seconds
-  * @return The index of the configuration in use at that time
+  * @param scan The scan index
+  * @return The index of the configuration in use for that scan
   */
-  int getConfigIndex(int offsetseconds);
+  inline int getScanConfigIndex(int scan) { return scanconfigindices[scan]; }
 
  /**
   * @param configindex The index of the configuration being used (from the table in the input file)
@@ -352,14 +345,15 @@ public:
   int getMaxNumFreqDatastreamIndex(int configindex);
 
  /**
-  * @return The maximum length of a cf32 vector containing all visibilities and autocorrelations, for any configuration
-  */
-  int getMaxResultLength();
-
- /**
   * @return The maximum length of a data message from any telescope, for any configuration
   */
   int getMaxDataBytes();
+
+ /**
+  * @param configindex The index of the relevant entry in the configuration table
+  * @return The maximum number of phase centres in any scan for this config
+  */
+  int getMaxPhaseCentres(int configindex);
 
  /**
   * @param datastreamindex The index of the datastream (from the table in the input file)
@@ -376,12 +370,6 @@ public:
   * @return The maximum number of products (1, 2 or 4) for any baseline in any configuration
   */
   int getMaxProducts();
-
- /**
-  * @param configindex The index of the configuration being used (from the table in the input file)
-  * @return The maximum length of a cf32 vector containing all visibilities and autocorrelations, for the specified configuration
-  */
-  int getResultLength(int configindex);
 
  /**
   * @param configindex The index of the configuration being used (from the table in the input file)
@@ -434,6 +422,14 @@ public:
   void getinputline(ifstream * input, string * line, string startofheader, int intval);
 
  /**
+  * Utility method which reads a line from a file, splitting it into a key and a value and storing both
+  * @param input Open input stream to read from
+  * @param key String to store key in
+  * @param val String to store value in
+  */
+  void getinputkeyval(ifstream * input, std::string * key, std::string * val);
+
+ /**
   * Utility method which converts a year,month,day into mjd and hour,minute,second into seconds from start of day
   * @param d The MJD, which will be set
   * @param s The seconds from start of day, which will be set
@@ -465,7 +461,7 @@ public:
 
 private:
   ///types of sections that can occur within an input file
-  enum sectionheader {COMMON, CONFIG, FREQ, TELESCOPE, DATASTREAM, BASELINE, DATA, NETWORK, INPUT_EOF, UNKNOWN};
+  enum sectionheader {COMMON, CONFIG, RULE, FREQ, TELESCOPE, DATASTREAM, BASELINE, DATA, NETWORK, INPUT_EOF, UNKNOWN};
 
   ///Storage struct for data from the frequency table of the input file
   typedef struct {
@@ -495,7 +491,7 @@ private:
 
   ///Storage struct for data from the config table of the input file
   typedef struct {
-    string sourcename;
+    string name;
     double inttime;
     int blockspersend;
     int subintns;
@@ -507,6 +503,7 @@ private:
     int numpolycos;
     int numbins;
     bool scrunchoutput;
+    int numphasecentres;
     string pulsarconfigfilename;
     Polyco ** polycos;
     int * datastreamindices;
@@ -514,6 +511,17 @@ private:
     int * baselineindices;
     bool * frequsedbybaseline;
   } configdata;
+
+  ///storage struct for data from the rule table of the input file
+  typedef struct {
+    string configname;
+    int configindex; //derived, into configs
+    string sourcename;
+    string scanId;
+    string calcode;
+    int qual;
+    double mjdStart, mjdStop;
+  } ruledata;
 
   ///Storage struct for data from the telescope table of the input file
   typedef struct {
@@ -525,6 +533,7 @@ private:
   ///Storage struct for data from the datastream table of the input file
   typedef struct {
     int telescopeindex;
+    int modelfileindex;
     double tsys;
     dataformat format;
     datasource source;
@@ -571,6 +580,25 @@ private:
   bool consistencyCheck();
 
  /**
+  * Goes through scans applying rules to figure out configs apply, and checking
+  * for inconsistencies
+  * @return True if the rules are all consistent, else false
+  */
+  bool populateScanConfigList();
+
+ /**
+  * Goes through configs working out the result length for each
+  * @return True if all result lengths make sense
+  */
+  bool populateResultLengths();
+
+ /**
+  * Goes through Model file and maps datastreams to the telescope names
+  * @return True if all datastreams used in this correlation are found
+  */
+  bool populateModelDatastreamMap();
+
+ /**
   * Loads the baseline table from the file into memory
   * @param input Open file stream for the input file
   * @return Whether the baseline table was successfully parsed (failure should abort)
@@ -591,6 +619,13 @@ private:
   bool processConfig(ifstream * input);
 
  /**
+  * Loads the rule table from the file into memory
+  * @param input Open file stream for the input file
+  * @return Whether the rule table was successfully parsed (failure should abort)
+  */
+  bool processRuleTable(ifstream * input);
+
+ /**
   * Loads the datastream table from the file into memory
   * @param input Open file stream for the input file
   * @return Whether the datastream table was successfully parsed (failure should abort)
@@ -606,8 +641,9 @@ private:
  /**
   * Loads the frequency table from the file into memory
   * @param input Open file stream for the input file
+  * @return Whether the freq table was successfully parsed (failure should abort)
   */
-  void processFreqTable(ifstream * input);
+  bool processFreqTable(ifstream * input);
 
  /**
   * Loads the telescope table from the file into memory
@@ -637,24 +673,36 @@ private:
   bool setPolycoFreqInfo(int configindex);
 
   ///The length of keywords in all input files
-  static const int HEADER_LENGTH = 21;
+  static const int DEFAULT_KEY_LENGTH = 20;
+  static const int MAX_KEY_LENGTH = 128;
+
+  ///The character used to denote a comment line, to be ignored
+  static const char COMMENT_CHAR = '@';
 
   /// Constant for the default number of channels for visibilities sent to monitor (STA or LTA)
   static const int DEFAULT_MONITOR_NUMCHANNELS = 32;
 
   int mpiid;
-  char header[HEADER_LENGTH];
-  bool commonread, configread, datastreamread, freqread, consistencyok, commandthreadinitialised, dumpsta, dumplta;
-  int visbufferlength;
-  int executeseconds, startmjd, startseconds, startns, numdatastreams, numbaselines, numconfigs, defaultconfigindex, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, databufferfactor, numdatasegments, numcoreconfs, maxnumchannels, maxnumpulsarbins, numindependentchannelconfigs, stadumpchannels, ltadumpchannels;
-  string delayfilename, uvwfilename, coreconffilename, outputfilename;
+  char header[MAX_KEY_LENGTH];
+  bool commonread, configread, datastreamread, freqread, ruleread, baselineread;
+  bool consistencyok, commandthreadinitialised, dumpsta, dumplta;
+  int visbufferlength, databufferfactor, numdatasegments;
+  int numdatastreams, numbaselines, numcoreconfs;
+  int executeseconds, startmjd, startseconds, startns;
+  int maxnumchannels, maxnumpulsarbins, maxresultlength, maxpostavresultlength, numindependentchannelconfigs;
+  int stadumpchannels, ltadumpchannels;
+  int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength;
+  string calcfilename, modelfilename, coreconffilename, outputfilename;
   int * numprocessthreads;
+  int * scanconfigindices;
+  int * configresultlengths;
+  int * configpostavresultlengths;
   configdata * configs;
+  ruledata * rules;
   freqdata * freqtable;
   telescopedata * telescopetable;
   baselinedata * baselinetable;
   datastreamdata * datastreamtable;
-  Uvw * uvw;
   Model * model;
   outputformat outformat;
 };

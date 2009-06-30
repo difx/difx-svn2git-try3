@@ -21,6 +21,7 @@
 //============================================================================
 #include <mpi.h>
 #include "mk5.h"
+#include "mode.h"
 #include <iomanip>
 #include <errno.h>
 #include <math.h>
@@ -87,13 +88,13 @@ void Mk5DataStream::initialise()
 
 }
 
-int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
+int Mk5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
   int bufferindex, framesin, vlbaoffset;
   
-  bufferindex = DataStream::calculateControlParams(offsetsec, offsetns);
+  bufferindex = DataStream::calculateControlParams(scan, offsetsec, offsetns);
 
-  if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] < 0.0)
+  if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
     return 0;
 
   //do the necessary correction to start from a frame boundary - work out the offset from the start of this segment
@@ -102,7 +103,7 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
   if(vlbaoffset < 0)
   {
     cwarn << startl << "Mk5DataStream::calculateControlParams : vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = -1.0;
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0;
   }
 
@@ -110,14 +111,14 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
   framesin = vlbaoffset/payloadbytes;
 
   // Note here a time is needed, so we only count payloadbytes
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = bufferinfo[atsegment].seconds + double(bufferinfo[atsegment].nanoseconds)*1.0e-9 + (double)framesin/framespersecond;
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + (int)(1000000000.0*(framesin/framespersecond));
 
   //go back to nearest frame -- here the total number of bytes matters
   bufferindex = atsegment*readbytes + framesin*framebytes;
   if(bufferindex >= bufferbytes)
   {
     cwarn << startl << "Mk5DataStream::calculateControlParams : bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = -1.0;
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0;
   }
   return bufferindex;
@@ -160,8 +161,10 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   bw = config->getDRecordedBandwidth(configindex, mpiid, 0);
 
   fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, framebytes, config->getDDecimationFactor(configindex, streamnum), formatname);
-  if (fanout < 0)
+  if (fanout < 0) {
+    cfatal << startl << "Fanount is " << fanout << ", which is impossible - no choice but to abort!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
+  }
 
   mark5stream = new_mark5_stream(
     new_mark5_stream_file(datafilenames[configindex][fileindex].c_str(), 0),
@@ -180,7 +183,16 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 
   readseconds = 86400*(mark5stream->mjd-corrstartday) + mark5stream->sec-corrstartseconds + intclockseconds;
   readnanoseconds = int(mark5stream->ns);
-  cverbose << startl << "The frame start is day=" << mark5stream->mjd << ", seconds=" << mark5stream->sec << ", ns=" << mark5stream->ns << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
+  while(model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+    readscan++;
+  while(model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+    readscan--;
+  if(readscan < 0)
+    readscan = 0;
+  if(readscan >= model->getNumScans())
+    readscan = model->getNumScans() - 1;
+  readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+  cverbose << startl << "The frame start is day=" << mark5stream->mjd << ", seconds=" << mark5stream->sec << ", ns=" << mark5stream->ns << ", readscan=" << readscan << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
 
   //close mark5stream
   delete_mark5_stream(mark5stream);
@@ -207,6 +219,14 @@ void Mk5DataStream::networkToMemory(int buffersegment, int & framebytesremaining
   readnanoseconds += bufferinfo[buffersegment].nsinc;
   readseconds += readnanoseconds/1000000000;
   readnanoseconds %= 1000000000;
+  if(readseconds >= model->getScanDuration(readscan)) {
+    if(readscan < model->getNumScans()) {
+      readscan++;
+      readseconds -= model->getScanStartSec(readscan, corrstartday, corrstartseconds) - model->getScanStartSec(readscan-1, corrstartday, corrstartseconds);
+    }
+    else
+      keepreading = false;
+  }
 }
 
 
@@ -518,6 +538,14 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
 
     readseconds = 86400*(mark5stream->mjd-corrstartday) + mark5stream->sec-corrstartseconds + intclockseconds;
     readnanoseconds = mark5stream->ns;
+    while(model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+      readscan++;
+    while(model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+      readscan--;
+    if(readscan < 0)
+      readscan = 0;
+    if(readscan >= model->getNumScans())
+      readscan = model->getNumScans() - 1;
     //cinfo << startl << "DataStream " << mpiid << ": The frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
 
     delete_mark5_stream(mark5stream);
@@ -575,5 +603,5 @@ int Mk5DataStream::openframe()
   }
 
 
-  return readbytes*nsegment;  
+  return readbytes*nsegment;
 }

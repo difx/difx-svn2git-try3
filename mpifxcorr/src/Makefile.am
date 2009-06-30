@@ -15,7 +15,6 @@ mpifxcorr_SOURCES = \
 	datastream.cpp \
 	visibility.cpp \
 	configuration.cpp \
-	uvw.cpp \
 	mode.cpp \
         model.cpp \
 	mk5.cpp \
@@ -32,7 +31,6 @@ library_include_HEADERS = \
 	architecture.h \
 	visibility.h \
 	configuration.h \
-	uvw.h \
 	mk5.h \
 	mk5mode.h \
         model.h \
@@ -53,10 +51,10 @@ libmpifxcorr_a_SOURCES = \
 	mk5.cpp \
 	mk5mode.cpp \
 	fxmanager.cpp \
-	uvw.cpp \
         model.cpp \
 	visibility.cpp \
-	alert.cpp 
+	alert.cpp \
+	$(mark5_files)
 
 libfxcorr_a_SOURCES = \
 	configuration.cpp \
@@ -64,7 +62,6 @@ libfxcorr_a_SOURCES = \
 	mk5mode.cpp \
 	polyco.cpp \
 	visibility.cpp \
-	uvw.cpp \
         model.cpp \
 	alert.cpp
 

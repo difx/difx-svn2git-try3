@@ -194,6 +194,8 @@
 #define vectorSub_s32(src1, src2, dest, length)                             ippsSub_32s_Sfs(src1, src2, dest, length, 0)
 #define vectorSub_cf32_I(src, srcdest, length)                              ippsSub_32fc_I(src, srcdest, length)
 
+#define vectorSum_cf32(src, length, sum, hint)                              ippsSum_32fc(src, length, sum, hint)
+
 #define vectorGenerateFIRLowpass_f64(freq, taps, length, window, normalise) ippsFIRGenLowpass_64f(freq, taps, length, window, normalise)
 
 #define vectorZero_cf32(dest, length)                                       ippsZero_32fc(dest, length)

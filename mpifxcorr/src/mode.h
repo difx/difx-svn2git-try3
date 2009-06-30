@@ -49,6 +49,7 @@ public:
   * @param confindex The index of the configuration this Mode is for
   * @param dsindex The index of the datastream this Mode is for
   * @param recordedbandchan The number of channels for each recorded subband
+  * @param chanstoavg The number of channels to average for each subband
   * @param bpersend The number of FFT blocks to be processed in a message
   * @param gsamples The number of additional guard samples at the end of a message
   * @param nrecordedfreqs The number of recorded frequencies for this Mode
@@ -65,21 +66,23 @@ public:
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param bclock The recorder clock-out frequency in MHz ("block clock")
   */
-  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, double bclock);
+  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, int unpacksamp, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, double bclock);
 
  /**
   * Stores the delay information for the current block series
   * @param d The array of delays at the start of each FFT chunk
   */
-  void setDelays(f64 * d);
+  void setValidFlags(s32 * v);
 
  /**
   * Stores the raw data for the current block series
   * @param d The data array
   * @param dbytes The number of bytes in the data array
-  * @param btime The time of the first sample in the data array
+  * @param dscan The scan from which the data comes
+  * @param dsec The seconds offset from the start of the scan
+  * @param dns The offset in nanoseconds from the integer second
   */
-  void setData(u8 * d, int dbytes, double btime);
+  void setData(u8 * d, int dbytes, int dscan, int dsec, int dns);
 
  /**
   * Calculates fringe rotation and fractional sample correction arrays and FFTs, and autocorrelates
@@ -95,10 +98,16 @@ public:
 
  /**
   * Stores the times for the first FFT chunk to be processed
-  * @param seconds The offset in seconds from the start of the correlation
+  * @param scan The current scan
+  * @param seconds The offset in seconds from the start of the scan
   * @param ns The offset in nanoseconds from the integer second
   */
-  inline void setOffsets(int seconds, int ns) { offsetseconds = seconds; offsetns = ns; }
+  void setOffsets(int scan, int seconds, int ns);
+
+ /**
+  * Averages the autocorrelations down in frequency
+  */
+  void averageFrequency();
 
  /**
   * Grabs the pointer to an autocorrelation array
@@ -127,22 +136,27 @@ public:
 
  /**
   * Returns a pointer to the FFT'd data of the specified product
+  * @param phasecentre The number of the phase centre (0 based)
   * @param outputband The band to get
   * @return Pointer to the FFT'd data (complex 32 bit float)
   */
-  inline cf32* getFreqs(int outputband) { return fftoutputs[outputband]; };
+  inline cf32* getFreqs(int phasecentre, int outputband) { return fftoutputs[phasecentre][outputband]; };
 
  /**
   * Returns a pointer to the FFT'd and conjugated data of the specified product
+  * @param phasecentre The number of the phase centre (0 based)
   * @param outputband The band to get
   * @return Pointer to the conjugate of the FFT'd data (complex 32 bit float)
   */
-  inline cf32* getConjugatedFreqs(int outputband) { return conjfftoutputs[outputband]; }
+  inline cf32* getConjugatedFreqs(int phasecentre, int outputband) { return conjfftoutputs[phasecentre][outputband]; }
 
   virtual ~Mode();
 
   /** Constant for comparing two floats for equality (for freqs and bandwidths etc) */
   static const float TINY;
+
+  ///constant indicating no valid data in a subint
+  static const int INVALID_SUBINT = -99999999;
 
 protected:
  /** 
@@ -156,13 +170,14 @@ protected:
   virtual float unpack(int sampleoffset);
   
   Configuration * config;
-  int configindex, datastreamindex, recordedbandchannels, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, bufferseconds, unpackstartsamples, datalengthbytes;
+  int configindex, datastreamindex, recordedbandchannels, channelstoaverage, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, currentscan, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, unpackstartsamples, maxphasecentres;
   int fringerotationorder, arraystridelength, numstrides;
   double recordedbandwidth, blockclock, sampletime; //MHz, microseconds
   double a0, b0, c0, a, b, c, quadadd1, quadadd2;
-  double buffermicroseconds, fftstartmicrosec, fftdurationmicrosec;
+  double fftstartmicrosec, fftdurationmicrosec;
   f32 dataweight;
-  int samplesperblock, samplesperlookup, numlookups, delaylength, autocorrwidth;
+  int samplesperblock, samplesperlookup, numlookups, flaglength, autocorrwidth;
+  int datascan, datasec, datans, datalengthbytes;
   bool filterbank, calccrosspolautocorrs, fractionalLoFreq, initok;
   double * recordedfreqclockoffsets;
   double * recordedfreqlooffsets;
@@ -170,20 +185,18 @@ protected:
   s16 * lookup;
   s16 * linearunpacked;
   f32** unpackedarrays;
-  cf32** fftoutputs;
-  cf32** conjfftoutputs;
-  //f32* fracmult;
-  //f32* fracmultsin;
-  //f32* fracmultcos;
-  //f32* channelfreqs;
-  //f32* lsbchannelfreqs;
-  //cf32* complexfracmult;
-  f64 * delays;
+  cf32*** fftoutputs;
+  cf32*** conjfftoutputs;
+  //cf32*** phasecentreoutputs;
+  //cf32*** conjphasecentreoutputs;
+  s32 * validflags;
   cf32*** autocorrelations;
   vecFFTSpecR_f32 * pFFTSpecR;
   vecFFTSpecC_cf32 * pFFTSpecC;
   u8 * fftbuffer;
   vecHintAlg hint;
+  Model * model;
+  f64 ** interpolators;
 
   //new arrays for strided complex multiply for fringe rotation and fractional sample correction
   cf32 * complexrotator;
@@ -252,6 +265,7 @@ public:
   * @param confindex The index of the configuration this Mode is for
   * @param dsindex The index of the datastream this Mode is for
   * @param nchan The number of channels per subband
+  * @param chanstoavg The number of channels to average for each subband
   * @param bpersend The number of FFT blocks to be processed in a message
   * @param gblocks The number of additional guard blocks at the end of a message
   * @param nfreqs The number of frequencies for this Mode
@@ -267,7 +281,7 @@ public:
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param unpackvalues 4 element array containing floating point unpack values for the four possible two bit values
   */
-    LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, const s16* unpackvalues);
+    LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int chanstoavg, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, const s16* unpackvalues);
 
     ///unpack mapping for "standard" recording modes
     static const s16 stdunpackvalues[];

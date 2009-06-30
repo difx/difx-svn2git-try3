@@ -41,11 +41,7 @@ dnl **********************************************************
 dnl **** Find difxmessage library                         ****
 dnl **********************************************************
 dm_enabled=true
-PKG_CHECK_MODULES(DIFXMESSAGE,
-        difxmessage,
-	[AC_DEFINE([HAVE_DIFXMESSAGE], 1, [1=has DIFXMESSAGE])],
-	dm_enabled=false)
-AM_CONDITIONAL(WITH_DIFXMESSAGE, $dm_enabled)
+PKG_CHECK_MODULES(DIFXMESSAGE, difxmessage)
 
 dnl **********************************************************
 dnl **** Look for StreamStor libraries                    ****

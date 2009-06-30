@@ -36,40 +36,41 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#ifdef HAVE_DIFXMESSAGE
 #include <difxmessage.h>
-#endif
 #include "alert.h"
 
-Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, int skipseconds, int startns, const string * pnames, bool mon, int port, char * hname, int * sock, int monskip)
-  : config(conf), visID(id), numvisibilities(numvis), executeseconds(eseconds), polnames(pnames), monitor(mon), portnum(port), hostname(hname), mon_socket(sock), monitor_skip(monskip)
+Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, int scan, int scanstartsec, int startns, const string * pnames, bool mon, int port, char * hname, int * sock, int monskip)
+  : config(conf), visID(id), numvisibilities(numvis), executeseconds(eseconds), currentscan(scan), currentstartseconds(scanstartsec), currentstartns(startns), polnames(pnames), monitor(mon), portnum(port), hostname(hname), mon_socket(sock), monitor_skip(monskip)
 {
   int status;
 
   cverbose << startl << "About to create visibility " << id << "/" << numvis << endl;
+  estimatedBytes = 0;
+  model = config->getModel();
 
   if(visID == 0)
     *mon_socket = -1;
   maxproducts = config->getMaxProducts();
   autocorrwidth = 1;
-  if (maxproducts > 1 && config->writeAutoCorrs(config->getConfigIndex(skipseconds)))
+  if (maxproducts > 1 && config->writeAutoCorrs(config->getScanConfigIndex(currentscan)))
     autocorrwidth = 2;
   first = true;
   configuredok = true;
   currentsubints = 0;
   numdatastreams = config->getNumDataStreams();
-  resultlength = config->getMaxResultLength();
+  resultlength = config->getMaxPostavResultLength();
   results = vectorAlloc_cf32(resultlength);
+  estimatedBytes += 8*resultlength; //for the results
+  estimatedBytes += 4*(config->getNumDataStreams() + config->getNumBaselines())*config->getDNumTotalBands(0,0); //a rough stab at the calibration arrays
   status = vectorZero_cf32(results, resultlength);
   if(status != vecNoErr)
     csevere << startl << "Error trying to zero when creating visibility " << visID << endl;
   numbaselines = config->getNumBaselines();
-  currentconfigindex = config->getConfigIndex(skipseconds);
+  cout << "About to get scanconfigindex for scan " << currentscan << endl;
+  currentconfigindex = config->getScanConfigIndex(currentscan);
   expermjd = config->getStartMJD();
   experseconds = config->getStartSeconds();
   offsetns = 0;
-  currentstartns = startns;
-  currentstartseconds = skipseconds;
   changeConfig(currentconfigindex);
 
   //set up the initial time period this Visibility will be responsible for
@@ -130,7 +131,9 @@ bool Visibility::addData(cf32* subintresults)
 void Visibility::increment()
 {
   int status;
-  cinfo << startl << "Vis. " << visID << " is incrementing, since currentsubints = " << currentsubints << ".  The approximate mjd/seconds is " << expermjd + (experseconds + currentstartseconds)/86400 << "/" << (experseconds + currentstartseconds)%86400 << endl;
+  int sec = experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds;
+
+  cinfo << startl << "Vis. " << visID << " is incrementing, since currentsubints = " << currentsubints << ".  The approximate mjd/seconds is " << expermjd + sec/86400 << "/" << (sec)%86400 << endl;
 
   currentsubints = 0;
   for(int i=0;i<numvisibilities;i++) //adjust the start time and offset
@@ -161,6 +164,7 @@ void Visibility::increment()
 void Visibility::updateTime()
 {
   int configindex;
+
   offsetns = offsetns+offsetnsperintegration;
   subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
   if(offsetns >= config->getSubintNS(currentconfigindex)/2)
@@ -168,14 +172,15 @@ void Visibility::updateTime()
     offsetns -= config->getSubintNS(currentconfigindex);
     subintsthisintegration++;
   }
+
   currentstartseconds += (int)config->getIntTime(currentconfigindex);
   currentstartns += (int)((config->getIntTime(currentconfigindex)-(int)config->getIntTime(currentconfigindex))*1000000000 + 0.5);
   currentstartseconds += currentstartns/1000000000;
   currentstartns %= 1000000000;
-  configindex = config->getConfigIndex(currentstartseconds);
-  while(configindex < 0 && currentstartseconds < executeseconds)
-  {
-    configindex = config->getConfigIndex(++currentstartseconds);
+
+  if(currentscan < model->getNumScans() && currentstartseconds >= model->getScanDuration(currentscan)) {
+    currentscan++;
+    currentstartseconds = 0;
     currentstartns = 0;
     offsetns = offsetnsperintegration;
     subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
@@ -185,7 +190,13 @@ void Visibility::updateTime()
       subintsthisintegration++;
     }
   }
-  if(configindex != currentconfigindex && currentstartseconds < executeseconds)
+
+  if(currentscan < model->getNumScans())
+    configindex = config->getScanConfigIndex(currentscan);
+  while(configindex < 0 && currentscan < model->getNumScans())
+    configindex = config->getScanConfigIndex(++currentscan);
+
+  if(configindex != currentconfigindex && currentscan < model->getNumScans())
   {
     changeConfig(configindex);
   }
@@ -379,8 +390,9 @@ bool Visibility::checkSocketStatus()
 void Visibility::writedata()
 {
   f32 scale, divisor;
-  int status, ds1, ds2, ds1bandindex, ds2bandindex, binloop, freqchannels;
-  int dumpmjd;
+  int ds1, ds2, ds1bandindex, ds2bandindex, freqindex, freqchannels, nyquistchannel, nyquistoffset;
+  int status, skip, count, binloop;
+  int dumpmjd, intsec;
   double dumpseconds;
 
   cdebug << startl << "Vis. " << visID << " is starting to write out data" << endl;
@@ -391,8 +403,13 @@ void Visibility::writedata()
     return; //NOTE EXIT HERE!!!
   }
 
-  dumpmjd = expermjd + (experseconds + currentstartseconds)/86400;
-  dumpseconds = double((experseconds + currentstartseconds)%86400) + ((double)currentstartns)/1000000000.0 + config->getIntTime(currentconfigindex)/2.0;
+  intsec = experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds;
+  dumpmjd = expermjd + intsec/86400;
+  dumpseconds = double(intsec%86400) + ((double)currentstartns)/1000000000.0 + config->getIntTime(currentconfigindex)/2.0;
+  if(dumpseconds > 86400.0) {
+    dumpmjd++;
+    dumpseconds -= 86400.0;
+  }
 
   if(currentsubints == 0) //nothing to write out
   {
@@ -407,9 +424,8 @@ void Visibility::writedata()
     return; //NOTE EXIT HERE!!!
   }
 
-  int skip = 0;
-  int count = 0;
-  int nyquistchannel, freqindex;
+  skip = 0;
+  count = 0;
   if(config->pulsarBinOn(currentconfigindex) && !config->scrunchOutputOn(currentconfigindex))
     binloop = config->getNumPulsarBins(currentconfigindex);
   else
@@ -420,7 +436,8 @@ void Visibility::writedata()
     //skip through the baseline visibilities, grabbing the weights as you go and zeroing
     //that cheekily used Nyquist channel imaginary component of the results array
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) {
-      freqchannels = config->getFNumChannels(config->getBFreqIndex(currentconfigindex, i, j));
+      freqindex = config->getBFreqIndex(currentconfigindex, i, j);
+      freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event 
       //that one datastream has USB and the other has LSB
       nyquistchannel = freqchannels;
@@ -442,17 +459,21 @@ void Visibility::writedata()
       {
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
         if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
-          freqchannels = config->getFNumChannels(freqindex);
+          freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
           nyquistchannel = freqchannels;
-          if(config->getFreqTableLowerSideband(freqindex))
+          nyquistoffset = 0;
+          if(config->getFreqTableLowerSideband(freqindex)) {
             nyquistchannel = 0;
+            nyquistoffset = 1;
+          }
+
           //Grab the weight for this band and then remove it from the resultsarray
           autocorrweights[i][j][k] = results[skip+count+nyquistchannel].im/fftsperintegration;
           results[skip+count+nyquistchannel].im = 0.0;
-          
+
           //work out the band average, for use in calibration (allows us to calculate fractional correlation)
           if(j==0) {
-            status = vectorMean_cf32(&results[skip + count], freqchannels+1, &autocorrcalibs[i][k], vecAlgHintFast);
+            status = vectorMean_cf32(&results[skip + count + nyquistoffset], freqchannels, &autocorrcalibs[i][k], vecAlgHintFast);
             if(status != vecNoErr)
               csevere << startl << "Error in getting average of autocorrelation!!!" << status << endl;
           }
@@ -468,7 +489,8 @@ void Visibility::writedata()
     ds2 = config->getBOrderedDataStream2Index(currentconfigindex, i);
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) //do each frequency
     {
-      freqchannels = config->getFNumChannels(config->getBFreqIndex(currentconfigindex, i, j));
+      freqindex = config->getBFreqIndex(currentconfigindex, i, j);
+      freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) //do each product of this frequency eg RR,LL,RL,LR
       {
         ds1bandindex = config->getBDataStream1BandIndex(currentconfigindex, i, j, k);
@@ -493,7 +515,7 @@ void Visibility::writedata()
             //samples rather than datastream tsys and decorrelation correction
             if(baselineweights[i][j][k] > 0.0)
             {
-              scale = 1.0/(baselineweights[i][j][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels)));
+              scale = 1.0/(baselineweights[i][j][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels*config->getFChannelsToAverage(freqindex))));
               status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(freqchannels+1));
               if(status != vecNoErr)
                 csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
@@ -515,7 +537,7 @@ void Visibility::writedata()
         {
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
-            freqchannels = config->getFNumChannels(freqindex);
+            freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
             //calibrate the data
             divisor = (Mode::getDecorrelationPercentage(config->getDNumBits(currentconfigindex, i))*sqrt(autocorrcalibs[i][k].re*autocorrcalibs[i][(j==0)?k:config->getDMatchingBand(currentconfigindex, i, k)].re));
             if(divisor > 0.0)
@@ -533,7 +555,7 @@ void Visibility::writedata()
                 //samples rather than datastream tsys and decorrelation correction
                 if(autocorrweights[i][j][k] > 0.0)
                 {
-                  scale = 1.0/(autocorrweights[i][j][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels)));
+                  scale = 1.0/(autocorrweights[i][j][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels*config->getFChannelsToAverage(freqindex))));
                   status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(freqchannels+1));
                   if(status != vecNoErr)
                     csevere << startl << "Error trying to amplitude calibrate the datastream data for the correlation coefficient case!!!" << endl;
@@ -546,7 +568,7 @@ void Visibility::writedata()
       }
     }
   }
-
+/*
   //if necessary, work out the scaling factors for pulsar binning
   if(pulsarbinon) {
     int mjd = expermjd + (experseconds + currentstartseconds)/86400;
@@ -568,7 +590,7 @@ void Visibility::writedata()
       polyco->getBins(i*fftminutes, pulsarbins);
       for(int j=0;j<config->getFreqTableLength();j++) {
         if (config->isFrequencyUsed(currentconfigindex, j)) {
-          for(int k=0;k<config->getFNumChannels(j)+1;k++) {
+          for(int k=0;k<config->getFNumChannels(j)/config->getFChannelsToAverage(freqindex)+1;k++) {
             if(config->scrunchOutputOn(currentconfigindex)) {
               binweightsums[j][k][0] += binweights[pulsarbins[j][k]];
             }
@@ -608,13 +630,13 @@ void Visibility::writedata()
       }
     }
     cinfo << startl << "Done the in-place multiplication" << endl;
-  }
+  }*/
   
   //all calibrated, now just need to write out
   if(config->getOutputFormat() == Configuration::DIFX)
-    writedifx();
+    writedifx(dumpmjd, dumpseconds);
   else
-    writeascii();
+    writeascii(dumpmjd, dumpseconds);
 
   //send monitoring data, if we don't have to skip this one
   if(monitor) {
@@ -631,20 +653,18 @@ void Visibility::writedata()
   cdebug << startl << "Vis. " << visID << " has finished writing data" << endl;
 }
 
-void Visibility::writeascii()
+void Visibility::writeascii(int dumpmjd, double dumpseconds)
 {
   ofstream output;
   int binloop, freqchannels, freqindex;
   char datetimestring[26];
 
   int count = 0;
-  int seconds = experseconds + currentstartseconds + (int)(config->getIntTime(currentconfigindex)/2.0 + currentstartns/1000000000.0);
-  int microseconds = int((config->getIntTime(currentconfigindex)/2.0-(int)(config->getIntTime(currentconfigindex)/2.0))*1000000.0) + currentstartns/1000;
-  if(microseconds > 1000000)
-    microseconds -= 1000000;
+  int mjd = dumpmjd;
+  int seconds = (int)dumpseconds;
+  int microseconds = ((int)((dumpseconds - (double)seconds)*1000000.0 + 0.5));
   int hours = seconds/3600;
   int minutes = (seconds-hours*3600)/60;
-  int mjd = expermjd;
   seconds = seconds - (hours*3600 + minutes*60);
   while(hours >= 24)
   {
@@ -663,7 +683,8 @@ void Visibility::writeascii()
   {
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++)
     {
-      freqchannels = config->getFNumChannels(config->getBFreqIndex(currentconfigindex, i, j));
+      freqindex = config->getBFreqIndex(currentconfigindex, i, j);
+      freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       for(int b=0;b<binloop;b++)
       {
         for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++)
@@ -689,7 +710,7 @@ void Visibility::writeascii()
         {
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
-            freqchannels = config->getFNumChannels(freqindex);
+            freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
             //write out to naive filename
             output.open(string(string("datastream_")+char('0' + i)+"_crosspolar_"+char('0' + j)+"_product_"+char('0'+k)+"_"+datetimestring+"_bin_"+char('0'+0)+".output").c_str(), ios::out|ios::trunc);
             for(int l=0;l<freqchannels+1;l++)
@@ -703,21 +724,27 @@ void Visibility::writeascii()
   }
 }
 
-void Visibility::writedifx()
+void Visibility::writedifx(int dumpmjd, double dumpseconds)
 {
   ofstream output;
   char filename[256];
-  int dumpmjd, binloop, sourceindex, freqindex, numpolproducts, firstpolindex, baselinenumber, lsboffset, freqchannels;
-  double dumpseconds;
+  int binloop, freqindex, numpolproducts, firstpolindex, lsboffset, freqchannels;
+  int ant1index, ant2index, sourceindex, baselinenumber;
+  double scanoffsetsecs;
+  bool modelok;
   int count = 0;
-  float buvw[3]; //the u,v and w for this baseline at this time
+  double buvw[3]; //the u,v and w for this baseline at this time
   char polpair[3]; //the polarisation eg RR, LL
+
+  if(currentscan >= model->getNumScans()) {
+    cwarn << startl << "Visibility will not write out time " << dumpmjd << "/" << dumpseconds << " since currentscan is " << currentscan << " and numscans is " << model->getNumScans() << endl;
+    return;
+  }
 
   if(config->pulsarBinOn(currentconfigindex) && !config->scrunchOutputOn(currentconfigindex))
     binloop = config->getNumPulsarBins(currentconfigindex);
   else
     binloop = 1;
-  sourceindex = config->getSourceIndex(expermjd, experseconds + currentstartseconds);
 
   //work out the time of this integration
   dumpmjd = expermjd + (experseconds + currentstartseconds)/86400;
@@ -729,38 +756,48 @@ void Visibility::writedifx()
   for(int i=0;i<numbaselines;i++)
   {
     baselinenumber = config->getBNumber(currentconfigindex, i);
-
-    //interpolate the uvw
-    (config->getUVW())->interpolateUvw(config->getDStationName(currentconfigindex, config->getBOrderedDataStream1Index(currentconfigindex, i)), config->getDStationName(currentconfigindex, config->getBOrderedDataStream2Index(currentconfigindex, i)), expermjd, dumpseconds + (dumpmjd-expermjd)*86400.0, buvw);
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++)
     {
       freqindex = config->getBFreqIndex(currentconfigindex, i, j);
-      freqchannels = config->getFNumChannels(freqindex);
+      freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       numpolproducts = config->getBNumPolProducts(currentconfigindex, i, j);
       lsboffset = 0;
       if(config->getFreqTableLowerSideband(freqindex))
         lsboffset = 1;
 
-      for(int b=0;b<binloop;b++)
+      for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
       {
-        for(int k=0;k<numpolproducts;k++) 
+        cout << "About to get the source index for scan " << currentscan << ", phasecentre " << s << endl;
+        //get the source-specific data
+        sourceindex = model->getPhaseCentreSourceIndex(currentscan, s);
+        scanoffsetsecs = currentstartseconds + ((double)currentstartns)/1e9 + config->getIntTime(currentconfigindex)/2.0;
+        ant1index = config->getDModelFileIndex(currentconfigindex, config->getBOrderedDataStream1Index(currentconfigindex, i));
+        ant2index = config->getDModelFileIndex(currentconfigindex, config->getBOrderedDataStream2Index(currentconfigindex, i));
+        modelok = model->interpolateUVW(currentscan, scanoffsetsecs, ant1index, ant2index, s+1, buvw);
+        if(!modelok)
+          csevere << startl << "Could not calculate the UVW for this integration!!!" << endl;
+        for(int b=0;b<binloop;b++)
         {
-          config->getBPolPair(currentconfigindex, i, j, k, polpair);
+          for(int k=0;k<numpolproducts;k++) 
+          {
+            config->getBPolPair(currentconfigindex, i, j, k, polpair);
 
-          //open the file for appending in ascii and write the ascii header
-          output.open(filename, ios::app);
-          writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][k], buvw);
+            cout << "Writing DiFX data to file " << filename << endl;
+            //open the file for appending in ascii and write the ascii header
+            output.open(filename, ios::app);
+            writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][k], buvw);
 
-          //close, reopen in binary and write the binary data, then close again
-          output.close();
-          output.open(filename, ios::app|ios::binary);
-          //For both USB and LSB data, the Nyquist channel is excised.  Thus, the numchannels that are written out represent the
-          //the valid part of the band in both cases, and run from lowest frequency to highest frequency in both cases.  For USB
-          //data, the first channel is the DC - for LSB data, the last channel is the DC
-          output.write((char*)(results + count + lsboffset), freqchannels*sizeof(cf32));
-          output.close();
+            //close, reopen in binary and write the binary data, then close again
+            output.close();
+            output.open(filename, ios::app|ios::binary);
+            //For both USB and LSB data, the Nyquist channel is excised.  Thus, the numchannels that are written out represent the
+            //the valid part of the band in both cases, and run from lowest frequency to highest frequency in both cases.  For USB
+            //data, the first channel is the DC - for LSB data, the last channel is the DC
+            output.write((char*)(results + count + lsboffset), freqchannels*sizeof(cf32));
+            output.close();
 
-          count += freqchannels + 1;
+            count += freqchannels + 1;
+          }
         }
       }
     }
@@ -781,6 +818,7 @@ void Visibility::writedifx()
         {
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
+            freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
             //open, write the header and close
             if(k<config->getDNumRecordedBands(currentconfigindex, i))
               polpair[0] = config->getDRecordedBandPol(currentconfigindex, i, k);
@@ -811,14 +849,25 @@ void Visibility::multicastweights()
 {
   float * weight;
   double mjd;
-  int dumpmjd;
+  int dumpmjd, intsec;
   double dumpseconds;
+
+  if(currentstartseconds >= executeseconds)
+  {
+    cdebug << startl << "Vis. " << visID << " is not multicasting any weights, since the time is past the end of the correlation" << endl;
+    return; //NOTE EXIT HERE!!!
+  }
 
   weight = new float[numdatastreams];
   
   //work out the time of this integration
-  dumpmjd = expermjd + (experseconds + currentstartseconds)/86400;
-  dumpseconds = double((experseconds + currentstartseconds)%86400) + ((double)currentstartns)/1000000000.0 + config->getIntTime(currentconfigindex)/2.0;
+  intsec = experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds;
+  dumpmjd = expermjd + intsec/86400;
+  dumpseconds = double(intsec%86400) + ((double)currentstartns)/1000000000.0 + config->getIntTime(currentconfigindex)/2.0;
+  if(dumpseconds > 86400.0) {
+    dumpmjd++;
+    dumpseconds -= 86400.0;
+  }
 
   for(int i=0;i<numdatastreams;i++)
   {
@@ -828,15 +877,13 @@ void Visibility::multicastweights()
 
   mjd = dumpmjd + dumpseconds/86400.0;
 
-#ifdef HAVE_DIFXMESSAGE
   difxMessageSendDifxStatus(DIFX_STATE_RUNNING, "", mjd, numdatastreams, weight);
-#endif
 
   delete [] weight;
 } 
 
 
-void Visibility::writeDiFXHeader(ofstream * output, int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, float buvw[3])
+void Visibility::writeDiFXHeader(ofstream * output, int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, double buvw[3])
 {
   *output << setprecision(15);
   *output << "BASELINE NUM:       " << baselinenum << endl;
@@ -914,7 +961,7 @@ void Visibility::changeConfig(int configindex)
   meansubintsperintegration =config->getIntTime(configindex)/(((double)config->getSubintNS(configindex))/1000000000.0);
   fftsperintegration = meansubintsperintegration*config->getBlocksPerSend(configindex);
   cverbose << startl << "For Visibility " << visID << ", offsetnsperintegration is " << offsetnsperintegration << ", subintns is " << config->getSubintNS(configindex) << ", and configindex is now " << configindex << endl;
-  resultlength = config->getResultLength(configindex);
+  resultlength = config->getPostavResultLength(configindex);
   for(int i=0;i<numdatastreams;i++) {
     autocorrcalibs[i] = new cf32[config->getDNumTotalBands(configindex, i)];
     autocorrweights[i] = new f32*[autocorrwidth];
