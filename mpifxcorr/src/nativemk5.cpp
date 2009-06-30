@@ -480,7 +480,7 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 			XLRGetErrorMessage(errStr, xlrEC);
 			cerror << startl << "XLRReadImmed returns FAIL.  Read error at position=" << readpointer << ", length=" << bytes << ", error=" << errStr << endl;
 
-			double errorTime = corrstartday + (model->getcanStartSec(readscan, corrstartday, corrstartseconds) + readseconds + corrstartseconds + readnanoseconds*1.0e-9)/86400.0;
+			double errorTime = corrstartday + (model->getScanStartSec(readscan, corrstartday, corrstartseconds) + readseconds + corrstartseconds + readnanoseconds*1.0e-9)/86400.0;
 			sendMark5Status(MARK5_STATE_ERROR, scan-module.scans+1, readpointer, errorTime, 0.0);
 			break;
 		}
@@ -555,7 +555,7 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	mark5stream->frame = (uint8_t *)data;
 	mark5_stream_get_frame_time(mark5stream, &mjd, &sec, &ns);
 	mark5stream->frame = 0;
-	sec2 = (model->getcanStartSec(readscan, corrstartday, corrstartseconds) + readseconds + corrstartseconds) % 86400;
+	sec2 = (model->getScanStartSec(readscan, corrstartday, corrstartseconds) + readseconds + corrstartseconds) % 86400;
 
 	if((sec % 86400) != sec2 || fabs(ns - readnanoseconds) > 0.5)
 	{
@@ -585,7 +585,7 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 			double fmjd, fmjd2;
 			enum Mk5State state;
 
-			fmjd = corrstartday + (corrstartseconds + model->getcanStartSec(readscan, corrstartday, corrstartseconds) + readseconds + (double)readnanoseconds/1000000000.0)/86400.0;
+			fmjd = corrstartday + (corrstartseconds + model->getScanStartSec(readscan, corrstartday, corrstartseconds) + readseconds + (double)readnanoseconds/1000000000.0)/86400.0;
 			if(newscan > 0)
 			{
 				newscan = 0;
