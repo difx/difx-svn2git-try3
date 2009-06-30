@@ -70,8 +70,7 @@ static int getRecordChannel(const string chanName, const map<string,Tracks>& ch2
 
 	if(F.format == "VLBA1_1" || F.format == "MKIV1_1" ||
 	   F.format == "VLBA1_2" || F.format == "MKIV1_2" ||
-	   F.format == "VLBA1_4" || F.format == "MKIV1_4" ||
-	   F.format == "Mark5B") 
+	   F.format == "VLBA1_4" || F.format == "MKIV1_4")
 	{
 		it = ch2tracks.find(chanName);
 
@@ -295,9 +294,9 @@ int getSources(VexData *V, Vex *v, const CorrParams& params)
 		const SourceSetup *setup = params.getSourceSetup(S->name);
 		if(setup)
 		{
-			if(setup->calCode > ' ')
+			if(setup->pointingCentre.calCode > ' ')
 			{
-				S->calCode = setup->calCode;
+				S->calCode = setup->pointingCentre.calCode;
 			}
 		}
 	}
@@ -481,7 +480,6 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 		{
 			const string& antName = V->getAntenna(a)->nameInVex;
 			string antName2 = V->getAntenna(a)->nameInVex;
-			const AntennaSetup *antennaSetup;
 
 			Upper(antName2);
 			bool swapPol = params.swapPol(antName2);
@@ -491,11 +489,6 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 			nTrack = 0;
 			nBit = 1;
 			VexFormat& F = M->formats[V->getAntenna(a)->name] = VexFormat();
-			antennaSetup = params.getAntennaSetup(antName2);
-			if(antennaSetup)
-			{
-				F.format = antennaSetup->format;
-			}
 
 			// Get sample rate
 			p = get_all_lowl(antName.c_str(), modeId, T_SAMPLE_RATE, B_FREQ, v);
@@ -536,27 +529,15 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 
 			// Get datastream assignments and formats
 
-
 			// Is it a Mark5 mode?
-			if(F.format == "")
+			p = get_all_lowl(antName.c_str(), modeId, T_TRACK_FRAME_FORMAT, B_TRACKS, v);
+			if(p)
 			{
-				p = get_all_lowl(antName.c_str(), modeId, T_TRACK_FRAME_FORMAT, B_TRACKS, v);
-			}
-			else
-			{
-				p = 0;
-			}
-			if(p || F.format == "VLBA" || F.format == "MKIV" || F.format == "Mark5B")
-			{
-				// If not overridden in v2d file
-				if(F.format == "")
+				vex_field(T_TRACK_FRAME_FORMAT, p, 1, &link, &name, &value, &units);
+				F.format = string(value);
+				if(F.format == "Mark4")
 				{
-					vex_field(T_TRACK_FRAME_FORMAT, p, 1, &link, &name, &value, &units);
-					F.format = string(value);
-					if(F.format == "Mark4")
-					{
-						F.format = "MKIV";
-					}
+					F.format = "MKIV";
 				}
 
 				for(p = get_all_lowl(antName.c_str(), modeId, T_FANOUT_DEF, B_TRACKS, v);
@@ -591,23 +572,20 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 					}
 				}
 				fanout = nTrack/ch2tracks.size()/nBit;
-				if(F.format != "Mark5B")
+				switch(fanout)
 				{
-					switch(fanout)
-					{
-						case 1: 
-							F.format += "1_1"; 
-							break;
-						case 2: 
-							F.format += "1_2"; 
-							break;
-						case 4: 
-							F.format += "1_4"; 
-							break;
-						default: 
-							cerr << "Error: fanout=" << fanout << " not legal for format " << F.format << endl;
-							exit(0);
-					}
+					case 1: 
+						F.format += "1_1"; 
+						break;
+					case 2: 
+						F.format += "1_2"; 
+						break;
+					case 4: 
+						F.format += "1_4"; 
+						break;
+					default: 
+						cerr << "Error: fanout=" << fanout << " not legal for format " << F.format << endl;
+						exit(0);
 				}
 				F.nRecordChan = ch2tracks.size();
 				F.nBit = nBit;
@@ -703,7 +681,6 @@ int getVSN(VexData *V, Vex *v, const CorrParams& params, const char *station)
 	llist *block;
 	Llist *defs;
 	Llist *lowls;
-	bool quit = false;
 
 	string antName(station);
 
@@ -748,22 +725,9 @@ int getVSN(VexData *V, Vex *v, const CorrParams& params, const char *station)
 
 		VexInterval vsnTimeRange(vexDate(p->start), vexDate(p->stop));
 		
-		if(!vsnTimeRange.isCausal())
-		{
-			cerr << "Error: Record stop (" << p->stop << ") precedes record start (" << p->start << ") for antenna " << antName << ", module " << vsn << " . " << endl;
-			quit = true;
-		}
-		else
-		{
-			V->addVSN(antName, vsn, vsnTimeRange);
-			V->addEvent(vsnTimeRange.mjdStart, VexEvent::RECORD_START, antName);
-			V->addEvent(vsnTimeRange.mjdStop, VexEvent::RECORD_STOP, antName);
-		}
-	}
-
-	if(quit)
-	{
-		exit(0);
+		V->addVSN(antName, vsn, vsnTimeRange);
+		V->addEvent(vsnTimeRange.mjdStart, VexEvent::RECORD_START, antName);
+		V->addEvent(vsnTimeRange.mjdStop, VexEvent::RECORD_STOP, antName);
 	}
 
 	return 0;

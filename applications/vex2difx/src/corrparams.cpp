@@ -124,13 +124,12 @@ CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 {
 	tInt = 2.0;
 	specAvg = 0;
-	startChan = 0;
-	nOutChan = 0;
-	nChan = 16;
+	nChan = 64;
 	doPolar = true;
 	doAuto = true;
-	postFFringe = false;
-	blocksPerSend = 0;
+	fringeRotOrder = 1;
+	strideLength = 16;
+	subintNS = 0;
 }
 
 void CorrSetup::setkv(const string &key, const string &value)
@@ -155,25 +154,17 @@ void CorrSetup::setkv(const string &key, const string &value)
 	{
 		doAuto = isTrue(value);
 	}
-	else if(key == "blocksPerSend")
+	else if(key == "subintNS")
 	{
-		ss >> blocksPerSend;
+		ss >> subintNS;
 	}
 	else if(key == "specAvg")
 	{
 		ss >> specAvg;
 	}
-	else if(key == "startChan")
+	else if(key == "fringeRotOrder")
 	{
-		ss >> startChan;
-	}
-	else if(key == "nOutChan")
-	{
-		ss >> nOutChan;
-	}
-	else if(key == "postFFringe")
-	{
-		postFFringe = isTrue(value);
+		ss >> fringeRotOrder;
 	}
 	else if(key == "binConfig")
 	{
@@ -222,12 +213,11 @@ bool CorrSetup::correlateFreqId(int freqId) const
 
 double CorrSetup::bytesPerSecPerBLPerBand() const
 {
-	int chans = nOutChan>0 ? nOutChan : nChan;
 	int pols = doPolar ? 2 : 1;
 
 	// assume 8 bytes per complex
 
-	return 8*chans*pols/tInt;
+	return 8*nChan*pols/tInt;
 }
 
 CorrRule::CorrRule(const string &name) : ruleName(name)
@@ -302,47 +292,101 @@ void CorrRule::setkv(const string &key, const string &value)
 	}
 }
 
+PhaseCentre::PhaseCentre()
+{
+	initialise(-999, -999, "");
+}
+
+PhaseCentre::PhaseCentre(double r, double d, string name)
+{
+	initialise(r, d, name);
+}
+
+void PhaseCentre::initialise(double r, double d, string name)
+{
+	ra = r;
+	dec = d;
+	difxname = name;
+	calCode = ' ';
+	ephemDeltaT = 60.0; //seconds
+	qualifier = 0;
+	string ephemObject = "";
+	string ephemFile = "";
+	string naifFile = "";  
+}
+
 SourceSetup::SourceSetup(const string &name) : vexName(name)
 {
-	ra = -999;
-	dec = -999;
-	calCode = ' ';
-	ephemDeltaT = 60.0;	// seconds
+	doPointingCentre = true;
 }
 
 void SourceSetup::setkv(const string &key, const string &value)
 {
+	setkv(key, value, &pointingCentre);
+}
+
+void SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc)
+{
+	string::size_type at, last, splitat;
+	string nestedkeyval;
 	stringstream ss;
 
 	ss << value;
 
 	if(key == "ra" || key == "RA")
 	{
-		ra = parseCoord(value.c_str(), 'R');
+		pc->ra = parseCoord(value.c_str(), 'R');
 	}
 	else if(key == "dec" || key == "Dec")
 	{
-		dec = parseCoord(value.c_str(), 'D');
+		pc->dec = parseCoord(value.c_str(), 'D');
 	}
 	else if(key == "calCode")
 	{
-		ss >> calCode;
+		ss >> pc->calCode;
 	}
 	else if(key == "name" || key == "newName")
 	{
-		ss >> difxName;
+		ss >> pc->difxname;
 	}
 	else if(key == "ephemObject")
 	{
-		ss >> ephemObject;
+		ss >> pc->ephemObject;
 	}
 	else if(key == "ephemFile")
 	{
-		ss >> ephemFile;
+		ss >> pc->ephemFile;
 	}
 	else if(key == "naifFile")
 	{
-		ss >> naifFile;
+		ss >> pc->naifFile;
+	}
+	else if(key == "doPointingCentre")
+	{
+		if(value == "true" || value == "True" || value == "TRUE" || value == "t" || value == "T")
+		{
+			doPointingCentre = true;
+		}
+		else
+		{
+			doPointingCentre = false;
+		}
+	}
+	else if(key == "addPhaseCentre")
+	{
+		//this is a bit tricky - all parameters must be together, no spaces, and separated by commas
+		phaseCentres.push_back(PhaseCentre());
+		PhaseCentre * newpc = &(phaseCentres.back());
+		last = 0;
+		at = 0;
+		while(at !=string::npos)
+		{
+			at = value.find_first_of('/', last);
+			nestedkeyval = value.substr(last, at-last);
+			splitat = nestedkeyval.find_first_of('@');
+			setkv(nestedkeyval.substr(0,splitat), nestedkeyval.substr(splitat+1), newpc);
+			last = at+1;
+		}
 	}
 	else
 	{
@@ -397,23 +441,6 @@ void AntennaSetup::setkv(const string &key, const string &value)
 	{
 		ss >> Z;
 	}
-	else if(key == "format")
-	{
-		string s;
-		ss >> s;
-		Upper(s);
-		
-		if(s == "MARK4")
-		{
-			s = "MKIV";
-		}
-		else if(s == "MARK5B")
-		{
-			s = "Mark5B";
-		}
-
-		format = s;
-	}
 	else
 	{
 		cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << endl; 
@@ -467,7 +494,6 @@ void CorrParams::defaults()
 	sendLength = 0.1;		// (s)
 	invalidMask = ~0;		// write flags for all types of invalidity
 	visBufferLength = 32;
-	v2dMode = V2D_MODE_NORMAL;
 }
 
 void CorrParams::setkv(const string &key, const string &value)
@@ -589,24 +615,6 @@ void CorrParams::setkv(const string &key, const string &value)
 		ss >> s;
 		Upper(s);
 		addBaseline(s);
-	}
-	else if(key == "mode")
-	{
-		string s;
-		ss >> s;
-		Upper(s);
-		if(s == "NORMAL")
-		{
-			v2dMode = V2D_MODE_NORMAL;
-		}
-		else if(s == "PROFILE")
-		{
-			v2dMode = V2D_MODE_PROFILE;
-		}
-		else
-		{
-			cerr << "Warning: Illegal value " << value << " for mode" << endl;
-		}
 	}
 	else
 	{
@@ -869,6 +877,8 @@ void CorrParams::load(const string& fileName)
 void CorrParams::defaultSetup()
 {
 	corrSetups.push_back(CorrSetup("default"));
+	rules.push_back(CorrRule("default"));
+	rules.back().corrSetupName = "default";
 }
 
 void CorrParams::example()
@@ -1012,6 +1022,11 @@ const AntennaSetup *CorrParams::getAntennaSetup(const string &name) const
 	return 0;
 }
 
+void CorrParams::addSourceSetup(SourceSetup toadd)
+{
+	sourceSetups.push_back(toadd);
+}
+
 const CorrSetup *CorrParams::getCorrSetup(const string &name) const
 {
 	int i, n;
@@ -1038,6 +1053,22 @@ const SourceSetup *CorrParams::getSourceSetup(const string &name) const
 		if(name == sourceSetups[i].vexName)
 		{
 			return &sourceSetups[i];
+		}
+	}
+
+	return 0;
+}
+
+const PhaseCentre * CorrParams::getPhaseCentre(const string & difxname) const
+{
+	for(int i=0;i<sourceSetups.size();i++)
+	{
+		if(difxname == sourceSetups[i].pointingCentre.difxname)
+			return &(sourceSetups[i].pointingCentre);
+		for(int j=0;j<sourceSetups[i].phaseCentres.size();j++)
+		{
+			if(difxname == sourceSetups[i].phaseCentres[j].difxname)
+				return &(sourceSetups[i].phaseCentres[j]);
 		}
 	}
 
@@ -1080,11 +1111,9 @@ ostream& operator << (ostream& os, const CorrSetup& x)
 	os << "  nChan=" << x.nChan << endl;
 	os << "  doPolar=" << x.doPolar << endl;
 	os << "  doAuto=" << x.doAuto << endl;
-	os << "  blocksPerSend=" << x.blocksPerSend << endl;
+	os << "  subintNS=" << x.subintNS << endl;
 	os << "  specAvg=" << x.specAvg << endl;
-	os << "  startChan=" << x.startChan << endl;
-	os << "  nOutChan=" << x.nOutChan << endl;
-	os << "  postFFringe=" << x.postFFringe << endl;
+	os << "  fringeRotOrder=" << x.fringeRotOrder << endl;
 	if(x.binConfigFile.size() > 0)
 	{
 		os << "  binConfig=" << x.binConfigFile << endl;
@@ -1153,46 +1182,31 @@ ostream& operator << (ostream& os, const SourceSetup& x)
 {
 	os << "SOURCE " << x.vexName << endl;
 	os << "{" << endl;
-	if(x.difxName.size() > 0)
+	if(x.pointingCentre.difxname.size() > 0)
 	{
-		os << "  name=" << x.difxName << endl;
+		os << "  pointing centre name=" << x.pointingCentre.difxname << endl;
 	}
-	if(x.ra > -990)
+	if(x.doPointingCentre)
 	{
-		os << "  ra=" << x.ra << " # J2000" << endl;
+		os << " Pointing centre is correlated" << endl;
 	}
-	if(x.dec > -990)
+	else
 	{
-		os << "  dec=" << x.dec << " # J2000" << endl;
+		os << " Pointing centre is not correlated" << endl;
 	}
-	if(x.calCode != ' ')
+	if(x.pointingCentre.ra > -990)
 	{
-		os << "  calCode=" << x.calCode << endl;
+		os << "  pointing centre ra=" << x.pointingCentre.ra << " # J2000" << endl;
 	}
-	os << "}" << endl;
-
-	return os;
-}
-
-ostream& operator << (ostream& os, const AntennaSetup& x)
-{
-	os << "ANTENNA " << x.vexName << endl;
-	os << "{" << endl;
-	if(x.difxName.size() > 0)
+	if(x.pointingCentre.dec > -990)
 	{
-		os << "  name=" << x.difxName << endl;
+		os << "  pointing centre dec=" << x.pointingCentre.dec << " # J2000" << endl;
 	}
-	if(fabs(x.X) > 0.1 || fabs(x.Y) > 0.1 || fabs(x.Z) > 0.1)
+	if(x.pointingCentre.calCode != ' ')
 	{
-		os << "  X=" << x.X <<" Y=" << x.Y << " Z=" << x.Z << endl;
+		os << "  pointing centre calCode=" << x.pointingCentre.calCode << endl;
 	}
-	os << "  #FIXME clock=" << endl;
-	os << "  polSwap=" << x.polSwap << endl;
-	if(x.format.size() > 0)
-	{
-		os << "  format=" << x.format << endl;
-	}
-
+	os << "  Number of additional phase centres is " << x.phaseCentres.size() << endl;
 	os << "}" << endl;
 
 	return os;
@@ -1208,15 +1222,6 @@ ostream& operator << (ostream& os, const CorrParams& x)
 	os << "# correlation parameters" << endl;
 
 	os << "vex=" << x.vexFile << endl;
-	switch(x.v2dMode)
-	{
-	case V2D_MODE_NORMAL:
-		os << "mode=normal" << endl;
-		break;
-	case V2D_MODE_PROFILE:
-		os << "mode=profile" << endl;
-		break;
-	}
 	os << "mjdStart=" << x.mjdStart << endl;
 	os << "mjdStop=" << x.mjdStop << endl;
 	os << "minSubarray=" << x.minSubarraySize << endl;
@@ -1267,17 +1272,6 @@ ostream& operator << (ostream& os, const CorrParams& x)
 			os << it->first << '-' << it->second;
 		}
 		os << endl;
-	}
-
-	if(!x.antennaSetups.empty())
-	{
-		vector<AntennaSetup>::const_iterator it;
-
-		for(it = x.antennaSetups.begin(); it != x.antennaSetups.end(); it++)
-		{
-			os << endl;
-			os << *it;
-		}
 	}
 
 	if(!x.sourceSetups.empty())

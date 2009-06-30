@@ -40,24 +40,29 @@
 
 using namespace std;
 
-enum V2D_Mode
-{
-	V2D_MODE_NORMAL = 0,	// for almost all purposes
-	V2D_MODE_PROFILE = 1	// to produce pulsar profiles
-};
-
 // see http://cira.ivec.org/dokuwiki/doku.php/difx/configuration
 
-class PhaseCenter
+class PhaseCentre
 {
 public:
-	double ra;
-	double dec;
-	string name;
-	// pulsar index
-	// ephemeris
-	char calCode;
+	//constructors
+	PhaseCentre(double ra, double dec, string name);
+	PhaseCentre();
+
+	//methods
+	void initialise(double ra, double dec, string name);
+
+	//variables
+	double ra;	  //radians
+	double dec;	  //radians
+	string difxname;
+        char calCode;
 	int qualifier;
+	// ephemeris
+	string ephemObject;     // name of the object in the ephemeris
+	string ephemFile;       // file containing a JPL ephemeris
+	string naifFile;        // file containing naif time data
+	double ephemDeltaT;     // tabulated ephem. interval (seconds, default 60)
 };
 
 class SourceSetup
@@ -65,17 +70,12 @@ class SourceSetup
 public:
 	SourceSetup(const string &name);
 	void setkv(const string &key, const string &value);
+	void setkv(const string &key, const string &value, PhaseCentre * pc);
 
-	string vexName;		// Source name as appears in vex file
-	string difxName;	// Source name (if different) to appear in difx
-	char calCode;
-	double ra, dec;		// in radians
-	string ephemObject;	// name of the object in the ephemeris
-	string ephemFile;	// file containing a JPL ephemeris
-	string naifFile;	// file containing naif time data
-	double ephemDeltaT;	// tabulated ephem. interval (seconds, default 60)
-
-	//vector<PhaseCenter> centers;
+	bool doPointingCentre;       	  // Whether or not to correlate the pointing centre
+	string vexName;		     	  // Source name as appears in vex file
+	PhaseCentre pointingCentre;  	  // The source which is at the pointing centre
+	vector<PhaseCentre> phaseCentres; // Additional phase centres to be correlated
 };
 
 class AntennaSetup
@@ -91,9 +91,6 @@ public:
 	// flag
 	// media
 	bool polSwap;		// If true, swap polarizations
-	string format;		// Override format from .v2d file.  
-				// This is sometimes needed because format not known always at scheduling time
-				// Possible values: S2 VLBA MkIV/Mark4 Mark5B .  Is converted to all caps on load
 };
 
 class CorrSetup
@@ -107,14 +104,15 @@ public:
 	string corrSetupName;
 
 	double tInt;		// integration time
-	int nChan;		// channels per sub-band
 	bool doPolar;		// false for no cross pol, true for full pol
 	bool doAuto;		// write autocorrelations
-	int blocksPerSend;	// literal
+	int subintNS;		// Duration of a subintegration in nanoseconds
+	int nChan;		// For the narrowest band 
+				// (all others will have same spectral resolution)
 	int specAvg;
-	int startChan;
-	int nOutChan;
-	bool postFFringe;	// fringe after FFT?
+	int fringeRotOrder;	// 0, 1, or 2
+	int strideLength;	// The number of channels to do at a time
+				// when fringeRotOrder > 0
 	string binConfigFile;
 	set<int> freqIds;	// which bands to correlate
 private:
@@ -155,12 +153,14 @@ public:
 	void defaults();
 	void defaultSetup();
 	void example();
+	void addSourceSetup(SourceSetup toadd);
 
 	bool useAntenna(const string &antName) const;
 	bool useBaseline(const string &ant1, const string &ant2) const;
 	bool swapPol(const string &antName) const;
 	const CorrSetup *getCorrSetup(const string &name) const;
 	const SourceSetup *getSourceSetup(const string &name) const;
+	const PhaseCentre *getPhaseCentre(const string &difxname) const;
 	const AntennaSetup *getAntennaSetup(const string &name) const;
 	const VexClock *getAntennaClock(const string &antName) const;
 
@@ -202,8 +202,6 @@ public:
 
 	/* rules to determine which setups to apply */
 	vector<CorrRule> rules;
-
-	enum V2D_Mode v2dMode;
 
 private:
 	void addAntenna(const string& antName);
