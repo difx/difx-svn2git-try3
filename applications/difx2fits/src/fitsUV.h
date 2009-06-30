@@ -58,7 +58,7 @@ typedef struct
 DifxVis *newDifxVis(const DifxInput *D, int jobId);
 void deleteDifxVis(DifxVis *dv);
 int DifxVisNextFile(DifxVis *dv);
-int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin);
+int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre);
 int DifxVisCollectRandomParams(const DifxVis *dv);
 
 
