@@ -396,7 +396,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	/* if chan weights are written the data volume is 3/2 as large */
 	/* for now, force nFloat = 2 (one weight for entire vis record) */
 	nFloat = 2;
-	readSize = nFloat * dv->D->nInChan;
+	readSize = nFloat * dv->D->nOutChan;
 	v = fread(dv->spectrum, sizeof(float), readSize, dv->in);
 	if(v < readSize)
 	{
@@ -419,6 +419,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	scanId = DifxInputGetScanIdByJobId(dv->D, mjd, dv->jobId);
 	if(scanId < 0)
 	{
+		fprintf(stderr, "scanId doesn't match - skipping!\n");
 		return SKIPPED_RECORD;
 	}
 
@@ -432,6 +433,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	}
 	if(configId < 0)
 	{
+		fprintf(stderr, "configId doesn't match - skipping!\n");
 		return SKIPPED_RECORD;
 	}
 
@@ -560,6 +562,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	{
 		if(!changed)	/* cannot change config within integration */
 		{
+			fprintf(stderr, "configId changes withing integration - skipping!\n");
 			return CONFIG_CHANGE_ERROR;
 		}
 		dv->configId = configId;
@@ -620,6 +623,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		dv->spectrum[i*dv->nComplex+1] *= dv->recweight;
 	}
 
+	printf("Looks to be ok - returning %d\n", changed);
 	return changed;
 }
 
