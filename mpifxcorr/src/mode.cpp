@@ -461,6 +461,8 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
 
   nearestsampletime = nearestsample*sampletime;
   fracsampleerror = float(starttime - nearestsampletime);
+  //if(datastreamindex == 0)
+  //  cout << "Fractional sample error is " << fracsampleerror << endl;
   fftstartmicrosec = index*twicerecordedbandchannels*sampletime;
 
   switch(fringerotationorder) {
@@ -824,7 +826,7 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   //fill in the quadratic interpolator values from model
   for(int i=1;i<=model->getNumPhaseCentres(currentscan);i++) {
     //cout << "About to do intepolators " << i << endl;
-    foundok = foundok && model->calculateDelayIntepolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e9, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), i, 2, interpolators[i]);
+    foundok = foundok && model->calculateDelayIntepolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), i, 2, interpolators[i]);
     //cout << "Interpolators = " << interpolators[i][0] << ", " << interpolators[i][1] << ", " << interpolators[i][2] << endl;
   }
   if(model->getNumPhaseCentres(currentscan) == 1 || model->isPointingCentreCorrelated(currentscan))
@@ -840,6 +842,9 @@ void Mode::setOffsets(int scan, int seconds, int ns)
     //need the actual pointing centre values, which we didn't get already
     foundok = foundok && model->calculateDelayIntepolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), 0, 2, interpolators[0]);
   }
+
+  //if(datastreamindex == 0)
+  //  cout << setprecision(15) << "delay at the start of the scan is " << interpolators[0][2] << ", delay at the end of the scan is " << interpolators[0][0]*config->getBlocksPerSend(configindex)*config->getBlocksPerSend(configindex) + interpolators[0][1]*config->getBlocksPerSend(configindex) + interpolators[0][2] << endl;
 
   if(!foundok) {
     cerror << startl << "Could not find a Model interpolator for scan " << scan << " offsetseconds " << seconds << " offsetns " << ns << " - will torch this subint!" << endl;
