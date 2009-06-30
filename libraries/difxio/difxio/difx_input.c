@@ -817,6 +817,63 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D,
 	return D;
 }
 
+static DifxInput *parseDifxInputRuleTable(DifxInput *D,
+	const DifxParameters *ip)
+{
+	int r, rule;
+
+	r = DifxParametersfind(ip, 0, "NUM RULES");
+	if(r<0)
+	{
+		fprintf(stderr, "NUM RULES not found\n");
+		return 0;
+	}
+	D->nRule = atoi(DifxParametersvalue(ip, r));
+	D->rule  = newDifxRuleArray(D->nRule);
+	for(rule=0;rule<D->nRule;rule++)
+	{
+		r = DifxParametersfind1(ip, r+1, "RULE %d SOURCE", rule);
+		if(r>=0)
+		{
+			strcpy(D->rule[rule].sourcename, DifxParametersvalue(ip, r));
+		}
+		r = DifxParametersfind1(ip, r+1, "RULE %d SCAN ID", rule);
+		if(r>=0)
+		{
+			strcpy(D->rule[rule].scanId, DifxParametersvalue(ip, r));
+		}
+		r = DifxParametersfind1(ip, r+1, "RULE %d CALCODE", rule);
+		if(r>=0)
+		{
+			strcpy(D->rule[rule].calCode, DifxParametersvalue(ip, r));
+		}
+		r = DifxParametersfind1(ip, r+1, "RULE %d QUAL", rule);
+		if(r>=0)
+		{
+			D->rule[rule].qual = atoi(DifxParametersvalue(ip, r));
+		}
+		r = DifxParametersfind1(ip, r+1, "RULE %d MJD START", rule);
+		if(r>=0)
+		{
+			D->rule[rule].mjdStart = atof(DifxParametersvalue(ip, r));
+		}
+		r = DifxParametersfind1(ip, r+1, "RULE %d MJD STOP", rule);
+		if(r>=0)
+		{
+			D->rule[rule].mjdStop = atof(DifxParametersvalue(ip, r));
+		}
+		r = DifxParametersfind1(ip, r+1, "RULE %d CONFIG NAME", rule);
+		if(r<0)
+		{
+			fprintf(stderr, "RULE %d CONFIG NAME not found\n", rule);
+			return 0;
+		}
+		strcpy(D->rule[rule].configName, DifxParametersvalue(ip, r));
+		printf("Rule %d applies to config %s\n", rule, D->rule[rule].configName);
+	}
+	return D;
+}
+
 static DifxInput *parseDifxInputFreqTable(DifxInput *D, 
 	const DifxParameters *ip)
 {
@@ -1333,6 +1390,9 @@ static DifxInput *populateInput(DifxInput *D, const DifxParameters *ip)
 	
 	/* CONFIGURATIONS */
 	D = parseDifxInputConfigurationTable(D, ip);
+
+	/* RULES */
+	D = parseDifxInputRuleTable(D, ip);
 	
 	/* FREQ TABLE */
 	D = parseDifxInputFreqTable(D, ip);
@@ -1405,7 +1465,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		sizeof(spacecraftKeys)/sizeof(spacecraftKeys[0]);
 	
 	int rows[20];
-	int a, i, j, k, c, s, N, row, n, p;
+	int a, i, j, k, c, s, N, row, n, p, r, applies, src;
 	const char *cname;
 	const char *str;
 	const char *antlist;
@@ -1419,6 +1479,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	//int nFound, nTel, nSrc, startsec, dursec;
 	int nFound, nTel, startsec, dursec;
 
+	printf("In populateCalc - D is %d", D);
 	if(!D)
 	{
 		return 0;
@@ -1571,6 +1632,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	nFound = 0;
 	for(i = 0; i < nTel; i++)
 	{
+		printf("Working through CALC file - up to telescope %d\n", i);
 		N = DifxParametersbatchfind1(cp, rows[N_ANT_ROWS-1], antKeys,
 			i, N_ANT_ROWS, rows);
 		if(N < N_ANT_ROWS)
@@ -1681,6 +1743,8 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		D->eop[i].yPole   = atof(DifxParametersvalue(cp, rows[4]));
 	}
 
+	printf("About to work through scans - nSubScan is %d and numscans is %d\n", nSubScan, D->nScan);
+
 	if(nSubScan == 0)
 	{
 	    k = 0;
@@ -1734,6 +1798,39 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		    }
 		    D->scan[i].phsCentreSrcs[j] = atoi(DifxParametersvalue(cp, row));
                 }
+		printf("D->nRule is %d\n", D->nRule);
+		for(r=0;r<D->nRule;r++)
+		{
+			applies = 1;
+			for(src=0;src<D->scan[i].nPhaseCentres;src++)
+			{
+				printf("Checking if rule %d applies to scan %d, phase centre %d\n", r, i, src);
+				printf("The phase centre src index is %d\n", D->scan[i].phsCentreSrcs[src]);
+				printf("And its name is %s\n", D->source[D->scan[i].phsCentreSrcs[src]].name);
+				printf("Rule sourcename is %s\n", D->rule[r].sourcename);
+				if(ruleApplies(&(D->rule[r]), &(D->scan[i]), &(D->source[D->scan[i].phsCentreSrcs[src]])) == 0)
+				{
+					applies = 0;
+				}
+			}
+			if(applies > 0)
+			{
+				printf("Yes, it does apply!\n");
+				for(c=0;c<D->nConfig;c++)
+				{
+					if(strcmp(D->rule[r].configName, D->config[c].name) == 0)
+					{
+						D->scan[i].configId = c;
+						applies = 0;
+					}
+				}
+				if(applies > 0)
+				{
+					fprintf(stderr, "Couldn't find the config (%s) that is supposed to match rule %d\n", 
+						D->rule[r].configName, r);
+				}
+			}
+		}
 		//cname = DifxParametersvalue(cp, row);
 		//for(c = 0; c < D->nConfig; c++)
 		//{

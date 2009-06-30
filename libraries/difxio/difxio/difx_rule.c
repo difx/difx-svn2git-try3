@@ -103,7 +103,7 @@ int writeDifxRuleArray(FILE *out, const DifxInput *D)
 int ruleApplies(const DifxRule * dr, const DifxScan * ds, const DifxSource * src)
 {
 	if((strcmp(dr->sourcename, "") != 0 && strcmp(src->name, dr->sourcename) != 0) ||
-	   (strcmp(dr->scanId, "") != 0  && strcmp(ds->identifier, dr->scanId) != 0)    ||
+	   (strcmp(dr->scanId, "") != 0  && strcmp(ds->identifier, dr->scanId) != 0) ||
 	   (strcmp(dr->calCode, "") != 0 && strcmp(src->calCode, dr->calCode) != 0) ||
 	   (dr->qual >= 0 && src->qual != dr->qual) ||
 	   (dr->mjdStart > 0.0 && ds->mjdStart < dr->mjdStart) || 
