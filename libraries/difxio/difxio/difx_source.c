@@ -42,7 +42,6 @@ DifxSource *newDifxSourceArray(int nSource)
 	ds = (DifxSource *)calloc(nSource, sizeof(DifxSource));
 	for(s = 0; s < nSource; s++)
 	{
-		ds[s].configId = -1;
 		ds[s].spacecraftId = -1;
 		ds[s].fitsSourceId = -1;
 	}
@@ -65,7 +64,6 @@ void fprintDifxSource(FILE *fp, const DifxSource *ds)
 	fprintf(fp, "    Dec = %+11.7f\n", ds->dec);
 	fprintf(fp, "    Calcode = %s\n", ds->calCode);
 	fprintf(fp, "    Qualifier = %d\n", ds->qual);
-	fprintf(fp, "    ConfigId = %d\n", ds->configId);
 	fprintf(fp, "    SpacecraftId = %d\n", ds->spacecraftId);
 	fprintf(fp, "    FITS SourceId = %d\n", ds->fitsSourceId);
 }
@@ -91,4 +89,49 @@ void fprintDifxSourceSummary(FILE *fp, const DifxSource *ds)
 void printDifxSourceSummary(const DifxSource *ds)
 {
 	fprintDifxSourceSummary(stdout, ds);
+}
+
+int writeDifxSourceArray(FILE *out, int nSource, const DifxSource *ds,
+        int doCalcode, int doQual, int doSpacecraftID, 
+	int doFitsSourceID)
+{
+        int n;  /* number of lines written */
+        int i;
+
+        writeDifxLineInt(out, "NUM SOURCES", nSource);
+        n = 1;
+
+        for(i = 0; i < nSource; i++)
+        {
+                writeDifxLine1(out, "SOURCE %d NAME", i, ds[i].name);
+                n++;
+		writeDifxLineDouble1(out, "SOURCE %d RA", i, 
+				     "%15.13f", ds[i].ra);
+                n++;
+                writeDifxLineDouble1(out, "SOURCE %d DEC", i, 
+				     "%15.13f",  ds[i].dec);
+                n++;
+		if(doCalcode) {
+			writeDifxLine1(out, "SOURCE %d CALCODE", 
+				       i, ds[i].calCode);
+			n++;
+		}
+		if(doQual) {
+			writeDifxLineInt1(out, "SOURCE %d QUAL", 
+					  i, ds[i].qual);
+	                n++;
+		}
+                if(doSpacecraftID) {
+                        writeDifxLineInt1(out, "SOURCE %d S/CRAFT ID", 
+					  i, ds[i].spacecraftId);
+                        n++;
+                }
+                if(doFitsSourceID) {
+                        writeDifxLineInt1(out, "SOURCE %d FITSSRC ID", 
+					  i, ds[i].fitsSourceId);
+                        n++;
+                }
+        }
+
+        return n;
 }

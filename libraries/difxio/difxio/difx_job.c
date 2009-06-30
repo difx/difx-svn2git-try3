@@ -76,7 +76,6 @@ void fprintDifxJob(FILE *fp, const DifxJob *dj)
 	}
 	fprintf(fp, "    Start = MJD %12.6f\n", dj->mjdStart);
 	fprintf(fp, "    Duration = %f sec\n", dj->duration);
-	fprintf(fp, "    Model Inc = %f sec\n", dj->modelInc);
 }
 
 void printDifxJob(const DifxJob *dj)

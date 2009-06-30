@@ -37,10 +37,10 @@
 int areDifxInputsMergable(const DifxInput *D1, const DifxInput *D2)
 {
 	if(D1->specAvg != D2->specAvg ||
-	   D1->nFFT != D2->nFFT ||
-	   D1->startChan != D2->startChan ||
-	   D1->nInChan != D2->nInChan ||
-	   D1->nOutChan != D2->nOutChan ||
+	   //D1->nFFT != D2->nFFT ||
+	   //D1->startChan != D2->startChan ||
+	   //D1->nInChan != D2->nInChan ||
+	   //D1->nOutChan != D2->nOutChan ||
 	   D1->job->aberCorr != D2->job->aberCorr ||
 	   strncmp(D1->job->difxVersion, D2->job->difxVersion, 64))
 	{
@@ -133,10 +133,10 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2,
 
 	/* copy over / merge some of DifxInput top level parameters */
 	D->specAvg = D1->specAvg;
-	D->nFFT = D1->nFFT;
-	D->startChan = D1->startChan;
-	D->nInChan = D1->nInChan;
-	D->nOutChan = D1->nOutChan;
+	//D->nFFT = D1->nFFT;
+	//D->startChan = D1->startChan;
+	//D->nInChan = D1->nInChan;
+	//D->nOutChan = D1->nOutChan;
 	if(D1->visBufferLength > D2->visBufferLength)
 	{
 		D->visBufferLength = D1->visBufferLength;

@@ -40,10 +40,8 @@ static int writeCommonSettings(FILE *out, const DifxInput *D,
 	double dsecs;
 
 	fprintf(out, "# COMMON SETTINGS ##!\n");
-	sprintf(value, "%s.delay", filebase);
-	writeDifxLine(out, "DELAY FILENAME", value);
-	sprintf(value, "%s.uvw", filebase);
-	writeDifxLine(out, "UVW FILENAME", value);
+	sprintf(value, "%s.calc", filebase);
+	writeDifxLine(out, "CALC FILENAME", value);
 	sprintf(value, "%s.threads", filebase);
 	writeDifxLine(out, "CORE CONF FILENAME", value);
 	secs = (D->mjdStop - D->mjdStart)*86400.0 + 0.5;
@@ -51,12 +49,12 @@ static int writeCommonSettings(FILE *out, const DifxInput *D,
 	writeDifxLineInt(out, "START MJD", (int)(D->mjdStart));
 	if(D->fracSecondStartTime > 0)
 	{
-		dsecs = (D->mjdStart - (int)(D->mjdStart))*86400.0;
+		dsecs = (D->mjdStart - (int)(D->mjdStart))*86400.0 + 0.5;
 		writeDifxLineDouble(out, "START SECONDS", "%12.6f", dsecs);
 	}
 	else
 	{
-		secs = (D->mjdStart - (int)(D->mjdStart))*86400.0 + 0.5;
+		secs = (D->mjdStart - (int)(D->mjdStart))*86400.0;
 		writeDifxLineInt(out, "START SECONDS", secs);
 	}
 	writeDifxLineInt(out, "ACTIVE DATASTREAMS", D->nDatastream);
@@ -74,6 +72,15 @@ static int writeConfigurations(FILE *out, const DifxInput *D)
 {
 	fprintf(out, "# CONFIGURATIONS ###!\n");
 	writeDifxConfigArray(out, D->nConfig, D->config, D->pulsar);
+	fprintf(out, "\n");
+
+	return 0;
+}
+
+static int writeRuleTable(FILE *out, const DifxInput *D)
+{
+	fprintf(out, "# RULES ############!\n");
+	writeDifxRuleArray(out, D);
 	fprintf(out, "\n");
 
 	return 0;
@@ -186,11 +193,17 @@ int writeDifxInput(const DifxInput *D, const char *filename)
 		return -1;
 	}
 
+	printf("About to start writing input file\n");
 	writeCommonSettings(out, D, filebase);
 	writeConfigurations(out, D);
+	printf("About to write rule table\n");
+	writeRuleTable(out, D);
+	printf("About to write freq table\n");
 	writeFreqTable(out, D);
 	writeTelescopeTable(out, D);
+	printf("About to write datastream table\n");
 	writeDatastreamTable(out, D);
+	printf("About to write baseline table\n");
 	writeBaselineTable(out, D);
 	writeDataTable(out, D);
 
