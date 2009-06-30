@@ -500,6 +500,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   int freqchannels, freqindex, channelinc, copylength, copiedchans, safelength, currentlength;
   int nyquistchannel, nyquistoffset;
   double offsetmins;
+  f32 bweight;
   float * dsweights = new float[numdatastreams];
   Mode * m1, * m2;
   //s32 *** polycobincounts;
@@ -563,8 +564,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event
         //that one datastream has USB and the other has LSB
         nyquistchannel = freqchannels;
-        if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, j, k)))
+        if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, j, k))) {
+          //cout << "This is a lower sideband frequency" << endl;
           nyquistchannel = 0;
+        }
 
         for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
         {
@@ -585,25 +588,25 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
               //if scrunching, add into temp accumulate space, otherwise add into normal space
               if(procslots[index].scrunchoutput)
               {
+                bweight = dsweights[ds1index]*dsweights[ds2index];
                 for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
                 {
                   pulsaraccumspace[j][k][s][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].re += pulsarscratchspace[l].re;
                   pulsaraccumspace[j][k][s][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].im += pulsarscratchspace[l].im;
                 }
                 pulsaraccumspace[j][k][s][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][nyquistchannel]][nyquistchannel].re += pulsarscratchspace[nyquistchannel].re;
-                pulsaraccumspace[j][k][s][p][0][nyquistchannel].im += dsweights[ds1index]*dsweights[ds2index];
+                pulsaraccumspace[j][k][s][p][0][nyquistchannel].im += bweight;
               }
               else
               {
+                bweight = dsweights[ds1index]*dsweights[ds2index]/(freqchannels+1);
                 for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
                 {
                   cindex = resultindex + (bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]*config->getBNumPolProducts(procslots[index].configindex,j,k) + p)*(freqchannels+1) + l;
                   threadresults[cindex].re += pulsarscratchspace[l].re;
                   threadresults[cindex].im += pulsarscratchspace[l].im;
+                  threadresults[cindex-l+nyquistchannel].im += bweight;
                 }
-                cindex = resultindex + p*(freqchannels+1) + nyquistchannel;
-                threadresults[cindex].re += pulsarscratchspace[nyquistchannel].re;
-                threadresults[cindex].im += dsweights[ds1index]*dsweights[ds2index];
               }
             }
             else
@@ -614,6 +617,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                 csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
               threadresults[resultindex+nyquistchannel].re += vis1[nyquistchannel].re*vis2[nyquistchannel].re;
               threadresults[resultindex+nyquistchannel].im += dsweights[ds1index]*dsweights[ds2index];
+              //cout << "DSweights were " << dsweights[ds1index] << ", " << dsweights[ds2index] << ", and nyquistchan.im (index " << resultindex+nyquistchannel << ") is now " << threadresults[resultindex+nyquistchannel].im << endl;
               resultindex += freqchannels+1;
             }
           }
@@ -630,7 +634,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   //  polycobincounts = currentpolyco->getBinCounts();
 
   //if we are pulsar binning, do the necessary scaling (from scratch space to results if scrunching, otherwise in-place)
-  if(procslots[index].pulsarbin)
+  if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
   {
     resultindex = 0;
     f64 * binweights = currentpolyco->getBinWeights();
@@ -644,36 +648,35 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event
         //that one datastream has USB and the other has LSB
         nyquistchannel = freqchannels;
-        if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, i, j)))
+        if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, i, j))) {
           nyquistchannel = 0;
+        }
         for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
         {
-          if(procslots[index].scrunchoutput)
+          for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
           {
-            for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
+            float baselineweight = pulsaraccumspace[i][j][s][k][0][nyquistchannel].im;
+            for(int l=0;l<procslots[index].numpulsarbins;l++)
             {
-              float baselineweight = pulsaraccumspace[i][j][s][k][0][nyquistchannel].im;
-              for(int l=0;l<procslots[index].numpulsarbins;l++)
-              {
-                //Scale the accumulation space, and scrunch it into the results vector
-                status = vectorMulC_f32_I((f32)(binweights[l]), (f32*)(pulsaraccumspace[i][j][s][k][l]), 2*freqchannels+2);
-                if(status != vecNoErr)
-                  csevere << startl << "Error trying to scale for scrunch!!!" << endl;
-                status = vectorAdd_cf32_I(pulsaraccumspace[i][j][s][k][l], &(threadresults[resultindex]), freqchannels+1);
-                if(status != vecNoErr)
-                  csevere << startl << "Error trying to accumulate for scrunch!!!" << endl;
+              //Scale the accumulation space, and scrunch it into the results vector
+              status = vectorMulC_f32_I((f32)(binweights[l]), (f32*)(pulsaraccumspace[i][j][s][k][l]), 2*freqchannels+2);
+              if(status != vecNoErr)
+                csevere << startl << "Error trying to scale for scrunch!!!" << endl;
+              status = vectorAdd_cf32_I(pulsaraccumspace[i][j][s][k][l], &(threadresults[resultindex]), freqchannels+1);
+              if(status != vecNoErr)
+                csevere << startl << "Error trying to accumulate for scrunch!!!" << endl;
 
-                //zero the accumulation space for next time
-                status = vectorZero_cf32(pulsaraccumspace[i][j][s][k][l], freqchannels+1);
-                if(status != vecNoErr)
-                  csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
-              }
-              //store the correct weight
-              threadresults[resultindex + nyquistchannel].im = baselineweight;
-              resultindex += freqchannels+1;
+              //zero the accumulation space for next time
+              status = vectorZero_cf32(pulsaraccumspace[i][j][s][k][l], freqchannels+1);
+              if(status != vecNoErr)
+                csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
             }
+            //store the correct weight
+            threadresults[resultindex + nyquistchannel].im = baselineweight;
+            resultindex += freqchannels+1;
           }
-          else
+        }
+        /*  else
           {
             for(int k=0;k<procslots[index].numpulsarbins;k++)
             {
@@ -690,13 +693,14 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
               }
             }
           }
-        }
+        }*/
       }
     }
   }
 
   //if required, average down in frequency
   cout << "Preavresultlength is " << procslots[index].preavresultlength << ", postavresultlength is " << procslots[index].postavresultlength << endl;
+  //cout << "Lowersideband for frequency 0 is " << ((config->getFreqTableLowerSideband(0))?"true":"false") << endl;
   if(procslots[index].preavresultlength != procslots[index].postavresultlength) {
     resultindex = 0;
     copyindex = 0;
@@ -712,10 +716,11 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         freqindex = config->getBFreqIndex(procslots[index].configindex, i, j);
         channelinc = config->getFChannelsToAverage(freqindex);
         freqchannels = config->getFNumChannels(freqindex)/channelinc;
-        cout << "Freqchannels (postaverage) is " << freqchannels << endl;
+        //cout << "Freqchannels (postaverage) is " << freqchannels << " from freqindex " << freqindex << endl;
         nyquistchannel = freqchannels;
         nyquistoffset = 0;
-        if(config->getFreqTableLowerSideband(freqindex)); {
+        if(config->getFreqTableLowerSideband(freqindex)) {
+          //cout << "This is a lower sideband frequency" << endl;
           nyquistchannel = 0;
           nyquistoffset = 1;
         }
@@ -771,7 +776,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     firstsum = false;
                   }
                 }
-                threadresults[resultindex+nyquistchannel] = threadresults[copyindex+nyquistchannel];
+                threadresults[resultindex+nyquistchannel] = threadresults[copyindex+nyquistchannel*channelinc];
+                cout << "When copying threadresults, got a nyquist channel value of " << threadresults[resultindex+nyquistchannel].im << " from index " << copyindex+nyquistchannel*channelinc << ", copyindex was " << copyindex << ", nyquistchan was " << nyquistchannel << endl;
                 resultindex += freqchannels + 1;
                 copyindex += freqchannels*channelinc + 1;
               }

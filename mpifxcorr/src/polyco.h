@@ -139,6 +139,12 @@ public:
   */
   inline f64 getBinWeightTimesWidth(int bin) { f64 w = binphases[bin]-binphases[(bin+numbins-1)%numbins]; return (w<0.0)?binweights[bin]*(1.0+w):binweights[bin]*w; }
 
+/**
+  * Returns the width of the specified bin
+  * @return The width of the specified bin
+  */
+  inline f64 getBinWidth(int bin) { f64 w = binphases[bin]-binphases[(bin+numbins-1)%numbins]; return (w<0.0)?(1.0+w):w; }
+
  /**
   * Clears the bin counts
   */

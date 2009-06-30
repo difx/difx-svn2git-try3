@@ -1094,6 +1094,10 @@ bool Configuration::processFreqTable(ifstream * input)
     freqtable[i].bandwidth = atof(line.c_str());
     getinputline(input, &line, "SIDEBAND ", i);
     freqtable[i].lowersideband = ((line == "L") || (line == "l") || (line == "LOWER") || (line == "lower"))?true:false;
+    if(freqtable[i].lowersideband) 
+      cout << "Lowersideband for freqtable " << i << " is true" << endl;
+    else
+      cout << "Lowersideband for freqtable " << i << " is false" << endl;
     getinputline(input, &line, "NUM CHANNELS ");
     freqtable[i].numchannels = atoi(line.c_str());
     if(freqtable[i].numchannels > maxnumchannels)
