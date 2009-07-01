@@ -546,6 +546,7 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
       readscan = 0;
     if(readscan >= model->getNumScans())
       readscan = model->getNumScans() - 1;
+    readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
     //cinfo << startl << "DataStream " << mpiid << ": The frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
 
     delete_mark5_stream(mark5stream);

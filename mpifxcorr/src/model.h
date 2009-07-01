@@ -153,7 +153,7 @@ class Model{
      * @param delaycoeffs The coefficients, to be filled in
      * @return true = success, false = failure (offset wasn't within scan, probably)
      */
-    bool calculateDelayIntepolator(int scanindex, f64 offsettime, f64 timespan, int increments, int antennaindex, int scansourceindex, int order, f64 * delaycoeffs);
+    bool calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timespan, int increments, int antennaindex, int scansourceindex, int order, f64 * delaycoeffs);
 
     /**
      * Returns the number of phase centres to be correlated for this scan

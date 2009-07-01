@@ -164,7 +164,7 @@ bool Model::interpolateUVW(int scanindex, double offsettime, int antennaindex1, 
   return true;
 }
 
-bool Model::calculateDelayIntepolator(int scanindex, f64 offsettime, f64 timespan, int numincrements, int antennaindex, int scansourceindex, int order, f64 * delaycoeffs)
+bool Model::calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timespan, int numincrements, int antennaindex, int scansourceindex, int order, f64 * delaycoeffs)
 {
   int scansample, status, polyoffset;
   double deltat;
@@ -180,7 +180,7 @@ bool Model::calculateDelayIntepolator(int scanindex, f64 offsettime, f64 timespa
   polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + (modelstartseconds + (int)offsettime) - scantable[scanindex].polystartseconds;
   scansample = int((offsettime+polyoffset)/double(modelincsecs));
   if(scansample < 0 || scansample >= scantable[scanindex].nummodelsamples) {
-    cwarn << startl << "Model delay interpolator was asked to produce results for scan " << scanindex << " from outside the scans valid range (worked out scansample " << scansample << ", when numsamples was " << scantable[scanindex].nummodelsamples << endl;
+    cwarn << startl << "Model delay interpolator was asked to produce results for scan " << scanindex << " from outside the scans valid range (worked out scansample " << scansample << ", when numsamples was " << scantable[scanindex].nummodelsamples << ")" << endl;
     return false;
   }
   deltat = offsettime+polyoffset+timespan/2.0 - scansample*modelincsecs;
@@ -227,6 +227,7 @@ bool Model::calculateDelayIntepolator(int scanindex, f64 offsettime, f64 timespa
   delaycoeffs[0] = (2.0*delaysamples[0]-4.0*delaysamples[1]+2.0*delaysamples[2])/(numincrements*numincrements);
   delaycoeffs[1] = (-3.0*delaysamples[0]+4.0*delaysamples[1]-delaysamples[2])/numincrements;
   delaycoeffs[2] = delaysamples[0];
+  //cout << "Interpolator produced coefficients " << delaycoeffs[0] << ", " << delaycoeffs[1] << ", " << delaycoeffs[2] << " from samples " << delaysamples[0] << ", " << delaysamples[1] << ", " << delaysamples[2] << " for a time range " << timespan << endl;
   return true;
 }
 

@@ -826,7 +826,7 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   //fill in the quadratic interpolator values from model
   for(int i=1;i<=model->getNumPhaseCentres(currentscan);i++) {
     //cout << "About to do intepolators " << i << endl;
-    foundok = foundok && model->calculateDelayIntepolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), i, 2, interpolators[i]);
+    foundok = foundok && model->calculateDelayInterpolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), i, 2, interpolators[i]);
     //cout << "Interpolators = " << interpolators[i][0] << ", " << interpolators[i][1] << ", " << interpolators[i][2] << endl;
   }
   if(model->getNumPhaseCentres(currentscan) == 1 || model->isPointingCentreCorrelated(currentscan))
@@ -840,7 +840,7 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   else
   {
     //need the actual pointing centre values, which we didn't get already
-    foundok = foundok && model->calculateDelayIntepolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), 0, 2, interpolators[0]);
+    foundok = foundok && model->calculateDelayInterpolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), 0, 2, interpolators[0]);
   }
 
   //if(datastreamindex == 0)

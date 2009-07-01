@@ -270,9 +270,9 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   //work out the first delay and the last delay and place in control buffer
   intdelayseconds = ((offsetsec + corrstartseconds) - delaystartseconds) + 86400*(corrstartday - delaystartday);
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = scan;
-  foundok = model->calculateDelayIntepolator(scan, (double)offsetsec + ((double)offsetns)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus1);
+  foundok = model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus1);
   firstoffsetns = offsetns - static_cast<int>(delayus1*1000);
-  foundok = foundok && model->calculateDelayIntepolator(scan, (double)offsetsec + ((double)offsetns + bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus2);
+  foundok = foundok && model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns + bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus2);
   if(!foundok) {
     cerror << startl << "Could not find a Model interpolator for scan " << scan << " offsetseconds " << offsetsec << " offsetns " << offsetns << " - will torch this subint!" << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;

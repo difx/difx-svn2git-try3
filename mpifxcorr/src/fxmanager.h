@@ -114,7 +114,7 @@ private:
   //variables
   Configuration * config;
   MPI_Comm return_comm;
-  int numcores, mpiid, numdatastreams, startmjd, startseconds, startns, startscan, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis;
+  int numcores, mpiid, numdatastreams, startmjd, startseconds, initns, initsec, initscan, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis;
   double inttime;
   bool keepwriting, circularpols, writethreadinitialised, visibilityconfigok;
   int senddata[4]; //targetcoreid, scan, scanoffsetseconds, scanoffsetnanoseconds

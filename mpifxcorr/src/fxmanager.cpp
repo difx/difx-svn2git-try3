@@ -59,7 +59,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
   : config(conf), return_comm(rcomm), numcores(ncores), mpiid(id), visibilityconfigok(true), monitor(mon), hostname(hname), monitorport(port)
 {
   bool startskip;
-  int perr, firstscansecond;
+  int perr;
   const string * polnames;
 
   cinfo << startl << "STARTING " << PACKAGE_NAME << " version " << VERSION << endl;
@@ -73,33 +73,33 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
   numdatastreams = config->getNumDataStreams();
   startmjd = config->getStartMJD();
   startseconds = config->getStartSeconds();
-  startns = config->getStartNS();
+  initns = config->getStartNS();
   executetimeseconds = config->getExecuteSeconds();
   model = config->getModel();
 
-  startscan = 0;
-  while(model->getScanEndSec(startscan, startmjd, startseconds) < 0)
-    startscan++;
+  initscan = 0;
+  while(model->getScanEndSec(initscan, startmjd, startseconds) < 0)
+    initscan++;
 
   startskip = false;
-  currentconfigindex = config->getScanConfigIndex(startscan);
-  while(currentconfigindex < 0 && startscan < model->getNumScans()) {
-    currentconfigindex = config->getScanConfigIndex(++startscan);
+  currentconfigindex = config->getScanConfigIndex(initscan);
+  while(currentconfigindex < 0 && initscan < model->getNumScans()) {
+    currentconfigindex = config->getScanConfigIndex(++initscan);
     startskip = true;
   }
 
-  if(startscan == model->getNumScans())
+  if(initscan == model->getNumScans())
   {
     cfatal << startl << "Did not find any scans to correlate in the specified time range - aborting!!!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
   if(startskip && config->getStartNS() != 0) {
-    cwarn << startl << "WARNING!!! Fractional start time of " << startseconds << " seconds plus " << startns << " ns was specified, but the start time corresponded to a configuration not specified in the input file and hence we are skipping to the first valid scan after the specified start (" << startscan << ")! The ns offset will be set to 0!!!" << endl;
-    startns = 0;
+    cwarn << startl << "WARNING!!! Fractional start time of " << startseconds << " seconds plus " << initns << " ns was specified, but the start time corresponded to a configuration not specified in the input file and hence we are skipping to the first valid scan after the specified start (" << initscan << ")! The ns offset will be set to 0!!!" << endl;
+    initns = 0;
   }
   inttime = config->getIntTime(currentconfigindex);
   nsincrement = config->getSubintNS(currentconfigindex);
-  firstscansecond = model->getScanStartSec(startscan, startmjd, startseconds);
+  initsec = model->getScanStartSec(initscan, startmjd, startseconds);
 
   numbaselines = (numdatastreams*(numdatastreams-1))/2;
   resultlength = config->getMaxResultLength();
@@ -135,7 +135,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
     polnames = LINEAR_POL_NAMES;
   for(int i=0;i<config->getVisBufferLength();i++)
   {
-    visbuffer[i] = new Visibility(config, i, config->getVisBufferLength(), executetimeseconds, startscan, firstscansecond, startns, polnames, monitor, monitorport, hostname, &mon_socket, monitor_skip);
+    visbuffer[i] = new Visibility(config, i, config->getVisBufferLength(), executetimeseconds, initscan, initsec, initns, polnames, monitor, monitorport, hostname, &mon_socket, monitor_skip);
     pthread_mutex_init(&(bufferlock[i]), NULL);
     islocked[i] = false;
     if(!visbuffer[i]->configuredOK()) { //problem with finding a polyco, probably
@@ -240,7 +240,7 @@ void FxManager::execute()
   cinfo << startl << "Hello World, I am the FxManager" << endl;
 
   //loop over all scans in the Model
-  for(int i=startscan;i<model->getNumScans();i++)
+  for(int i=initscan;i<model->getNumScans();i++)
   {
     currentconfigindex = config->getScanConfigIndex(i);
     inttime = config->getIntTime(config->getScanConfigIndex(i));
@@ -248,12 +248,8 @@ void FxManager::execute()
     if(model->getScanStartSec(i, startmjd, startseconds) >= executetimeseconds)
       break; //can stop here
 
-    senddata[3] = startns; //will be zero for all scans except (maybe) the first
-    senddata[2] = model->getScanStartSec(i, startmjd, startseconds);
-    if(senddata[2] < 0) {
-      senddata[2] = 0;
-      senddata[3] = 0;
-    }
+    senddata[3] = initns; //will be zero for all scans except (maybe) the first
+    senddata[2] = initsec; //ditto to initns
     senddata[1] = i;
 
     //do as many sends as we need to for this scan
@@ -274,8 +270,9 @@ void FxManager::execute()
       }
     }
 
-    //make sure the startns is zero for all scans but the first
-    senddata[3] = 0;
+    //make sure the offset from start of scan is zero for all scans but the first
+    initns = 0;
+    initsec = 0;
   }
 
   //must be done - send the terminate signal to each datastream and each core
