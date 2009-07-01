@@ -273,14 +273,10 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 		readpointer = scan->start + scan->frameoffset;
 		readseconds = (scan->mjd-corrstartday)*86400 + scan->sec - corrstartseconds;
 		readnanoseconds = scanns;
-                while(model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+                while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
                   readscan++;
-                while(model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+                while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
                   readscan--;
-                if(readscan < 0)
-                  readscan = 0;
-                if(readscan >= model->getNumScans())
-                  readscan = model->getNumScans() - 1;
                 readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 
 		cinfo << startl << "After[" << mpiid << "]  readscan = " << readscan << " rs = " << readseconds << "  rns = " << readnanoseconds << endl;
@@ -312,14 +308,10 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 				readseconds = (scan->mjd-corrstartday)*86400 
 					+ scan->sec - corrstartseconds;
 				readnanoseconds = scanns;
-                                while(model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+                                while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
                                   readscan++;
-                                while(model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+                                while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
                                   readscan--;
-                                if(readscan < 0)
-                                  readscan = 0;
-                                if(readscan >= model->getNumScans())
-                                  readscan = model->getNumScans() - 1;
                                 readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 				break;
 			}
@@ -333,14 +325,10 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 				readpointer += n*scan->framebytes;
 				readseconds = 0;
 				readnanoseconds = 0;
-                                while(model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+                                while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
                                   readscan++;
-                                while(model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+                                while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
                                   readscan--;
-                                if(readscan < 0)
-                                  readscan = 0;
-                                if(readscan >= model->getNumScans())
-                                  readscan = model->getNumScans() - 1;
                                 readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 				break;
 			}
@@ -627,9 +615,10 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
         if(readseconds >= model->getScanDuration(readscan)) {
-          if(readscan < model->getNumScans()) {
+          if(readscan < model->getNumScans()-1) {
             readscan++;
             readseconds -= model->getScanStartSec(readscan, corrstartday, corrstartseconds) - model->getScanStartSec(readscan-1, corrstartday, corrstartseconds);
+            cdebug << startl << "Incrementing scan to " << readscan << ", readseconds is now " << readseconds << endl;
           }
           else
             keepreading = false;

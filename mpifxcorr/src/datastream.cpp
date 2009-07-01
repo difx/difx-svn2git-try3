@@ -925,7 +925,7 @@ int DataStream::initialiseFrame(char * frameheader)
   readnanoseconds = 0;
   while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
     readscan++;
-  while(readscan >= 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+  while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
     readscan--;
   readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 

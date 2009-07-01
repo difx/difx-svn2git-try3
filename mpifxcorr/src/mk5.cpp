@@ -185,14 +185,10 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 
   readseconds = 86400*(mark5stream->mjd-corrstartday) + mark5stream->sec-corrstartseconds + intclockseconds;
   readnanoseconds = int(mark5stream->ns);
-  while(model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+  while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
     readscan++;
-  while(model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+  while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
     readscan--;
-  if(readscan < 0)
-    readscan = 0;
-  if(readscan >= model->getNumScans())
-    readscan = model->getNumScans() - 1;
   readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
   cverbose << startl << "The frame start is day=" << mark5stream->mjd << ", seconds=" << mark5stream->sec << ", ns=" << mark5stream->ns << ", readscan=" << readscan << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
 
@@ -222,7 +218,7 @@ void Mk5DataStream::networkToMemory(int buffersegment, int & framebytesremaining
   readseconds += readnanoseconds/1000000000;
   readnanoseconds %= 1000000000;
   if(readseconds >= model->getScanDuration(readscan)) {
-    if(readscan < model->getNumScans()) {
+    if(readscan < model->getNumScans()-1) {
       readscan++;
       readseconds -= model->getScanStartSec(readscan, corrstartday, corrstartseconds) - model->getScanStartSec(readscan-1, corrstartday, corrstartseconds);
     }
@@ -540,16 +536,12 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
 
     readseconds = 86400*(mark5stream->mjd-corrstartday) + mark5stream->sec-corrstartseconds + intclockseconds;
     readnanoseconds = mark5stream->ns;
-    while(model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+    while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
       readscan++;
-    while(model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+    while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
       readscan--;
-    if(readscan < 0)
-      readscan = 0;
-    if(readscan >= model->getNumScans())
-      readscan = model->getNumScans() - 1;
     readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
-    //cinfo << startl << "DataStream " << mpiid << ": The frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
+    cinfo << startl << "DataStream " << mpiid << ": The frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
 
     delete_mark5_stream(mark5stream);
   }

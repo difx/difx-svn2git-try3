@@ -814,7 +814,7 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   offsetseconds = seconds;
   offsetns = ns;
 
-  if(seconds <= INVALID_SUBINT)
+  if(datasec <= INVALID_SUBINT)
     return; //there is no valid data - this whole subint will be ignored
 
   if(currentscan != datascan) {
@@ -867,7 +867,7 @@ void Mode::setData(u8 * d, int dbytes, int dscan, int dsec, int dns)
   datasec = dsec;
   datans = dns;
   unpackstartsamples = -999999999;
-  //cout << "Mode for datastream " << datastreamindex << " just set the datascan to " << datascan << ", datasec " << datasec << ", datans " << datans << endl;
+  cdebug << startl << "Mode for datastream " << datastreamindex << " just set the datascan to " << datascan << ", datasec " << datasec << ", datans " << datans << endl;
 }
 
 const float Mode::decorrelationpercentage[] = {0.63662, 0.88, 0.94, 0.96, 0.98, 0.99, 0.996, 0.998}; //note these are just approximate!!!
