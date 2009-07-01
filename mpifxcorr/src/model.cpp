@@ -135,7 +135,7 @@ bool Model::interpolateUVW(int scanindex, double offsettime, int antennaindex1, 
   double * coeffs;
 
   //work out the correct sample and offset from that sample
-  polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + (modelstartseconds + (int)offsettime) - scantable[scanindex].polystartseconds;
+  polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + modelstartseconds + scantable[scanindex].offsetseconds - scantable[scanindex].polystartseconds;
   scansample = int((offsettime+polyoffset)/double(modelincsecs));
   if(scansample < 0 || scansample >= scantable[scanindex].nummodelsamples)
     return false;
@@ -177,7 +177,7 @@ bool Model::calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timesp
   } 
 
   //work out the correct sample and offset for the midrange of the timespan
-  polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + (modelstartseconds + (int)offsettime) - scantable[scanindex].polystartseconds;
+  polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + modelstartseconds + scantable[scanindex].offsetseconds - scantable[scanindex].polystartseconds;
   scansample = int((offsettime+polyoffset)/double(modelincsecs));
   if(scansample < 0 || scansample >= scantable[scanindex].nummodelsamples) {
     cwarn << startl << "Model delay interpolator was asked to produce results for scan " << scanindex << " from outside the scans valid range (worked out scansample " << scansample << ", when numsamples was " << scantable[scanindex].nummodelsamples << ")" << endl;
