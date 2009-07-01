@@ -2211,17 +2211,17 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 					scan->im[a][src][p].order = order;
 					scan->im[a][src][p].validDuration = interval;
 					r = parsePoly1(mp, r, "SRC %d ANT %d DELAY (us)", 
-						src, t, scan->im[a][s][p].delay, order+1);
+						src, t, scan->im[a][src][p].delay, order+1);
 					r = parsePoly1(mp, r, "SRC %d ANT %d DRY (us)", src,
-						t, scan->im[a][s][p].dry, order+1);
+						t, scan->im[a][src][p].dry, order+1);
 					r = parsePoly1(mp, r, "SRC %d ANT %d WET (us)", src,
-						t, scan->im[a][s][p].wet, order+1);
+						t, scan->im[a][src][p].wet, order+1);
 					r = parsePoly1(mp, r, "SRC %d ANT %d U (m)", src,
-						t, scan->im[a][s][p].u, order+1);
+						t, scan->im[a][src][p].u, order+1);
 					r = parsePoly1(mp, r, "SRC %d ANT %d V (m)", src,
-						t, scan->im[a][s][p].v, order+1);
+						t, scan->im[a][src][p].v, order+1);
 					r = parsePoly1(mp, r, "SRC %d ANT %d W (m)", src,
-						t, scan->im[a][s][p].w, order+1);
+						t, scan->im[a][src][p].w, order+1);
 					if(r < 0)
 					{
 						printf("Could not find SRC %d ANT %d W (m)\n", src, t);
@@ -2229,7 +2229,6 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 					}
 				}
 			}
-			//printf("XX %e %e %e %e\n", scan->im[0][p].delay[0], scan->im[0][p].delay[1], scan->im[0][p].delay[2], scan->im[a][p].delay[3]);
 		}
 	}
 
