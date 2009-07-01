@@ -296,7 +296,6 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   //while we have passed the first of our two locked sections, unlock that and lock the next - have two tests so sample difference can't overflow
   waitForSendComplete();
 
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = 0; //make sure a valid scan is here
   if(!bufferinfo[atsegment].readto) //can only occur when *all* datastream files bad, hence no good data, ever
   {
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
@@ -323,7 +322,6 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
     atsegment = (atsegment+1)%numdatasegments;
   }
 
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = scan;
   //look at the segment we are in now - if we want to look wholly before this or the buffer segment is bad then 
   //can't continue, fill control buffer with -1 and bail out
   if((scan < bufferinfo[atsegment].scan) || (offsetsec < bufferinfo[atsegment].scanseconds - 1) || ((offsetsec - bufferinfo[atsegment].scanseconds < 2) && ((offsetsec - bufferinfo[atsegment].scanseconds)*1000000000 + lastoffsetns - bufferinfo[atsegment].scanns < 0)))

@@ -327,7 +327,7 @@ int Visibility::sendMonitorData(bool tofollow) {
     if(!tofollow)
       atsec = -1;
     else
-      atsec = currentstartseconds;
+      atsec = currentstartseconds + model->getScanStartSec(currentscan, expermjd, experseconds);
 
     ptr = (char*)(&atsec);
     nwrote = send(*mon_socket, ptr, 4, 0);
@@ -397,7 +397,7 @@ void Visibility::writedata()
 
   cdebug << startl << "Vis. " << visID << " is starting to write out data" << endl;
 
-  if(currentstartseconds >= executeseconds)
+  if(currentstartseconds + model->getScanStartSec(currentscan, expermjd, experseconds) >= executeseconds)
   {
     cdebug << startl << "Vis. " << visID << " is not writing out any data, since the time is past the end of the correlation" << endl;
     return; //NOTE EXIT HERE!!!
@@ -764,8 +764,8 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
     binloop = 1;
 
   //work out the time of this integration
-  dumpmjd = expermjd + (experseconds + currentstartseconds)/86400;
-  dumpseconds = double((experseconds + currentstartseconds)%86400) + ((double)currentstartns)/1000000000.0 + config->getIntTime(currentconfigindex)/2.0;
+  dumpmjd = expermjd + (experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)/86400;
+  dumpseconds = double((experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)%86400) + ((double)currentstartns)/1000000000.0 + config->getIntTime(currentconfigindex)/2.0;
 
   sprintf(filename, "%s/DIFX_%05d_%06d", config->getOutputFilename().c_str(), expermjd, experseconds);
   
@@ -869,7 +869,7 @@ void Visibility::multicastweights()
   int dumpmjd, intsec;
   double dumpseconds;
 
-  if(currentstartseconds >= executeseconds)
+  if((model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds) >= executeseconds)
   {
     cdebug << startl << "Vis. " << visID << " is not multicasting any weights, since the time is past the end of the correlation" << endl;
     return; //NOTE EXIT HERE!!!
@@ -1009,10 +1009,10 @@ void Visibility::changeConfig(int configindex)
   //create the pulsar bin weight accumulation arrays
   if(pulsarbinon) {
     cverbose << startl << "Starting the pulsar bin initialisation" << endl;
-    polyco = Polyco::getCurrentPolyco(configindex, expermjd + (experseconds + currentstartseconds)/86400, double((experseconds + currentstartseconds)%86400)/86400.0, config->getPolycos(configindex), config->getNumPolycos(configindex), false);
+    polyco = Polyco::getCurrentPolyco(configindex, expermjd + (experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)/86400, double((experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)%86400)/86400.0, config->getPolycos(configindex), config->getNumPolycos(configindex), false);
     if (polyco == NULL) {
-      cfatal << startl << "Could not locate a Polyco to cover the timerange MJD " << expermjd + (experseconds + currentstartseconds)/86400 << ", seconds " << (experseconds + currentstartseconds)%86400 << " - aborting" << endl;
-      Polyco::getCurrentPolyco(configindex, expermjd + (experseconds + currentstartseconds)/86400, double((experseconds + currentstartseconds)%86400)/86400.0, config->getPolycos(configindex), config->getNumPolycos(configindex), true);
+      cfatal << startl << "Could not locate a Polyco to cover the timerange MJD " << expermjd + (experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)/86400 << ", seconds " << (experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)%86400 << " - aborting" << endl;
+      Polyco::getCurrentPolyco(configindex, expermjd + (experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)/86400, double((experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds)%86400)/86400.0, config->getPolycos(configindex), config->getNumPolycos(configindex), true);
       configuredok = false;
     }
     //polyco->setTime(expermjd + (experseconds + currentstartseconds)/86400, double((experseconds + currentstartseconds)%86400)/86400.0);

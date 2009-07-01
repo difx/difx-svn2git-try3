@@ -365,13 +365,14 @@ void FxManager::receiveData(bool resend)
       sourceid = i;
   }
 
+  subintscan = coretimes[(numsent[sourceid]+extrareceived[sourceid])%Core::RECEIVE_RING_LENGTH][sourceid][0];
+  scantime = coretimes[(numsent[sourceid]+extrareceived[sourceid]) % Core::RECEIVE_RING_LENGTH][sourceid][1] + double(coretimes[(numsent[sourceid]+extrareceived[sourceid]) % Core::RECEIVE_RING_LENGTH][sourceid][2])/1000000000.0;
+
   //put the data in the appropriate slot
   if(mpistatus.MPI_TAG == CR_VALIDVIS) // the data is valid
   {
     //find where it belongs
     visindex = locateVisIndex(sourceid);
-    subintscan = coretimes[(numsent[sourceid]+extrareceived[sourceid])%Core::RECEIVE_RING_LENGTH][sourceid][0];
-    scantime = coretimes[(numsent[sourceid]+extrareceived[sourceid]) % Core::RECEIVE_RING_LENGTH][sourceid][1] + double(coretimes[(numsent[sourceid]+extrareceived[sourceid]) % Core::RECEIVE_RING_LENGTH][sourceid][2])/1000000000.0;
 
     //immediately get some more data heading to that node
     if(resend)
