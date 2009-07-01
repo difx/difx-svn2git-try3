@@ -111,7 +111,7 @@ int Mk5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   framesin = vlbaoffset/payloadbytes;
 
   // Note here a time is needed, so we only count payloadbytes
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + (int)(1000000000.0*(framesin/framespersecond));
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + (int)((1000000000.0*framesin)/framespersecond);
 
   //go back to nearest frame -- here the total number of bytes matters
   bufferindex = atsegment*readbytes + framesin*framebytes;
