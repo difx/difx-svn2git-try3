@@ -515,7 +515,7 @@ void Core::receivedata(int index, bool * terminate)
 
 void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord)
 {
-  int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel, channelinc;
+  int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel, channelinc, freqindex;
   double offsetmins;
   f32 bweight;
   float * dsweights = new float[numdatastreams];
@@ -523,6 +523,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   s32 *** polycobincounts;
   cf32 * vis1;
   cf32 * vis2;
+  cf32 * accumulationvector;
   f32 * acdata;
   bool writecrossautocorrs;
 
@@ -575,6 +576,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       {
         //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event
         //that one datastream has USB and the other has LSB
+	freqindex = config->getBFreqIndex(procslots[index].configindex, j, k);
         nyquistchannel = procslots[index].numchannels;
         if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, j, k)))
           nyquistchannel = 0;
@@ -589,7 +591,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
             vis2 = m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p));
 
             //multiply into scratch space
-            status = vectorMul_cf32(m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, k, p)), m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p)), pulsarscratchspace, procslots[index].numchannels+1);
+            status = vectorMul_cf32(vis1, vis2, pulsarscratchspace, procslots[index].numchannels+1);
             if(status != vecNoErr)
               csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
 
@@ -599,8 +601,9 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
               bweight = dsweights[ds1index]*dsweights[ds2index];
               for(int l=0;l<procslots[index].numchannels+1;l++)
               {
-                pulsaraccumspace[j][k][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].re += pulsarscratchspace[l].re;
-                pulsaraccumspace[j][k][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].im += pulsarscratchspace[l].im;
+	        accumulationvector = pulsaraccumspace[j][k][p][bins[freqindex][l]];
+                accumulationvector[l].re += pulsarscratchspace[l].re;
+                accumulationvector[l].im += pulsarscratchspace[l].im;
               }
               pulsaraccumspace[j][k][p][0][nyquistchannel].im += bweight;
             }
@@ -637,8 +640,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   //if(procslots[index].pulsarbin)
   //  polycobincounts = currentpolyco->getBinCounts();
 
-  //if we are pulsar scrunching, do the necessary scaling
-  if(procslots[index].pulsarbin  && procslots[index].scrunchoutput)
+  //if we are pulsar binning, do the necessary scaling (from scratch space to results if scrunching, otherwise in-place)
+  if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
   {
     resultindex = 0;
     f64 * binweights = currentpolyco->getBinWeights();
