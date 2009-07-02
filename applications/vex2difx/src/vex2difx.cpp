@@ -42,8 +42,8 @@
 #include "vexload.h"
 
 const string program("vex2difx");
-const string version("0.2");
-const string verdate("20090422");
+const string version("0.3");
+const string verdate("20090627");
 const string author("Walter Brisken");
 
 const double MJD_UNIX0 = 40587.0;	/* MJD at beginning of unix time */
@@ -533,6 +533,11 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, const VexMode 
 		strcpy(D->datastream[dsId].dataFormat, "MKIV");
 		D->datastream[dsId].dataFrameSize = 10000*format.nBit*n2;
 	}
+	else if(format.format == string("Mark5B"))
+	{
+		strcpy(D->datastream[dsId].dataFormat, "Mark5B");
+		D->datastream[dsId].dataFrameSize = 10016;
+	}
 	else if(format.format == string("S2"))
 	{
 		strcpy(D->datastream[dsId].dataFormat, "LBA");
@@ -604,12 +609,27 @@ void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *c
 
 	// Calculate maximum number of possible baselines based on list of configs
 	D->nBaseline = 0;
-	for(configId = 0; configId < D->nConfig; configId++)
+
+	// FIXME : below assumes nAntenna = nDatastream!
+	if(P->v2dMode == V2D_MODE_PROFILE)
 	{
-		int nD = D->config[configId].nDatastream;
-		D->nBaseline += nD*(nD-1)/2;
+		// Here use nAntenna as nBaseline
+		for(configId = 0; configId < D->nConfig; configId++)
+		{
+			int nD = D->config[configId].nDatastream;
+			D->nBaseline += nD;
+		}
 	}
-	
+	else
+	{
+		// This is the normal configuration, assume n*(n-1)/2
+		for(configId = 0; configId < D->nConfig; configId++)
+		{
+			int nD = D->config[configId].nDatastream;
+			D->nBaseline += nD*(nD-1)/2;
+		}
+	}
+
 	D->baseline = newDifxBaselineArray(D->nBaseline);
 
 	bl = D->baseline;
@@ -622,17 +642,16 @@ void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *c
 		config->nBaseline = 0;
 
 		// Note: these should loop over antennaIds
-		for(a1 = 0; a1 < config->nDatastream-1; a1++)
+		if(P->v2dMode == V2D_MODE_PROFILE)
 		{
-			for(a2 = a1+1; a2 < config->nDatastream; a2++)
+			// Disable writing of standard autocorrelations
+			config->writeAutocorrs = 0;
+
+			// Instead, make autocorrlations from scratch
+			for(a1 = 0; a1 < config->nDatastream; a1++)
 			{
 				bl->dsA = config->datastreamId[a1];
-				bl->dsB = config->datastreamId[a2];
-
-				if(!P->useBaseline(D->antenna[a1].name, D->antenna[a2].name))
-				{
-					continue;
-				}
+				bl->dsB = config->datastreamId[a1];
 
 				DifxBaselineAllocFreqs(bl, D->datastream[a1].nFreq);
 
@@ -651,20 +670,13 @@ void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *c
 					DifxBaselineAllocPolProds(bl, nFreq, 4);
 
 					n1 = DifxDatastreamGetRecChans(D->datastream+a1, freqId, a1p, a1c);
-					n2 = DifxDatastreamGetRecChans(D->datastream+a2, freqId, a2p, a2c);
 
 					npol = 0;
 					for(u = 0; u < n1; u++)
 					{
-						for(v = 0; v < n2; v++)
-						{
-							if(a1p[u] == a2p[v])
-							{
-								bl->recChanA[nFreq][npol] = a1c[u];
-								bl->recChanB[nFreq][npol] = a2c[v];
-								npol++;
-							}
-						}
+						bl->recChanA[nFreq][npol] = a1c[u];
+						bl->recChanB[nFreq][npol] = a1c[u];
+						npol++;
 					}
 
 					if(npol == 0)
@@ -700,6 +712,90 @@ void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *c
 					config->nBaseline++;
 					bl++;
 					blId++;
+				}
+			}
+		}
+		else
+		{
+			for(a1 = 0; a1 < config->nDatastream-1; a1++)
+			{
+				for(a2 = a1+1; a2 < config->nDatastream; a2++)
+				{
+					bl->dsA = config->datastreamId[a1];
+					bl->dsB = config->datastreamId[a2];
+
+					if(!P->useBaseline(D->antenna[a1].name, D->antenna[a2].name))
+					{
+						continue;
+					}
+
+					DifxBaselineAllocFreqs(bl, D->datastream[a1].nFreq);
+
+					nFreq = 0; // this counts the actual number of freqs
+
+					// Note: here we need to loop over all datastreams associated with this antenna!
+					for(f = 0; f < D->datastream[a1].nFreq; f++)
+					{
+						freqId = D->datastream[a1].freqId[f];
+
+						if(!corrSetup->correlateFreqId(freqId))
+						{
+							continue;
+						}
+
+						DifxBaselineAllocPolProds(bl, nFreq, 4);
+
+						n1 = DifxDatastreamGetRecChans(D->datastream+a1, freqId, a1p, a1c);
+						n2 = DifxDatastreamGetRecChans(D->datastream+a2, freqId, a2p, a2c);
+
+						npol = 0;
+						for(u = 0; u < n1; u++)
+						{
+							for(v = 0; v < n2; v++)
+							{
+								if(a1p[u] == a2p[v])
+								{
+									bl->recChanA[nFreq][npol] = a1c[u];
+									bl->recChanB[nFreq][npol] = a2c[v];
+									npol++;
+								}
+							}
+						}
+
+						if(npol == 0)
+						{
+							// This deallocates
+							DifxBaselineAllocPolProds(bl, nFreq, 0);
+
+							continue;
+						}
+
+						if(npol == 2 && corrSetup->doPolar)
+						{
+							// configure cross hands here
+							bl->recChanA[nFreq][2] = bl->recChanA[nFreq][0];
+							bl->recChanB[nFreq][2] = bl->recChanB[nFreq][1];
+							bl->recChanA[nFreq][3] = bl->recChanA[nFreq][1];
+							bl->recChanB[nFreq][3] = bl->recChanB[nFreq][0];
+						}
+						else
+						{
+							// Not all 4 products used: reduce count
+							bl->nPolProd[nFreq] = npol;
+						}
+
+						nFreq++;
+					}
+
+					bl->nFreq = nFreq;
+
+					if(bl->nFreq > 0)
+					{
+						config->baselineId[config->nBaseline] = blId;
+						config->nBaseline++;
+						bl++;
+						blId++;
+					}
 				}
 			}
 		}
@@ -1214,13 +1310,16 @@ int usage(int argc, char **argv)
 	cout << endl;
 	cout << "  options can include:" << endl;
 	cout << "     -h" << endl;
-	cout << "     --help      display this information and quit." << endl;
+	cout << "     --help        display this information and quit." << endl;
 	cout << endl;
 	cout << "     -v" << endl;
-	cout << "     --verbose   increase the verbosity of the output; -v -v for more detail." << endl;
+	cout << "     --verbose     increase the verbosity of the output; -v -v for more." << endl;
 	cout << endl;
 	cout << "     -o" << endl;
-	cout << "     --output    create a v2d file with all defaults populated." << endl;
+	cout << "     --output      create a v2d file with all defaults populated." << endl;
+	cout << endl;
+	cout << "     -d" << endl;
+	cout << "     --delete-old  delete all jobs in this series before running." << endl;
 	cout << endl;
 	cout << "  the v2d file is the vex2difx configuration file to process." << endl;
 	cout << endl;
@@ -1240,6 +1339,7 @@ int main(int argc, char **argv)
 	int verbose = 0;
 	string v2dFile;
 	bool writeParams = 0;
+	bool deleteOld = 0;
 	int nDigit;
 
 	if(argc < 2)
@@ -1264,7 +1364,12 @@ int main(int argc, char **argv)
 			else if(strcmp(argv[a], "-o") == 0 ||
 			        strcmp(argv[a], "--output") == 0)
 			{
-				writeParams=1;
+				writeParams = 1;
+			}
+			else if(strcmp(argv[a], "-d") == 0 ||
+			        strcmp(argv[a], "--delete-old") == 0)
+			{
+				deleteOld = 1;
 			}
 			else
 			{
@@ -1277,7 +1382,7 @@ int main(int argc, char **argv)
 		{
 			if(v2dFile.size() > 0)
 			{
-				cerr << "Error: multiple configuration files provides, one expected." << endl;
+				cerr << "Error: multiple configuration files provided, only one expected." << endl;
 				cerr << "Run with -h for help information." << endl;
 				exit(0);
 			}
@@ -1331,6 +1436,39 @@ int main(int argc, char **argv)
 		of.open(paramsFile.c_str());
 		of << *P << endl;
 		of.close();
+	}
+
+	if(deleteOld)
+	{
+		char cmd[512];
+
+		sprintf(cmd, "rm -f %s.params", v2dFile.c_str());
+		if(verbose > 0)
+		{
+			printf("Executing: %s\n", cmd);
+		}
+		system(cmd);
+
+		sprintf(cmd, "rm -f %s_*.input", P->jobSeries.c_str());
+		if(verbose > 0)
+		{
+			printf("Executing: %s\n", cmd);
+		}
+		system(cmd);
+
+		sprintf(cmd, "rm -f %s_*.calc", P->jobSeries.c_str());
+		if(verbose > 0)
+		{
+			printf("Executing: %s\n", cmd);
+		}
+		system(cmd);
+		
+		sprintf(cmd, "rm -f %s_*.flag", P->jobSeries.c_str());
+		if(verbose > 0)
+		{
+			printf("Executing: %s\n", cmd);
+		}
+		system(cmd);
 	}
 
 	ofstream of;

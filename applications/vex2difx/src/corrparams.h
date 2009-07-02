@@ -40,6 +40,12 @@
 
 using namespace std;
 
+enum V2D_Mode
+{
+	V2D_MODE_NORMAL = 0,	// for almost all purposes
+	V2D_MODE_PROFILE = 1	// to produce pulsar profiles
+};
+
 // see http://cira.ivec.org/dokuwiki/doku.php/difx/configuration
 
 class PhaseCenter
@@ -85,6 +91,9 @@ public:
 	// flag
 	// media
 	bool polSwap;		// If true, swap polarizations
+	string format;		// Override format from .v2d file.  
+				// This is sometimes needed because format not known always at scheduling time
+				// Possible values: S2 VLBA MkIV/Mark4 Mark5B .  Is converted to all caps on load
 };
 
 class CorrSetup
@@ -193,6 +202,8 @@ public:
 
 	/* rules to determine which setups to apply */
 	vector<CorrRule> rules;
+
+	enum V2D_Mode v2dMode;
 
 private:
 	void addAntenna(const string& antName);
