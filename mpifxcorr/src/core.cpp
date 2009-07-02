@@ -699,7 +699,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   }
 
   //if required, average down in frequency
-  cout << "Preavresultlength is " << procslots[index].preavresultlength << ", postavresultlength is " << procslots[index].postavresultlength << endl;
+  //cout << "Preavresultlength is " << procslots[index].preavresultlength << ", postavresultlength is " << procslots[index].postavresultlength << endl;
   //cout << "Lowersideband for frequency 0 is " << ((config->getFreqTableLowerSideband(0))?"true":"false") << endl;
   if(procslots[index].preavresultlength != procslots[index].postavresultlength) {
     resultindex = 0;
@@ -777,7 +777,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   }
                 }
                 threadresults[resultindex+nyquistchannel] = threadresults[copyindex+nyquistchannel*channelinc];
-                cout << "When copying threadresults, got a nyquist channel value of " << threadresults[resultindex+nyquistchannel].im << " from index " << copyindex+nyquistchannel*channelinc << ", copyindex was " << copyindex << ", nyquistchan was " << nyquistchannel << endl;
                 resultindex += freqchannels + 1;
                 copyindex += freqchannels*channelinc + 1;
               }
@@ -832,7 +831,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   //cout << "Copylock done for " << index << ", now to copy results" << endl;
 
   //copy the baseline results
-  cout << "About to copy length " << resultindex << ", while maxpostavlength should be " << config->getMaxPostavResultLength() << endl;
+  //cout << "About to copy length " << resultindex << ", while maxpostavlength should be " << config->getMaxPostavResultLength() << endl;
   status = vectorAdd_cf32_I(threadresults, procslots[index].results, resultindex);
   if(status != vecNoErr)
     csevere << startl << "Error trying to add thread results to final results!!!" << endl;

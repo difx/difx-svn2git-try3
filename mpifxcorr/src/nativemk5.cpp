@@ -614,11 +614,19 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	readnanoseconds += bufferinfo[buffersegment].nsinc;
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
+	cdebug << startl << "readseconds is " << readseconds << ", duration of this scan is " << model->getScanDuration(readscan) << endl;
         if(readseconds >= model->getScanDuration(readscan)) {
           if(readscan < model->getNumScans()-1) {
             readscan++;
             readseconds -= model->getScanStartSec(readscan, corrstartday, corrstartseconds) - model->getScanStartSec(readscan-1, corrstartday, corrstartseconds);
             cdebug << startl << "Incrementing scan to " << readscan << ", readseconds is now " << readseconds << endl;
+	    if(readseconds < -1)
+	    {
+	    	int skipseconds = -readseconds-1;
+		readpointer += (long long)(skipseconds)*(long long)(scan->framebytes)*(long long)(scan->framespersecond);
+		readseconds += skipseconds;
+		cdebug << startl << "Skipping " << skipseconds << " seconds at scan boundary." << endl;
+	    }
           }
           else
             keepreading = false;

@@ -66,7 +66,6 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, i
   if(status != vecNoErr)
     csevere << startl << "Error trying to zero when creating visibility " << visID << endl;
   numbaselines = config->getNumBaselines();
-  cout << "About to get scanconfigindex for scan " << currentscan << endl;
   currentconfigindex = config->getScanConfigIndex(currentscan);
   expermjd = config->getStartMJD();
   experseconds = config->getStartSeconds();
@@ -784,7 +783,6 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
 
       for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
       {
-        cout << "About to get the source index for scan " << currentscan << ", phasecentre " << s << endl;
         //get the source-specific data
         sourceindex = model->getPhaseCentreSourceIndex(currentscan, s);
         scanoffsetsecs = currentstartseconds + ((double)currentstartns)/1e9 + config->getIntTime(currentconfigindex)/2.0;
@@ -799,7 +797,6 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
           {
             config->getBPolPair(currentconfigindex, i, j, k, polpair);
 
-            cout << "Writing DiFX data to file " << filename << endl;
             //open the file for appending in ascii and write the ascii header
             output.open(filename, ios::app);
             writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][b][k], buvw);

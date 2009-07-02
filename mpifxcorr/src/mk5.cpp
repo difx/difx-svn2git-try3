@@ -102,7 +102,8 @@ int Mk5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 
   if(vlbaoffset < 0)
   {
-    cwarn << startl << "Mk5DataStream::calculateControlParams : vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << endl;
+    cwarn << startl << "Mk5DataStream::calculateControlParams : vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << endl; 
+    cwarn << startl << "Mk5DataStream::calculateControlParams : readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     MPI_Abort(MPI_COMM_WORLD, 1);
     return 0;
@@ -118,7 +119,7 @@ int Mk5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   bufferindex = atsegment*readbytes + framesin*framebytes;
   if(bufferindex >= bufferbytes)
   {
-    cwarn << startl << "Mk5DataStream::calculateControlParams : bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << endl;
+    cwarn << startl << "Mk5DataStream::calculateControlParams : bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     MPI_Abort(MPI_COMM_WORLD, 1);
     return 0;

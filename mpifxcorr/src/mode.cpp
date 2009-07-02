@@ -444,7 +444,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   if(nearestsample < -1 || (((nearestsample + twicerecordedbandchannels)/samplesperblock)*bytesperblocknumerator)/bytesperblockdenominator > datalengthbytes)
   {
     cerror << startl << "MODE error for datastream " << datastreamindex << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample << ", the max bytes should be " << datalengthbytes << ".  offsetseconds was " << offsetseconds << ", offsetns was " << offsetns << ", index was " << index << ", average delay was " << averagedelay << ", datasec was " << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
-    exit(1);
+    //exit(1);
     return 0.0;
   }
   if(nearestsample == -1)
@@ -818,7 +818,7 @@ void Mode::setOffsets(int scan, int seconds, int ns)
     return; //there is no valid data - this whole subint will be ignored
 
   if(currentscan != datascan) {
-    cerror << startl << "Received a request to process scan " << currentscan << " but received data from scan " << datascan << " - I'm confused and will ignore this data!" << endl;
+    cerror << startl << "Received a request to process scan " << currentscan << " (" << seconds << "/" << ns << " but received data from scan " << datascan << " (" << datasec << "/" << datans << ") - I'm confused and will ignore this data!" << endl;
     datalengthbytes = 0; //torch the whole subint - can't work with different scans!
     return;
   }
@@ -867,7 +867,7 @@ void Mode::setData(u8 * d, int dbytes, int dscan, int dsec, int dns)
   datasec = dsec;
   datans = dns;
   unpackstartsamples = -999999999;
-  cdebug << startl << "Mode for datastream " << datastreamindex << " just set the datascan to " << datascan << ", datasec " << datasec << ", datans " << datans << endl;
+  //cdebug << startl << "Mode for datastream " << datastreamindex << " just set the datascan to " << datascan << ", datasec " << datasec << ", datans " << datans << endl;
 }
 
 const float Mode::decorrelationpercentage[] = {0.63662, 0.88, 0.94, 0.96, 0.98, 0.99, 0.996, 0.998}; //note these are just approximate!!!

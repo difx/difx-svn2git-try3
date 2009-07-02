@@ -180,6 +180,8 @@ void DataStream::execute()
     offsetsec = receiveinfo[2];
     offsetns = receiveinfo[3];
 
+    if(mpiid ==1)
+      cdebug << startl << "About to try and locate some data for scan " << scan << ", seconds " << offsetsec << ", ns " << offsetns << endl;
     //now get another instruction while we process
     MPI_Irecv(receiveinfo, 4, MPI_INT, fxcorr::MANAGERID, MPI_ANY_TAG, MPI_COMM_WORLD, &msgrequest);
 
@@ -209,7 +211,7 @@ void DataStream::execute()
         //data is ok
         MPI_Issend(&databuffer[startpos], bufferinfo[atsegment].sendbytes, MPI_UNSIGNED_CHAR, targetcore, CR_PROCESSDATA, MPI_COMM_WORLD, &(bufferinfo[atsegment].datarequests[bufferinfo[atsegment].numsent]));
         MPI_Issend(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent], bufferinfo[atsegment].controllength, MPI_INT, targetcore, CR_PROCESSCONTROL, MPI_COMM_WORLD, &(bufferinfo[atsegment].controlrequests[bufferinfo[atsegment].numsent]));
-        cout << "Datastream " << mpiid << " just sent data which starts at time scan " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] << ", second " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] << ", ns " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] << endl;
+        //cout << "Datastream " << mpiid << " just sent data which starts at time scan " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] << ", second " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] << ", ns " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] << endl;
       }
 
       bufferinfo[atsegment].numsent++;
@@ -266,7 +268,7 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   double delayus1, delayus2;
   bool foundok;
 
-  cinfo << startl << "Working on scan " << scan << " offsetsec " << offsetsec << ", offsetns " << offsetns << endl;
+  //cinfo << startl << "Working on scan " << scan << " offsetsec " << offsetsec << ", offsetns " << offsetns << endl;
   //work out the first delay and the last delay and place in control buffer
   intdelayseconds = ((offsetsec + corrstartseconds) - delaystartseconds) + 86400*(corrstartday - delaystartday);
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = scan;
@@ -279,7 +281,7 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
     return 0; //note exit here!!!!
   }
   lastoffsetns = offsetns + int(bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens - 1000*delayus2 + 0.5);
-  cout << mpiid << ": delayus1 is " << delayus1 << ", delayus2 is " << delayus2 << endl;
+  //cout << mpiid << ": delayus1 is " << delayus1 << ", delayus2 is " << delayus2 << endl;
   if(lastoffsetns < 0)
   {
     offsetsec -= 1;
@@ -293,6 +295,12 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
     cerror << startl << "lastoffsetns less than 0 still! =" << lastoffsetns << endl;
   }
 
+  if(scan < bufferinfo[atsegment].scan)
+  {
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+    return 0; //note exit here!!!!
+  }
+
   //while we have passed the first of our two locked sections, unlock that and lock the next - have two tests so sample difference can't overflow
   waitForSendComplete();
 
@@ -302,13 +310,13 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
     return 0; //note exit here!!!!
   }
 
-  if(offsetsec < bufferinfo[atsegment].scanseconds - 1) //coarse test to see if its all bad
+  if(scan == bufferinfo[atsegment].scan && offsetsec < bufferinfo[atsegment].scanseconds - 1) //coarse test to see if its all bad
   {
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0; //note exit here!!!!
   }
 
-  while((scan > bufferinfo[(atsegment+1)%numdatasegments].scan || offsetsec > bufferinfo[(atsegment+1)%numdatasegments].scanseconds + 1 || ((offsetsec - bufferinfo[(atsegment+1)%numdatasegments].scanseconds)*1000000000 + (firstoffsetns - bufferinfo[(atsegment+1)%numdatasegments].scanns) >= 0)) && (keepreading || (atsegment != lastvalidsegment)))
+  while((scan > bufferinfo[(atsegment+1)%numdatasegments].scan || (scan == bufferinfo[(atsegment+1)%numdatasegments].scan && (offsetsec > bufferinfo[(atsegment+1)%numdatasegments].scanseconds + 1 || ((offsetsec - bufferinfo[(atsegment+1)%numdatasegments].scanseconds)*1000000000 + (firstoffsetns - bufferinfo[(atsegment+1)%numdatasegments].scanns) >= 0)))) && (keepreading || (atsegment != lastvalidsegment)))
   {
     //test the to see if sends have completed from the wait segment
     waitForSendComplete();
@@ -326,6 +334,8 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   //can't continue, fill control buffer with -1 and bail out
   if((scan < bufferinfo[atsegment].scan) || (offsetsec < bufferinfo[atsegment].scanseconds - 1) || ((offsetsec - bufferinfo[atsegment].scanseconds < 2) && ((offsetsec - bufferinfo[atsegment].scanseconds)*1000000000 + lastoffsetns - bufferinfo[atsegment].scanns < 0)))
   {
+    if(mpiid == 1)
+      cout << "Bailing out: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0; //note exit here!!!!
   }
@@ -333,6 +343,8 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   // FIXME -- talk to Adam about this next check.  -WFB
   if(offsetsec > bufferinfo[atsegment].scanseconds + 1)
   {
+    if(mpiid == 1)
+      cout << "Bailing out2: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0; //note exit here!!!!
   }
@@ -345,6 +357,8 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
     double dbufferindex = atsegment*readbytes + (((double(offsetsec - bufferinfo[atsegment].scanseconds)*1000000000.0 + (firstoffsetns - bufferinfo[atsegment].scanns))/bufferinfo[atsegment].sampletimens)*bufferinfo[atsegment].bytespersamplenum)/bufferinfo[atsegment].bytespersampledenom;
     if(dbufferindex < double(-blockbytes*bufferinfo[atsegment].blockspersend) || dbufferindex > double(bufferbytes)) //its way off, bail out
     {
+      if(mpiid == 1)
+        cout << "Bailing out3: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
       bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
       return 0; //note exit here!!!!
     }
@@ -354,22 +368,22 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][3+i/FLAGS_PER_INT] = 0;
 
   //if we make it here, its safe to make the int calculations below
-  cout << "Datastream " << mpiid << " has a firstoffsetns of " << firstoffsetns << " and an offsetsec of " << offsetsec << endl;
+  //cout << "Datastream " << mpiid << " has a firstoffsetns of " << firstoffsetns << " and an offsetsec of " << offsetsec << endl;
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds;
   bufferindex = atsegment*readbytes + (int(((offsetsec - bufferinfo[atsegment].scanseconds)*1000000000 + (firstoffsetns - bufferinfo[atsegment].scanns))/bufferinfo[atsegment].sampletimens + 0.5)*bufferinfo[atsegment].bytespersamplenum)/bufferinfo[atsegment].bytespersampledenom;
-  cout << "And so the bufferindex is " << bufferindex << endl;
+  //cout << "And so the bufferindex is " << bufferindex << endl;
 
   //align the index to nearest previous 16 bit boundary
   if(bufferindex % 2 != 0)
     bufferindex--;
 
   int count=0;
-  while(bufferindex < 0 && count < bufferinfo[atsegment].blockspersend)
+  while(bufferindex < atsegment*readbytes && count < bufferinfo[atsegment].blockspersend)
   {
     bufferindex += blockbytes;
     count++;
   }
-  if(bufferindex < 0)
+  if(bufferindex < atsegment*readbytes)
   {
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0;
@@ -391,7 +405,7 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] += segoffns/1000000000;
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + segoffns%1000000000;
 
-  cout << "Count for datastream " << mpiid << " is " << count << ", and at this stage the first controlbuffer value is " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][3] << endl;
+  //cout << "Count for datastream " << mpiid << " is " << count << ", and at this stage the first controlbuffer value is " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][3] << endl;
   if((bufferinfo[atsegment].validbytes - segoffbytes >= bufferinfo[atsegment].sendbytes) || (bufferinfo[atsegment].validbytes == readbytes && ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 + bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns) == bufferinfo[atsegment].nsinc && (bufferinfo[atsegment].validbytes-segoffbytes+bufferinfo[(atsegment+1)%numdatasegments].validbytes) > bufferinfo[atsegment].sendbytes)) //they're all ok
   {
     for(int i=count;i<bufferinfo[atsegment].blockspersend;i++)
@@ -465,7 +479,7 @@ void DataStream::initialiseMemoryBuffer()
 void DataStream::updateConfig(int segmentindex)
 {
   //work out what the new config will be
-  cout << "Setting configindex of segment " << segmentindex << " to " << config->getScanConfigIndex(readscan) << " from scan " << readscan << endl;
+  //cout << "Setting configindex of segment " << segmentindex << " to " << config->getScanConfigIndex(readscan) << " from scan " << readscan << endl;
   bufferinfo[segmentindex].configindex = config->getScanConfigIndex(readscan);
   if(bufferinfo[segmentindex].configindex < 0)
   {
@@ -1086,8 +1100,8 @@ void DataStream::openfile(int configindex, int fileindex)
   dataremaining = true;
   if(input.fail())
     input.clear(); //get around EOF problems caused by peeking
-  cout << "About to open fileindex " << fileindex << " of config " << configindex << endl;
-  cout << "It is called " << datafilenames[configindex][fileindex] << endl;
+  //cout << "About to open fileindex " << fileindex << " of config " << configindex << endl;
+  //cout << "It is called " << datafilenames[configindex][fileindex] << endl;
   input.open(datafilenames[configindex][fileindex].c_str(),ios::in);
   cverbose << startl << "input.bad() is " << input.bad() << ", input.fail() is " << input.fail() << endl;
   if(!input.is_open() || input.bad())
@@ -1155,9 +1169,9 @@ void DataStream::initialiseFile(int configindex, int fileindex)
     readscan++;
   while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
     readscan--;
-  cout << "About to call model->getScanStartSec for scan " << readscan << endl;
+  //cout << "About to call model->getScanStartSec for scan " << readscan << endl;
   readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
-  cout << "Datastream " << mpiid << " just set readseconds to be " << readseconds << endl;
+  //cout << "Datastream " << mpiid << " just set readseconds to be " << readseconds << endl;
 }
 
 void DataStream::diskToMemory(int buffersegment)
@@ -1193,7 +1207,7 @@ void DataStream::waitForBuffer(int buffersegment)
   bufferinfo[buffersegment].scanns = readnanoseconds;
   bufferinfo[buffersegment].scanseconds = readseconds;
   bufferinfo[buffersegment].scan = readscan;
-  cout << "Datastream " << mpiid << " just set buffersegment " << buffersegment << " scanseconds to " << readseconds << endl;
+  cout << "Datastream " << mpiid << " just set buffersegment " << buffersegment << " to scan " << readscan << ", scanseconds " << readseconds << endl;
 
   //if we need to, change the config
   if(config->getScanConfigIndex(readscan) != bufferinfo[buffersegment].configindex)

@@ -253,7 +253,7 @@ void FxManager::execute()
     senddata[1] = i;
 
     //do as many sends as we need to for this scan
-    while(senddata[2] < model->getScanEndSec(i, startmjd, startseconds)) {
+    while(senddata[2] < model->getScanDuration(i)) {
       if(sendcount < Core::RECEIVE_RING_LENGTH*numcores) {//still in the "filling up" phase
         senddata[0] = coreids[((int)sendcount)%numcores];
         sendData(senddata, ((int)sendcount)%numcores);
