@@ -43,6 +43,7 @@ DifxConfig *newDifxConfigArray(int nConfig)
 	{
 		dc[c].doPolar = -1;
 		dc[c].pulsarId = -1;
+		dc[c].writeAutocorrs = 1;
 	}
 	
 	return dc;
@@ -238,6 +239,7 @@ int isSameDifxConfig(const DifxConfig *dc1, const DifxConfig *dc2)
 	   dc1->blocksPerSend != dc2->blocksPerSend ||
 	   dc1->guardBlocks != dc2->guardBlocks ||
 	   dc1->quadDelayInterp != dc2->quadDelayInterp ||
+	   dc1->writeAutocorrs != dc2->writeAutocorrs ||
 	   dc1->pulsarId != dc2->pulsarId ||
 	   dc1->nPol != dc2->nPol ||
 	   dc1->doPolar != dc2->doPolar ||
@@ -425,6 +427,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	dest->nChan = src->nChan;
 	strcpy(dest->name, src->name);
 	dest->postFFringe = src->postFFringe;
+	dest->writeAutocorrs = src->writeAutocorrs;
 	dest->quadDelayInterp = src->quadDelayInterp;
 	if(pulsarIdRemap && src->pulsarId >= 0)
 	{
@@ -632,18 +635,19 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		writeDifxLineInt(out, "BLOCKS PER SEND", 
 			config->blocksPerSend);
 		writeDifxLineInt(out, "GUARD BLOCKS", config->guardBlocks);
-		writeDifxLine(out, "POST-F FRINGE ROT", "FALSE");
-		writeDifxLine(out, "QUAD DELAY INTERP", "TRUE");
-		writeDifxLine(out, "WRITE AUTOCORRS", "TRUE");
+		writeDifxLineBoolean(out, "POST-F FRINGE ROT", 0);
+		writeDifxLineBoolean(out, "QUAD DELAY INTERP", 1);
+		writeDifxLineBoolean(out, "POST-F FRINGE ROT", 
+			config->writeAutocorrs);
 		if(config->pulsarId >= 0 && pulsar)
 		{
-			writeDifxLine(out, "PULSAR BINNING", "TRUE");
+			writeDifxLineBoolean(out, "PULSAR BINNING", 1);
 			writeDifxLine(out, "PULSAR CONFIG FILE", 
 				pulsar[config->pulsarId].fileName);
 		}
 		else
 		{
-			writeDifxLine(out, "PULSAR BINNING", "FALSE");
+			writeDifxLineBoolean(out, "PULSAR BINNING", 0);
 		}
 		for(j = 0; j < config->nDatastream; j++)
 		{
