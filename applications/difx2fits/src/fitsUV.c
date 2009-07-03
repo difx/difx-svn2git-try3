@@ -11,278 +11,78 @@
 #include "sniffer.h"
 #endif
 
-#define HEADER_READ_ERROR	-1
-#define NEXT_FILE_ERROR		-2
-#define DATA_READ_ERROR		-3
-#define SKIPPED_RECORD 		-4
+/*Error Codes*/
+#define NEXT_FILE            1
+#define HEADER_READ_ERROR   -1
+#define NEXT_FILE_ERROR     -2
+#define DATA_READ_ERROR     -3
+#define SKIPPED_RECORD      -4
 #define CONFIG_CHANGE_ERROR	-5
-#define BAND_ID_ERROR		-6
-#define POL_ID_ERROR		-7
-#define NFLOAT_ERROR		-8
+#define BAND_ID_ERROR       -6
+#define POL_ID_ERROR        -7
+#define NFLOAT_ERROR        -8
+#define UNDEFINED_ERROR     -9
+
+/*changed codes*/
+#define NEW_BIN			0
+#define NEW_POL			0
+#define NEW_BAND		1
+#define NEW_BL			2
+#define NEW_MJD			3
+#define NEW_TINT		4
+#define NEW_CONFIG	5
+#define NEW_JOB			6
+#define JOBS_DONE   7
 
 const double TWO_PI=2*M_PI;
 const double cLight=2.99792458e8;	/* speed of light in m/s */
 
-static int DifxVisInitData(DifxVis *dv)
+int baseline2index(int a1, int a2, int nAnt)
 {
-	int n;
-	
-	if(!dv)
+	/*0-index in, 0-index out*/
+	if(a1 < a2)
 	{
-		return -1;
+		return a1*(2*(nAnt-1) - (a1-1))/2 + (a2-a1-1);
 	}
-
-	if(dv->record)
+	if(a1 > a2)
 	{
-		free(dv->record);
+		return a2*(2*(nAnt-1) - (a2-1))/2 + (a1-a2-1);
 	}
-
-	/* size of output data record (in floats) */
-	dv->nData = dv->nComplex*dv->nFreq*dv->D->nPolar*dv->D->nOutChan;
-	if(dv->nData <= 0)
+	if(a1 == a2)
 	{
-		return -1;
+		return nAnt*(nAnt-1)/2 + a1;
 	}
-	n = dv->nFreq*dv->D->nPolar + dv->nData;
-	dv->record = calloc(n*sizeof(float) + sizeof(struct UVrow), 1);
-	if(dv->record == 0)
-	{
-		return -2;
-	}
-	dv->weight = dv->record->data;
-	/* FIXME -- here add a similar thing for gateId? */
-	dv->data = dv->weight + (dv->nFreq*dv->D->nPolar);
-	dv->sourceId = -1;
-	dv->scanId = -1;
-
-	return 0;
 }
 
-static void DifxVisStartGlob(DifxVis *dv)
+int getFrequencies(VisBuffer *vb)
 {
-	char *globstr;
-	const char suffix[] = ".difx/DIFX*";
+	/*FIXME put ref_pixel in algorithm */
+	int i, j, bandFreq, isUSB;
+	int startChan = vb->D->startChan;
+	double chanBW;
+	float ref_pixel = 1.0;
 
-	globstr = calloc(strlen(dv->D->job[dv->jobId].fileBase)+
-		strlen(suffix)+8, 1);
-
-	sprintf(globstr, "%s%s", dv->D->job[dv->jobId].fileBase, suffix);
-
-	glob(globstr, 0, 0, &dv->globbuf);
-	dv->nFile = dv->globbuf.gl_pathc;
-	
-	dv->globbuf.gl_offs = 0;
-
-	free(globstr);
-}
-
-int DifxVisNextFile(DifxVis *dv)
-{
-	if(dv->in)
+	for(i = 0; i < vb->nBand; i++) 
 	{
-		fclose(dv->in);
-		dv->in = 0;
-	}
-	dv->curFile++;
-	if(dv->curFile >= dv->nFile)
-	{
-		printf("    JobId %d done.\n", dv->jobId);
-		return -1;
-	}
-	printf("    JobId %d File %d/%d : %s\n", 
-		dv->jobId,
-		dv->curFile+1, dv->nFile,
-		dv->globbuf.gl_pathv[dv->curFile]);
-	dv->in = fopen(dv->globbuf.gl_pathv[dv->curFile], "r");
-	if(!dv->in)
-	{
-		fprintf(stderr, "Error opening file : %s\n", 
-			dv->globbuf.gl_pathv[dv->curFile]);
-		return -1;
-	}
-
-	return 0;
-}
-
-DifxVis *newDifxVis(const DifxInput *D, const DifxInput *OldModel, int jobId)
-{
-	DifxVis *dv;
-	int i, c, v;
-	int polMask = 0;
-
-	dv = (DifxVis *)calloc(1, sizeof(DifxVis));
-
-	if(!dv)
-	{
-		fprintf(stderr, "Error: newDifxVis: dv=calloc failed, size=%d\n",
-			sizeof(DifxVis));
-		return 0;
-	}
-
-	if(jobId < 0 || jobId >= D->nJob)
-	{
-		fprintf(stderr, "Error: newDifxVis: jobId = %d, nJob = %d\n",
-			jobId, D->nJob);
-		return 0;
-	}
-	
-	dv->jobId = jobId;
-	dv->D = D;
-	dv->OldModel = OldModel;
-	dv->curFile = -1;
-	DifxVisStartGlob(dv);
-	dv->configId = -1;
-	dv->sourceId = -1;
-	dv->scanId = -1;
-	dv->baseline = -1;
-	dv->scale = 1.0;
-	dv->shiftDelay = 0;
-
-	/* For now, the difx format only provides 1 weight for the entire
-	 * vis record, so we don't need weights per channel */
-	dv->nComplex = 2;	/* for now don't write weights */
-	dv->first = 1;
-	
-	for(c = 0; c < D->nConfig; c++)
-	{
-		if(D->nIF > dv->nFreq)
+		bandFreq = vb->config->IF[i].freq;
+		chanBW = (vb->config->IF[i].bw/vb->D->nInChan);/*in MHz*/
+		for(j = 0; j < vb->D->nOutChan; j++)
 		{
-			dv->nFreq = D->nIF;
-		}
-		for(i = 0; i < D->nIF; i++)
-		{
-			if(D->config[c].IF[i].pol[0] == 'R' ||
-			   D->config[c].IF[i].pol[1] == 'R')
+			if(vb->config->IF[i].sideband == 'U')
 			{
-				polMask |= 0x01;
-			}
-			if(D->config[c].IF[i].pol[0] == 'L' ||
-			   D->config[c].IF[i].pol[1] == 'L')
-			{
-				polMask |= 0x02;
-			}
-			if(D->config[c].IF[i].pol[0] == 'X' ||
-			   D->config[c].IF[i].pol[1] == 'X')
-			{
-				polMask |= 0x10;
-			}
-			if(D->config[c].IF[i].pol[0] == 'Y' ||
-			   D->config[c].IF[i].pol[1] == 'Y')
-			{
-				polMask |= 0x20;
-			}
-		}
-	}
-
-	/* check for polarization confusion */
-	if( ((polMask & 0x0F) > 0 && (polMask & 0xF0) > 0) || polMask == 0 )
-	{
-		fprintf(stderr, "Error: bad polarization combinations : %x\n",
-			polMask);
-		deleteDifxVis(dv);
-		return 0;
-	}
-
-	if(polMask & 0x01)
-	{
-		dv->polStart = -1;
-	}
-	else if(polMask & 0x02)
-	{
-		dv->polStart = -2;
-	}
-	else if(polMask & 0x10)
-	{
-		dv->polStart = -5;
-	}
-	else /* must be YY only! who would do that? */
-	{
-		dv->polStart = -6;
-	}
-
-	/* room for input vis record: 3 for real, imag, weight */
-	dv->spectrum = (float *)calloc(3*dv->D->nInChan, sizeof(float));
-
-	dv->dp = newDifxParameters();
-
-	v = DifxVisInitData(dv);
-	if(v < 0)
-	{
-		fprintf(stderr, "Error %d allocating %d + %d bytes\n",
-			v, (int)(sizeof(struct UVrow)),
-			dv->nComplex*dv->nFreq*dv->D->nPolar*dv->D->nOutChan);
-		deleteDifxVis(dv);
-		return 0;
-	}
-
-	if(DifxVisNextFile(dv) < 0)
-	{
-		fprintf(stderr, "Info: newDifxVis: DifxVisNextFile(dv) < 0\n");
-		deleteDifxVis(dv);
-		return 0;
-	}
-
-	return dv;
-}
-
-void deleteDifxVis(DifxVis *dv)
-{
-	if(!dv)
-	{
-		return;
-	}
-
-	globfree(&dv->globbuf);
-	if(dv->in)
-	{
-		fclose(dv->in);
-	}
-	if(dv->spectrum)
-	{
-		free(dv->spectrum);
-	}
-	if(dv->dp)
-	{
-		deleteDifxParameters(dv->dp);
-	}
-	if(dv->record)
-	{
-		free(dv->record);
-	}
-	
-	free(dv);
-}
-
-
-static int getPolProdId(const DifxVis *dv, const char *polPair)
-{
-	const char polSeq[8][4] = 
-		{"RR", "LL", "RL", "LR", "XX", "YY", "XY", "YX"};
-	int p;
-
-	for(p = 0; p < 8; p++)
-	{
-		if(strncmp(polPair, polSeq[p], 2) == 0)
-		{
-			p = (p+1) + dv->polStart;
-			
-			if(p < 0 || p >= dv->D->nPolar)
-			{
-				return -1;
+				vb->freq[i][j] = bandFreq + (j + startChan) * chanBW;
 			}
 			else
 			{
-				return p;
+				vb->freq[i][j] = bandFreq - (j + startChan) * chanBW;
 			}
 		}
 	}
-	
-	return -2;
+	return 0;
 }
 
-
 /* Use Cramer's rule to evaluate polynomial */
-static double evalPoly(const double *p, int n, double x)
+double evalPoly(const double *p, int n, double x)
 {
 	double y;
 	int i;
@@ -302,8 +102,1009 @@ static double evalPoly(const double *p, int n, double x)
 	return y;
 }
 
+static int DifxVisInitData(VisBuffer *vb, DifxVis *dv)
+{
+	int i, j, k;
+	int n;
+	float ****datamap;
+	float *data0, *weight0;
+
+	/* Allocate tEff*/
+	dv->tEff = (double **)calloc(vb->nBand, sizeof(double *));
+	if(!dv->tEff)
+	{
+		fprintf(stderr, "Error: DifxVisInitData: dv->tEff=calloc failed, size=%d\n",
+			vb->nBand * sizeof(double *));
+		return 0;
+	}
+	for(i = 0; i < vb->nBand; i++)
+		{
+			dv->tEff[i] = (double *)calloc(vb->nPol, sizeof(double));
+		}
+
+	/* Allocate data */
+	vb->nData = vb->nBand*vb->nPol*vb->D->nOutChan*vb->nComplex;
+	n = vb->nData + vb->nBand * vb->nPol;/*weights and visibilities*/
+	dv->record = calloc(n * sizeof(float) + sizeof(struct UVrow), 1);
+	if(!dv->record)
+	{
+		fprintf(stderr, "Error: DifxVisInitData: dv->record=calloc failed, size=%d\n",
+			n * sizeof(float) + sizeof(struct UVrow));
+		return 0;
+	}
+
+	/* Set up data array pointing to record->data*/
+	weight0 = dv->record->data;
+	data0 = weight0 + (vb->nBand*vb->nPol);
+
+	datamap = (float ****)calloc(vb->nBand, sizeof(float ***));
+	if(!datamap)
+	{
+		fprintf(stderr, "Error: DifxVisInitData: dv->data=calloc failed, size=%d\n",
+			n * sizeof(float) + sizeof(struct UVrow));
+		return 0;
+	}
+	for(i = 0; i < vb->nBand; i++)
+	{
+		datamap[i] = (float ***)calloc(vb->nPol, sizeof(float **));
+		if(!datamap[i])
+		{
+			fprintf(stderr, "Error: DifxVisInitData: dv->data[%d]=calloc failed, size=%d\n",
+				i, sizeof(float)*vb->nPol);
+			return 0;
+		}
+		for(j = 0; j < vb->nPol; j++)
+		{
+			datamap[i][j] = (float **)calloc(vb->nOutChan, sizeof(float *));
+			if(!datamap[i][j])
+			{
+				fprintf(stderr, "Error: DifxVisInitData: dv->data[%d][%d]=calloc failed, size=%d\n",
+					i, j, sizeof(float)*vb->nOutChan);
+				return 0;
+			}
+			for(k = 0; k < vb->nOutChan; k++)
+			{
+				datamap[i][j][k] = data0 +
+							 i*vb->nPol*vb->D->nOutChan*vb->nComplex +
+							 j*vb->D->nOutChan*vb->nComplex +
+							 k*vb->nComplex;
+			}
+		}
+	}
+	dv->data = datamap;
+
+	/* Set up weight arrays pointing to record->data*/
+	dv->weightSum = (float **)calloc(vb->nBand, sizeof(float *));
+	for(i = 0; i < vb->nBand; i++)
+	{
+		dv->weightSum[i] = weight0 + i*vb->nPol;
+	}
+	//dv->n = 0;
+
+	return 0;
+}
+
+static void startGlob(VisBuffer *vb)
+{
+	char *globstr;
+	const char suffix[] = ".difx/DIFX*";
+
+	globstr = calloc(strlen(vb->D->job[vb->jobId].fileBase)+
+		strlen(suffix)+8, 1);
+
+	sprintf(globstr, "%s%s", vb->D->job[vb->jobId].fileBase, suffix);
+
+	glob(globstr, 0, 0, vb->globbuf);
+	vb->nFile = vb->globbuf->gl_pathc;
+	if(vb->nFile == 0)
+	{
+		fprintf(stderr, "Error: No files found for job %d %s\n",
+				vb->jobId, vb->D->job[vb->jobId].fileBase);
+	}
+	vb->globbuf->gl_offs = 0;
+
+	free(globstr);
+}
+
+int nextFile(VisBuffer *vb)
+{
+	/*find next file, moving to the next job if necessary*/
+	/*in the case of a new job, jobId, globbuff, are updated*/
+	printf("    JobId %d File %d/%d finished\n", 
+		vb->jobId,
+		vb->curFile+1, vb->nFile);
+	if(vb->in)
+	{
+		fclose(vb->in);
+		vb->in = 0;
+	}
+	vb->curFile++;
+	if(vb->jobId < 0 || vb->curFile >= vb->nFile)
+	{
+		vb->changed = NEW_JOB;
+		if(vb->jobId > 0) 
+		{
+			printf("    JobId %d done.\n", vb->jobId);
+		}
+		vb->jobId = updateJob(vb);
+		if(vb->jobId == -1)
+		{
+			return JOBS_DONE;
+		}
+		vb->curFile = 0;
+	}
+	printf("    Opening JobId %d File %d/%d : %s\n", 
+		vb->jobId,
+		vb->curFile+1, vb->nFile,
+		vb->globbuf->gl_pathv[vb->curFile]);
+	vb->in = fopen(vb->globbuf->gl_pathv[vb->curFile], "r");
+	if(!vb->in)
+	{
+		fprintf(stderr, "Error opening file : %s\n", 
+			vb->globbuf->gl_pathv[vb->curFile]);
+		return -1;
+	}
+	return 0;
+}
+
+double getScaleFactor(const DifxInput *D, double s, int verbose)
+{
+	double scale;
+
+	if(D->inputFileVersion == 0) /* Perth merge and after */
+	{
+		scale = 4.576*D->nOutChan/D->nInChan;
+	}
+	else
+	{
+		scale = 7.15/(D->chanBW*6.25e6*D->config[0].tInt*D->specAvg);
+	}
+	if(D->quantBits == 2)
+	{
+		scale /= (3.3359*3.3359);
+	}
+
+	if(s > 0.0)
+	{
+		if(verbose > 0)
+		{
+			printf("      Overriding scale factor %e with %e\n",
+				scale, s);
+		}
+		scale = s;
+	}
+
+	return scale;
+}
+
+int updateBand(VisBuffer *vb)
+{
+	vb->bandId = vb->config->baselineFreq2IF[vb->aa1][vb->aa2][vb->header->freq_index];
+	if(vb->bandId <  0 || vb->bandId >= vb->D->nFreq)
+	{
+		fprintf(stderr, "Parameter problem: bandId should be in "
+				"[0, %d), was %d\n", 
+				vb->D->nFreq, vb->bandId);
+		
+		return BAND_ID_ERROR;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+int updateBaseline(VisBuffer *vb)
+{
+	int a1, a2, d1, d2, bl;
+	vb->aa1 = a1 = (vb->header->baseline_num/256) - 1;
+	vb->aa2 = a2 = (vb->header->baseline_num%256) - 1;
+
+
+	if(a1 < 0 || a1 >= vb->config->nAntenna ||
+	   a2 < 0 || a2 >= vb->config->nAntenna)
+	{
+		printf("Error: illegal baseline %d -> %d-%d\n", bl, a1, a2);
+		return -8;
+	}
+
+	/* translate from .input file antId to index for 
+	 * D->antenna via dsId */
+	d1 = vb->config->ant2dsId[a1];
+	d2 = vb->config->ant2dsId[a2];
+	if(d1 < 0 || d1 >= vb->D->nDatastream || 
+	   d2 < 0 || d2 >= vb->D->nDatastream)
+	{
+		printf("Error: baseline %d -> datastreams %d-%d\n",
+			bl, d1, d2);
+		return -9;
+	}
+	vb->a1 = vb->D->datastream[d1].antennaId;
+	vb->a2 = vb->D->datastream[d2].antennaId;
+
+	/*used to index dvs*/
+	vb->blId = vb->baseline2blId[vb->aa1][vb->aa2];
+#ifdef DEBUG
+	printf("\t\t\taa1=%d aa2=%d blid=%d\n", vb->aa1, vb->aa2, vb->blId);
+	printf("\t\t\t a1=%d  a2=%d\n",vb->a1, vb->a2);
+#endif
+
+	vb->dv = vb->dvs[vb->blId][0];
+	/*this is the one actually written out to fits*/
+	//vb->dv = vb->dvs[vb->blId][vb->binId];
+	vb->bl = (vb->a1+1)*256 + (vb->a2+1);
+	vb->difxbl = vb->header->baseline_num;
+	return 0;
+}
+
+int updateShiftDelay(VisBuffer *vb)
+{
+	if (vb->a1 == vb->a2 || vb->D == vb->CorrModel)
+	{
+		/*skip for autocorrs or if no shifting*/
+		return 0;
+	}
+	/*1 and 2 are the two datastreams*/
+	/*Corr refers to the model used for correlation*/
+	double delay1, delayCorr1;
+	double delay2, delayCorr2;
+	const DifxPolyModel *im1, *im2;
+	const DifxPolyModel *imCorr1, *imCorr2;
+	int terms1, terms2;
+	int termsCorr1, termsCorr2;
+
+
+	im1 = vb->D->scan[vb->scanId].im[vb->aa1];
+	im2 = vb->D->scan[vb->scanId].im[vb->aa2];
+	imCorr1 = vb->CorrModel->scan[vb->scanId].im[vb->aa1];
+	imCorr2 = vb->CorrModel->scan[vb->scanId].im[vb->aa2];
+	terms1 = im1->order + 1;
+	terms2 = im2->order + 1;
+	termsCorr1 = imCorr1->order + 1;
+	termsCorr2 = imCorr2->order + 1;
+	delay1    = evalPoly(im1[vb->n].delay, terms1, vb->dt);
+	delay2    = evalPoly(im2[vb->n].delay, terms2, vb->dt);
+	delayCorr1 = evalPoly(imCorr1[vb->nCorr].delay, termsCorr1, vb->dtCorr);
+	delayCorr2 = evalPoly(imCorr2[vb->nCorr].delay, termsCorr2, vb->dtCorr);
+	vb->shiftDelay = (delay2 - delay1) - (delayCorr2 - delayCorr1);
+
+	return 0;
+}
+
+int updateInt(VisBuffer *vb)
+{
+	int scanId, scanId2;
+	vb->mjdStart = vb->header->mjd - fmod(vb->header->mjd - vb->D->job[vb->jobId].mjdStart, (vb->tIntOut/86400.0));
+	vb->mjdCentroid = vb->mjdStart + (vb->tIntOut/(2*86400.0));
+
+	scanId = DifxInputGetScanIdByJobId(vb->D, vb->mjdStart, vb->jobId);
+	scanId2 = DifxInputGetScanIdByJobId(vb->D, vb->mjdStart+vb->tIntOut/86400.0, vb->jobId);
+	if(scanId != scanId2)
+	{
+		fprintf(stderr, "Error: scan change in middle of integration: Id %d changes to %d\n", scanId, scanId2);
+	}
+	return 0;
+}
+
+int updateScan(VisBuffer*vb)
+{
+	int scanId;
+	DifxScan *scan;
+
+	scanId = DifxInputGetScanIdByJobId(vb->D, vb->header->mjd, vb->jobId);
+	if(scanId != vb->scanId )
+	{
+#ifdef DEBUG
+		printf("newscan\n");
+#endif
+		vb->scanId = scanId;
+		if(!vb->first && vb->scanId < 0)
+		{
+			fprintf(stderr, "Error: scan outside range on  mjd=%12.6f, jobId=%d\n", vb->header->mjd, vb->jobId);
+		}
+		scan = vb->D->scan + vb->scanId;
+		vb->sourceId = scan->sourceId;
+		vb->configId = scan->configId;
+		vb->config = vb->D->config + vb->configId;
+	}
+	return(0);
+}
+int updateConfig(VisBuffer *oldvb, VisBuffer *vb)
+{
+	int **map;
+	int a1, a2;
+	int i;
+	DifxScan *scan, *CorrScan;
+	/* n.b Most of the if tests are meaningless for now (D never changes) */
+
+	if(vb->verbose >= 1)
+	{
+		printf("        MJD=%11.5f jobId=%d scanId=%d Source=%s  FITS SourceId=%d\n", 
+			vb->mjd, vb->jobId, vb->scanId, vb->D->scan[vb->scanId].name, vb->D->source[vb->sourceId].fitsSourceId+1);
+	}
+
+	vb->freqId = vb->config->freqId;
+	vb->tIntIn = vb->config->tInt;
+	vb->tIntOut = vb->tIntIn * vb->timeAvg;
+	if(oldvb->first)
+	{
+		oldvb->freqId = vb->freqId;
+		oldvb->tIntOut = vb->tIntOut;
+	}
+
+	/* allocate baseline index. see difxio/difx_if.c*/
+	if(vb->first || vb->D->nAntenna != oldvb->D->nAntenna)
+	{
+		map = (int **)calloc(vb->D->nAntenna+1, sizeof(int *));
+		for(a1 = 0; a1 < vb->D->nAntenna; a1++)
+		{
+			map[a1] = (int *)calloc(vb->D->nAntenna+1, sizeof(int));
+			for(a2 = 0; a2 < vb->D->nAntenna; a2++)
+			{
+				map[a1][a2] = baseline2index(a1, a2, vb->D->nAntenna);
+			}
+		}
+		vb->baseline2blId = map;
+		if(oldvb->first)
+		{
+			oldvb->baseline2blId = map;
+		}
+	}
+	/* allocate spectrum */
+	if(vb->first || vb->D->nInChan != oldvb->D->nInChan)
+	{
+		vb->spectrum = (float *)calloc(3*vb->D->nInChan, sizeof(float));
+		if(oldvb->first)
+		{
+			oldvb->spectrum = vb->spectrum;
+		}
+	}
+
+	if(vb->first || vb->nBand != oldvb->nBand ||
+		vb->D->nOutChan != oldvb->D->nInChan)
+	{
+		/*allocate freq*/
+		vb->freq = (double **)calloc(vb->nBand, sizeof(double *));
+		for(i = 0; i < vb->nBand; i++)
+		{
+			vb->freq[i] = (double *)calloc(vb->D->nOutChan, sizeof(double));
+		}
+		/*recalculate frequencies*/
+		getFrequencies(vb);
+		if(oldvb->first)
+		{
+			oldvb->freq = vb->freq;
+		}
+	}
+	if(vb->first || vb->nBl != oldvb->nBl ||
+		vb->nBinOut != oldvb->nBinOut)
+	{
+		vb->dvs = (DifxVis ***)calloc(vb->nBl, sizeof(DifxVis **));
+		for(i = 0; i < vb->nBl; i++)
+		{
+			vb->dvs[i] = (DifxVis **)calloc(vb->nBinOut, sizeof(DifxVis *));
+		}
+		if(oldvb->first)
+		{
+			oldvb->dvs = vb->dvs;
+		}
+	}
+
+	CorrScan = vb->CorrModel->scan + vb->scanId;
+	scan = vb->D->scan + vb->scanId;
 	
-int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
+	vb->n = getDifxScanIMIndex(scan, vb->header->mjd, &vb->dt);
+	if(vb->n < 0)
+	{
+		fprintf(stderr, "Error: updateConfig: interferometer model index out of range: scanId=%d mjd=%12.6f %d-%d \n",
+		vb->scanId, vb->header->mjd,
+		vb->aa1, vb->aa2);
+	}
+	vb->nCorr = getDifxScanIMIndex(CorrScan, vb->header->mjd, &vb->dtCorr);
+	if(vb->nCorr < 0)
+	{
+		fprintf(stderr, "Error: updateConfig: interferometer model index out of range: scanId=%d mjd=%12.6f %d-%d \n",
+		vb->scanId, vb->header->mjd,
+		vb->aa1, vb->aa2);
+	}
+
+	vb->scale = getScaleFactor(vb->D, vb->user_scale, vb->verbose);
+	vb->nOutChan = vb->D->nOutChan;
+	if(oldvb->first)
+	{
+		oldvb->n = vb->n;
+		oldvb->nCorr = vb->nCorr;
+
+		oldvb->scale = vb->scale;
+		oldvb->nOutChan = vb->nOutChan;
+	}
+	return 0;
+}
+
+int updateJob(VisBuffer *vb)
+{
+	int j;
+	double mjd;
+	int bestmjd = 1.0e9;
+	int bestj = -1;
+	vb->jobsCompleted++;
+	if(vb->jobsCompleted >= vb->nJob)
+	{
+		vb->changed = JOBS_DONE;
+		return -1;
+	}
+	/*FIXME go back to old algorithm*/
+	for(j = 0; j < vb->nJob; j++)
+	{
+		mjd = vb->D->job[j].mjdStart;
+		if(mjd > vb->mjdCentroid && mjd < bestmjd)
+		{
+			bestmjd = mjd;
+			bestj = j;
+		}
+	}
+	if(bestj == -1)
+	{
+		vb->changed = JOBS_DONE;
+		return bestj;
+	}
+	printf("    Starting JobId %d mjdStart %5.5f \n",
+		       bestj, vb->D->job[bestj].mjdStart);
+	return bestj;
+}
+	
+int updateVisBuffer(VisBuffer *oldvb, VisBuffer *vb)
+{
+	int configId;
+	DifxHeader *h, *oldh;
+	int newBand = 0; int newBl = 0; int newMjd = 0; int newInt = 0; int newScan = 0; int newConfig = 0; 
+	h = vb->header; oldh = oldvb->header;
+
+	if(vb->first || h->config_index != oldh->config_index)
+	{
+		vb->changed = NEW_CONFIG;
+		newBand = newBl = newMjd = newInt = newScan = newConfig = 1;
+	}
+	else
+	{
+		vb->changed = NEW_POL;
+		if(h->freq_index != oldh->freq_index)
+		{
+			vb->changed = NEW_BAND;
+			newBand = 1;
+		}
+		if(h->baseline_num != oldh->baseline_num)
+		{
+			newBl = 1;
+			vb->changed = NEW_BL;
+#ifdef DEBUG
+			printf("\t\t\tnewbl %d-%d\n", h->baseline_num/256, h->baseline_num%256);
+#endif
+		}		
+		if(fabs(h->mjd - oldh->mjd) > 1.0/86400000.0)
+		{
+			updateScan(vb);
+			newMjd = 1;
+			vb->changed = NEW_MJD;
+#ifdef DEBUG
+			printf("\t\tnewmjd: old=%d %06.2f new=%d %06.2f\n",
+				(int)oldh->mjd, fmod(oldh->mjd, 1.0) * 86400.0,
+				(int)h->mjd, fmod(h->mjd, 1.0) * 86400.0);
+#endif
+			if(h->mjd - oldvb->mjdStart - oldvb->tIntOut/86400.0 > 0)
+			{
+				newInt = 1;
+				vb->changed = NEW_TINT;
+				updateInt(vb);
+#ifdef DEBUG
+				printf("\tnewtint mjdStart=%d %06.2f mjdCentroid=%d %06.2f\n", 
+						(int)vb->mjdStart, fmod(vb->mjdStart, 1.0) * 86400.0,
+						(int)vb->mjdCentroid, fmod(vb->mjdCentroid, 1.0) * 86400.0);
+#endif
+				if(oldvb->first)
+				{
+					oldvb->scanId = vb->scanId;
+				}
+				if(vb->configId != oldvb->configId)
+				{
+					newConfig = 1;
+					vb->changed = NEW_CONFIG;
+#ifdef DEBUG
+					printf("newconfig\n");
+#endif
+				}
+			}
+		}		
+	}
+
+	if(newScan)
+	{
+		updateScan(vb);
+		if(oldvb->first)
+		{
+			oldvb->configId = vb->configId;
+			oldvb->config = vb->config;
+			oldvb->sourceId = vb->sourceId;
+		}
+	}
+	if(newConfig)
+	{
+		updateConfig(oldvb, vb);
+		vb->changed = NEW_CONFIG;
+	}
+	if(newInt)
+	{
+		updateInt(vb);
+	}
+
+	/*check header source and config are what we expect*/
+	if(vb->header->config_index != vb->configId)
+	{
+		//can't continue -- we don't know which scan we're on
+		//so we don't have correct model information
+		fprintf(stderr, "Error: configId in .difx doesn't match expected. .difx id %d instead of %d\n",
+				vb->header->config_index, vb->configId);
+		return SKIPPED_RECORD;
+	}
+	if(newBl)
+	{
+		updateBaseline(vb);
+	}
+	if(newMjd)
+	{
+		updateShiftDelay(vb);
+	}
+	if(newBand)
+	{
+		updateBand(vb);
+	}
+	vb->polId = h->polId;
+	vb->binId = h->pulsar_bin;
+#ifdef DEBUG
+	printf("\n\t\t\t\tnewband/pol/bin band=%d pol=%d bin=%d\n", vb->bandId, vb->polId, vb->binId);
+#endif
+	vb->first = 0;
+	oldvb->first = 0;
+	return 0;
+}
+
+int getPolStart(const DifxInput *D)
+{
+	int i, c;
+	int polMask = 0;
+        for(c = 0; c < D->nConfig; c++)
+        {
+                for(i = 0; i < D->nIF; i++)
+                {
+                        if(D->config[c].IF[i].pol[0] == 'R' ||
+                           D->config[c].IF[i].pol[1] == 'R')
+                        {
+                                polMask |= 0x01;
+                        }
+                        if(D->config[c].IF[i].pol[0] == 'L' ||
+                           D->config[c].IF[i].pol[1] == 'L')
+                        {
+                                polMask |= 0x02;
+                        }
+                        if(D->config[c].IF[i].pol[0] == 'X' ||
+                           D->config[c].IF[i].pol[1] == 'X')
+                        {
+                                polMask |= 0x10;
+                        }
+                        if(D->config[c].IF[i].pol[0] == 'Y' ||
+                           D->config[c].IF[i].pol[1] == 'Y')
+                        {
+                                polMask |= 0x20;
+                        }
+                }
+        }
+
+	/* check for polarization confusion */
+	if( ((polMask & 0x0F) > 0 && (polMask & 0xF0) > 0) || polMask == 0 )
+	{
+		fprintf(stderr, "Error: bad polarization combinations : 0x%x\n",
+			polMask);
+		return 0;
+	}
+
+	if(polMask & 0x01)
+	{
+		return -1;
+	}
+	else if(polMask & 0x02)
+	{
+		return -2;
+	}
+	else if(polMask & 0x10)
+	{
+		return -5;
+	}
+	else /* must be YY only! who would do that? */
+	{
+		return -6;
+	}
+}
+
+VisBuffer *newVisBuffer(const DifxInput *D, const DifxInput *CorrModel, int nComplex, float timeAvg, float scale, int pulsarBin, int verbose)
+{
+	/* This should set *everything* that is the same for all jobs
+	 * Anything else is set in updateVisBuffer etc. */
+
+	VisBuffer *vb;
+	vb = (VisBuffer *)calloc(1, sizeof(VisBuffer));
+	if(!vb)
+	{
+		fprintf(stderr, "Error: newVisBuffer: vb=calloc failed, size=%d\n",
+			sizeof(VisBuffer));
+		return 0;
+	}
+
+	vb->D = D;
+	vb->CorrModel = CorrModel;
+	vb->jobId = -1;
+	vb->nJob = D->nJob;
+	vb->jobsCompleted = -1;
+	vb->first = 1;
+	vb->changed = UNDEFINED_ERROR;
+	vb->difxbl = 0;
+
+	vb->header = (DifxHeader *)calloc(1, sizeof(DifxHeader));
+	if(!vb)
+	{
+		fprintf(stderr, "Error: newVisBuffer: vb->header=calloc failed, size=%d\n",
+			sizeof(DifxHeader));
+		return 0;
+	}
+	vb->header->dp = newDifxParameters();
+	vb->config = 0;
+
+	vb->curFile = -1;
+
+	vb->freqId = -1;
+	vb->configId = -1;
+	vb->scanId = -1;
+
+	vb->timeAvg = timeAvg;
+	vb->user_scale = scale;
+	vb->scale = getScaleFactor(D, scale, verbose);
+	vb->polStart = getPolStart(D);
+
+	vb->nBl = D->nBaseline + D->nAntenna;
+	vb->nBand = D->nIF;
+	vb->nPol = D->nPol;
+	vb->nBinOut = 1;
+	vb->nComplex = 2;
+
+	vb->binsOut = (int*) calloc(1, sizeof(int));
+	vb->binsOut[0] = pulsarBin;
+
+	vb->baseline2blId = 0;
+	vb->freq = 0;
+
+	vb->binId = vb->binsOut[0];
+
+	vb->nFloat = 2;
+
+	vb->shiftDelay = 0;
+
+	return vb;
+}
+
+int moveVisBuffer(VisBuffer *vb, VisBuffer *oldvb)
+{
+	int i, j;
+	int **map;
+	oldvb->jobId = vb->jobId;
+	oldvb->scanId = vb->scanId;
+	oldvb->sourceId = vb->sourceId;
+	oldvb->configId = vb->configId;
+	oldvb->blId = vb->blId;
+	oldvb->bandId = vb->bandId;
+	oldvb->polId = vb->polId;
+	oldvb->binId = vb->binId;
+	oldvb->mjdCentroid = vb->mjdCentroid;
+	oldvb->mjdStart = vb->mjdStart;
+	oldvb->n = vb->n;
+	oldvb->nCorr = vb->nCorr;
+	oldvb->tIntIn = vb->tIntIn;
+	oldvb->tIntOut = vb->tIntOut;
+
+	/*first delete all arrays in oldvb which aren't used by vb*/
+	//assume that D is always the same
+	/*
+	if(oldvb->D != vb->D)
+	{
+		deleteDifxInput(oldvb->D)
+	}
+	if(oldvb->CorrModel != vb->CorrModel)
+	{
+		deleteDifxInput(oldvb->CorrModel)
+	}
+	*/
+	//resetDifxParameters(oldvb->header->dp);
+		//deleteDifxParameters(oldvb->header->dp);
+		//free(oldvb->header);
+	/*
+	if(oldvb->config != vb->config)
+	{
+		deleteDifxConfig(oldvb->config);
+	}
+	*/
+	if(oldvb->in != vb->in)
+	{
+		if(oldvb->in)
+		{
+			fclose(oldvb->in);
+		}
+		else
+		{
+			oldvb->in = vb->in;
+		}
+	}
+	if(oldvb->globbuf != vb->globbuf)
+	{
+		globfree(oldvb->globbuf);
+	}
+
+	if(oldvb->binsOut[0] != vb->binsOut[0])
+	{
+		free(oldvb->binsOut);
+	}
+	
+	if(oldvb->baseline2blId != vb->baseline2blId)
+	{
+		map = oldvb->baseline2blId;
+		if(map)
+		{
+			for(i = 0; map[i]; i++)
+			{
+				free(map[i]);
+			}
+			free(map);
+		}
+	}
+	if(oldvb->spectrum != vb->spectrum)
+	{
+		free(oldvb->spectrum);
+	}
+	if(oldvb->freq != vb->freq)
+	{
+		for(i = 0; i < vb->nBand; i++)
+		{
+			free(vb->freq[i]);
+		}
+	}
+	if(oldvb->dvs != vb->dvs)
+	{
+		for(i = 0; i < vb->nBl; i++)
+		{
+			for(j=0; j < vb->nBinOut; j++)
+			{
+				if(vb->dvs[i][j])
+					{
+						deleteDifxVis(vb->dvs[i][j]);
+					}
+			}
+			free(vb->dvs[i]);
+		}
+		free(vb->dvs);
+	}
+
+#ifdef HAVE_FFTW
+	if(vb->S != oldvb->S)
+	{
+		deleteSniffer(vb->S);
+	}
+#endif
+	
+	return 0;
+}
+
+int deleteVisBuffer(VisBuffer *vb)
+{
+	int i, j;
+	int **map;
+
+	if(!vb)
+	{
+		return 0;
+	}
+
+	if(vb->in)
+	{
+		fclose(vb->in);
+	}
+	free(vb);
+
+	if(vb->header)
+	{
+		if(vb->header->dp)
+		{
+			deleteDifxParameters(vb->header->dp);
+		}
+		free(vb->header);
+	}
+
+	globfree(vb->globbuf);
+
+	map = vb->baseline2blId;
+        if(map)
+        {
+                for(i = 0; map[i]; i++)
+                {
+                        free(map[i]);
+                }
+                free(map);
+        }
+
+	/*delete dvs*/
+	for(i = 0; i < vb->nBl; i++)
+	{
+		for(j=0; j < vb->nBinOut; j++)
+		{
+			if(vb->dvs[i][j])
+				{
+					deleteDifxVis(vb->dvs[i][j]);
+				}
+		}
+		free(vb->dvs[i]);
+	}
+	free(vb->dvs);
+
+	if(vb->freq)
+	{
+		for(i = 0; i < vb->nBand; i++)
+		{
+			free(vb->freq[i]);
+		}
+	}
+
+	if(vb->header)
+	{
+		free(vb->header);
+	}
+	return 0;
+}
+
+DifxVis *newDifxVis(VisBuffer *vb)
+{
+	DifxVis *dv;
+
+	dv = (DifxVis *)calloc(1, sizeof(DifxVis));
+	if(!dv)
+	{
+		fprintf(stderr, "Error: newDifxVis: dv=calloc failed, size=%d\n",
+			sizeof(DifxVis));
+		return 0;
+	}
+	DifxVisInitData(vb, dv);
+
+	return dv;
+}
+
+void deleteDifxVis(DifxVis *dv)
+{
+	if(!dv)
+	{
+		return;
+	}
+
+	if(dv->record)
+	{
+		free(dv->record);
+	}
+	
+	if(dv->data)
+	{
+		free(dv->data);
+	}
+	free(dv);
+}
+
+
+int getPolProdId(const VisBuffer *vb, const char *polPair)
+{
+	const char polSeq[8][4] = 
+		{"RR", "LL", "RL", "LR", "XX", "YY", "XY", "YX"};
+	int p;
+
+	for(p = 0; p < 8; p++)
+	{
+		if(strncmp(polPair, polSeq[p], 2) == 0)
+		{
+			p = (p+1) + vb->polStart;
+			
+			if(p < 0 || p >= vb->D->nPolar)
+			{
+				return -1;
+			}
+			else
+			{
+				return p;
+			}
+		}
+	}
+	return -2;
+}
+
+static int storevis(VisBuffer *vb)
+{
+	const DifxInput *D;
+	int isLSB;
+	int startChan;
+	int stopChan;
+	int i, j, k;
+	double weight;
+	DifxVis * dv;
+
+	D = vb->D;
+	weight = vb->header->data_weight;
+
+	if(!vb->dvs[vb->blId][0])
+	{
+
+#ifdef DEBUG
+		printf("newDifxVis\n");
+#endif
+		vb->dvs[vb->blId][0] = newDifxVis(vb);
+		vb->dvs[vb->blId][0]->difxbl = vb->difxbl;
+		vb->dvs[vb->blId][0]->bl = vb->bl;
+	}
+
+#ifdef DEBUG
+	printf("blId=%d\n", vb->blId);
+#endif
+	dv = vb->dvs[vb->blId][0];
+	/* scale data by weight */
+	for(i = 0; i < vb->D->nInChan; i++)
+	{
+		vb->spectrum[i*vb->nComplex] *= weight;
+		vb->spectrum[i*vb->nComplex+1] *= weight;
+	}
+
+	isLSB = vb->config->IF[vb->bandId].sideband == 'L';
+	startChan = D->startChan;
+	stopChan = startChan + D->nOutChan*D->specAvg;
+
+	//dv->weightSum[D->nPolar*vb->bandId + vb->polId] =
+	//	vb->recweight;
+	dv->tEff[vb->bandId][vb->polId] += vb->tIntIn * weight;
+	dv->weightSum[vb->bandId][vb->polId] += weight;
+	shiftPhase(vb);
+	
+	for(i = startChan; i < stopChan; i++)
+	{
+		if(isLSB)
+		{
+			j = (stopChan - 1 - i) / vb->D->specAvg;
+		}
+		else
+		{
+			j = i / vb->D->specAvg;
+		}
+
+		for(k = 0; k < vb->nComplex; k++)
+		{
+			/* swap phase/uvw for FITS-IDI conformance */
+			if(k % 3 == 1 && !isLSB)
+			{
+				dv->data[vb->bandId][vb->polId][j][k]-=
+					vb->scale*
+					vb->spectrum[vb->nComplex*i+k];
+			}
+			else
+			{
+				dv->data[vb->bandId][vb->polId][j][k]+= 
+					vb->scale*
+					vb->spectrum[vb->nComplex*i+k];
+			}
+		}
+	}
+	dv->n += 1;
+	return 0;
+}
+
+int readDifxHeader(VisBuffer *vb)
 {
 	const char difxKeys[][MAX_DIFX_KEY_LEN] = 
 	{
@@ -336,438 +1137,378 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 		"V (METRES)",
 		"W (METRES)"
 	};
-
 	const int N_DIFX_ROWS = sizeof(difxKeys)/sizeof(difxKeys[0]);
 	int rows[N_DIFX_ROWS];
-	int i, i1, v, N, index;
-	int a1, a2;
-	int bl, scanId;
-	double mjd, dt, dt2;
-	int changed = 0;
-	int nFloat, readSize;
+	int i, N;
+	int v = 1;
 	char line[100];
-	int freqNum;
-	int configId;
-	const DifxConfig *config;
-	const DifxScan *scan, *oldScan;
-	const DifxPolyModel *im1, *im2;
-	int terms1, terms2;
-	int d1, d2, aa1, aa2;	/* FIXME -- temporary */
-	int bin;
+	DifxHeader *h;
 
-	resetDifxParameters(dv->dp);
+	h = vb->header;
+	resetDifxParameters(h->dp);
 
+	if(!vb->in)
+	{
+#ifdef DEBUG
+		printf("newfile\n");
+#endif
+		v = nextFile(vb);
+	}
 	for(i = 0; i < 13; i++)
 	{
-		fgets(line, 99, dv->in);
-		if(feof(dv->in))
+		fgets(line, 99, vb->in);
+		if(feof(vb->in))
 		{
 			/* EOF should not happen in middle of text */
 			if(i != 0)
 			{
-				return HEADER_READ_ERROR;
+				fprintf(stderr, "Error reading header. EOF in line %d\n", i);
+				fprintf(stderr, "\t%s\n", line);
+				vb->changed = HEADER_READ_ERROR;
+				return -1;
 			}
-			v = DifxVisNextFile(dv);
-			if(v < 0)
+			v = nextFile(vb);
+			if(v != 0)
 			{
+				if(vb->changed == JOBS_DONE)
+				{
+					return JOBS_DONE;
+				}
+				vb->changed = NEXT_FILE_ERROR;
 				return NEXT_FILE_ERROR;
 			}
-			fgets(line, 99, dv->in);
+			fgets(line, 99, vb->in);
 		}
-		DifxParametersaddrow(dv->dp, line);
+		DifxParametersaddrow(h->dp, line);
 	}
 
 	/* parse the text header */
-	if(dv->D->inputFileVersion == 0)
+	if(vb->D->inputFileVersion == 0)
 	{
-		N = DifxParametersbatchfind(dv->dp, 0, difxKeys, 
+		N = DifxParametersbatchfind(h->dp, 0, difxKeys, 
 			N_DIFX_ROWS, rows);
 	}
 	else
 	{
-		N = DifxParametersbatchfind(dv->dp, 0, difxKeysOrig, 
+		N = DifxParametersbatchfind(h->dp, 0, difxKeysOrig, 
 			N_DIFX_ROWS, rows);
 	}
 	if(N < N_DIFX_ROWS)
 	{
 		printf("ERROR: N=%d < N_DIFX_ROWS=%d\n", N, N_DIFX_ROWS);
+		vb->changed = HEADER_READ_ERROR;
 		return HEADER_READ_ERROR;
 	}
 
-	bl           = atoi(DifxParametersvalue(dv->dp, rows[0]));
-	mjd          = atoi(DifxParametersvalue(dv->dp, rows[1])) +
-	               atof(DifxParametersvalue(dv->dp, rows[2]))/86400.0;
-	freqNum      = atoi(DifxParametersvalue(dv->dp, rows[5]));
-	bin          = atoi(DifxParametersvalue(dv->dp, rows[7]));
+	h->baseline_num = atoi(DifxParametersvalue(h->dp, rows[0]));
+	h->mjd          = atoi(DifxParametersvalue(h->dp, rows[1])) +
+	                atof(DifxParametersvalue(h->dp, rows[2]))/86400.0;
+	h->config_index = atoi(DifxParametersvalue(h->dp, rows[3]));
+	h->source_index = atoi(DifxParametersvalue(h->dp, rows[4]));
+	h->freq_index   = atoi(DifxParametersvalue(h->dp, rows[5]));
+	h->polId        = getPolProdId(vb, DifxParametersvalue(h->dp, rows[6]));
+	h->pulsar_bin   = atoi(DifxParametersvalue(h->dp, rows[7]));
+	//h->U            = atof(DifxParametersvalue(h->dp, rows[9]));
+	//h->V            = atof(DifxParametersvalue(h->dp, rows[10]));
+	//h->W            = atof(DifxParametersvalue(h->dp, rows[11]));
 
+	if(vb->D->inputFileVersion == 0)
+	{
+		h->data_weight = atof(DifxParametersvalue(h->dp, rows[8]));
+	}
+	else
+	{
+		h->data_weight = 1.0;
+	}
+	//printf("baseline_num %d\n", h->baseline_num);
+	//printf("mjd          %f\n", h->mjd);
+	//printf("config_index %d\n", h->config_index);
+	//printf("source_index %d\n", h->source_index);
+	//printf("freq_index   %d\n", h->freq_index);
+	//printf("polId        %d\n", h->polId);
+	//printf("pulsar_bin   %d\n", h->pulsar_bin);
+	//printf("data_weight  %f\n", h->data_weight);
+	return 0;
+}
+
+int DifxVisNewUVData(VisBuffer *oldvb, VisBuffer *vb)
+{
+
+	int i, i1, v;
+	int nFloat, readSize;
+	int error = 0;
+
+	error = readDifxHeader(vb);
+	if(error)
+	{
+		return error;
+	}
+
+	/*change parameters of new vb to match header*/
+	updateVisBuffer(oldvb, vb);
+
+	/*read data*/
 	/* if chan weights are written the data volume is 3/2 as large */
 	/* for now, force nFloat = 2 (one weight for entire vis record) */
-	nFloat = 2;
-	readSize = nFloat * dv->D->nInChan;
-	v = fread(dv->spectrum, sizeof(float), readSize, dv->in);
+	vb->nFloat = 2;
+	readSize = vb->nFloat * vb->D->nInChan;
+	v = fread(vb->spectrum, sizeof(float), readSize, vb->in);
 	if(v < readSize)
 	{
+		vb->changed = DATA_READ_ERROR;
 		return DATA_READ_ERROR;
 	}
 
-	if(bin != pulsarBin)
+	if(vb->nFloat > vb->nComplex)
 	{
-		return SKIPPED_RECORD;
-	}
-	else
-	{
-		dv->pulsarBin = bin;
+		fprintf(stderr, "nFloat > vb->nComplex\n");
+		vb->changed = NFLOAT_ERROR;
+		return NFLOAT_ERROR;
 	}
 
-	/* FIXME -- look at sourceId in the record as a check */
-	/* FIXME -- look at configId in the record as a check */
-
-	/* scanId at middle of integration */
-	scanId = DifxInputGetScanIdByJobId(dv->D, mjd, dv->jobId);
-	if(scanId < 0)
-	{
-		return SKIPPED_RECORD;
-	}
-
-	scan = dv->D->scan + scanId;
-	configId = scan->configId;
-	if(configId >= dv->D->nConfig) 
-	{
-		fprintf(stderr, "Developer error: configId = %d\n", configId);
-		fprintf(stderr, "ScanId was %d\n", scanId);
-		exit(0);
-	}
-	if(configId < 0)
-	{
-		return SKIPPED_RECORD;
-	}
-
-	config = dv->D->config + configId;
-
-	/* see if it is still the same scan at the edges of integration */
-	dt2 = config->tInt/(86400.0*2.001);  
-	if(scan->mjdStart > mjd-dt2 || scan->mjdEnd < mjd+dt2)
-	{
-		/* Nope! */
-		dv->flagTransition = 1;
-		return SKIPPED_RECORD;
-	}
-	else
-	{
-		dv->flagTransition = 0;
-	}
-
-	aa1 = a1 = (bl/256) - 1;
-	aa2 = a2 = (bl%256) - 1;
-
-	if(a1 < 0 || a1 >= config->nAntenna ||
-	   a2 < 0 || a2 >= config->nAntenna)
-	{
-		printf("Error: illegal baseline %d -> %d-%d\n", bl, a1, a2);
-		return -8;
-	}
-
-	/* translate from .input file antId to index for D->antenna via dsId */
-	d1 = config->ant2dsId[a1];
-	d2 = config->ant2dsId[a2];
-	if(d1 < 0 || d1 >= dv->D->nDatastream || 
-	   d2 < 0 || d2 >= dv->D->nDatastream)
-	{
-		printf("Error: baseline %d -> datastreams %d-%d\n",
-			bl, d1, d2);
-		return -9;
-	}
-	a1 = dv->D->datastream[d1].antennaId;
-	a2 = dv->D->datastream[d2].antennaId;
-	bl = (a1+1)*256 + (a2+1);
-	
-	if(verbose >= 1 && scanId != dv->scanId)
-	{
-		printf("        MJD=%11.5f jobId=%d scanId=%d Source=%s  FITS SourceId=%d\n", 
-			mjd, dv->jobId, scanId, scan->name, dv->D->source[scan->sourceId].fitsSourceId+1);
-	}
-
-	dv->scanId = scanId;
-	dv->sourceId = scan->sourceId;
-	dv->freqId = config->freqId;
-	dv->bandId = config->baselineFreq2IF[aa1][aa2][freqNum];
-	dv->polId  = getPolProdId(dv, DifxParametersvalue(dv->dp, rows[6]));
-
-	/* stash the weight for later incorporation into a record */
-	if(dv->D->inputFileVersion == 0)
-	{
-		dv->recweight = atof(DifxParametersvalue(dv->dp, rows[8]));
-	}
-	else
-	{
-		dv->recweight = 1.0;
-	}
-
-	if(bl != dv->baseline || fabs(mjd - dv->mjd) > 1.0/86400000.0)
-	{
-		changed = 1;
-		dv->baseline = bl;
-		dv->mjd = mjd;
-
-		index = dv->freqId + dv->nFreq*dv->polId;
-
-		/* swap phase/uvw for FITS-IDI conformance */
-		dv->U = -atof(DifxParametersvalue(dv->dp, rows[9]));
-		dv->V = -atof(DifxParametersvalue(dv->dp, rows[10]));
-		dv->W = -atof(DifxParametersvalue(dv->dp, rows[11]));
-
-		/* recompute from polynomials if possible */
-		if(scan->im)
-		{
-			double u,v,w;
-			int n;
-
-			n = getDifxScanIMIndex(scan, mjd, &dt);
-
-			u = dv->U;
-			v = dv->V;
-			w = dv->W;
-
-			/* use .difx/ antenna indices for model tables */
-			im1 = scan->im[aa1];
-			im2 = scan->im[aa2];
-			if(im1 && im2)
-			{
-				if(n < 0)
-				{
-					fprintf(stderr, "Error: interferometer model index out of range: scanId=%d mjd=%12.6f\n",
-					scanId, mjd);
-				}
-				else
-				{
-					terms1 = im1->order + 1;
-					terms2 = im2->order + 1;
-					dv->U = evalPoly(im2[n].u, terms2, dt) 
-					       -evalPoly(im1[n].u, terms1, dt);
-					dv->V = evalPoly(im2[n].v, terms2, dt) 
-					       -evalPoly(im1[n].v, terms1, dt);
-					dv->W = evalPoly(im2[n].w, terms2, dt) 
-					       -evalPoly(im1[n].w, terms1, dt);
-				}
-			}
-
-			if((dv->D == dv->OldModel) && /* We could check against OldModel instead?*/
-			   (fabs(u - dv->U) > 10.0 ||
-			    fabs(v - dv->V) > 10.0 ||
-			    fabs(w - dv->W) > 10.0) && 
-			    !dv->flagTransition) 
-			{
-				printf("Warning: UVW diff: %d %d %d-%d %f %f (%f %f)(%f %f)(%f %f)\n", 
-					scanId, n, aa1, aa2, mjd, dt, u, dv->U, v, dv->V, w, dv->W);
-			}
-		}
-		if (dv->D != dv->OldModel)
-		{
-			/* FIXME should we skip autocorrs? (they'll cancel to zero anyway)
-			 * Above doesn't seem to bother */
-			double delay1, delayOld1;
-			double delay2, delayOld2;
-			const DifxPolyModel *imOld1, *imOld2;
-			int n, nOld, termsOld1, termsOld2;
-
-                        oldScan = dv->OldModel->scan + dv->scanId;
-			
-			n = getDifxScanIMIndex(scan, mjd, &dt);
-			nOld = getDifxScanIMIndex(oldScan, mjd, &dt);
-
-			imOld1 = oldScan->im[aa1];
-			imOld2 = oldScan->im[aa2];
-			termsOld1 = imOld1->order + 1;
-			termsOld2 = imOld2->order + 1;
-			delay2    = evalPoly(im2[n].delay, terms2, dt);
-			delay1    = evalPoly(im1[n].delay, terms1, dt);
-			delayOld2 = evalPoly(imOld2[nOld].delay, termsOld2, dt);
-			delayOld1 = evalPoly(imOld1[nOld].delay, termsOld1, dt);
-/*
-			printf("aa1+1: %d\taa2+1: %d\n", aa1+1, aa2+1);
-			printf("mjd: %f\tdelay1    %f\tdelay2    %f\n", dv->mjd, delay1, delay2);
-			printf("mjd: %f\tdelayOld1 %f\tdelayOld2 %f\n", dv->mjd, delayOld1, delayOld2);
-*/
-			dv->shiftDelay = (delay2 - delay1) - (delayOld2 - delayOld1);
-/*
-			printf("mjd: %f\tshiftDelay\t\t            %e\n", dv->mjd, dv->shiftDelay);
-*/
-		}
-	}
-
-	if(configId != dv->configId)
-	{
-		if(!changed)	/* cannot change config within integration */
-		{
-			return CONFIG_CHANGE_ERROR;
-		}
-		dv->configId = configId;
-		dv->tInt = config->tInt;
-	}
-
-	/* don't get all excited and signify a change on first rec */
-	if(changed && dv->first)
-	{
-		dv->first = 0;
-		changed = 0;
-		DifxVisCollectRandomParams(dv);
-	}
-
-	if(dv->bandId <  0 || dv->bandId >= dv->nFreq)
-	{
-		fprintf(stderr, "Parameter problem: bandId should be in "
-				"[0, %d), was %d\n", 
-				dv->nFreq, dv->bandId);
-		
-		return BAND_ID_ERROR;
-	}
-	
-	if(dv->polId  <  0 || dv->polId  >= dv->D->nPolar)
+	if(vb->header->polId  <  0 || vb->header->polId  >= vb->D->nPolar)
 	{
 		fprintf(stderr, "Parameter problem: polId should be in "
 				"[0, %d), was %d\n",
-				dv->D->nPolar, dv->polId);
-
+				vb->D->nPolar, vb->header->polId);
+		vb->changed = POL_ID_ERROR;
 		return POL_ID_ERROR;
 	}
-
-	/* don't read weighted data into unweighted slot */
-	if(nFloat > dv->nComplex)
+	/*skip if wrong pulsar bin */
+	if(vb->header->pulsar_bin != vb->binsOut[0])
 	{
-		printf("nFloat > dv->nComplex\n");
-		return NFLOAT_ERROR;
+#ifdef DEBUG
+		printf("skipped: wrong bin %d instead of %d\n", vb->header->pulsar_bin, vb->binsOut[0]);
+#endif
+		vb->changed = SKIPPED_RECORD;
+		return SKIPPED_RECORD;
 	}
-	
+
 	/* reorder data and set weights if weights not provided */
-	if(nFloat < dv->nComplex)
+	if(nFloat < vb->nComplex)
 	{
-		for(i = 3*dv->D->nInChan-3; i > 0; i -= 3)
+		for(i = 3*vb->D->nInChan-3; i > 0; i -= 3)
 		{
 			i1 = i*2/3;
-			dv->spectrum[i+2] = 1.0;                 /* weight */
-			dv->spectrum[i+1] = dv->spectrum[i1+1];  /* imag */
-			dv->spectrum[i]   = dv->spectrum[i1];    /* real */
+			vb->spectrum[i+2] = 1.0;                 /* weight */
+			vb->spectrum[i+1] = vb->spectrum[i1+1];  /* imag */
+			vb->spectrum[i]   = vb->spectrum[i1];    /* real */
 		}
 		/* The first element needs no reordering, but needs weight */
-		dv->spectrum[2] = 1.0;
+		vb->spectrum[2] = 1.0;
 	}
-
-	/* scale data by weight */
-	for(i = 0; i < dv->D->nInChan; i++)
-	{
-		dv->spectrum[i*dv->nComplex] *= dv->recweight;
-		dv->spectrum[i*dv->nComplex+1] *= dv->recweight;
-	}
-
-	return changed;
-
+	return 0;
 }
 
-int DifxVisCollectRandomParams(const DifxVis *dv)
+int DifxVisCollectRandomParams(const VisBuffer *vb)
 {
-	
-	dv->record->U		= dv->U/cLight;
-	dv->record->V		= dv->V/cLight;
-	dv->record->W		= dv->W/cLight;
+	DifxVis *dv = vb->dv;
+	const DifxPolyModel *im1, *im2;
+	int terms1, terms2, n;
+	double U, V, W, dt;
+	/*calculate UVW*/
+	im1 = vb->D->scan[vb->scanId].im[dv->difxbl/256 - 1];
+	im2 = vb->D->scan[vb->scanId].im[dv->difxbl%256 - 1];
+	if(im1 != im2)
+	{
+		//FIXME shouldn't need to redo this
+		n = getDifxScanIMIndex(vb->D->scan + vb->scanId, vb->mjdCentroid, &dt);
+		if(n < 0)
+		{
+			fprintf(stderr, "Error: interferometer model index out of range: scanId=%d mjd=%12.6f %d-%d \n",
+			vb->scanId, vb->mjdCentroid,
+			dv->bl/256, dv->bl%256);
+		}
+		else
+		{
+			terms1 = im1->order + 1;
+			terms2 = im2->order + 1;
+			U = evalPoly(im2[n].u, terms2, dt) 
+			   -evalPoly(im1[n].u, terms1, dt);
+			V = evalPoly(im2[n].v, terms2, dt) 
+			   -evalPoly(im1[n].v, terms1, dt);
+			W = evalPoly(im2[n].w, terms2, dt) 
+			   -evalPoly(im1[n].w, terms1, dt);
+		}
+	}
+	else
+	{
+		U = 0.0;
+		V = 0.0;
+		W = 0.0;
+	}
+	dv->record->U		= U/cLight;
+	dv->record->V		= V/cLight;
+	dv->record->W		= W/cLight;
 
-	dv->record->jd		= 2400000.5 + (int)dv->mjd;
-	dv->record->iat		= dv->mjd - (int)dv->mjd;
+	dv->record->jd		= 2400000.5 + (int)vb->mjdCentroid;
+	dv->record->iat		= vb->mjdCentroid - (int)vb->mjdCentroid;
 
 	/* reminder: antennaIds, sourceId, freqId are 1-based in FITS */
-	dv->record->baseline	= dv->baseline;
+	dv->record->baseline	= dv->bl;
 	dv->record->filter	= 0;
-	dv->record->sourceId1	= dv->D->source[dv->sourceId].fitsSourceId + 1;
-	dv->record->freqId1	= dv->freqId + 1;
-	dv->record->intTime	= dv->tInt;
-
+	dv->record->sourceId1	= vb->D->source[vb->sourceId].fitsSourceId + 1;
+	dv->record->freqId1	= vb->freqId + 1;
+	dv->record->intTime	= vb->tIntOut;
+#ifdef DEBUG
+	printf("U=%f\n", dv->record->U);
+	printf("V=%f\n", dv->record->V);
+	printf("W=%f\n", dv->record->W);
+	printf("jd=%f\n", dv->record->jd);
+	printf("iat=%f\n", dv->record->iat);
+	printf("baseline=%d\n", dv->record->baseline);
+	printf("filter=%d\n", dv->record->filter);
+	printf("sourceId1=%d\n", dv->record->sourceId1);
+	printf("freqId1=%d\n", dv->record->freqId1);
+	printf("intTime=%f\n", dv->record->intTime);
+#endif
 	return 0;
 }
 
-static int RecordIsInvalid(const DifxVis *dv)
+static int resetData(const VisBuffer *vb)
 {
-	int i, n;
-	const float *d;
+	int i, j, k, l;
+	float ****d;
 
-	d = dv->data;
-	n = dv->nData;
+	d = vb->dv->data;
 
-	for(i = 0; i < n; i++)
+	for(i=0; i<vb->nBand; i++)
 	{
-		if(isnan(d[i]) || isinf(d[i]))
+		for(j=0; j<vb->nPol; j++)
 		{
-
-			printf("Warning -- record with !finite value: ");
-			printf("a1=%d a1=%d mjd=%13.7f\n",
-				(dv->record->baseline/256) - 1,
-				(dv->record->baseline%256) - 1,
-				dv->mjd);
-			return 1;
+			for(k=0; k<vb->nOutChan; k++)
+			{
+				for(l=0; l<vb->nComplex; l++)
+				{
+					d[i][j][k][l] = 0.0;
+				}
+			}
+			vb->dv->tEff[i][j] = 0.0;
+			vb->dv->weightSum[i][j] = 0.0;
 		}
 	}
-	for(i = 0; i < n; i++)
-	{
-		if(d[i] > 1.0e10 || d[i] < -1.0e10)
-		{
-			printf("Warning -- record with extreme value: ");
-			printf("a1=%d a1=%d mjd=%13.7f value=%e\n",
-				(dv->record->baseline/256) - 1,
-				(dv->record->baseline%256) - 1,
-				dv->mjd,
-				d[i]);
-			return 1;
-		}
-	}
-	
+	vb->dv->n = 0;
 	return 0;
 }
 
-static int RecordIsZero(const DifxVis *dv)
+static int RecordIsInvalid(const VisBuffer *vb)
 {
-	int i, n;
-	int invalid=1;
-	const float *d;
+	int i, j, k, l;
+	float ****d;
 
-	d = dv->data;
-	n = dv->nData;
+	d = vb->dv->data;
 
-	for(i = 0; i < n; i++)
+	for(i=0; i<vb->nBand; i++)
 	{
-		/* don't look at weight in deciding whether data is valid */
-		if((d[i] != 0.0) && (i % dv->nComplex != 2))
+		for(j=0; j<vb->nPol; j++)
 		{
-			invalid = 0;
+			for(k=0; k<vb->nOutChan; k++)
+			{
+				for(l=0; l<vb->nComplex; l++)
+				{
+					if(isnan(d[i][j][k][l]) || isinf(d[i][j][k][l]))
+					{
+
+						printf("Warning -- droppin record with !finite value: ");
+						printf("a1=%d a2=%d mjd=%13.7f band=%d pol=%d chan=%d cplx=%d\n",
+							(vb->dv->record->baseline/256) - 1,
+							(vb->dv->record->baseline%256) - 1,
+							vb->mjdCentroid,
+							i,j,k,l);
+						return 1;
+					}
+					if(d[i][j][k][l] > 1.0e10 || d[i][j][k][l] < -1.0e10)
+					{
+						printf("Warning -- dropping record with extreme value: ");
+						printf("a1=%d a2=%d mjd=%13.7f band=%d pol=%d chan=%d cplx=%d value=%e\n",
+							(vb->dv->record->baseline/256) - 1,
+							(vb->dv->record->baseline%256) - 1,
+							vb->mjdCentroid,
+							i,j,k,l,
+							d[i][j][k][l]);
+						return 1;
+					}
+				}
+			}
 		}
 	}
-	return invalid;
+	return 0;
 }
 
-static int RecordIsTransitioning(const DifxVis *dv)
+static int RecordIsZero(const VisBuffer *vb)
 {
-	return dv->flagTransition;
+	int i, j, k, l;
+	int invalid=1, weightinvalid = 1;
+	float ****d;
+
+	d = vb->dv->data;
+
+	for(i=0; i<vb->nBand; i++)
+	{
+		for(j=0; j<vb->nPol; j++)
+		{
+			for(k=0; k<vb->nOutChan; k++)
+			{
+				for(l=0; l<vb->nComplex; l++)
+				{
+					/* don't look at weight in deciding whether data is valid */
+					if((d[i][j][k][l] != 0.0) && (l != 2))
+					{
+						invalid = 0;
+					}
+				}
+			}
+		}
+	}
+	if(vb->nComplex == 2)
+	{
+		for(i=0; i<vb->nBand; i++)
+		{
+			for(j=0; j<vb->nPol; j++)
+			{
+				if(vb->dv->weightSum[i][j] != 0.0)
+				{
+					weightinvalid = 0;
+				}
+			}
+		}
+	}
+
+	return invalid || weightinvalid;
 }
 
-static int RecordIsFlagged(const DifxVis *dv)
+static int RecordIsTransitioning(const VisBuffer *vb)
+{
+	return 0;
+	//return vb->flagTransition;
+}
+
+static int RecordIsFlagged(const VisBuffer *vb)
 {
 	double mjd;
 	int a1, a2;
 	int i;
 
-	if(dv->D->nFlag <= 0)
+	DifxVis *dv;
+
+	dv = vb->dv;
+		
+	if(vb->D->nFlag <= 0)
 	{
 		return 0;
 	}
 
 	a1  = (dv->record->baseline/256) - 1;
 	a2  = (dv->record->baseline%256) - 1;
-	mjd = dv->mjd;
+	mjd = vb->mjdCentroid;
 
-	for(i = 0; i < dv->D->nFlag; i++)
+	for(i = 0; i < vb->D->nFlag; i++)
 	{
-		if(dv->D->flag[i].mjd1 <= mjd &&
-		   dv->D->flag[i].mjd2 >= mjd)
+		if(vb->D->flag[i].mjd1 <= mjd &&
+		   vb->D->flag[i].mjd2 >= mjd)
 		{
-			if(dv->D->flag[i].antennaId == a1 ||
-			   dv->D->flag[i].antennaId == a2)
+			if(vb->D->flag[i].antennaId == a1 ||
+			   vb->D->flag[i].antennaId == a2)
 			{
 				return 1;
 			}
@@ -777,206 +1518,108 @@ static int RecordIsFlagged(const DifxVis *dv)
 	return 0;
 }
 
-static double getDifxScaleFactor(const DifxInput *D, double s, int verbose)
+
+int shiftPhase(VisBuffer *vb)
 {
-	double scale;
-
-	if(D->inputFileVersion == 0) /* Perth merge and after */
-	{
-		scale = 4.576*D->nOutChan/D->nInChan;
-	}
-	else
-	{
-		scale = 7.15/(D->chanBW*6.25e6*D->config[0].tInt*D->specAvg);
-	}
-	if(D->quantBits == 2)
-	{
-		scale /= (3.3359*3.3359);
-	}
-
-	if(s > 0.0)
-	{
-		if(verbose > 0)
-		{
-			printf("      Overriding scale factor %e with %e\n",
-				scale, s);
-		}
-		scale = s;
-	}
-
-	return scale;
-}
-
-int shiftPhase(DifxVis *dv, int verbose)
-{
-	if(dv->shiftDelay == 0)
+	if(vb->shiftDelay == 0)
 	{
 		return(0);
 	}
 	/*shift phase for a single spectrum (subband)*/
-	int i, index, nInChan, nChan, startChan, isUSB;
+	int i, index, nInChan, nChan, startChan;
 	float real, imag, preal, pimag; 
 	float *d;
-	double *freq;
-	double bandFreq, chanBW, shift;
+	double shift;
 
-	startChan = dv->D->startChan;
-	nChan = dv->D->nOutChan*dv->D->specAvg;
+	startChan = vb->D->startChan;
+	nChan = vb->D->nOutChan*vb->D->specAvg;
 
-	d = dv->spectrum;
-	freq = calloc(nChan*sizeof(double), 1);
-	nInChan = dv->D->nInChan;
+	d = vb->spectrum;
+	nInChan = vb->D->nInChan;
 	
-	bandFreq = dv->D->config[dv->configId].IF[dv->bandId].freq;
-	isUSB = dv->D->config[dv->configId].IF[dv->bandId].sideband == 'U';
-	chanBW = (dv->D->config[dv->configId].IF[dv->bandId].bw/nInChan); /*in MHz*/
-/*
-	if(verbose >= 2)
-	{
-	printf("IF: %d Delay: %f us; bandFreq %f MHz; Phase Turns at bandFreq: %f fraction: %f nComplex: %d\n", dv->bandId + 1, dv->shiftDelay, bandFreq, bandFreq*dv->shiftDelay, fmod(bandFreq*dv->shiftDelay, 1.0), dv->nComplex);
-	}
-*/
-
-	/* At some point we'll probably want to move this loop into its own function
-	 * maybe in difxio. It certainly doesn't need to be repeated for every
-	 * timestep! */
-	for(i = 0; i < nChan; i++)
-	{
-		if(isUSB)
-		{
-			freq[i] = bandFreq + (i+startChan) * chanBW;
-		}
-		else
-		{
-			freq[i] = bandFreq - (i+startChan) * chanBW;
-		}
-	}
-
-	//printf("chan\tfreq\t unshifted   \t\t\tphase multiplier\t\tshifted\n");
 	for(i = 0; i < nChan; i++)
 	{
 		index = (startChan + i) * 2;
-		shift = TWO_PI * fmod(freq[i] * dv->shiftDelay, 1.0);/* us and MHz cancel*/
+		shift = TWO_PI * fmod(vb->freq[nInChan][vb->bandId] * vb->shiftDelay, 1.0);/* us and MHz cancel*/
 		preal = cos(shift); 
 		pimag = sin(shift);
-		//printf("%03d ", i+1);
-		//printf("%.3f\t", freq[i]);
-		//printf("%+.2e %+.2e ", d[index], d[index+1]);
-		//printf("%+f ", shift);
-		//printf("%+.2f ", shift * 360.0/ TWO_PI);
 		real = d[index] * preal - d[index+1] * pimag;
 		imag = d[index] * pimag + d[index+1] * preal;
 		d[index] = real;
 		d[index+1] = imag;
-		//printf("%+.2e %+.2e\n", d[index], d[index+1]);
 	}
-	free(freq);
 	return(0);
 }
 
-static int storevis(DifxVis *dv, int verbose)
+static int readvisrecord(VisBuffer *oldvb, VisBuffer *vb)
 {
-	const DifxInput *D;
-	int isLSB;
-	int startChan;
-	int stopChan;
-	int i, j, k, index;
-
-	D = dv->D;
-
-	if(dv->configId < 0)
+	VisBuffer *oldervb;
+	vb->changed = 0;
+	while(vb->changed < NEW_TINT || 
+	      vb->changed == SKIPPED_RECORD)
 	{
-		return -1;
+		if(!vb->first && vb->changed >= 0)
+		{
+			storevis(vb);
+#ifdef DEBUG
+			printf("\t\t\t\tstored, ");
+#endif
+			//printf("vb      %f %d-%d %d %d\n", vb->header->mjd, vb->header->baseline_num/256, vb->header->baseline_num%256, vb->header->freq_index, vb->header->polId);
+			//printf("oldvb   %f %d-%d %d %d\n", oldvb->header->mjd, oldvb->header->baseline_num/256, oldvb->header->baseline_num%256, oldvb->header->freq_index, oldvb->header->polId);
+			moveVisBuffer(vb, oldvb);
+#ifdef DEBUG
+			//printf("swapping\n");
+#endif
+			oldervb = oldvb;
+			oldvb = vb;
+			vb = oldervb;
+#ifdef DEBUG
+			//printf("vb      %f %d-%d %d %d\n", vb->header->mjd, vb->header->baseline_num/256, vb->header->baseline_num%256, vb->header->freq_index, vb->header->polId);
+			//printf("oldvb   %f %d-%d %d %d\n", oldvb->header->mjd, oldvb->header->baseline_num/256, oldvb->header->baseline_num%256, oldvb->header->freq_index, oldvb->header->polId);
+#endif
+		}
+#ifdef DEBUG
+		printf("reading, ");
+#endif
+		DifxVisNewUVData(oldvb, vb);
+#ifdef DEBUG
+		printf("\t\t\t\tchanged = %d, ", vb->changed);
+#endif
 	}
-	
-	isLSB = D->config[dv->configId].IF[dv->bandId].sideband == 'L';
-	startChan = D->startChan;
-	stopChan = startChan + D->nOutChan*D->specAvg;
-
-	dv->weight[D->nPolar*dv->bandId + dv->polId] = 
-		dv->recweight;
-	
-	shiftPhase(dv, verbose);
-
-	for(i = startChan; i < stopChan; i++)
-	{
-		if(isLSB)
-		{
-			j = stopChan - 1 - i;
-			index = ((dv->bandId*D->nOutChan + 
-				j/D->specAvg)*
-				D->nPolar+dv->polId)*dv->nComplex;
-		}
-		else
-		{
-			index = ((dv->bandId*D->nOutChan + 
-				(i-startChan)/D->specAvg)*
-				D->nPolar+dv->polId)*dv->nComplex;
-		}
-
-		for(k = 0; k < dv->nComplex; k++)
-		{
-			/* swap phase/uvw for FITS-IDI conformance */
-			if(k % 3 == 1 && !isLSB)
-			{
-				dv->data[index+k] -= dv->scale*
-					dv->spectrum[dv->nComplex*i+k];
-			}
-			else
-			{
-				dv->data[index+k] += dv->scale*
-					dv->spectrum[dv->nComplex*i+k];
-			}
-		}
-	}
-
-	return 0;
+#ifdef DEBUG
+	printf("breaking out\n");
+#endif
+	return vb->changed;
 }
 
-static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
-{
-	/* blank array */
-	memset(dv->data, 0, dv->nData*sizeof(float));
-
-	dv->changed = 0;
-
-	while(dv->changed == 0 || dv->changed == SKIPPED_RECORD)
-	{
-		if(!dv->first && dv->changed >= 0)
-		{
-			storevis(dv, verbose);
-		}
-		dv->changed = DifxVisNewUVData(dv, verbose, pulsarBin);
-	}
-
-	return 0;
-}
-
-
-static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
+static int DifxVisConvert(const DifxInput *D, const DifxInput *CorrModel,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, 
-	double s, int verbose, double sniffTime, int pulsarBin)
+	double s, int verbose, int timeAvg, double sniffTime, int pulsarBin)
 {
-	int i, j, l, v;
+	int i, j, k, l, m;
 	float visScale = 1.0;
 	char fileBase[200];
 	char dateStr[12];
 	char fluxFormFloat[8];
 	char gateFormInt[8];
 	char weightFormFloat[8];
+	int changed;
 	int nRowBytes;
 	int nColumn;
 	int nWeight;
-	int nJob, bestj;
+	int nData;
+	int nFreq;
+	int nJob;
+	int polStart;
+	int nComplex = 2;
 	int nInvalid = 0;
 	int nFlagged = 0;
 	int nZero = 0;
 	int nTrans = 0;
 	int nWritten = 0;
-	double mjd, bestmjd;
 	double scale;
-	DifxVis **dvs;
-	DifxVis *dv;
+	VisBuffer *vb, *oldvb;
+	DifxVis* dv;
 #ifdef HAVE_FFTW
 	Sniffer *S = 0;
 #endif
@@ -999,30 +1642,7 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 		{"FLUX", fluxFormFloat, "data matrix", "UNCALIB"}
 	};
 
-	/* allocate one DifxVis per job */
 
-	scale = getDifxScaleFactor(D, s, verbose);
-
-	dvs = (DifxVis **)calloc(D->nJob, sizeof(DifxVis *));
-	for(j = 0; j < D->nJob; j++)
-	{
-		dvs[j] = newDifxVis(D, OldModel, j);
-		if(!dvs[j])
-		{
-			fprintf(stderr, "Error allocating DifxVis[%d/%d]\n",
-				j, D->nJob);
-#ifdef HAVE_FFTW
-			deleteSniffer(S);
-#endif
-			return 0;
-		}
-		dvs[j]->scale = scale;
-	}
-
-	/* for now set dv to the first job's structure */
-	dv = dvs[0];
-
-	nWeight = dv->nFreq*D->nPolar;
 
 	/* Start up sniffer */
 	if(sniffTime > 0.0)
@@ -1038,14 +1658,19 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 			}
 		}
 #ifdef HAVE_FFTW
-		S = newSniffer(D, dv->nComplex, fileBase, sniffTime);
+		S = newSniffer(D, nComplex, fileBase, sniffTime);
 #endif
 	}
+
+	nWeight = D->nIF*D->nPolar;
+	nData = 2*D->nFreq*D->nPolar*D->nOutChan;
+	nFreq = D->nFreq;
+	polStart = getPolStart(D);
 
 	/* set the number of weight and flux values*/
 	sprintf(weightFormFloat, "%dE", nWeight);
 	sprintf(gateFormInt, "%dJ", 0);
-	sprintf(fluxFormFloat, "%dE", dv->nData);
+	sprintf(fluxFormFloat, "%dE", nData);
 
 	nColumn = NELEMENTS(columns);
 	nRowBytes = FitsBinTableSize(columns, nColumn);
@@ -1070,7 +1695,7 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 
 	/* define the data matrix columns */
 	fitsWriteInteger(out, "MAXIS", 6, "");
-	fitsWriteInteger(out, "MAXIS1", dv->nComplex, "");
+	fitsWriteInteger(out, "MAXIS1", nComplex, "");
 
 	fitsWriteString(out, "CTYPE1", "COMPLEX", "");
 	fitsWriteFloat(out, "CDELT1", 1.0, "");
@@ -1080,14 +1705,14 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 	fitsWriteString(out, "CTYPE2", "STOKES", "");
 	fitsWriteFloat(out, "CDELT2", -1.0, "");
 	fitsWriteFloat(out, "CRPIX2", 1.0, "");
-	fitsWriteFloat(out, "CRVAL2", (float)dv->polStart, "");
+	fitsWriteFloat(out, "CRVAL2", (float)polStart, "");
 	fitsWriteInteger(out, "MAXIS3", D->nOutChan, "");
 	fitsWriteString(out, "CTYPE3", "FREQ", "");
 	fitsWriteFloat(out, "CDELT3", 
 		D->chanBW*D->specAvg*1.0e6/D->nInChan, "");
 	fitsWriteFloat(out, "CRPIX3", p_fits_keys->ref_pixel, "");
 	fitsWriteFloat(out, "CRVAL3", D->refFreq*1000000.0, "");
-	fitsWriteInteger(out, "MAXIS4", dv->nFreq, "");
+	fitsWriteInteger(out, "MAXIS4", nFreq, "");
 	fitsWriteString(out, "CTYPE4", "BAND", "");
 	fitsWriteFloat(out, "CDELT4", 1.0, "");
 	fitsWriteFloat(out, "CRPIX4", 1.0, "");
@@ -1106,91 +1731,93 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 	
 	fitsWriteEnd(out);
 
-
 	nJob = D->nJob;
 
-	/* below opens each of the jobs and works through them 
-	 * always checking which has the earliest data
-	 * this will all have to be rewritten so we're only
-	 * buffering a single job at a time */
-	/* First prime each structure with some data */
-	for(j = 0; j < nJob; j++)
-	{
-		readvisrecord(dvs[j], verbose, pulsarBin);
-	}
+	oldvb = newVisBuffer(D, CorrModel, nComplex, timeAvg, scale, verbose, pulsarBin);
+	vb = newVisBuffer(D, CorrModel, nComplex, timeAvg, scale, verbose, pulsarBin);
 
-	/* Now loop until done, looking at */
-	while(nJob > 0)
+	/*prime vb with first job*/
+	vb->jobId = updateJob(vb);
+	startGlob(vb);
+	
+	while(1)
 	{
-		bestmjd = 1.0e9;
-		bestj = 0;
-		for(j = 0; j < nJob; j++)
+		changed = readvisrecord(oldvb, vb);
+#ifdef DEBUG
+		printf("record read\n");
+#endif
+
+		for(i=0; i < vb->nBl; i++)
 		{
-			dv = dvs[j];
-			mjd = (int)(dv->record->jd - 2400000.0) + 
-				dv->record->iat;
-			if(mjd < bestmjd)
+			oldvb->dv = oldvb->dvs[i][0];
+			dv = oldvb->dv;
+			if(dv == 0)/*no data for this baseline*/
 			{
-				bestmjd = mjd;
-				bestj = j;
+#ifdef DEBUG
+			printf("Warning -- empty baseline ");
+			printf("blId %d mjd=%13.7f\n",
+				i, vb->mjdCentroid);
+#endif
+				continue;
 			}
-		}
-		dv = dvs[bestj];
 
-		/* dv now points to earliest data. */
-
-		if(RecordIsInvalid(dv))
-		{
-			nInvalid++;
-		}
-		else if(RecordIsFlagged(dv))
-		{
-			nFlagged++;
-		}
-		else if(RecordIsZero(dv))
-		{
-			nZero++;
-		}
-		else if(RecordIsTransitioning(dv))
-		{
-			nTrans++;
-		}
-		else
-		{
+			DifxVisCollectRandomParams(oldvb);
+			if(RecordIsInvalid(oldvb))
+			{
+				nInvalid++;
+			}
+			else if(RecordIsFlagged(oldvb))
+			{
+				nFlagged++;
+			}
+			else if(RecordIsZero(oldvb))
+			{
+				nZero++;
+			}
+			else if(RecordIsTransitioning(oldvb))
+			{
+				nTrans++;
+			}
+			else
+			{
+				/*do weight averaging*/
+				for(j=0; j<oldvb->nBand; j++)
+				{
+					for(k=0; k<oldvb->nPol; k++)
+					{
+						for(l=0; l<oldvb->nOutChan; l++)
+						{
+							for(m=0; m<oldvb->nComplex; m++)
+							{
+								/*this gives results consistent with old difx2fits*/
+								dv->data[j][k][l][m] /= 1;
+									//dv->weightSum[j][k]; 
+							}
+						}
+						dv->weightSum[j][k] = dv->tEff[j][k]/oldvb->tIntOut;
+					}
+				}
 #ifdef HAVE_FFTW
-			feedSnifferFITS(S, dv->record);
+				feedSnifferFITS(S, dv->record);
 #endif
 #ifndef WORDS_BIGENDIAN
-			FitsBinRowByteSwap(columns, nColumn, 
-				dv->record);
+				FitsBinRowByteSwap(columns, nColumn, 
+					dv->record);
 #endif
-
-//			printf("Record out: %f %d\n", dv->mjd, dv->pulsarBin);
-
-			fitsWriteBinRow(out, (char *)dv->record);
-			nWritten++;
-		}
-		if(dv->changed < 0)
-		{
-			deleteDifxVis(dv);
-			nJob--;
-			dvs[bestj] = dvs[nJob];
-		}
-		else
-		{
-			v = DifxVisCollectRandomParams(dv);
-			if(v < 0)
-			{
-				fprintf(stderr, "Error in "
-					"DifxVisCollectRandomParams : "
-					"return value = %d\n", v);
-#ifdef HAVE_FFTW
-				deleteSniffer(S);
-#endif
-				return -3;
+				fitsWriteBinRow(out, (char *)dv->record);
+				nWritten++;
+				printf("record written\n");
 			}
-
-			readvisrecord(dv, verbose, pulsarBin);
+			resetData(oldvb);
+		}
+		oldvb->nBuffer = 0;
+		if(changed >= NEW_JOB)
+		{
+			nJob--;
+		}
+		if(changed >= JOBS_DONE)
+		{
+			break;
 		}
 	}
 
@@ -1201,11 +1828,9 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 	printf("      %d records written\n", nWritten);
 	if(verbose > 1)
 	{
-		printf("        Note : 1 record is all data from 1 baseline\n");
-		printf("        for 1 timestamp\n");
+		printf("        Note : A record is all data from 1 baseline\n");
+		printf("        for 1 output time integration\n");
 	}
-
-	free(dvs);
 
 #ifdef HAVE_FFTW
 	deleteSniffer(S);
@@ -1214,9 +1839,9 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *OldModel,
 	return 0;
 }
 
-const DifxInput *DifxInput2FitsUV(const DifxInput *D, const DifxInput *OldModel,
+const DifxInput *DifxInput2FitsUV(const DifxInput *D, const DifxInput *CorrModel,
 	struct fits_keywords *p_fits_keys,
-	struct fitsPrivate *out, double scale,
+	struct fitsPrivate *out, double scale, int timeAvg,
 	int verbose, double sniffTime, int pulsarBin)
 {
 	if(D == 0)
@@ -1224,7 +1849,7 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D, const DifxInput *OldModel,
 		return 0;
 	}
 
-	DifxVisConvert(D, OldModel, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin);
+	DifxVisConvert(D, CorrModel, p_fits_keys, out, scale, timeAvg, verbose, sniffTime, pulsarBin);
 
 	return D;
 }
