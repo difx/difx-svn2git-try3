@@ -1,3 +1,9 @@
+Version 0.2.1
+~~~~~~~~~~~~~
+* Change sign convention associated with vex file
+   Note on clock sign conventions: As far as I (WFB) can tell, vex uses one sign
+   convention and the VLBA, DiFX and FITS all use the other.
+
 Version 0.2
 ~~~~~~~~~~~
 * Make several classes subclasses of VexInterval to simplify things
