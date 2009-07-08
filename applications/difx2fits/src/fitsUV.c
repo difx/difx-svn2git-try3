@@ -57,9 +57,9 @@ int baseline2index(int a1, int a2, int nAnt)
 int getFrequencies(VisBuffer *vb)
 {
 	/*FIXME put ref_pixel in algorithm */
-	int i, j, bandFreq, isUSB;
+	int i, j, isUSB;
 	int startChan = vb->D->startChan;
-	double chanBW;
+	double chanBW, bandFreq;
 	float ref_pixel = 1.0;
 
 	for(i = 0; i < vb->nBand; i++) 
@@ -342,6 +342,7 @@ int updateShiftDelay(VisBuffer *vb)
 	if (vb->a1 == vb->a2 || vb->D == vb->CorrModel)
 	{
 		/*skip for autocorrs or if no shifting*/
+		vb->shiftDelay = 0;
 		return 0;
 	}
 	/*1 and 2 are the two datastreams*/
@@ -649,6 +650,7 @@ int updateVisBuffer(VisBuffer *oldvb, VisBuffer *vb)
 	if(newBl)
 	{
 		updateBaseline(vb);
+		updateShiftDelay(vb);
 	}
 	if(newMjd)
 	{
@@ -808,6 +810,7 @@ int moveVisBuffer(VisBuffer *vb, VisBuffer *oldvb)
 	oldvb->nCorr = vb->nCorr;
 	oldvb->tIntIn = vb->tIntIn;
 	oldvb->tIntOut = vb->tIntOut;
+	oldvb->shiftDelay = vb->shiftDelay;
 
 	/*first delete all arrays in oldvb which aren't used by vb*/
 	//assume that D is always the same
@@ -1235,7 +1238,7 @@ int DifxVisNewUVData(VisBuffer *oldvb, VisBuffer *vb)
 {
 
 	int i, i1, v;
-	int nFloat, readSize;
+	int readSize;
 	int error = 0;
 
 	error = readDifxHeader(vb);
@@ -1285,7 +1288,7 @@ int DifxVisNewUVData(VisBuffer *oldvb, VisBuffer *vb)
 	}
 
 	/* reorder data and set weights if weights not provided */
-	if(nFloat < vb->nComplex)
+	if(vb->nFloat < vb->nComplex)
 	{
 		for(i = 3*vb->D->nInChan-3; i > 0; i -= 3)
 		{
@@ -1537,10 +1540,10 @@ int shiftPhase(VisBuffer *vb)
 	d = vb->spectrum;
 	nInChan = vb->D->nInChan;
 	
-	for(i = 0; i < nChan; i++)
+	for(i = 0; i < nInChan; i++)
 	{
 		index = (startChan + i) * 2;
-		shift = TWO_PI * fmod(vb->freq[nInChan][vb->bandId] * vb->shiftDelay, 1.0);/* us and MHz cancel*/
+		shift = TWO_PI * fmod(vb->freq[vb->bandId][startChan + i] * vb->shiftDelay, 1.0);/* us and MHz cancel*/
 		preal = cos(shift); 
 		pimag = sin(shift);
 		real = d[index] * preal - d[index+1] * pimag;
