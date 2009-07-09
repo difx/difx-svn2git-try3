@@ -10,6 +10,7 @@
 #ifdef HAVE_FFTW
 #include "sniffer.h"
 #endif
+#define DEBUG
 
 /*Error Codes*/
 #define NEXT_FILE            1
@@ -62,6 +63,9 @@ int getFrequencies(VisBuffer *vb)
 	double chanBW, bandFreq;
 	float ref_pixel = 1.0;
 
+#ifdef DEBUG
+			printf("band\tchan\tfrequency\n");
+#endif
 	for(i = 0; i < vb->nBand; i++) 
 	{
 		bandFreq = vb->config->IF[i].freq;
@@ -76,6 +80,11 @@ int getFrequencies(VisBuffer *vb)
 			{
 				vb->freq[i][j] = bandFreq - (j + startChan) * chanBW;
 			}
+#ifdef DEBUG
+			printf("%d\t%d\t%f\n", i, j, vb->freq[i][j]);
+#endif
+			
+
 		}
 	}
 	return 0;
@@ -349,11 +358,15 @@ int updateShiftDelay(VisBuffer *vb)
 	/*Corr refers to the model used for correlation*/
 	double delay1, delayCorr1;
 	double delay2, delayCorr2;
+	double dt, dtCorr;
 	const DifxPolyModel *im1, *im2;
 	const DifxPolyModel *imCorr1, *imCorr2;
 	int terms1, terms2;
 	int termsCorr1, termsCorr2;
+	int n, nCorr;
 
+	n = getDifxScanIMIndex(vb->D->scan + vb->scanId, vb->mjdCentroid, &dt);
+	nCorr = getDifxScanIMIndex(vb->D->scan + vb->scanId, vb->mjdCentroid, &dtCorr);
 
 	im1 = vb->D->scan[vb->scanId].im[vb->aa1];
 	im2 = vb->D->scan[vb->scanId].im[vb->aa2];
@@ -363,11 +376,11 @@ int updateShiftDelay(VisBuffer *vb)
 	terms2 = im2->order + 1;
 	termsCorr1 = imCorr1->order + 1;
 	termsCorr2 = imCorr2->order + 1;
-	delay1    = evalPoly(im1[vb->n].delay, terms1, vb->dt);
-	delay2    = evalPoly(im2[vb->n].delay, terms2, vb->dt);
-	delayCorr1 = evalPoly(imCorr1[vb->nCorr].delay, termsCorr1, vb->dtCorr);
-	delayCorr2 = evalPoly(imCorr2[vb->nCorr].delay, termsCorr2, vb->dtCorr);
-	vb->shiftDelay = (delay2 - delay1) - (delayCorr2 - delayCorr1);
+	delay1    = evalPoly(im1[vb->n].delay, terms1, dt);
+	delay2    = evalPoly(im2[vb->n].delay, terms2, dt);
+	delayCorr1 = evalPoly(imCorr1[vb->nCorr].delay, termsCorr1, dtCorr);
+	delayCorr2 = evalPoly(imCorr2[vb->nCorr].delay, termsCorr2, dtCorr);
+	vb->shiftDelay =  (delay2 - delay1) - (delayCorr2 - delayCorr1);
 
 	return 0;
 }
@@ -1354,9 +1367,9 @@ int DifxVisCollectRandomParams(const VisBuffer *vb)
 	dv->record->freqId1	= vb->freqId + 1;
 	dv->record->intTime	= vb->tIntOut;
 #ifdef DEBUG
-	printf("U=%f\n", dv->record->U);
-	printf("V=%f\n", dv->record->V);
-	printf("W=%f\n", dv->record->W);
+	printf("U=%e\n", dv->record->U);
+	printf("V=%e\n", dv->record->V);
+	printf("W=%e\n", dv->record->W);
 	printf("jd=%f\n", dv->record->jd);
 	printf("iat=%f\n", dv->record->iat);
 	printf("baseline=%d\n", dv->record->baseline);
@@ -1739,7 +1752,7 @@ static int DifxVisConvert(const DifxInput *D, const DifxInput *CorrModel,
 	oldvb = newVisBuffer(D, CorrModel, nComplex, timeAvg, scale, verbose, pulsarBin);
 	vb = newVisBuffer(D, CorrModel, nComplex, timeAvg, scale, verbose, pulsarBin);
 
-	/*prime vb with first job*/
+	/*point vb at first job*/
 	vb->jobId = updateJob(vb);
 	startGlob(vb);
 	
