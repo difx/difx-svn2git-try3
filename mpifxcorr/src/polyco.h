@@ -150,6 +150,12 @@ public:
   */
   void incrementBinCount();
 
+ /**
+  * Returns the estimated number of bytes used by the Polyco
+  * @return Estimated memory size of the Polyco (bytes)
+  */
+  inline int getEstimatedBytes() { return estimatedbytes; }
+
   inline int getMJD() { return mjd; }
   inline double getMJDfraction() { return mjdfraction; }
   inline double getSpanMinutes() { return timespan; }
@@ -168,7 +174,7 @@ protected:
   void calculateDMPhaseOffsets(double offsetmins);
 
   string pulsarname;
-  int configindex, numbins, maxchannels, numfreqs, observatory, timespan, numcoefficients, mjd;
+  int configindex, numbins, maxchannels, numfreqs, observatory, timespan, numcoefficients, mjd, estimatedbytes;
   double mjdfraction, dt0, dm, dopplershift, logresidual, refphase, f0, obsfrequency, binaryphase, minbinwidth, calclengthmins;
   bool readok;
   double * coefficients;

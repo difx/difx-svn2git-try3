@@ -29,6 +29,7 @@ Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
 {
   int status;
   double guardratio, maxguardratio;
+  estimatedbytes = config->getEstimatedBytes();
 
   //Get all the correlation parameters from config
   model = config->getModel();
@@ -92,6 +93,8 @@ Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
     {
       procslots[i].databuffer[j] = vectorAlloc_u8(databytes);
       procslots[i].controlbuffer[j] = vectorAlloc_s32(controllength);
+      estimatedbytes += databytes;
+      estimatedbytes += controllength;
     }
   }
 
@@ -99,10 +102,12 @@ Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
   processthreads = new pthread_t[numprocessthreads];
   processconds = new pthread_cond_t[numprocessthreads];
   processthreadinitialised = new bool[numprocessthreads];
+  threadbytes = new int[numprocessthreads];
   for(int i=0;i<numprocessthreads;i++)
   {
     pthread_cond_init(&processconds[i], NULL);
     processthreadinitialised[i] = false;
+    threadbytes[i] = 8*maxpreavresultlength;
   }
 
   //initialise the MPI communication objects
@@ -135,6 +140,7 @@ Core::~Core()
     delete [] procslots[i].controlbuffer;
     vectorFree(procslots[i].results);
   }
+  delete [] threadbytes;
   delete [] processthreads;
   delete [] processconds;
   delete [] processthreadinitialised;
@@ -199,6 +205,7 @@ void Core::execute()
     if(status != vecNoErr)
       csevere << startl << "Error trying to zero results in Core!!!" << endl;
     procslots[numreceived%RECEIVE_RING_LENGTH].resultsvalid = CR_VALIDVIS;
+    cverbose << startl << "Estimated memory usage by Core is now " << getEstimatedBytes() << " MB" << endl;
   }
 
   //Run through the shutdown sequence
@@ -251,6 +258,14 @@ void * Core::launchNewProcessThread(void * tdata)
   return 0;
 }
 
+int Core::getEstimatedBytes()
+{
+  int toreturn = estimatedbytes;
+  for(int i=0;i<numprocessthreads;i++)
+    toreturn += threadbytes[i];
+  return toreturn;
+}
+
 void Core::loopprocess(int threadid)
 {
   int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos, maxbins, maxchan, maxpolycos, stadumpchannels;
@@ -295,7 +310,7 @@ void Core::loopprocess(int threadid)
     if(somescrunch) //need separate accumulation space
     {
       pulsaraccumspace = new cf32*****[numbaselines];
-      createPulsarAccumSpace(pulsaraccumspace, procslots[0].configindex, -1); //don't need to delete old space
+      createPulsarAccumSpace(pulsaraccumspace, procslots[0].configindex, -1, threadid); //don't need to delete old space
     }
     bins = new s32*[config->getFreqTableLength()];
     for(int i=0;i<config->getFreqTableLength();i++)
@@ -381,7 +396,7 @@ void Core::loopprocess(int threadid)
       cinfo << startl << "Core " << mpiid << " threadid " << threadid << ": changing config to " << currentslot->configindex << endl;
       updateconfig(lastconfigindex, currentslot->configindex, threadid, startblock, numblocks, numpolycos, pulsarbin, modes, polycos, false);
       cinfo << startl << "Core " << mpiid << " threadid " << threadid << ": config changed successfully - pulsarbin is now " << pulsarbin << endl;
-      createPulsarAccumSpace(pulsaraccumspace, currentslot->configindex, lastconfigindex);
+      createPulsarAccumSpace(pulsaraccumspace, currentslot->configindex, lastconfigindex, threadid);
       lastconfigindex = currentslot->configindex;
     }
   }
@@ -416,7 +431,7 @@ void Core::loopprocess(int threadid)
     vectorFree(pulsarscratchspace);
     if(somescrunch)
     {
-      createPulsarAccumSpace(pulsaraccumspace, -1, procslots[(numprocessed+1)%RECEIVE_RING_LENGTH].configindex);
+      createPulsarAccumSpace(pulsaraccumspace, -1, procslots[(numprocessed+1)%RECEIVE_RING_LENGTH].configindex, threadid);
       delete [] pulsaraccumspace;
     }
   }
@@ -521,6 +536,9 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     //zero the autocorrelations and set delays
     modes[j]->zeroAutocorrelations();
     modes[j]->setValidFlags(&(procslots[index].controlbuffer[j][3]));
+    if(j==0) {
+      cout << "Core is telling Mode that data starts at time " << procslots[index].controlbuffer[j][0] << ", " << procslots[index].controlbuffer[j][1] << ", " << procslots[index].controlbuffer[j][2] << endl;
+    }
     modes[j]->setData(procslots[index].databuffer[j], procslots[index].datalengthbytes[j], procslots[index].controlbuffer[j][0], procslots[index].controlbuffer[j][1], procslots[index].controlbuffer[j][2]);
     modes[j]->setOffsets(procslots[index].offsets[0], procslots[index].offsets[1], procslots[index].offsets[2]);
   }
@@ -834,7 +852,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   //cout << "About to copy length " << resultindex << ", while maxpostavlength should be " << config->getMaxPostavResultLength() << endl;
   status = vectorAdd_cf32_I(threadresults, procslots[index].results, resultindex);
   if(status != vecNoErr)
-    csevere << startl << "Error trying to add thread results to final results!!!" << endl;
+    csevere << startl << "Error trying to add thread results to final results!!!" << ippGetStatusString((IppStatus)status) << endl;
 
   //cout << "Results done for " << index << ", now to copy autocorrelations" << endl;
 
@@ -935,7 +953,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   delete [] dsweights;
 }
 
-void Core::createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfigindex, int oldconfigindex)
+void Core::createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfigindex, int oldconfigindex, int threadid)
 {
   int status, freqchannels;
 
@@ -946,12 +964,14 @@ void Core::createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfiginde
     {
       for(int j=0;j<config->getBNumFreqs(oldconfigindex, i);j++)
       {
+        freqchannels = config->getFNumChannels(config->getBFreqIndex(oldconfigindex, i, j));
         for(int s=0;j<config->getMaxPhaseCentres(oldconfigindex);s++)
         {
           for(int k=0;k<config->getBNumPolProducts(oldconfigindex,i,j);k++)
           {
             for(int l=0;l<config->getNumPulsarBins(oldconfigindex);l++)
             {
+              threadbytes[threadid] -= 8*(freqchannels+1);
               vectorFree(pulsaraccumspace[i][j][s][k][l]);
             }
             delete [] pulsaraccumspace[i][j][s][k];
@@ -983,6 +1003,7 @@ void Core::createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfiginde
             for(int l=0;l<config->getNumPulsarBins(newconfigindex);l++)
             {
               pulsaraccumspace[i][j][s][k][l] = vectorAlloc_cf32(freqchannels + 1);
+              threadbytes[threadid] += 8*(freqchannels+1);
               status = vectorZero_cf32(pulsaraccumspace[i][j][s][k][l], freqchannels+1);
               if(status != vecNoErr)
                 csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
@@ -1010,13 +1031,17 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
 
   if(!first) //need to delete the old stuff
   {
-    for(int i=0;i<numdatastreams;i++)
+    for(int i=0;i<numdatastreams;i++) {
+      threadbytes[threadid] -= modes[i]->getEstimatedBytes();
       delete modes[i];
+    }
     if(threadid > 0 && pulsarbin)
     {
       //only delete the polycos if they were a copy (threadid > 0)
-      for(int i=0;i<numpolycos;i++)
+      for(int i=0;i<numpolycos;i++) {
+        threadbytes[threadid] -= polycos[i]->getEstimatedBytes();
         delete polycos[i];
+      }
     }
   }
 
@@ -1025,6 +1050,7 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
     modes[i] = config->getMode(configindex, i);
     if(!modes[i]->initialisedOK())
       MPI_Abort(MPI_COMM_WORLD, 1);
+    threadbytes[threadid] += modes[i]->getEstimatedBytes();
   }
 
   pulsarbin = config->pulsarBinOn(configindex);
@@ -1036,6 +1062,8 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
     {
       //if we are not the first thread, create a copy of the Polyco for our use
       polycos[i] = (threadid==0)?currentpolycos[i]:new Polyco(*currentpolycos[i]);
+      if(threadid == 0)
+        threadbytes[threadid] += polycos[i]->getEstimatedBytes();
     }
     cinfo << startl << "Core " << mpiid << " thread " << threadid << ": polycos created/copied successfully!"  << endl;
   }

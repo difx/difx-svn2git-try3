@@ -179,6 +179,10 @@ bool Model::calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timesp
   //work out the correct sample and offset for the midrange of the timespan
   polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + modelstartseconds + scantable[scanindex].offsetseconds - scantable[scanindex].polystartseconds;
   scansample = int((offsettime+polyoffset)/double(modelincsecs));
+  if(scansample == scantable[scanindex].nummodelsamples && ((offsettime+polyoffset - scansample*modelincsecs) < 1e-9)) {
+    //Asked for a value at the exact end of a scan, which is ok, but need to adjust or check below would complain
+    scansample--;
+  }
   if(scansample < 0 || scansample >= scantable[scanindex].nummodelsamples) {
     cwarn << startl << "Model delay interpolator was asked to produce results for scan " << scanindex << " from outside the scans valid range (worked out scansample " << scansample << ", when numsamples was " << scantable[scanindex].nummodelsamples << ")" << endl;
     return false;
@@ -229,6 +233,59 @@ bool Model::calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timesp
   delaycoeffs[2] = delaysamples[0];
   //cout << "Interpolator produced coefficients " << delaycoeffs[0] << ", " << delaycoeffs[1] << ", " << delaycoeffs[2] << " from samples " << delaysamples[0] << ", " << delaysamples[1] << ", " << delaysamples[2] << " for a time range " << timespan << endl;
   return true;
+}
+
+bool Model::addClockTerms(string antennaname, double refmjd, int order, double * terms)
+{
+  double clockdistance, dt, polysampleclock;
+
+  if(scantable == 0) //hasn't been allocated yet
+    return false; //note exit here
+
+  for(int i=0;i<numstations;i++)
+  {
+    if(stationtable[i].name.compare(antennaname) == 0)
+    {
+      for(int j=0;j<numscans;j++)
+      {
+        if(scantable[j].nummodelsamples == 0) //the IM information has not yet been read
+          return false; //note exit here
+        
+        for(int k=0;k<scantable[j].nummodelsamples;k++)
+        {
+          clockdistance = 86400.0*(scantable[j].polystartmjd + ((double)scantable[j].polystartseconds)/86400.0 - refmjd);
+          dt = clockdistance;
+          polysampleclock = terms[0];
+          for(int l=1;l<=order;l++)
+          {
+            polysampleclock += terms[l]*dt;
+            dt *= clockdistance;
+          }
+          scantable[j].clock[k][i][0] = polysampleclock;
+          for(int l=1;l<=order;l++)
+          {
+            scantable[j].clock[k][i][l] = terms[l];
+          }
+          for(int l=order+1;l<=polyorder;l++)
+          {
+            scantable[j].clock[k][i][l] = 0.0;
+          }
+
+          //now update the overall delay model too
+          for(int p=0;p<scantable[j].numphasecentres+1;p++)
+          {
+            for(int l=0;l<=polyorder;l++)
+            {
+              scantable[j].delay[k][p][i][l] += scantable[j].clock[k][i][l];
+            }
+          }
+        }
+      }
+      return true; //note exit here
+    }
+  }
+
+  return false; //mustn't have found the station
 }
 
 bool Model::readInfoData(ifstream * input)
@@ -336,6 +393,7 @@ bool Model::readScanData(ifstream * input)
   numscans = atoi(line.c_str());
   scantable = new scan[numscans];
   for(int i=0;i<numscans;i++) {
+    scantable[i].nummodelsamples = 0; //shows that IM info not yet read
     config->getinputline(input, &scantable[i].identifier, "SCAN ", i);
     config->getinputline(input, &line, "SCAN ", i);
     scantable[i].offsetseconds = atoi(line.c_str());
@@ -511,6 +569,7 @@ bool Model::readPolynomialSamples(ifstream * input)
     scantable[i].delay = new f64***[scantable[i].nummodelsamples];
     scantable[i].wet = new f64***[scantable[i].nummodelsamples];
     scantable[i].dry = new f64***[scantable[i].nummodelsamples];
+    scantable[i].clock = new f64**[scantable[i].nummodelsamples];
     for(int j=0;j<scantable[i].nummodelsamples;j++) {
       config->getinputline(input, &line, "SCAN ", i);
       mjd = atoi(line.c_str());
@@ -530,6 +589,9 @@ bool Model::readPolynomialSamples(ifstream * input)
       scantable[i].delay[j] = new f64**[scantable[i].numphasecentres+1];
       scantable[i].wet[j] = new f64**[scantable[i].numphasecentres+1];
       scantable[i].dry[j] = new f64**[scantable[i].numphasecentres+1];
+      scantable[i].clock[j] = new f64*[numstations];
+      for(int k=0;k<numstations;k++)
+        scantable[i].clock[j][k] = vectorAlloc_f64(polyorder+1);
       for(int k=0;k<scantable[i].numphasecentres+1;k++) {
         scantable[i].u[j][k] = new f64*[numstations];
         scantable[i].v[j][k] = new f64*[numstations];

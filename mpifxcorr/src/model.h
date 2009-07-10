@@ -118,6 +118,7 @@ class Model{
     inline double getScanEndMJD(int scan) { return modelmjd + (double)(modelstartseconds+scantable[scan].offsetseconds+scantable[scan].durationseconds)/86400.0; }
     inline string getScanIdentifier(int scan) { return scantable[scan].identifier; }
     inline int getScanDuration(int scan) { return scantable[scan].durationseconds; }
+    inline double getModelStartMJDPlusFraction() { return modelmjd + ((double)modelstartseconds)/86400.0; }
 
     ///accessor methods for source information from a scan
     inline int getPhaseCentreSourceIndex(int scan, int phasecentre) { return scantable[scan].phasecentres[phasecentre]->index; }
@@ -156,6 +157,16 @@ class Model{
     bool calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timespan, int increments, int antennaindex, int scansourceindex, int order, f64 * delaycoeffs);
 
     /**
+     * Adds the clock model for a given antenna
+     * @param antennaname The name of the antenna to add the clock model for
+     * @param refmjd The reference time for this clock model (MJD, with fraction)
+     * @param order The order of the clock polynomial model (0, 1, or more)
+     * @param terms The clock model coefficients (in us, us/s, us/s^2 ...)
+     * @return True unless the antenna was not found
+     */
+    bool addClockTerms(string antennaname, double refmjd, int order, double * terms);
+
+    /**
      * Returns the number of phase centres to be correlated for this scan
      * @return The number of phase centres to be correlated for this scan
      */
@@ -181,6 +192,7 @@ class Model{
       f64 **** delay;
       f64 **** wet;
       f64 **** dry;
+      f64 *** clock;
     } scan;
 
     bool readInfoData(ifstream * input);

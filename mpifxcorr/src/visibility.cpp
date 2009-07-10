@@ -45,7 +45,7 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, i
   int status;
 
   cverbose << startl << "About to create visibility " << id << "/" << numvis << endl;
-  estimatedBytes = 0;
+  estimatedbytes = 0;
   model = config->getModel();
 
   if(visID == 0)
@@ -60,8 +60,8 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, i
   numdatastreams = config->getNumDataStreams();
   resultlength = config->getMaxPostavResultLength();
   results = vectorAlloc_cf32(resultlength);
-  estimatedBytes += 8*resultlength; //for the results
-  estimatedBytes += 4*(config->getNumDataStreams() + config->getNumBaselines())*config->getDNumTotalBands(0,0); //a rough stab at the calibration arrays
+  estimatedbytes += 8*resultlength; //for the results
+  estimatedbytes += 4*(config->getNumDataStreams() + config->getNumBaselines())*config->getDNumTotalBands(0,0); //a rough stab at the calibration arrays
   status = vectorZero_cf32(results, resultlength);
   if(status != vecNoErr)
     csevere << startl << "Error trying to zero when creating visibility " << visID << endl;
@@ -460,6 +460,7 @@ void Visibility::writedata()
       }
     }
   }
+  cout << "Finished grabbing the baseline weights" << endl;
   for(int i=0;i<numdatastreams;i++)
   {
     for(int j=0;j<autocorrwidth;j++)

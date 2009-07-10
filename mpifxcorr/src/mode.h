@@ -150,6 +150,12 @@ public:
   */
   inline cf32* getConjugatedFreqs(int phasecentre, int outputband) { return conjfftoutputs[phasecentre][outputband]; }
 
+ /**
+  * Returns the estimated number of bytes used by the Mode
+  * @return Estimated memory size of the Mode (bytes)
+  */
+  inline int getEstimatedBytes() { return estimatedbytes; }
+
   virtual ~Mode();
 
   /** Constant for comparing two floats for equality (for freqs and bandwidths etc) */
@@ -170,11 +176,11 @@ protected:
   virtual float unpack(int sampleoffset);
   
   Configuration * config;
-  int configindex, datastreamindex, recordedbandchannels, channelstoaverage, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, currentscan, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, unpackstartsamples, maxphasecentres;
+  int configindex, datastreamindex, recordedbandchannels, channelstoaverage, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, currentscan, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, unpackstartsamples, maxphasecentres, estimatedbytes;
   int fringerotationorder, arraystridelength, numstrides;
   double recordedbandwidth, blockclock, sampletime; //MHz, microseconds
   double a0, b0, c0, a, b, c, quadadd1, quadadd2;
-  double fftstartmicrosec, fftdurationmicrosec;
+  double fftstartmicrosec, fftdurationmicrosec, intclockseconds;
   f32 dataweight;
   int samplesperblock, samplesperlookup, numlookups, flaglength, autocorrwidth;
   int datascan, datasec, datans, datalengthbytes;

@@ -73,6 +73,7 @@ public:
   */
 //@{
   inline int getMPIId() { return mpiid; }
+  inline int getEstimatedBytes() { return estimatedbytes; }
   inline int getVisBufferLength() { return visbufferlength; }
   inline bool consistencyOK() {return consistencyok; }
   inline int getResultLength(int configindex) { return configresultlengths[configindex]; }
@@ -691,7 +692,7 @@ private:
   int executeseconds, startmjd, startseconds, startns;
   int maxnumchannels, maxnumpulsarbins, maxresultlength, maxpostavresultlength, numindependentchannelconfigs;
   int stadumpchannels, ltadumpchannels;
-  int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength;
+  int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, estimatedbytes;
   string calcfilename, modelfilename, coreconffilename, outputfilename;
   int * numprocessthreads;
   int * scanconfigindices;

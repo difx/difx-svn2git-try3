@@ -346,6 +346,7 @@ int main(int argc, char *argv[])
       manager = new FxManager(config, numcores, datastreamids, coreids, myID, return_comm, monitor, monhostname, port, monitor_skip);
       MPI_Barrier(world);
       t1 = MPI_Wtime();
+      cinfo << startl << "Estimated memory usage by FXManager: " << manager->getEstimatedBytes()/1048576.0 << " MB" << endl;
       manager->execute();
       t2 = MPI_Wtime();
       cinfo << startl << "Total wallclock time was **" << t2 - t1 << "** seconds" << endl;
@@ -361,12 +362,14 @@ int main(int argc, char *argv[])
         stream = new DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
       stream->initialise();
       MPI_Barrier(world);
+      cinfo << startl << "Estimated memory usage by Datastream: " << stream->getEstimatedBytes()/1048576.0 << " MB" << endl;
       stream->execute();
     }
     else //im a processing core
     {
       core = new Core(myID, config, datastreamids, return_comm);
       MPI_Barrier(world);
+      cinfo << startl << "Estimated memory usage by Core: " << core->getEstimatedBytes()/1048576.0 << " MB" << endl;
       core->execute();
     }
     MPI_Barrier(world);

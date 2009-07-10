@@ -113,7 +113,9 @@ int Mk5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   framesin = vlbaoffset/payloadbytes;
 
   // Note here a time is needed, so we only count payloadbytes
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + (int)((1000000000.0*framesin)/framespersecond);
+  int segoffns = bufferinfo[atsegment].scanns + (int)((1000000000.0*framesin)/framespersecond);
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + segoffns/1000000000;
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = segoffns%1000000000;
 
   //go back to nearest frame -- here the total number of bytes matters
   bufferindex = atsegment*readbytes + framesin*framebytes;
@@ -161,7 +163,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   nbits = config->getDNumBits(configindex, streamnum);
   nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
   framebytes = config->getFrameBytes(configindex, streamnum);
-  bw = config->getDRecordedBandwidth(configindex, mpiid, 0);
+  bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
   fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, framebytes, config->getDDecimationFactor(configindex, streamnum), formatname);
   if (fanout < 0) {
@@ -169,13 +171,16 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
+  cout << "Format name is " << formatname << ", configindex is " << configindex << ", fileindex is " << fileindex << endl;
   mark5stream = new_mark5_stream(
     new_mark5_stream_file(datafilenames[configindex][fileindex].c_str(), 0),
     new_mark5_format_generic_from_string(formatname) );
+  cout << "Value of mark5stream was " << mark5stream << endl;
   if(mark5stream->nchan != config->getDNumRecordedBands(configindex, streamnum))
   {
     cerror << startl << "Error - number of recorded bands for datastream " << streamnum << " (" << nrecordedbands << ") does not match with MkV file " << datafilenames[configindex][fileindex] << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
   }
+  cout << "Successfully used mark5stream" << endl;
 
   // resolve any day ambiguities
   mark5_stream_fix_mjd(mark5stream, corrstartday);

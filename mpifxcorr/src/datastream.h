@@ -70,6 +70,12 @@ public:
   */
   void execute();
 
+ /**
+  * Returns the estimated number of bytes used by the Datastream
+  * @return Estimated memory size of the Datastream (bytes)
+  */
+  inline int getEstimatedBytes() { return estimatedbytes; }
+
 protected:
   /// Structure which maintains all information necessary for a segment of the databuffer, including the configuration parameters for
   /// that time interval and the MPI requests for the non-blocking communications that originated in this segment
@@ -141,7 +147,7 @@ protected:
   virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
   
   const int databufferfactor, numdatasegments;
-  int streamnum, atsegment, readscan, readseconds, corrstartday, corrstartseconds, readbytes, bufferbytes, readnanoseconds, intclockseconds;
+  int streamnum, atsegment, readscan, readseconds, corrstartday, corrstartseconds, readbytes, bufferbytes, readnanoseconds, intclockseconds, estimatedbytes;
   bool dataremaining;
   readinfo * bufferinfo;
   Configuration * config;

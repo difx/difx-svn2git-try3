@@ -41,6 +41,7 @@ Configuration::Configuration(const char * configfile, int id)
   ruleread = false;
   baselineread = false;
   maxnumchannels = 0;
+  estimatedbytes = 0;
   model = NULL;
   
   //open the file
@@ -157,6 +158,15 @@ Configuration::Configuration(const char * configfile, int id)
     model = new Model(this, calcfilename);
     consistencyok = model->openSuccess();
   }
+  double * clockmodel = new double[2];
+  for(int i=0;i<telescopetablelength;i++) {
+    clockmodel[0] = telescopetable[i].clockdelay;
+    clockmodel[1] = telescopetable[i].clockrate;
+    if(consistencyok)
+      consistencyok = model->addClockTerms(telescopetable[i].name, model->getModelStartMJDPlusFraction(), 1, clockmodel);
+  }
+  delete [] clockmodel;
+  estimatedbytes += model->getEstimatedBytes();
   //cout << "About to populateScanConfigList(), consistencyok is " << consistencyok << endl;
   if(consistencyok)
     consistencyok = populateScanConfigList();
@@ -610,6 +620,7 @@ bool Configuration::processBaselineTable(ifstream * input)
   getinputline(input, &line, "BASELINE ENTRIES");
   baselinetablelength = atoi(line.c_str());
   baselinetable = new baselinedata[baselinetablelength];
+  estimatedbytes += baselinetablelength*sizeof(baselinedata);
   if(baselinetablelength < numbaselines)
   {
     cfatal << startl << "Error - not enough baselines are supplied in the baseline table (" << baselinetablelength << ") compared to the number of baselines (" << numbaselines << ")!!!" << endl;
@@ -637,6 +648,7 @@ bool Configuration::processBaselineTable(ifstream * input)
       baselinetable[i].numpolproducts[j] = atoi(line.c_str());
       baselinetable[i].datastream1bandindex[j] = new int[baselinetable[i].numpolproducts[j]];
       baselinetable[i].datastream2bandindex[j] = new int[baselinetable[i].numpolproducts[j]];
+      estimatedbytes += baselinetable[i].numpolproducts[j]*2*4;
       baselinetable[i].polpairs[j] = new char*[baselinetable[i].numpolproducts[j]];
       for(int k=0;k<baselinetable[i].numpolproducts[j];k++)
       {
@@ -646,6 +658,7 @@ bool Configuration::processBaselineTable(ifstream * input)
         getinputline(input, &line, "D/STREAM B BAND ", k);
         baselinetable[i].datastream2bandindex[j][k] = atoi(line.c_str());
         baselinetable[i].polpairs[j][k] = new char[3];
+        estimatedbytes += 3;
       }
       dsdata = datastreamtable[baselinetable[i].datastream1index];
       dsband = baselinetable[i].datastream1bandindex[j][0];
@@ -732,6 +745,7 @@ bool Configuration::processConfig(ifstream * input)
   getinputline(input, &line, "NUM CONFIGURATIONS");
   numconfigs = atoi(line.c_str());
   configs = new configdata[numconfigs];
+  estimatedbytes += numconfigs*sizeof(configdata);
   for(int i=0;i<numconfigs;i++)
   {
     found = false;
@@ -780,6 +794,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
   getinputline(input, &line, "DATASTREAM ENTRIES");
   datastreamtablelength = atoi(line.c_str());
   datastreamtable = new datastreamdata[datastreamtablelength];
+  estimatedbytes += datastreamtablelength*sizeof(datastreamdata);
   if(datastreamtablelength < numdatastreams)
   {
     cfatal << startl << "Error - not enough datastreams are supplied in the datastream table (" << datastreamtablelength << ") compared to the number of datastreams (" << numdatastreams << "!!!" << endl;
@@ -872,6 +887,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     datastreamtable[i].recordedfreqtableindices = new int[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqclockoffsets = new double[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqlooffsets = new double[datastreamtable[i].numrecordedfreqs];
+    estimatedbytes += 8*datastreamtable[i].numrecordedfreqs*3;
     datastreamtable[i].numrecordedbands = 0;
     for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
     {
@@ -896,6 +912,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].bytespersampledenom = 1;
     datastreamtable[i].recordedbandpols = new char[datastreamtable[i].numrecordedbands];
     datastreamtable[i].recordedbandlocalfreqindices = new int[datastreamtable[i].numrecordedbands];
+    estimatedbytes += datastreamtable[i].numrecordedbands*5;
     for(int j=0;j<datastreamtable[i].numrecordedbands;j++)
     {
       getinputline(input, &line, "REC BAND ", j);
@@ -911,6 +928,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     datastreamtable[i].zoomfreqpols = new int[datastreamtable[i].numzoomfreqs];
     datastreamtable[i].zoomfreqparentdfreqindices = new int[datastreamtable[i].numzoomfreqs];
     datastreamtable[i].zoomfreqchanneloffset = new int[datastreamtable[i].numzoomfreqs];
+    estimatedbytes += datastreamtable[i].numzoomfreqs*16;
     datastreamtable[i].numzoombands = 0;
     for(int j=0;j<datastreamtable[i].numzoomfreqs;j++)
     {
@@ -943,6 +961,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     }
     datastreamtable[i].zoombandpols = new char[datastreamtable[i].numzoombands];
     datastreamtable[i].zoombandlocalfreqindices = new int[datastreamtable[i].numzoombands];
+    estimatedbytes += 5*datastreamtable[i].numzoombands;
     for(int j=0;j<datastreamtable[i].numzoombands;j++)
     {
       getinputline(input, &line, "ZOOM BAND ", j);
@@ -1009,6 +1028,7 @@ bool Configuration::processRuleTable(ifstream * input)
   getinputline(input, &key, "NUM RULES");
   numrules = atoi(key.c_str());
   rules = new ruledata[numrules];
+  estimatedbytes += numrules*sizeof(ruledata);
   for(int i=0;i<numrules;i++) {
     rules[i].configindex = -1;
     rules[i].sourcename = "";
@@ -1085,7 +1105,7 @@ bool Configuration::processFreqTable(ifstream * input)
   getinputline(input, &line, "FREQ ENTRIES");
   freqtablelength = atoi(line.c_str());
   freqtable = new freqdata[freqtablelength];
-
+  estimatedbytes += freqtablelength*sizeof(freqdata);
   for(int i=0;i<freqtablelength;i++)
   {
     getinputline(input, &line, "FREQ (MHZ) ", i);
@@ -1143,7 +1163,7 @@ void Configuration::processTelescopeTable(ifstream * input)
   getinputline(input, &line, "TELESCOPE ENTRIES");
   telescopetablelength = atoi(line.c_str());
   telescopetable = new telescopedata[telescopetablelength];
-
+  estimatedbytes += telescopetablelength*sizeof(telescopedata);
   for(int i=0;i<telescopetablelength;i++)
   {
     getinputline(input, &(telescopetable[i].name), "TELESCOPE NAME ", i);
@@ -1174,6 +1194,7 @@ bool Configuration::populateScanConfigList()
   ruledata r;
 
   scanconfigindices = new int[model->getNumScans()];
+  estimatedbytes += 4*model->getNumScans();
   for(int i=0;i<model->getNumScans();i++) {
     scanconfigindices[i] = -1;
     for(int j=0;j<numrules;j++) {
@@ -1266,8 +1287,10 @@ bool Configuration::populateResultLengths()
     }
 
     //multiply this by number of pulsar bins if necessary
-    if(configs[c].pulsarbin && !configs[c].scrunchoutput)
+    if(configs[c].pulsarbin && !configs[c].scrunchoutput) {
       len *= configs[c].numbins;
+      postavlen *= configs[c].numbins;
+    }
 
     found = false;
     //find a scan that matches this config
@@ -1275,6 +1298,7 @@ bool Configuration::populateResultLengths()
       if(scanconfigindices[i] == c) {
         //multiply length by number of phase centres
         len *= model->getNumPhaseCentres(i);
+        postavlen *= model->getNumPhaseCentres(i);
         found = true;
         break;
       }
@@ -1663,6 +1687,7 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
       configs[configindex].polycos[polycocount] = new Polyco(polycofilenames[i], j, configindex, configs[configindex].numbins, getMaxNumChannels(), binphaseends, binweights, double(configs[configindex].subintns)/60000000000.0);
       if (!configs[configindex].polycos[polycocount]->initialisedOK())
         return false;
+      estimatedbytes += configs[configindex].polycos[polycocount]->getEstimatedBytes();
       polycocount++;
     } 
   }

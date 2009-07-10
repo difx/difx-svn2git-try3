@@ -35,10 +35,12 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 {
   int status, localfreqindex;
   int decimationfactor = config->getDDecimationFactor(configindex, datastreamindex);
+  estimatedbytes = 0;
 
   model = config->getModel();
   maxphasecentres = config->getMaxPhaseCentres(configindex);
   initok = true;
+  intclockseconds = int(floor(config->getDClockOffset(configindex, dsindex)/1000000.0 + 0.5));
   numstrides = twicerecordedbandchannels/arraystridelength;
   sampletime = 1.0/(2.0*recordedbandwidth); //microseconds
   fftdurationmicrosec = twicerecordedbandchannels*sampletime;
@@ -79,8 +81,10 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
       numlookups++;
 
     unpackedarrays = new f32*[numrecordedbands];
-    for(int i=0;i<numrecordedbands;i++)
+    for(int i=0;i<numrecordedbands;i++) {
       unpackedarrays[i] = vectorAlloc_f32(unpacksamples);
+      estimatedbytes += 4*unpacksamples;
+    }
 
     fftoutputs = new cf32**[maxphasecentres+1];
     conjfftoutputs = new cf32**[maxphasecentres+1];
@@ -93,6 +97,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
       {
         fftoutputs[i][j] = vectorAlloc_cf32(recordedbandchannels + 1);
         conjfftoutputs[i][j] = vectorAlloc_cf32(recordedbandchannels + 1);
+        estimatedbytes += 2*8*(recordedbandchannels + 1);
         //zero the Nyquist channel
         if(config->getDRecordedLowerSideband(configindex, datastreamindex, config->getDLocalRecordedFreqIndex(configindex, datastreamindex, j))) {
           fftoutputs[i][j][0].re = 0.0;
@@ -114,6 +119,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
     lookup = vectorAlloc_s16((MAX_U16+1)*samplesperlookup);
     linearunpacked = vectorAlloc_s16(numlookups*samplesperlookup);
+    estimatedbytes += 2*(numlookups*samplesperlookup + (MAX_U16+1)*samplesperlookup);
 
     //initialise the fft info
     order = 0;
@@ -126,15 +132,18 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
       case 2:
         piecewiserotator = vectorAlloc_cf32(arraystridelength);
         quadpiecerotator = vectorAlloc_cf32(arraystridelength);
+        estimatedbytes += 2*8*arraystridelength;
 
         subquadxval  = vectorAlloc_f64(arraystridelength);
         subquadphase = vectorAlloc_f64(arraystridelength);
         subquadarg   = vectorAlloc_f32(arraystridelength);
         subquadsin   = vectorAlloc_f32(arraystridelength);
         subquadcos   = vectorAlloc_f32(arraystridelength);
+        estimatedbytes += (8+8+4+4+4)*arraystridelength;
 
         stepxoffsquared = vectorAlloc_f64(numstrides);
         tempstepxval    = vectorAlloc_f64(numstrides);
+        estimatedbytes += 16*numstrides;
       case 1:
         subxoff  = vectorAlloc_f64(arraystridelength);
         subxval  = vectorAlloc_f64(arraystridelength);
@@ -142,6 +151,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
         subarg   = vectorAlloc_f32(arraystridelength);
         subsin   = vectorAlloc_f32(arraystridelength);
         subcos   = vectorAlloc_f32(arraystridelength);
+        estimatedbytes += (3*8+3*4)*arraystridelength;
 
         stepxoff  = vectorAlloc_f64(numstrides);
         stepxval  = vectorAlloc_f64(numstrides);
@@ -150,10 +160,12 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
         stepsin   = vectorAlloc_f32(numstrides);
         stepcos   = vectorAlloc_f32(numstrides);
         stepcplx  = vectorAlloc_cf32(numstrides);
+        estimatedbytes += (3*8+3*4+8)*numstrides;
 
         complexunpacked = vectorAlloc_cf32(twicerecordedbandchannels);
         complexrotator = vectorAlloc_cf32(twicerecordedbandchannels);
         fftd = vectorAlloc_cf32(twicerecordedbandchannels);
+        estimatedbytes += 3*8*twicerecordedbandchannels;
 
         for(int i=0;i<arraystridelength;i++)
           subxoff[i] = (double(i)/double(twicerecordedbandchannels));
@@ -189,6 +201,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     subfracsampcos = vectorAlloc_f32(arraystridelength);
     subchannelfreqs = vectorAlloc_f32(arraystridelength);
     lsbsubchannelfreqs = vectorAlloc_f32(arraystridelength);
+    estimatedbytes += 5*4*arraystridelength;
     /*cout << "subfracsamparg is " << subfracsamparg << endl;
     cout << "subfracsampsin is " << subfracsampsin << endl;
     cout << "subfracsampcos is " << subfracsampcos << endl;
@@ -205,6 +218,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     stepfracsampcplx = vectorAlloc_cf32(numstrides/2);
     stepchannelfreqs = vectorAlloc_f32(numstrides/2);
     lsbstepchannelfreqs = vectorAlloc_f32(numstrides/2);
+    estimatedbytes += (5*2+4)*numstrides;
     /*cout << "stepfracsamparg is " << stepfracsamparg << endl;
     cout << "stepfracsampsin is " << stepfracsampsin << endl;
     cout << "stepfracsampcos is " << stepfracsampcos << endl;
@@ -218,6 +232,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     }
 
     fracsamprotator = vectorAlloc_cf32(recordedbandchannels + 1);
+    estimatedbytes += 8*(recordedbandchannels + 1);
     /*cout << "Numstrides is " << numstrides << ", recordedbandchannels is " << recordedbandchannels << ", arraystridelength is " << arraystridelength << endl;
     cout << "fracsamprotator is " << fracsamprotator << endl;
     cout << "stepchannelfreqs[5] is " << stepchannelfreqs[5] << endl;
@@ -245,8 +260,10 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     for(int i=0;i<autocorrwidth;i++)
     {
       autocorrelations[i] = new cf32*[numrecordedbands+numzoombands];
-      for(int j=0;j<numrecordedbands;j++)
+      for(int j=0;j<numrecordedbands;j++) {
         autocorrelations[i][j] = vectorAlloc_cf32(recordedbandchannels+1);
+        estimatedbytes += 8*(recordedbandchannels+1);
+      }
       for(int j=0;j<numzoombands;j++)
       {
         localfreqindex = config->getDLocalZoomFreqIndex(confindex, dsindex, j);
@@ -426,13 +443,15 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   fftslot = maxphasecentres-1;
   fftcentre = index+0.5;
   averagedelay = interpolators[0][0]*fftcentre*fftcentre + interpolators[0][1]*fftcentre + interpolators[0][2];
-  //cout << "averagedelay for " <<  datastreamindex << " is " << averagedelay << endl;
+  if(datastreamindex == 0 && index == 0) {
+    cout << setprecision(15) << "averagedelay for index " <<  index << " is " << averagedelay << ", Index Time is " << offsetseconds + ((double)offsetns)/1000000000.0 << ", Data Time is " << datasec + ((double)datans)/1000000000.0 << endl;
+  }
   fftstartmicrosec = index*twicerecordedbandchannels*sampletime;
   starttime = (offsetseconds-datasec)*1000000.0 + double(offsetns - datans)/1000.0 + fftstartmicrosec - averagedelay;
   //cout << "starttime for " << datastreamindex << " is " << starttime << endl;
   nearestsample = int(starttime/sampletime + 0.5);
   //cout << "nearestsample for " << datastreamindex << " is " << nearestsample << endl;
-  walltimesecs = model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds + ((double)offsetns)/1000000000.0 + fftstartmicrosec;
+  walltimesecs = model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds + ((double)offsetns)/1000000000.0 + fftstartmicrosec/1000000.0;
 
   //if we need to, unpack some more data - first check to make sure the pos is valid at all
   //cout << "Datalengthbytes for " << datastreamindex << " is " << datalengthbytes << endl;
@@ -463,7 +482,6 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   fracsampleerror = float(starttime - nearestsampletime);
   //if(datastreamindex == 0)
   //  cout << "Fractional sample error is " << fracsampleerror << endl;
-  fftstartmicrosec = index*twicerecordedbandchannels*sampletime;
 
   switch(fringerotationorder) {
     case 0: //post-F
@@ -490,6 +508,8 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       a = interpolators[0][0];
       b = interpolators[0][1] + index*interpolators[0][0]*2.0;
       c = interpolators[0][2] + index*interpolators[0][1] + index*index*interpolators[0][0];
+      if(datastreamindex == 0)
+        cout << "I got a c value of " << c << " when my average delay was " << averagedelay << ", the difference is " << c-averagedelay << endl;
       integerdelay = int(c);
       c -= integerdelay;
 
@@ -547,6 +567,11 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         status = vectorMulC_f64(stepxval, lofreq, stepphase, numstrides);
         if(status != vecNoErr)
           csevere << startl << "Error in linearinterpolate lofreq step multiplication!!!" << status << endl;
+        if(fractionalLoFreq) {
+          status = vectorAddC_f64_I((lofreq-int(lofreq))*double(integerdelay), subphase, arraystridelength);
+          if(status != vecNoErr)
+            csevere << startl << "Error in linearinterpolate lofreq non-integer freq addition!!!" << status << endl;
+        }
         for(int j=0;j<arraystridelength;j++) {
           subarg[j] = -TWO_PI*(subphase[j] - int(subphase[j]));
         }
@@ -575,6 +600,11 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         status = vectorMulC_f64(subxval, lofreq, subphase, arraystridelength);
         if(status != vecNoErr)
           csevere << startl << "Error in quadinterpolate lofreq sub multiplication!!!" << status << endl;
+        if(fractionalLoFreq) {
+          status = vectorAddC_f64_I((lofreq-int(lofreq))*double(integerdelay), subphase, arraystridelength);
+          if(status != vecNoErr)
+            csevere << startl << "Error in linearinterpolate lofreq non-integer freq addition!!!" << status << endl;
+        }
         status = vectorMulC_f64(subquadxval, lofreq, subquadphase, arraystridelength);
         if(status != vecNoErr)
           csevere << startl << "Error in quadinterpolate lofreq subquad multiplication!!!" << status << endl;
@@ -623,7 +653,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         phasecentredelay = 0.0;
       else
       {
-        phasecentredelay = interpolators[i+1][0]*fftcentre*fftcentre + interpolators[i+1][1]*fftcentre + interpolators[i+1][2] - averagedelay;
+        phasecentredelay = interpolators[p+1][0]*fftcentre*fftcentre + interpolators[p+1][1]*fftcentre + interpolators[p+1][2] - averagedelay;
       }
       status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, subfracsamparg, arraystridelength);
       if(status != vecNoErr) {
@@ -827,6 +857,7 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   for(int i=1;i<=model->getNumPhaseCentres(currentscan);i++) {
     //cout << "About to do intepolators " << i << endl;
     foundok = foundok && model->calculateDelayInterpolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), i, 2, interpolators[i]);
+     interpolators[i][2] -= intclockseconds*1000000.0; //integer second clock offsets are subtracted by the Datastream
     //cout << "Interpolators = " << interpolators[i][0] << ", " << interpolators[i][1] << ", " << interpolators[i][2] << endl;
   }
   if(model->getNumPhaseCentres(currentscan) == 1 || model->isPointingCentreCorrelated(currentscan))
@@ -841,6 +872,7 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   {
     //need the actual pointing centre values, which we didn't get already
     foundok = foundok && model->calculateDelayInterpolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), 0, 2, interpolators[0]);
+     interpolators[0][2] -= intclockseconds*1000000.0; //integer second clock offsets are subtracted by the Datastream
   }
 
   //if(datastreamindex == 0)
@@ -867,7 +899,8 @@ void Mode::setData(u8 * d, int dbytes, int dscan, int dsec, int dns)
   datasec = dsec;
   datans = dns;
   unpackstartsamples = -999999999;
-  //cdebug << startl << "Mode for datastream " << datastreamindex << " just set the datascan to " << datascan << ", datasec " << datasec << ", datans " << datans << endl;
+  if(datastreamindex == 0)
+    cout << "Mode for datastream " << datastreamindex << " just set the datascan to " << datascan << ", datasec " << datasec << ", datans " << datans << endl;
 }
 
 const float Mode::decorrelationpercentage[] = {0.63662, 0.88, 0.94, 0.96, 0.98, 0.99, 0.996, 0.998}; //note these are just approximate!!!

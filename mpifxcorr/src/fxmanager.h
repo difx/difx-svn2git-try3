@@ -67,6 +67,12 @@ public:
   */
   void execute();
 
+ /**
+  * Returns the estimated number of bytes used by the FxManager
+  * @return Estimated memory size of the FxManager (bytes)
+  */
+  inline int getEstimatedBytes() { return estimatedbytes; }
+
 protected:
  /** 
   * Launches a new writing thread, that will loop through the Visibility array as fast as possible, writing out results as soon as it is allowed
@@ -114,7 +120,7 @@ private:
   //variables
   Configuration * config;
   MPI_Comm return_comm;
-  int numcores, mpiid, numdatastreams, startmjd, startseconds, initns, initsec, initscan, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis;
+  int numcores, mpiid, numdatastreams, startmjd, startseconds, initns, initsec, initscan, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis, estimatedbytes;
   double inttime;
   bool keepwriting, circularpols, writethreadinitialised, visibilityconfigok;
   int senddata[4]; //targetcoreid, scan, scanoffsetseconds, scanoffsetnanoseconds

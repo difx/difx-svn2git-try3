@@ -33,6 +33,7 @@
 #include <math.h>
 #include "config.h"
 #include "alert.h"
+#include <iomanip>
 
 DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
   : databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
@@ -72,6 +73,7 @@ void DataStream::initialise()
   int currentconfigindex, currentoverflowbytes, overflowbytes = 0;
   bufferbytes = databufferfactor*config->getMaxDataBytes(streamnum);
   readbytes = bufferbytes/numdatasegments;
+  estimatedbytes = config->getEstimatedBytes();
 
   //cinfo << startl << "******DATASTREAM " << mpiid << ": Initialise. bufferbytes=" << bufferbytes << "  numdatasegments=" << numdatasegments << "  readbytes=" << readbytes << endl;
 
@@ -82,6 +84,7 @@ void DataStream::initialise()
   }
   cinfo << startl << "DATASTREAM " << mpiid << " about to allocate " << bufferbytes << " + " << overflowbytes << " bytes in databuffer" << endl;
   databuffer = vectorAlloc_u8(bufferbytes + overflowbytes + 4); // a couple extra for mark5 case
+  estimatedbytes += bufferbytes + overflowbytes + 4;
   if(databuffer == NULL) {
     cfatal << startl << "Error - datastream " << mpiid << " could not allocate databuffer (length " << bufferbytes + overflowbytes << ")! Aborting correlation" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
@@ -211,7 +214,9 @@ void DataStream::execute()
         //data is ok
         MPI_Issend(&databuffer[startpos], bufferinfo[atsegment].sendbytes, MPI_UNSIGNED_CHAR, targetcore, CR_PROCESSDATA, MPI_COMM_WORLD, &(bufferinfo[atsegment].datarequests[bufferinfo[atsegment].numsent]));
         MPI_Issend(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent], bufferinfo[atsegment].controllength, MPI_INT, targetcore, CR_PROCESSCONTROL, MPI_COMM_WORLD, &(bufferinfo[atsegment].controlrequests[bufferinfo[atsegment].numsent]));
-        //cout << "Datastream " << mpiid << " just sent data which starts at time scan " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] << ", second " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] << ", ns " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] << endl;
+	if(mpiid == 1) {
+          cout << "Datastream " << mpiid << " just sent data which starts at time scan " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] << ", second " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] << ", ns " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] << ", when we were asked for time " << scan << ", " << offsetsec << ", " << offsetns << endl;
+        }
       }
 
       bufferinfo[atsegment].numsent++;
@@ -264,28 +269,31 @@ void DataStream::execute()
 //the returned value MUST be between 0 and bufferlength
 int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
-  int intdelayseconds, firstoffsetns, lastoffsetns, bufferindex, perr, blockbytes, segoffbytes, segoffns;
+  int firstoffsetns, lastoffsetns, bufferindex, perr, blockbytes, segoffbytes, segoffns;
   double delayus1, delayus2;
   bool foundok;
 
   //cinfo << startl << "Working on scan " << scan << " offsetsec " << offsetsec << ", offsetns " << offsetns << endl;
   //work out the first delay and the last delay and place in control buffer
-  intdelayseconds = ((offsetsec + corrstartseconds) - delaystartseconds) + 86400*(corrstartday - delaystartday);
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = scan;
   foundok = model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus1);
+  delayus1 -= intclockseconds;
   firstoffsetns = offsetns - static_cast<int>(delayus1*1000);
   foundok = foundok && model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns + bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus2);
+  delayus2 -= intclockseconds;
   if(!foundok) {
     cerror << startl << "Could not find a Model interpolator for scan " << scan << " offsetseconds " << offsetsec << " offsetns " << offsetns << " - will torch this subint!" << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0; //note exit here!!!!
+  }
+  if(mpiid == 1) {
+    cout << setprecision(15) << "For scan " << scan << ", offset sec " << offsetsec << ", ns " << offsetns << ", datastream1 got delays of " << delayus1 << ", " << delayus2 << endl;
   }
   lastoffsetns = offsetns + int(bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens - 1000*delayus2 + 0.5);
   //cout << mpiid << ": delayus1 is " << delayus1 << ", delayus2 is " << delayus2 << endl;
   if(lastoffsetns < 0)
   {
     offsetsec -= 1;
-    intdelayseconds -= 1;
     offsetns += 1000000000;
     firstoffsetns += 1000000000;
     lastoffsetns += 1000000000;
@@ -329,6 +337,9 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
       csevere << startl << "Error in telescope mainthread unlock of buffer section!!!" << atsegment << endl;
     atsegment = (atsegment+1)%numdatasegments;
   }
+
+  //in case the atsegment has changed...
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = scan;
 
   //look at the segment we are in now - if we want to look wholly before this or the buffer segment is bad then 
   //can't continue, fill control buffer with -1 and bail out
@@ -404,6 +415,9 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   segoffns = int(double(segoffbytes*bufferinfo[atsegment].bytespersampledenom/bufferinfo[atsegment].bytespersamplenum)* bufferinfo[atsegment].sampletimens + 0.5);
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] += segoffns/1000000000;
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + segoffns%1000000000;
+  if(mpiid == 1) {
+    cout << "Segoffns is " << segoffns << " and send time will be " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] << " sec + " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] << " ns " << ", bytesbetweenintegerns is " << bufferinfo[atsegment].bytesbetweenintegerns << endl;
+  }
 
   //cout << "Count for datastream " << mpiid << " is " << count << ", and at this stage the first controlbuffer value is " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][3] << endl;
   if((bufferinfo[atsegment].validbytes - segoffbytes >= bufferinfo[atsegment].sendbytes) || (bufferinfo[atsegment].validbytes == readbytes && ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 + bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns) == bufferinfo[atsegment].nsinc && (bufferinfo[atsegment].validbytes-segoffbytes+bufferinfo[(atsegment+1)%numdatasegments].validbytes) > bufferinfo[atsegment].sendbytes)) //they're all ok

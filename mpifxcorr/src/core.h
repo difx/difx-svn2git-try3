@@ -56,6 +56,12 @@ public:
   */
   void execute();
 
+ /**
+  * Returns the estimated number of bytes used by the Core
+  * @return Estimated memory size of the Core (bytes)
+  */
+  int getEstimatedBytes();
+
   /// The number of elements in the send/receive circular buffer
   static const int RECEIVE_RING_LENGTH = 4;
 
@@ -99,8 +105,9 @@ private:
   * @param pulsaraccumspace The array of scratch space
   * @param newconfigindex The index of the config which is to be used
   * @param oldconfigindex The index of the config which was previously being used
+  * @param threadid The thread for which this will be done
   */
-  void createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfigindex, int oldconfigindex);
+  void createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfigindex, int oldconfigindex, int threadid);
 
  /**
   * While the correlation is continuing, processes the given thread's share of the next element in the send/receive circular buffer
@@ -152,7 +159,8 @@ private:
   MPI_Request * datarequests;
   MPI_Request * controlrequests;
   MPI_Status * msgstatuses;
-  int numdatastreams, numbaselines, databytes, controllength, numreceived, currentconfigindex, numprocessthreads, maxpreavresultlength, maxpostavresultlength, startmjd, startseconds;
+  int numdatastreams, numbaselines, databytes, controllength, numreceived, currentconfigindex, numprocessthreads, maxpreavresultlength, maxpostavresultlength, startmjd, startseconds, estimatedbytes;
+  int * threadbytes;
   int * datastreamids;
   processslot * procslots;
   pthread_t * processthreads;

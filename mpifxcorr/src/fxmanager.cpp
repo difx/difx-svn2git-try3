@@ -62,6 +62,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
   int perr;
   const string * polnames;
 
+  estimatedbytes = 0;
   cinfo << startl << "STARTING " << PACKAGE_NAME << " version " << VERSION << endl;
 
   difxMessageSendDifxStatus(DIFX_STATE_STARTING, "Version " VERSION, 0.0, 0, 0);
@@ -76,6 +77,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
   initns = config->getStartNS();
   executetimeseconds = config->getExecuteSeconds();
   model = config->getModel();
+  estimatedbytes += config->getEstimatedBytes();
 
   initscan = 0;
   while(model->getScanEndSec(initscan, startmjd, startseconds) < 0)
@@ -99,11 +101,16 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
   }
   inttime = config->getIntTime(currentconfigindex);
   nsincrement = config->getSubintNS(currentconfigindex);
-  initsec = model->getScanStartSec(initscan, startmjd, startseconds);
+  initsec = -(model->getScanStartSec(initscan, startmjd, startseconds));
+  if(initsec < 0) {
+    cwarn << startl << "Asked to start correlation before the beginning of the model! Will start from first possible time (" << (-initsec) << ") seconds later than requested" << endl;
+    initsec = 0;
+   }
 
   numbaselines = (numdatastreams*(numdatastreams-1))/2;
   resultlength = config->getMaxResultLength();
   resultbuffer = vectorAlloc_cf32(resultlength);
+  estimatedbytes += resultlength*8;
   datastreamids = new int[numdatastreams];
   coreids = new int[numcores];
   for(int i=0;i<numdatastreams;i++)
@@ -142,6 +149,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
       cfatal << startl << "Manager aborting correlation!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
+    estimatedbytes += visbuffer[i]->getEstimatedBytes();
   }
 
   //create the threaded writing stuff
@@ -171,7 +179,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
 
   lastsource = numdatastreams;
 
-  cinfo << startl << "Estimated memory usage by FXManager: " << float(model->getEstimatedBytes() + config->getVisBufferLength()*visbuffer[0]->getEstimatedBytes() + resultlength*8)/1048576.0 << " MB" << endl;
+  //cinfo << startl << "Estimated memory usage by FXManager: " << float(model->getEstimatedBytes() + config->getVisBufferLength()*visbuffer[0]->getEstimatedBytes() + resultlength*8)/1048576.0 << " MB" << endl;
 }
 
 
@@ -253,7 +261,7 @@ void FxManager::execute()
     senddata[1] = i;
 
     //do as many sends as we need to for this scan
-    while(senddata[2] < model->getScanDuration(i)) {
+    while(senddata[2] < model->getScanDuration(i) && (senddata[2]+model->getScanStartSec(i, startmjd, startseconds) < executetimeseconds)) {
       if(sendcount < Core::RECEIVE_RING_LENGTH*numcores) {//still in the "filling up" phase
         senddata[0] = coreids[((int)sendcount)%numcores];
         sendData(senddata, ((int)sendcount)%numcores);
