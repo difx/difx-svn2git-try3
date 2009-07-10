@@ -76,6 +76,8 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  --scale <scale>\n");
 	fprintf(stderr, "  -s      <scale>     Scale visibility data "
 		"by <scale>\n");
+	fprintf(stderr, " --phasecentre	<p>    Create a fits file for all the "
+		"<p>th phase centres (default 0)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --keep-order\n");
 	fprintf(stderr, "  -k                  Keep antenna order\n");

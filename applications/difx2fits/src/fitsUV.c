@@ -346,7 +346,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	const DifxPolyModel *im1, *im2;
 	int terms1, terms2;
 	int d1, d2, aa1, aa2;	/* FIXME -- temporary */
-	int bin;
+	int bin, srcindex;
 
 	resetDifxParameters(dv->dp);
 
@@ -392,6 +392,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	               atof(DifxParametersvalue(dv->dp, rows[2]))/86400.0;
 	freqNum      = atoi(DifxParametersvalue(dv->dp, rows[5]));
 	bin          = atoi(DifxParametersvalue(dv->dp, rows[7]));
+	srcindex     = atoi(DifxParametersvalue(dv->dp, rows[4]));
 
 	/* if chan weights are written the data volume is 3/2 as large */
 	/* for now, force nFloat = 2 (one weight for entire vis record) */
@@ -434,6 +435,11 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	if(configId < 0)
 	{
 		fprintf(stderr, "configId doesn't match - skipping!\n");
+		return SKIPPED_RECORD;
+	}
+	if(srcindex != scan->phsCentreSrcs[phasecentre])
+	{
+		printf("Skipping record with srcindex %d because phasecentresrc[%d] is %d\n", srcindex, phasecentre,  scan->phsCentreSrcs[phasecentre]);
 		return SKIPPED_RECORD;
 	}
 
@@ -525,8 +531,8 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 			w = dv->W;
 
 			/* use .difx/ antenna indices for model tables */
-			im1 = scan->im[aa1][phasecentre];
-			im2 = scan->im[aa2][phasecentre];
+			im1 = scan->im[aa1][phasecentre+1];
+			im2 = scan->im[aa2][phasecentre+1];
 			if(im1 && im2)
 			{
 				if(n < 0)
@@ -623,7 +629,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		dv->spectrum[i*dv->nComplex+1] *= dv->recweight;
 	}
 
-	printf("Looks to be ok - returning %d\n", changed);
+	//printf("Looks to be ok - returning %d\n", changed);
 	return changed;
 }
 
@@ -980,7 +986,7 @@ static int DifxVisConvert(const DifxInput *D,
 	fitsWriteInteger(out, "MAXIS3", D->nOutChan, "");
 	fitsWriteString(out, "CTYPE3", "FREQ", "");
 	fitsWriteFloat(out, "CDELT3", 
-		D->chanBW*D->specAvg*1.0e6/D->nInChan, "");
+		D->chanBW*D->specAvg*1.0e6/D->nOutChan, "");
 	fitsWriteFloat(out, "CRPIX3", p_fits_keys->ref_pixel, "");
 	fitsWriteFloat(out, "CRVAL3", D->refFreq*1000000.0, "");
 	fitsWriteInteger(out, "MAXIS4", dv->nFreq, "");
