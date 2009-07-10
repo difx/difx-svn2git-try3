@@ -123,7 +123,7 @@ double parseCoord(const char *str, char type)
 CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 {
 	tInt = 2.0;
-	specAvg = 0;
+	specAvg = 1;
 	nChan = 64;
 	doPolar = true;
 	doAuto = true;
@@ -374,7 +374,8 @@ void SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc
 	}
 	else if(key == "addPhaseCentre")
 	{
-		//this is a bit tricky - all parameters must be together, no spaces, and separated by commas
+		//this is a bit tricky - all parameters must be together, with @ replacing =, and separated by /
+		//eg addPhaseCentre = name=1010-1212/RA@10:10:21.1/Dec@-12:12:00.34
 		phaseCentres.push_back(PhaseCentre());
 		PhaseCentre * newpc = &(phaseCentres.back());
 		last = 0;
