@@ -529,6 +529,7 @@ static int makeFreqId2IFmap(DifxInput *D, int configId)
 		dc->IF[i].freq     = D->freq[f].freq;
 		dc->IF[i].bw       = D->freq[f].bw;
 		dc->IF[i].sideband = D->freq[f].sideband;
+		printf("Setting IF %d to a bw of %f\n", i, D->freq[f].bw);
 		dc->IF[i].nPol     = nPol;
 		dc->IF[i].pol[0]   = dc->pol[0];
 		dc->IF[i].pol[1]   = dc->pol[1];
@@ -916,6 +917,7 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D,
 			return 0;
 		}
 		D->freq[b].freq     = atof(DifxParametersvalue(ip, rows[0]));
+		printf("Setting IF to %f\n", D->freq[b].freq);
 		D->freq[b].bw       = atof(DifxParametersvalue(ip, rows[1]));
 		D->freq[b].sideband = DifxParametersvalue(ip, rows[2])[0];
 		D->freq[b].nChan    = atoi(DifxParametersvalue(ip, rows[3]));
@@ -1329,8 +1331,10 @@ static DifxInput *deriveDifxInputValues(DifxInput *D)
 	D->refFreq = 0.0;
 	for(b = 0; b < D->nFreq; b++)
 	{
+		printf("Whilst setting refFreq, bw[%d] is %f\n", b, D->freq[b].bw);
 		if(D->freq[b].freq < D->refFreq || D->refFreq <= 0.0)
 		{
+			printf("Setting refFreq to %f\n", D->freq[b].freq);
 			D->refFreq = D->freq[b].freq;
 		}
 	}
@@ -1804,10 +1808,10 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 			applies = 1;
 			for(src=0;src<D->scan[i].nPhaseCentres;src++)
 			{
-				printf("Checking if rule %d applies to scan %d, phase centre %d\n", r, i, src);
-				printf("The phase centre src index is %d\n", D->scan[i].phsCentreSrcs[src]);
-				printf("And its name is %s\n", D->source[D->scan[i].phsCentreSrcs[src]].name);
-				printf("Rule sourcename is %s\n", D->rule[r].sourcename);
+				//printf("Checking if rule %d applies to scan %d, phase centre %d\n", r, i, src);
+				//printf("The phase centre src index is %d\n", D->scan[i].phsCentreSrcs[src]);
+				//printf("And its name is %s\n", D->source[D->scan[i].phsCentreSrcs[src]].name);
+				//printf("Rule sourcename is %s\n", D->rule[r].sourcename);
 				if(ruleApplies(&(D->rule[r]), &(D->scan[i]), &(D->source[D->scan[i].phsCentreSrcs[src]])) == 0)
 				{
 					applies = 0;
@@ -1815,7 +1819,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 			}
 			if(applies > 0)
 			{
-				printf("Yes, it does apply!\n");
+				//printf("Yes, it does apply!\n");
 				for(c=0;c<D->nConfig;c++)
 				{
 					if(strcmp(D->rule[r].configName, D->config[c].name) == 0)
@@ -2157,7 +2161,7 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 
 	for(s = 0; s < nScan; s++)
 	{
-		printf("Looping through scan %d/%d\n", s+1, nScan);
+		//printf("Looping through scan %d/%d\n", s+1, nScan);
 		/* FIXME -- validate source name, ... */
 
 		scan = D->scan + s;
@@ -2174,10 +2178,10 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 		scan->im = newDifxPolyModelArray(scan->nAntenna, scan->nPhaseCentres + 1, 
 						 scan->nPoly);
 
-		printf("Created PolyModelArray, with %d antennas\n", scan->nAntenna);
+		//printf("Created PolyModelArray, with %d antennas\n", scan->nAntenna);
 		for(p = 0; p < scan->nPoly; p++)
 		{
-			printf("Working on poly %d/%d\n", p+1, scan->nPoly);
+			//printf("Working on poly %d/%d\n", p+1, scan->nPoly);
 			r = DifxParametersfind2(mp, r, "SCAN %d POLY %d MJD",
 				s, p);
 			if(r < 0)
@@ -2232,7 +2236,7 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 		}
 	}
 
-	printf("About to free antMap\n");
+	//printf("About to free antMap\n");
 	free(antMap);
 
 	return D;

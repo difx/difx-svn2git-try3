@@ -70,7 +70,7 @@ typedef struct
 	double bw;		/* (MHz) */
 	char sideband;		/* U or L -- net sideband */
         int nChan;
-	int specAvg;            /* This is averaging within mpifxcorr -- NYI */
+	int specAvg;            /* This is averaging within mpifxcorr  */
 	int overSamp;
 	int decimation;
 } DifxFreq;
