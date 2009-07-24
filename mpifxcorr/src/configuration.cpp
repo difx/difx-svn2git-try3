@@ -1263,7 +1263,7 @@ bool Configuration::populateResultLengths()
 {
   datastreamdata currentdatastream;
   bool found;
-  int len, postavlen, bandsperautocorr, freqindex, freqchans;
+  int len, postavlen, bandsperautocorr, freqindex, freqchans, maxconfigphasecentres;
 
   maxresultlength = 0;
   maxpostavresultlength = 0;
@@ -1294,16 +1294,21 @@ bool Configuration::populateResultLengths()
 
     found = false;
     //find a scan that matches this config
+    maxconfigphasecentres = 1;
     for(int i=0;i<model->getNumScans();i++) {
       if(scanconfigindices[i] == c) {
         //multiply length by number of phase centres
-        len *= model->getNumPhaseCentres(i);
-        postavlen *= model->getNumPhaseCentres(i);
+        if(model->getNumPhaseCentres(i) > maxconfigphasecentres)
+          maxconfigphasecentres = model->getNumPhaseCentres(i);
         found = true;
-        break;
       }
     }
-    if(!found) {
+    if(found) {
+      len *= maxconfigphasecentres;
+      postavlen *= maxconfigphasecentres;
+    }
+    else
+    {
       csevere << "Did not find a scan matching config index " << c << endl;
     }
 

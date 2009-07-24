@@ -200,7 +200,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     subfracsampsin = vectorAlloc_f32(arraystridelength);
     subfracsampcos = vectorAlloc_f32(arraystridelength);
     subchannelfreqs = vectorAlloc_f32(arraystridelength);
-    lsbsubchannelfreqs = vectorAlloc_f32(arraystridelength);
+    //lsbsubchannelfreqs = vectorAlloc_f32(arraystridelength);
     estimatedbytes += 5*4*arraystridelength;
     /*cout << "subfracsamparg is " << subfracsamparg << endl;
     cout << "subfracsampsin is " << subfracsampsin << endl;
@@ -208,8 +208,8 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     cout << "subchannelfreqs is " << subchannelfreqs << endl;
     cout << "lsbsubchannelfreqs is " << lsbsubchannelfreqs << endl;*/
     for(int i=0;i<arraystridelength;i++) {
-      subchannelfreqs[i] = (float)((TWO_PI*(i+1)*recordedbandwidth)/recordedbandchannels);
-      lsbsubchannelfreqs[i] = (float)((-TWO_PI*(arraystridelength-i)*recordedbandwidth)/recordedbandchannels);
+      subchannelfreqs[i] = (float)((TWO_PI*(i)*recordedbandwidth)/recordedbandchannels);
+      //lsbsubchannelfreqs[i] = (float)((-TWO_PI*(arraystridelength-(i+1))*recordedbandwidth)/recordedbandchannels);
     }
 
     stepfracsamparg = vectorAlloc_f32(numstrides/2);
@@ -350,7 +350,7 @@ Mode::~Mode()
   vectorFree(subfracsampsin);
   vectorFree(subfracsampcos);
   vectorFree(subchannelfreqs);
-  vectorFree(lsbsubchannelfreqs);
+  //vectorFree(lsbsubchannelfreqs);
 
   vectorFree(stepfracsamparg);
   vectorFree(stepfracsampsin);
@@ -440,7 +440,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
     return 0.0; //don't process crap data
   }
 
-  fftslot = maxphasecentres-1;
+  fftslot = maxphasecentres;
   fftcentre = index+0.5;
   averagedelay = interpolators[0][0]*fftcentre*fftcentre + interpolators[0][1]*fftcentre + interpolators[0][2];
   if(datastreamindex == 0 && index == 0) {
@@ -541,20 +541,20 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
     count = 0;
     //updated so that Nyquist channel is not accumulated for either USB or LSB data
     sidebandoffset = 0;
-    currentsubchannelfreqs = subchannelfreqs;
+    //currentsubchannelfreqs = subchannelfreqs;
     currentstepchannelfreqs = stepchannelfreqs;
-    fracsamprotator[0].re = 1.0;
-    fracsamprotator[0].im = 0.0;
-    fracsampptr1 = &(fracsamprotator[1]);
-    fracsampptr2 = &(fracsamprotator[1+arraystridelength]);
+    fracsamprotator[recordedbandchannels].re = 1.0;
+    fracsamprotator[recordedbandchannels].im = 0.0;
+    //fracsampptr1 = &(fracsamprotator[1]);
+    //fracsampptr2 = &(fracsamprotator[1+arraystridelength]);
+    fracsampptr1 = &(fracsamprotator[0]);
+    fracsampptr2 = &(fracsamprotator[arraystridelength]);
     if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
       sidebandoffset = 1;
-      currentsubchannelfreqs = lsbsubchannelfreqs;
+      //currentsubchannelfreqs = lsbsubchannelfreqs;
       currentstepchannelfreqs = lsbstepchannelfreqs;
-      fracsamprotator[recordedbandchannels].re = 1.0;
-      fracsamprotator[recordedbandchannels].im = 0.0;
-      fracsampptr1 = &(fracsamprotator[recordedbandchannels-arraystridelength]);
-      fracsampptr2 = &(fracsamprotator[0]);
+      //fracsampptr1 = &(fracsamprotator[recordedbandchannels-arraystridelength]);
+      //fracsampptr2 = &(fracsamprotator[0]);
     }
 
     //get ready to apply fringe rotation, if its pre-F
@@ -655,12 +655,15 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       {
         phasecentredelay = interpolators[p+1][0]*fftcentre*fftcentre + interpolators[p+1][1]*fftcentre + interpolators[p+1][2] - averagedelay;
       }
-      status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, subfracsamparg, arraystridelength);
+      //status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, subfracsamparg, arraystridelength);
+      status = vectorMulC_f32(subchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, subfracsamparg, arraystridelength);
       if(status != vecNoErr) {
         csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
         exit(1);
       }
       status = vectorMulC_f32(currentstepchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, stepfracsamparg, numstrides/2);
+      if(datastreamindex == 9 && index==200)
+        cout << "Just multiplied " << fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay << " by up to 8 MHz - too big for a float?" << endl;
       if(status != vecNoErr)
         csevere << startl << "Error in frac sample correction, arg generation (step)!!!" << status << endl;
   

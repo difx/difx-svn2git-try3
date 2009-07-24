@@ -205,7 +205,7 @@ void Core::execute()
     if(status != vecNoErr)
       csevere << startl << "Error trying to zero results in Core!!!" << endl;
     procslots[numreceived%RECEIVE_RING_LENGTH].resultsvalid = CR_VALIDVIS;
-    cverbose << startl << "Estimated memory usage by Core is now " << getEstimatedBytes() << " MB" << endl;
+    cverbose << startl << "Estimated memory usage by Core is now " << getEstimatedBytes()/(1024.0*1024.0) << " MB" << endl;
   }
 
   //Run through the shutdown sequence
@@ -277,6 +277,11 @@ void Core::loopprocess(int threadid)
   Mode ** modes;
   s32 ** bins;
   cf32 * threadresults = vectorAlloc_cf32(maxpreavresultlength);
+  if(threadresults == NULL) {
+    cfatal << startl << "Could not allocate thread results!!! Aborting." << endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+    
   cf32 * pulsarscratchspace=0;
   cf32 ****** pulsaraccumspace=0;
   DifxMessageSTARecord * starecord = 0;
@@ -530,15 +535,18 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   writecrossautocorrs = modes[0]->writeCrossAutoCorrs();
   maxproducts = config->getMaxProducts();
 
+  //if(procslots[index].offsets[0] == 1)
+  //  cout << "Core is working on scan 1! Doing real processing" << endl;
+
   //set up the mode objects that will do the station-based processing
   for(int j=0;j<numdatastreams;j++)
   {
     //zero the autocorrelations and set delays
     modes[j]->zeroAutocorrelations();
     modes[j]->setValidFlags(&(procslots[index].controlbuffer[j][3]));
-    if(j==0) {
-      cout << "Core is telling Mode that data starts at time " << procslots[index].controlbuffer[j][0] << ", " << procslots[index].controlbuffer[j][1] << ", " << procslots[index].controlbuffer[j][2] << endl;
-    }
+    //if(j==0) {
+    //  cout << "Core is telling Mode that data starts at time " << procslots[index].controlbuffer[j][0] << ", " << procslots[index].controlbuffer[j][1] << ", " << procslots[index].controlbuffer[j][2] << endl;
+    //}
     modes[j]->setData(procslots[index].databuffer[j], procslots[index].datalengthbytes[j], procslots[index].controlbuffer[j][0], procslots[index].controlbuffer[j][1], procslots[index].controlbuffer[j][2]);
     modes[j]->setOffsets(procslots[index].offsets[0], procslots[index].offsets[1], procslots[index].offsets[2]);
   }
@@ -550,6 +558,9 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   //process each FFT chunk in turn
   for(int i=startblock;i<startblock+numblocks;i++)
   {
+    //if(procslots[index].offsets[0] == 1)
+    //  cout << "Core is working on index " << i << " of scan 1!" << endl;
+
     resultindex = 0;
     //cout << "Processing block " << startblock+i+1 << "/" << startblock+numblocks << ": ";
 
@@ -558,6 +569,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     {
       dsweights[j] = modes[j]->process(i);
     }
+    //if(procslots[index].offsets[0] == 1)
+    //  cout << "Core made it past mode->process() of index " << i << " of scan 1!" << endl;
 
     //if necessary, work out the pulsar bins
     if(procslots[index].pulsarbin)
@@ -589,6 +602,11 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 
         for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
         {
+          //if(procslots[index].offsets[0] == 1) {
+          //  char towrite[512];
+          //  sprintf(towrite, "Core working on pc %d of index %d, baseline %d, freq %d, we are up to resultindex %d when the max should be %d or %d\n", s, index, j, k, resultindex, procslots[index].preavresultlength, maxpreavresultlength);
+          //  cout << towrite << endl;
+          //}
           //loop through each polarisation for this frequency
           for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,k);p++)
           {
@@ -744,9 +762,9 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         }
         if(channelinc == 1) //this frequency is not averaged
         {
+          copylength = model->getNumPhaseCentres(procslots[index].offsets[0])*binloop* config->getBNumPolProducts(procslots[index].configindex,i,j)*(freqchannels+1);
           if(copyindex != resultindex) //we wouldn't have to do anything otherwise
           {
-            copylength = model->getNumPhaseCentres(procslots[index].offsets[0])*binloop* config->getBNumPolProducts(procslots[index].configindex,i,j)*(freqchannels+1); 
             if(copylength < (copyindex - resultindex)) //can do it all in one go
             {
               status = vectorCopy_cf32(&(threadresults[copyindex]), &(threadresults[resultindex]), copylength);
@@ -776,6 +794,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         {
           for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
           {
+            //if(procslots[index].offsets[0] == 1)
+            //  cout << "For scan 1, phase center " << s << "/" << model->getNumPhaseCentres(1) << " , we are up to copying from " << copyindex << " to resultindex " << " when the maximum lengths should be " << procslots[index].preavresultlength << " and " << procslots[index].postavresultlength << endl;
             for(int b=0;b<binloop;b++)
             {
               for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
