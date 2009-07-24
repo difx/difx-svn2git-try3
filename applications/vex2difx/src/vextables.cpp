@@ -688,6 +688,7 @@ void VexJobGroup::createJobs(vector<VexJob>& jobs, VexInterval& jobTimeRange, co
 				/* start a new job at scan boundary if maxLength exceeded */
 				if(J->duration() > maxLength || size > maxSize)
 				{
+					cout << "Pushing a new Job since duration is " << J->duration() << ", maxLength is " << maxLength << ", size is " << size << ", maxSize is " << maxSize << endl;
 					totalTime = J->duration();
 					J->dutyCycle = scanTime / totalTime;
 					J->dataSize = size;

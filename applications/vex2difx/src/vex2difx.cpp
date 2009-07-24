@@ -30,6 +30,7 @@
 #include <vector>
 #include <set>
 #include <sstream>
+#include <iomanip>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -60,17 +61,20 @@ double current_mjd()
 // A is assumed to be the first scan in time order
 bool areScansCompatible(const VexScan *A, const VexScan *B, const CorrParams *P)
 {
-	if((B->mjdStart < A->mjdStop) ||
+	if(((B->mjdStart < A->mjdStop) && (fabs(B->mjdStart-A->mjdStop)>0.00000001)) ||
 	   (B->mjdStart > A->mjdStop + P->maxGap))
 	{
+		cout << setprecision(15) << "Scans incompatible 1: 1st scan has Stop " << A->mjdStop << " and 2nd has start " << B->mjdStart << " and maxGap is " << P->maxGap << endl;
 		return false;
 	}
 	if(P->singleScan)
 	{
+		cout << "Scans incompatible B" << endl;
 		return false;
 	}
 	if(P->singleSetup && A->modeName != B->modeName)
 	{
+		cout << "Scans incompatible C" << endl;
 		return false;
 	}
 	
@@ -111,7 +115,7 @@ void genJobGroups(vector<VexJobGroup> &JGs, const VexData *V, const CorrParams *
 				corrSetup1 = corrSetup2;
 			}
 			else
-			{	
+			{
 				it++;
 			}
 		}
@@ -225,6 +229,7 @@ void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const CorrPa
 	{
 		// look for break with highest score
 		// Try as hard as possible to minimize number of breaks
+		cout << "Doing something with a change" << endl;
 		scoreBest = -1;
 		for(t = times.begin(); t != times.end(); t++)
 		{
@@ -292,6 +297,7 @@ void makeJobs(vector<VexJob>& J, VexData *V, const CorrParams *P, int verbose)
 	// Finalize all the new job structures
 	for(j = J.begin(), k = P->startSeries; j != J.end(); j++, k++)
 	{
+		cout << "Now doing another job" << endl;
 		ostringstream name;
 		j->jobSeries = P->jobSeries;
 		j->jobId = k;
@@ -1274,14 +1280,16 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
 	}
 
 	// fix a few last parameters
-	if(corrSetup->specAvg == 0)
-	{
-		D->specAvg  = 1;
-	}
-	else
-	{
-		D->specAvg = corrSetup->specAvg;
-	}
+	//if(corrSetup->specAvg == 0)
+	//{
+	//	D->specAvg  = 1;
+	//}
+	//else
+	//{
+	//	D->specAvg = corrSetup->specAvg;
+	//}
+ 	//All averaging will always be in correlator by default, not difx2fits
+	D->specAvg  = 1;
 
 	cout << "About to write input file" << endl;
 
