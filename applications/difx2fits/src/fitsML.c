@@ -180,6 +180,11 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	   {
 	   	continue;
 	   }
+	   if(phasecentre > scan->nPhaseCentres)
+	   {
+	     printf("Skipping scan %d as the requested phase centre was not used\n", s);
+	     continue;
+	   }
 
 	   config = D->config + configId;
 	   freqId1 = config->freqId + 1;
@@ -228,12 +233,14 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		  }
 	       
 		  P = scan->im[a][phasecentre] + p;
+		  //printf("Working on antenna %d, phasecentre %d, polynomial %d\n", a, phasecentre, p);
 
 	          time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
 		  deltat = (P->mjd - D->mjdStart)*86400.0 + P->sec;
 
 	          for(k = 0; k < array_N_POLY; k++)
 		  {
+		    //printf("About to look for poly %d of %d", k, array_N_POLY);
 		    gpoly[k] = -P->delay[k]*1.0e-6;
 		  }
 		}

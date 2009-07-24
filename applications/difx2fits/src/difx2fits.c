@@ -405,6 +405,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 	keys->ref_freq = D->refFreq*1.0e6;
 	keys->ref_date = D->mjdStart;
 	keys->chan_bw = 1.0e6*D->freq[fqindex].bw*D->freq[fqindex].specAvg/D->freq[fqindex].nChan;
+        printf("Channel bandwidth is %f\n", keys->chan_bw);
 	keys->ref_pixel = 0.5 + 1.0/(2.0*D->specAvg);
 	if(D->nPolar > 1)
 	{
@@ -703,20 +704,21 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	}
 	else
 	{
-		if(opts->pulsarBin == 0)
+		if(opts->pulsarBin == 0 && opts->phaseCentre == 0)
 		{
 			sprintf(outFitsName, "%s%s.%d.FITS",
 				D->job[0].obsCode,
 				D->job[0].obsSession,
 				passNum);
 		}
-		else
+		else 
 		{
-			sprintf(outFitsName, "%s%s.%d.bin%04d.FITS",
+			sprintf(outFitsName, "%s%s.%d.bin%04d.source%04d.FITS",
 				D->job[0].obsCode,
 				D->job[0].obsSession,
 				passNum,
-				opts->pulsarBin);
+				opts->pulsarBin,
+				opts->phaseCentre);
 		}
 	}
 

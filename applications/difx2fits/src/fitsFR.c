@@ -83,12 +83,14 @@ const DifxInput *DifxInput2FitsFR(const DifxInput *D,
 			IF = config->IF + i;
 			bandFreq[i] = (IF->freq - D->refFreq)*1.0e6;
 			chanBW[i] = (IF->bw*D->specAvg/D->nOutChan)*1.0e6;
+			printf("D->specAvg is %d, IF->bw was already %f\n", D->specAvg, IF->bw);
 			bandBW[i] = chanBW[i]*D->nOutChan;
 			netSide[i] = ( IF->sideband == 'U' ? 1 : -1 );
 			bbChan[i] = 0;	/* vistigial */
 			/* correct for skipping some channels */
 			bandFreq[i] += netSide[i]*IF->bw*
 				D->startChan*1.0e6/(double)(D->nInChan);
+			printf("Writing IF with freq %f, chanBW %f, bandBW %f\n", bandFreq[i], chanBW[i], bandBW[i]);
 		}
 		
 		/* pointer to the buffer for FITS records */

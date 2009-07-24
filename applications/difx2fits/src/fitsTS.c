@@ -173,6 +173,12 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 			}
 			scan = D->scan + scanId;
 
+			if(phasecentre > scan->nPhaseCentres)
+			{
+				printf("Skipping scan %d as the requested phase centre was not used\n", scanId);
+				continue;
+			}
+
 			sourceId = scan->phsCentreSrcs[phasecentre];
 			if(sourceId < 0 || mjd < D->mjdStart || 
 				mjd > D->mjdStop)

@@ -437,6 +437,10 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		fprintf(stderr, "configId doesn't match - skipping!\n");
 		return SKIPPED_RECORD;
 	}
+	if(phasecentre > scan->nPhaseCentres)
+	{
+		return SKIPPED_RECORD;
+	}
 	if(srcindex != scan->phsCentreSrcs[phasecentre])
 	{
 		printf("Skipping record with srcindex %d because phasecentresrc[%d] is %d\n", srcindex, phasecentre,  scan->phsCentreSrcs[phasecentre]);

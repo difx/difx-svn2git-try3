@@ -117,6 +117,11 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	   {
 	   	continue;
 	   }
+	   if(phasecentre > scan->nPhaseCentres)
+	   {
+	     printf("Skipping scan %d as the requested phase centre > number of phase centres\n", s);
+	     continue;
+	   }
 	   config = D->config + configId;
 	   freqId1 = config->freqId + 1;
 	   sourceId1 = D->source[scan->phsCentreSrcs[phasecentre]].fitsSourceId + 1;
