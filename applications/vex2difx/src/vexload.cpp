@@ -421,9 +421,8 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 		S->corrSetupName = corrSetupName;
 
 		// Add to event list
-		V->addEvent(startScan+0.000011574, VexEvent::SCAN_START, scanId, scanId);
-		//NOTE Edit by ATD to get bm261 to collapse into 1 job
-		V->addEvent(stopScan-0.000001,  VexEvent::SCAN_STOP,  scanId, scanId);
+		V->addEvent(startScan, VexEvent::SCAN_START, scanId, scanId);
+		V->addEvent(stopScan,  VexEvent::SCAN_STOP,  scanId, scanId);
 		for(it = antStart.begin(); it != antStart.end(); it++)
 		{
 			V->addEvent(max(it->second, startScan), VexEvent::ANT_SCAN_START, it->first, scanId);

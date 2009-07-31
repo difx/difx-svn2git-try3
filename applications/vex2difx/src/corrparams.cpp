@@ -130,6 +130,7 @@ CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 	fringeRotOrder = 1;
 	strideLength = 16;
 	subintNS = 0;
+	maxNSBetweenUVShifts = 2000000000;
 }
 
 void CorrSetup::setkv(const string &key, const string &value)
@@ -157,6 +158,10 @@ void CorrSetup::setkv(const string &key, const string &value)
 	else if(key == "subintNS")
 	{
 		ss >> subintNS;
+	}
+	else if(key == "maxNSBetweenUVShifts")
+	{
+		ss >> maxNSBetweenUVShifts;
 	}
 	else if(key == "specAvg")
 	{

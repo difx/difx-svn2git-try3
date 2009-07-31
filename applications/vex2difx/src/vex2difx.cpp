@@ -43,9 +43,9 @@
 #include "vexload.h"
 
 const string program("vex2difx");
-const string version("0.2");
-const string verdate("20090422");
-const string author("Walter Brisken");
+const string version("0.3");
+const string verdate("20090728");
+const string author("Walter Brisken/Adam Deller");
 
 const double MJD_UNIX0 = 40587.0;	/* MJD at beginning of unix time */
 const double SEC_DAY = 86400.0;
@@ -551,7 +551,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, const VexMode 
 	}
 	else if(format.format == string("S2"))
 	{
-		strcpy(D->datastream[dsId].dataFormat, "LBA");
+		strcpy(D->datastream[dsId].dataFormat, "LBAVSOP");
 		D->datastream[dsId].dataFrameSize = 4096 + 10*format.nBit*n2*(int)(mode->sampRate+0.5)/8;
 	}
 	else
@@ -1046,6 +1046,7 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
 		{
 			cerr << "No source setup for " << S->sourceName << " - aborting!" << endl;
 		}
+		scan->maxNSBetweenUVShifts = corrSetup->maxNSBetweenUVShifts;
 		scan->nPhaseCentres = sourceSetup->phaseCentres.size();
 		if(sourceSetup->doPointingCentre)
 			scan->nPhaseCentres++;
