@@ -44,7 +44,7 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, i
 {
   int status;
 
-  cverbose << startl << "About to create visibility " << id << "/" << numvis << endl;
+  //cverbose << startl << "About to create visibility " << id << "/" << numvis << endl;
   estimatedbytes = 0;
   model = config->getModel();
 
