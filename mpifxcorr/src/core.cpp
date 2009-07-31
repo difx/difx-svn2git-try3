@@ -20,6 +20,7 @@
 //
 //============================================================================
 #include <mpi.h>
+#include <iomanip>
 #include "core.h"
 #include "fxmanager.h"
 #include "alert.h"
@@ -79,9 +80,11 @@ Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
     procslots[i].preavresultlength = config->getResultLength(currentconfigindex);
     procslots[i].postavresultlength = config->getPostavResultLength(currentconfigindex);
     procslots[i].slotlocks = new pthread_mutex_t[numprocessthreads];
+    procslots[i].copylocks = new pthread_mutex_t[numbaselines+1];
     for(int j=0;j<numprocessthreads;j++)
       pthread_mutex_init(&(procslots[i].slotlocks[j]), NULL);
-    pthread_mutex_init(&(procslots[i].copylock), NULL);
+    for(int j=0;j<numbaselines+1;j++)
+      pthread_mutex_init(&(procslots[i].copylocks[j]), NULL);
     procslots[i].datalengthbytes = new int[numdatastreams];
     procslots[i].databuffer = new u8*[numdatastreams];
     procslots[i].controlbuffer = new s32*[numdatastreams];
@@ -154,7 +157,7 @@ Core::~Core()
 
 void Core::execute()
 {
-  int perr, status;
+  int perr, status, lastconfigindex;
   bool terminate;
   processthreadinfo * threadinfos = new processthreadinfo[numprocessthreads];
   
@@ -192,6 +195,8 @@ void Core::execute()
     }
   }
 
+  cverbose << startl << "Estimated memory usage by Core is now " << getEstimatedBytes()/(1024.0*1024.0) << " MB" << endl;
+  lastconfigindex = procslots[0].configindex;
   while(!terminate) //the data is valid, so keep processing
   {
     //increment and receive some more data
@@ -199,13 +204,16 @@ void Core::execute()
 
     //send the results back
     MPI_Ssend(procslots[numreceived%RECEIVE_RING_LENGTH].results, procslots[numreceived%RECEIVE_RING_LENGTH].postavresultlength*2, MPI_FLOAT, fxcorr::MANAGERID, procslots[numreceived%RECEIVE_RING_LENGTH].resultsvalid, return_comm);
+    if(procslots[numreceived%RECEIVE_RING_LENGTH].configindex != lastconfigindex)
+    {
+      cverbose << startl << "After config change, estimated memory usage by Core is " << getEstimatedBytes()/(1024.0*1024.0) << " MB" << endl;
+    }
 
     //zero the results buffer for this slot and set the status back to valid
     status = vectorZero_cf32(procslots[numreceived%RECEIVE_RING_LENGTH].results, procslots[numreceived%RECEIVE_RING_LENGTH].postavresultlength);
     if(status != vecNoErr)
       csevere << startl << "Error trying to zero results in Core!!!" << endl;
     procslots[numreceived%RECEIVE_RING_LENGTH].resultsvalid = CR_VALIDVIS;
-    cverbose << startl << "Estimated memory usage by Core is now " << getEstimatedBytes()/(1024.0*1024.0) << " MB" << endl;
   }
 
   //Run through the shutdown sequence
@@ -275,16 +283,17 @@ void Core::loopprocess(int threadid)
   Polyco ** polycos=0;
   Polyco * currentpolyco=0;
   Mode ** modes;
-  s32 ** bins;
-  cf32 * threadresults = vectorAlloc_cf32(maxpreavresultlength);
-  if(threadresults == NULL) {
+  threadscratchspace * scratchspace = new threadscratchspace;
+  scratchspace->threadresults = vectorAlloc_cf32(maxpreavresultlength);
+  scratchspace->dsweights = new f32[numdatastreams];
+  if(scratchspace->threadresults == NULL) {
     cfatal << startl << "Could not allocate thread results!!! Aborting." << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
-    
-  cf32 * pulsarscratchspace=0;
-  cf32 ****** pulsaraccumspace=0;
-  DifxMessageSTARecord * starecord = 0;
+
+  scratchspace->pulsarscratchspace=0;
+  scratchspace->pulsaraccumspace=0;
+  scratchspace->starecord = 0;
 
   pulsarbin = false;
   somepulsarbin = false;
@@ -293,6 +302,10 @@ void Core::loopprocess(int threadid)
   maxpolycos = 0;
   maxchan = config->getMaxNumChannels();
   maxbins = config->getMaxNumPulsarBins();
+  scratchspace->rotator = vectorAlloc_cf32(maxchan);
+  scratchspace->rotated = vectorAlloc_cf32(maxchan);
+  scratchspace->channelsums = vectorAlloc_cf32(maxchan);
+  scratchspace->argument = vectorAlloc_f32(3*maxchan);
 
   //work out whether we'll need to do any pulsar binning, and work out the maximum # channels (and # polycos if applicable)
   for(int i=0;i<config->getNumConfigs();i++)
@@ -311,20 +324,16 @@ void Core::loopprocess(int threadid)
   //create the necessary pulsar scratch space if required
   if(somepulsarbin)
   {
-    pulsarscratchspace = vectorAlloc_cf32(maxchan+1);
+    scratchspace->pulsarscratchspace = vectorAlloc_cf32(maxchan+1);
     if(somescrunch) //need separate accumulation space
     {
-      pulsaraccumspace = new cf32*****[numbaselines];
-      createPulsarAccumSpace(pulsaraccumspace, procslots[0].configindex, -1, threadid); //don't need to delete old space
+      scratchspace->pulsaraccumspace = new cf32*****[numbaselines];
+      createPulsarAccumSpace(scratchspace->pulsaraccumspace, procslots[0].configindex, -1, threadid); //don't need to delete old space
     }
-    bins = new s32*[config->getFreqTableLength()];
+    scratchspace->bins = new s32*[config->getFreqTableLength()];
     for(int i=0;i<config->getFreqTableLength();i++)
     {
-      bins[i] = vectorAlloc_s32(config->getFNumChannels(i)+1);
-      //if(config->getFMatchingWiderBandIndex(i) < 0)
-      //  bins[i] = vectorAlloc_s32(config->getFNumChannels(i)+1);
-      //else
-      //  bins[i] = &(bins[config->getFMatchingWiderBandIndex(i)][config->getFMatchingWiderBandOffset(i)]);
+      scratchspace->bins[i] = vectorAlloc_s32(config->getFNumChannels(i)+1);
     }
   }
 
@@ -377,22 +386,22 @@ void Core::loopprocess(int threadid)
     //if necessary, allocate/reallocate space for the STAs
     nowdumpingsta = config->dumpSTA();
     if(nowdumpingsta != dumpingsta) {
-      if (starecord != 0) {
-        delete starecord;
-        starecord = 0;
+      if (scratchspace->starecord != 0) {
+        delete scratchspace->starecord;
+        scratchspace->starecord = 0;
       }
       if(nowdumpingsta) {
         stadumpchannels = config->getSTADumpChannels();
-        starecord = (DifxMessageSTARecord*)malloc(sizeof(DifxMessageSTARecord) + sizeof(f32)*stadumpchannels);
-        starecord->threadId = threadid;
-        starecord->nThreads = numprocessthreads;
-        starecord->nChan = stadumpchannels;
+        scratchspace->starecord = (DifxMessageSTARecord*)malloc(sizeof(DifxMessageSTARecord) + sizeof(f32)*stadumpchannels);
+        scratchspace->starecord->threadId = threadid;
+        scratchspace->starecord->nThreads = numprocessthreads;
+        scratchspace->starecord->nChan = stadumpchannels;
       }
       dumpingsta = nowdumpingsta;
     }
 
     //process our section of responsibility for this time range
-    processdata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, threadresults, bins, pulsarscratchspace, pulsaraccumspace, starecord);
+    processdata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, scratchspace);
 
     currentslot = &(procslots[numprocessed%RECEIVE_RING_LENGTH]);
     //if the configuration changes from this segment to the next, change our setup accordingly
@@ -401,7 +410,7 @@ void Core::loopprocess(int threadid)
       cinfo << startl << "Core " << mpiid << " threadid " << threadid << ": changing config to " << currentslot->configindex << endl;
       updateconfig(lastconfigindex, currentslot->configindex, threadid, startblock, numblocks, numpolycos, pulsarbin, modes, polycos, false);
       cinfo << startl << "Core " << mpiid << " threadid " << threadid << ": config changed successfully - pulsarbin is now " << pulsarbin << endl;
-      createPulsarAccumSpace(pulsaraccumspace, currentslot->configindex, lastconfigindex, threadid);
+      createPulsarAccumSpace(scratchspace->pulsaraccumspace, currentslot->configindex, lastconfigindex, threadid);
       lastconfigindex = currentslot->configindex;
     }
   }
@@ -428,22 +437,28 @@ void Core::loopprocess(int threadid)
       for(int i=0;i<config->getFreqTableLength();i++)
       {
         //if(config->getFWiderBandIndex(i) < 0)
-        vectorFree(bins[i]);
+        vectorFree(scratchspace->bins[i]);
       }
-      delete [] bins;
+      delete [] scratchspace->bins;
     }
     delete [] polycos;
-    vectorFree(pulsarscratchspace);
+    vectorFree(scratchspace->pulsarscratchspace);
     if(somescrunch)
     {
-      createPulsarAccumSpace(pulsaraccumspace, -1, procslots[(numprocessed+1)%RECEIVE_RING_LENGTH].configindex, threadid);
-      delete [] pulsaraccumspace;
+      createPulsarAccumSpace(scratchspace->pulsaraccumspace, -1, procslots[(numprocessed+1)%RECEIVE_RING_LENGTH].configindex, threadid);
+      delete [] scratchspace->pulsaraccumspace;
     }
   }
-  vectorFree(threadresults);
-  if(starecord != 0) {
-    delete starecord;
+  delete [] scratchspace->dsweights;
+  vectorFree(scratchspace->threadresults);
+  vectorFree(scratchspace->rotator);
+  vectorFree(scratchspace->rotated);
+  vectorFree(scratchspace->channelsums);
+  vectorFree(scratchspace->argument);
+  if(scratchspace->starecord != 0) {
+    delete scratchspace->starecord;
   }
+  delete scratchspace;
 
   cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process thread exiting!!!" << endl;
 }
@@ -513,30 +528,25 @@ void Core::receivedata(int index, bool * terminate)
   }
 }
 
-void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32****** pulsaraccumspace, DifxMessageSTARecord * starecord)
+void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace)
 {
   int status, perr;
-  int resultindex, copyindex, cindex, ds1index, ds2index, maxproducts, binloop;
+  int resultindex, copyindex, cindex, ds1index, ds2index, maxproducts, binloop, blockcount, maxblocks, shiftcount;
   int freqchannels, freqindex, channelinc, copylength, copiedchans, safelength, currentlength;
   int nyquistchannel, nyquistoffset;
-  double offsetmins;
+  double offsetmins, blockns;
   f32 bweight;
-  float * dsweights = new float[numdatastreams];
   Mode * m1, * m2;
-  //s32 *** polycobincounts;
   cf32 * vis1;
   cf32 * vis2;
   f32 * acdata;
   cf32 tempsum;
   cf32 * sumpointer;
-  bool firstsum;
+  bool datastreamsaveraged;
   bool writecrossautocorrs;
 
   writecrossautocorrs = modes[0]->writeCrossAutoCorrs();
   maxproducts = config->getMaxProducts();
-
-  //if(procslots[index].offsets[0] == 1)
-  //  cout << "Core is working on scan 1! Doing real processing" << endl;
 
   //set up the mode objects that will do the station-based processing
   for(int j=0;j<numdatastreams;j++)
@@ -544,39 +554,34 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     //zero the autocorrelations and set delays
     modes[j]->zeroAutocorrelations();
     modes[j]->setValidFlags(&(procslots[index].controlbuffer[j][3]));
-    //if(j==0) {
-    //  cout << "Core is telling Mode that data starts at time " << procslots[index].controlbuffer[j][0] << ", " << procslots[index].controlbuffer[j][1] << ", " << procslots[index].controlbuffer[j][2] << endl;
-    //}
     modes[j]->setData(procslots[index].databuffer[j], procslots[index].datalengthbytes[j], procslots[index].controlbuffer[j][0], procslots[index].controlbuffer[j][1], procslots[index].controlbuffer[j][2]);
     modes[j]->setOffsets(procslots[index].offsets[0], procslots[index].offsets[1], procslots[index].offsets[2]);
   }
   //zero the results for this slot, for this thread
-  status = vectorZero_cf32(threadresults, procslots[index].preavresultlength);
+  status = vectorZero_cf32(scratchspace->threadresults, procslots[index].preavresultlength);
   if(status != vecNoErr)
     csevere << startl << "Error trying to zero threadresults!!!" << endl;
 
   //process each FFT chunk in turn
+  blockcount = 0;
+  shiftcount = 0;
+  blockns = ((double)(config->getSubintNS(procslots[index].configindex)))/((double)(config->getBlocksPerSend(procslots[index].configindex)));
+  maxblocks = ((int)(model->getMaxNSBetweenUVShifts(procslots[index].offsets[0])/blockns));
   for(int i=startblock;i<startblock+numblocks;i++)
   {
-    //if(procslots[index].offsets[0] == 1)
-    //  cout << "Core is working on index " << i << " of scan 1!" << endl;
-
     resultindex = 0;
-    //cout << "Processing block " << startblock+i+1 << "/" << startblock+numblocks << ": ";
 
     //do the station-based processing for this FFT chunk
     for(int j=0;j<numdatastreams;j++)
     {
-      dsweights[j] = modes[j]->process(i);
+      scratchspace->dsweights[j] = modes[j]->process(i);
     }
-    //if(procslots[index].offsets[0] == 1)
-    //  cout << "Core made it past mode->process() of index " << i << " of scan 1!" << endl;
 
     //if necessary, work out the pulsar bins
     if(procslots[index].pulsarbin)
     {
       offsetmins = ((double)i)*((double)config->getSubintNS(procslots[index].configindex))/(60000000000.0);
-      currentpolyco->getBins(offsetmins, bins);
+      currentpolyco->getBins(offsetmins, scratchspace->bins);
     }
 
     //do the cross multiplication - gets messy for the pulsar binning
@@ -596,367 +601,193 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         //that one datastream has USB and the other has LSB
         nyquistchannel = freqchannels;
         if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, j, k))) {
-          //cout << "This is a lower sideband frequency" << endl;
           nyquistchannel = 0;
         }
 
-        for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
+        //loop through each polarisation for this frequency
+        for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,k);p++)
         {
-          //if(procslots[index].offsets[0] == 1) {
-          //  char towrite[512];
-          //  sprintf(towrite, "Core working on pc %d of index %d, baseline %d, freq %d, we are up to resultindex %d when the max should be %d or %d\n", s, index, j, k, resultindex, procslots[index].preavresultlength, maxpreavresultlength);
-          //  cout << towrite << endl;
-          //}
-          //loop through each polarisation for this frequency
-          for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,k);p++)
+          //get the appropriate arrays to multiply
+          vis1 = m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, k, p));
+          vis2 = m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p));
+
+          if(procslots[index].pulsarbin)
           {
-            //get the appropriate arrays to multiply
-            vis1 = m1->getFreqs(s, config->getBDataStream1BandIndex(procslots[index].configindex, j, k, p));
-            vis2 = m2->getConjugatedFreqs(s, config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p));
+            //multiply into scratch space
+            status = vectorMul_cf32(vis1,vis2, scratchspace->pulsarscratchspace, freqchannels+1);
+            if(status != vecNoErr)
+              csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
 
-            if(procslots[index].pulsarbin)
+            //if scrunching, add into temp accumulate space, otherwise add into normal space
+            if(procslots[index].scrunchoutput)
             {
-              //multiply into scratch space
-              status = vectorMul_cf32(vis1,vis2, pulsarscratchspace, freqchannels+1);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
-
-              //if scrunching, add into temp accumulate space, otherwise add into normal space
-              if(procslots[index].scrunchoutput)
+              bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index];
+              for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
               {
-                bweight = dsweights[ds1index]*dsweights[ds2index];
-                for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
-                {
-                  pulsaraccumspace[j][k][s][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].re += pulsarscratchspace[l].re;
-                  pulsaraccumspace[j][k][s][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].im += pulsarscratchspace[l].im;
-                }
-                pulsaraccumspace[j][k][s][p][bins[config->getBFreqIndex(procslots[index].configindex, j, k)][nyquistchannel]][nyquistchannel].re += pulsarscratchspace[nyquistchannel].re;
-                pulsaraccumspace[j][k][s][p][0][nyquistchannel].im += bweight;
+                //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
+                scratchspace->pulsaraccumspace[j][k][0][p][scratchspace->bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].re += scratchspace->pulsarscratchspace[l].re;
+                scratchspace->pulsaraccumspace[j][k][0][p][scratchspace->bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].im += scratchspace->pulsarscratchspace[l].im;
               }
-              else
-              {
-                bweight = dsweights[ds1index]*dsweights[ds2index]/(freqchannels+1);
-                for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
-                {
-                  cindex = resultindex + (bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]*config->getBNumPolProducts(procslots[index].configindex,j,k) + p)*(freqchannels+1) + l;
-                  threadresults[cindex].re += pulsarscratchspace[l].re;
-                  threadresults[cindex].im += pulsarscratchspace[l].im;
-                  threadresults[cindex-l+nyquistchannel].im += bweight;
-                }
-              }
+              scratchspace->pulsaraccumspace[j][k][0][p][0][nyquistchannel].im += bweight;
             }
             else
             {
-              //not pulsar binning, so this is nice and simple - just cross multiply accumulate
-              status = vectorAddProduct_cf32(&(vis1[1-nyquistchannel/freqchannels]), &(vis2[1-nyquistchannel/freqchannels]), &(threadresults[resultindex+1-nyquistchannel/freqchannels]), freqchannels);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
-              threadresults[resultindex+nyquistchannel].re += vis1[nyquistchannel].re*vis2[nyquistchannel].re;
-              threadresults[resultindex+nyquistchannel].im += dsweights[ds1index]*dsweights[ds2index];
-              //cout << "DSweights were " << dsweights[ds1index] << ", " << dsweights[ds2index] << ", and nyquistchan.im (index " << resultindex+nyquistchannel << ") is now " << threadresults[resultindex+nyquistchannel].im << endl;
-              resultindex += freqchannels+1;
+              bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index]/(freqchannels+1);
+              for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
+              {
+                cindex = resultindex + (scratchspace->bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]*config->getBNumPolProducts(procslots[index].configindex,j,k) + p)*(freqchannels+1) + l;
+                scratchspace->threadresults[cindex].re += scratchspace->pulsarscratchspace[l].re;
+                scratchspace->threadresults[cindex].im += scratchspace->pulsarscratchspace[l].im;
+                scratchspace->threadresults[cindex-l+nyquistchannel].im += bweight;
+              }
             }
           }
+          else
+          {
+            //not pulsar binning, so this is nice and simple - just cross multiply accumulate
+            status = vectorAddProduct_cf32(&(vis1[1-nyquistchannel/freqchannels]), &(vis2[1-nyquistchannel/freqchannels]), &(scratchspace->threadresults[resultindex+1-nyquistchannel/freqchannels]), freqchannels);
+            if(status != vecNoErr)
+              csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
+            scratchspace->threadresults[resultindex+nyquistchannel].im += scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index];
+            resultindex += freqchannels+1;
+          }
           if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-            //we've gone through all the products of this frequency, so add the requisite increment to resultindex
+            //finished all the products of this frequency, so add the requisite increment to resultindex
             resultindex += config->getBNumPolProducts(procslots[index].configindex,j,k)*procslots[index].numpulsarbins*(freqchannels+1);
         }
       }
     }
+    blockcount++;
+    if(blockcount == maxblocks)
+    {
+      //shift/average and then lock results and copy data
+      uvshiftAndAverage(index, threadid, (startblock+shiftcount*maxblocks+((double)maxblocks)/2.0)*blockns, currentpolyco, scratchspace);
+
+      //reset the blockcount, increment shiftcount
+      blockcount = 0;
+      shiftcount++;
+    }
   }
 
-  //grab the bin counts if necessary
-  //if(procslots[index].pulsarbin)
-  //  polycobincounts = currentpolyco->getBinCounts();
+  if(blockcount != 0)
+    uvshiftAndAverage(index, threadid, (startblock+shiftcount*maxblocks+((double)blockcount)/2.0)*blockns, currentpolyco, scratchspace);
 
-  //if we are pulsar binning, do the necessary scaling (from scratch space to results if scrunching, otherwise in-place)
-  if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
+  datastreamsaveraged = false;
+  //if STA send needed but we can average datastream results in freq first, do so
+  if(scratchspace->starecord != 0 && procslots[index].preavresultlength != procslots[index].postavresultlength && config->getMinPostAvFreqChannels(procslots[index].configindex) >= config->getSTADumpChannels())
   {
-    resultindex = 0;
-    f64 * binweights = currentpolyco->getBinWeights();
-
-    //do the scrunch
-    for(int i=0;i<numbaselines;i++)
-    {
-      for(int j=0;j<config->getBNumFreqs(procslots[index].configindex, i);j++)
-      {
-        freqchannels = config->getFNumChannels(config->getBFreqIndex(procslots[index].configindex, i, j));
-        //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event
-        //that one datastream has USB and the other has LSB
-        nyquistchannel = freqchannels;
-        if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, i, j))) {
-          nyquistchannel = 0;
-        }
-        for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
-        {
-          for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
-          {
-            float baselineweight = pulsaraccumspace[i][j][s][k][0][nyquistchannel].im;
-            for(int l=0;l<procslots[index].numpulsarbins;l++)
-            {
-              //Scale the accumulation space, and scrunch it into the results vector
-              status = vectorMulC_f32_I((f32)(binweights[l]), (f32*)(pulsaraccumspace[i][j][s][k][l]), 2*freqchannels+2);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to scale for scrunch!!!" << endl;
-              status = vectorAdd_cf32_I(pulsaraccumspace[i][j][s][k][l], &(threadresults[resultindex]), freqchannels+1);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to accumulate for scrunch!!!" << endl;
-
-              //zero the accumulation space for next time
-              status = vectorZero_cf32(pulsaraccumspace[i][j][s][k][l], freqchannels+1);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
-            }
-            //store the correct weight
-            threadresults[resultindex + nyquistchannel].im = baselineweight;
-            resultindex += freqchannels+1;
-          }
-        }
-        /*  else
-          {
-            for(int k=0;k<procslots[index].numpulsarbins;k++)
-            {
-              for(int l=0;l<config->getBNumPolProducts(procslots[index].configindex,i,j);l++)
-              {
-                //Scale the bin
-                status = vectorMulC_f32_I((f32)(binweights[k]), (f32*)(&(threadresults[resultindex])), 2*freqchannels+2);
-                if(status != vecNoErr)
-                  csevere << startl << "Error trying to scale pulsar binned (non-scrunched) results!!!" << endl;
-                if(k==0)
-                  //renormalise the weight
-                  threadresults[resultindex + nyquistchannel].im /= binweights[k];
-                resultindex += freqchannels+1;
-              }
-            }
-          }
-        }*/
-      }
-    }
-  }
-
-  //if required, average down in frequency
-  //cout << "Preavresultlength is " << procslots[index].preavresultlength << ", postavresultlength is " << procslots[index].postavresultlength << endl;
-  //cout << "Lowersideband for frequency 0 is " << ((config->getFreqTableLowerSideband(0))?"true":"false") << endl;
-  if(procslots[index].preavresultlength != procslots[index].postavresultlength) {
-    resultindex = 0;
-    copyindex = 0;
-    firstsum = true;
-    binloop = 1;
-    if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-      binloop = procslots[index].numpulsarbins;
-
-    for(int i=0;i<numbaselines;i++)
-    {
-      for(int j=0;j<config->getBNumFreqs(procslots[index].configindex, i);j++)
-      {
-        freqindex = config->getBFreqIndex(procslots[index].configindex, i, j);
-        channelinc = config->getFChannelsToAverage(freqindex);
-        freqchannels = config->getFNumChannels(freqindex)/channelinc;
-        //cout << "Freqchannels (postaverage) is " << freqchannels << " from freqindex " << freqindex << endl;
-        nyquistchannel = freqchannels;
-        nyquistoffset = 0;
-        if(config->getFreqTableLowerSideband(freqindex)) {
-          //cout << "This is a lower sideband frequency" << endl;
-          nyquistchannel = 0;
-          nyquistoffset = 1;
-        }
-        if(channelinc == 1) //this frequency is not averaged
-        {
-          copylength = model->getNumPhaseCentres(procslots[index].offsets[0])*binloop* config->getBNumPolProducts(procslots[index].configindex,i,j)*(freqchannels+1);
-          if(copyindex != resultindex) //we wouldn't have to do anything otherwise
-          {
-            if(copylength < (copyindex - resultindex)) //can do it all in one go
-            {
-              status = vectorCopy_cf32(&(threadresults[copyindex]), &(threadresults[resultindex]), copylength);
-              if(status != vecNoErr)
-                cerror << startl << "Error trying to copy frequency " << j << " of baseline " << i << " when averaging in frequency" << endl;
-            }
-            else //need to be more creative
-            {
-              copiedchans = 0;
-              safelength = copyindex - resultindex;
-              while(copiedchans < copylength)
-              {
-                currentlength = safelength;
-                if(copylength - copiedchans < safelength)
-                  currentlength = copylength - copiedchans;
-                status = vectorCopy_cf32(&(threadresults[copyindex+copiedchans]), &(threadresults[resultindex+copiedchans]), currentlength);
-                if(status != vecNoErr)
-                  cerror << startl << "Error trying to copy frequency " << j << " of baseline " << i << " when averaging in frequency and working piecemeal" << endl;
-                copiedchans += currentlength;
-              }
-            }
-          }
-          resultindex += copylength;
-          copyindex += copylength;
-        }
-        else
-        {
-          for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
-          {
-            //if(procslots[index].offsets[0] == 1)
-            //  cout << "For scan 1, phase center " << s << "/" << model->getNumPhaseCentres(1) << " , we are up to copying from " << copyindex << " to resultindex " << " when the maximum lengths should be " << procslots[index].preavresultlength << " and " << procslots[index].postavresultlength << endl;
-            for(int b=0;b<binloop;b++)
-            {
-              for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
-              {
-                for(int l=0;l<freqchannels;l++)
-                {
-                  if(firstsum)
-                    sumpointer = &tempsum;
-                  else
-                    sumpointer = &(threadresults[resultindex+nyquistoffset+l]);
-                  status = vectorSum_cf32(&(threadresults[copyindex+nyquistoffset+l*channelinc]), channelinc, sumpointer, vecAlgHintFast);
-                  if(status != vecNoErr)
-                    cerror << startl << "Error trying to average frequency " << j << " of baseline " << i << endl;
-                  if(firstsum) {
-                    threadresults[resultindex+nyquistoffset+l] = *sumpointer;
-                    firstsum = false;
-                  }
-                }
-                threadresults[resultindex+nyquistchannel] = threadresults[copyindex+nyquistchannel*channelinc];
-                resultindex += freqchannels + 1;
-                copyindex += freqchannels*channelinc + 1;
-              }
-            }
-          }
-        }
-      }
-    }
-    //now do the datastreams too
     for(int i=0;i<numdatastreams;i++) {
       modes[i]->averageFrequency();
     }
+    datastreamsaveraged = true;
   }
 
   //if required, send off a message with the STA results
-  if(starecord != 0) {
-    starecord->sec = model->getScanStartSec(procslots[index].offsets[0], startmjd, startseconds) + procslots[index].offsets[1];
-    starecord->ns = procslots[index].offsets[2];
+  //(before averaging in case high spectral resolution for the dump is required)
+  if(scratchspace->starecord != 0) {
+    scratchspace->starecord->sec = model->getScanStartSec(procslots[index].offsets[0], startmjd, startseconds) + procslots[index].offsets[1];
+    scratchspace->starecord->ns = procslots[index].offsets[2];
     for (int i=0;i<numdatastreams;i++) {
-      starecord->antId = i;
+      scratchspace->starecord->antId = i;
       for (int j=0;j<config->getDNumTotalBands(procslots[index].configindex, i);j++) {
-        starecord->nChan = config->getSTADumpChannels();
+        scratchspace->starecord->nChan = config->getSTADumpChannels();
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, i, j);
-        freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
-        if (freqchannels < starecord->nChan)
-          starecord->nChan = freqchannels;
-        channelinc = freqchannels/starecord->nChan;
-        //cout << "Doing band " << j << " of datastream " << i << endl;
-        starecord->bandId = j;
-        int nyquistoffset = (config->getFreqTableLowerSideband(freqindex))?1:0;
+        freqchannels = config->getFNumChannels(freqindex);
+        if(datastreamsaveraged)
+          freqchannels /= config->getFChannelsToAverage(freqindex);
+        if (freqchannels < scratchspace->starecord->nChan)
+          scratchspace->starecord->nChan = freqchannels;
+        channelinc = freqchannels/scratchspace->starecord->nChan;
+        scratchspace->starecord->bandId = j;
+        nyquistoffset = (config->getFreqTableLowerSideband(freqindex))?1:0;
         acdata = (f32*)(modes[i]->getAutocorrelation(false, j));
-        for (int k=0;k<starecord->nChan;k++) {
+        for (int k=0;k<scratchspace->starecord->nChan;k++) {
           //cout << "Doing channel " << k << endl;
-          starecord->data[k] = acdata[2*(k*channelinc + nyquistoffset)];
+          scratchspace->starecord->data[k] = acdata[2*(k*channelinc + nyquistoffset)];
           for (int l=1;l<channelinc;l++)
-            starecord->data[k] += acdata[2*(k*channelinc+l+nyquistoffset)];
+            scratchspace->starecord->data[k] += acdata[2*(k*channelinc+l+nyquistoffset)];
         }
         //cout << "About to send the binary message" << endl;
-        difxMessageSendBinary((const char *)starecord, BINARY_STA, sizeof(DifxMessageSTARecord) + starecord->nChan);
+        difxMessageSendBinary((const char *)(scratchspace->starecord), BINARY_STA, sizeof(DifxMessageSTARecord) + scratchspace->starecord->nChan);
       }
     }
     //cout << "Finished doing some STA stuff" << endl;
   }
 
-  //cout << "About to lock copylock for " << index << endl;
+  //if required, average the datastreams down in frequency
+  if(procslots[index].preavresultlength != procslots[index].postavresultlength && !datastreamsaveraged) {
+    for(int i=0;i<numdatastreams;i++) {
+      modes[i]->averageFrequency();
+    }
+  }
 
-  //lock the thread "copy" lock, meaning we're the only one adding to the result array
-  perr = pthread_mutex_lock(&(procslots[index].copylock));
+  //lock the thread extra "copy" lock, so we're the only one adding to the result array (datastream section)
+  perr = pthread_mutex_lock(&(procslots[index].copylocks[numbaselines]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying lock copy mutex!!!" << endl;
-
-  //cout << "Copylock done for " << index << ", now to copy results" << endl;
-
-  //copy the baseline results
-  //cout << "About to copy length " << resultindex << ", while maxpostavlength should be " << config->getMaxPostavResultLength() << endl;
-  status = vectorAdd_cf32_I(threadresults, procslots[index].results, resultindex);
-  if(status != vecNoErr)
-    csevere << startl << "Error trying to add thread results to final results!!!" << ippGetStatusString((IppStatus)status) << endl;
-
-  //cout << "Results done for " << index << ", now to copy autocorrelations" << endl;
 
   //copy the autocorrelations
   for(int j=0;j<numdatastreams;j++)
   {
     for(int k=0;k<config->getDNumTotalBands(procslots[index].configindex, j);k++)
     {
-      //cout << "About to do band " << k << endl;
       freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
-      //cout << "Freq index is " << freqindex << endl;
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex)) {
         freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
-        //cout << "This band is used, freqchannels is " << freqchannels << endl;
+        nyquistoffset = (config->getFreqTableLowerSideband(freqindex))?1:0;
         //put autocorrs in resultsbuffer
-        //cout << "About to put into resultindex " << resultindex << ", where max is " << maxresultlength << endl;
-        status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[resultindex], freqchannels+1);
+        status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[scratchspace->copyindex+nyquistoffset], freqchannels);
         if(status != vecNoErr)
           csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << endl;
-        //cout << "About to check if this is a zoom band" << endl;
         if(k>=config->getDNumRecordedBands(procslots[index].configindex, j)) {
           //need to get the weight from the parent band
           if(config->getFreqTableLowerSideband(freqindex))
             nyquistchannel = 0;
           else
             nyquistchannel = freqchannels;
-          //cout << "It is - nyquist channel is " << nyquistchannel << endl;
           int parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, freqindex);
-          //cout << "Parent freq index is " << parentfreqindex << endl;
           for(int l=0;l<config->getDNumRecordedBands(procslots[index].configindex, j);l++) {
             if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l)) {
-              procslots[index].results[resultindex+nyquistchannel].im = modes[j]->getAutocorrelation(false, l)[nyquistchannel].im;
+              procslots[index].results[scratchspace->copyindex+nyquistchannel].im += modes[j]->getAutocorrelation(false, l)[nyquistchannel].im;
             }
           }
         }
-        resultindex += freqchannels+1;
+        scratchspace->copyindex += freqchannels+1;
       }
     }
-    if(writecrossautocorrs && maxproducts > 1) //want the cross-polarisation autocorrs as well
+    if(writecrossautocorrs && maxproducts > 2) //want the cross-polarisation autocorrs as well
     {
       for(int k=0;k<config->getDNumTotalBands(procslots[index].configindex, j);k++)
       {
-        //cout << "Doing cross autocorrelation for band " << k << endl;
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
-        //cout << "Freqindex is " << freqindex << endl;
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex)) {
-          //cout << "This frequency is used" << endl;
           freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
-          //cout << "Freqchannels is " << freqchannels << endl;
-          //cout << "About to copy to position " << resultindex << ", whereresultlength is " <<  maxresultlength << endl;
+          nyquistoffset = (config->getFreqTableLowerSideband(freqindex))?1:0;
           //put autocorrs in resultsbuffer
-          status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[resultindex], freqchannels+1);
+          status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[scratchspace->copyindex]+nyquistoffset, freqchannels);
           if(status != vecNoErr)
             csevere << startl << "Error copying cross-polar autocorrelations for datastream " << j << ", band " << k << endl;
-          //cout << "About to check if this comes from a parent band" << endl;
           if(k>=config->getDNumRecordedBands(procslots[index].configindex, j)) {
-            //cout << "Yes it is" << endl;
-          //need to get the weight from the parent band
+            //need to get the weight from the parent band
             if(config->getFreqTableLowerSideband(freqindex))
               nyquistchannel = 0;
             else
               nyquistchannel = freqchannels;
-            //cout << "Nyquist channel is " << nyquistchannel << endl;
             int parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, freqindex);
-            //cout << "Parent freq index is " << parentfreqindex << endl; 
             for(int l=0;l<config->getDNumRecordedBands(procslots[index].configindex, j);l++) {
               if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l)) {
-                //cout << "Found a matching band " << l << ", about to put in weight " << endl;
-                procslots[index].results[resultindex+nyquistchannel].im = modes[j]->getAutocorrelation(true, l)[nyquistchannel].im;
-                //cout << "done" << endl;
+                procslots[index].results[scratchspace->copyindex+nyquistchannel].im += modes[j]->getAutocorrelation(true, l)[nyquistchannel].im;
               }
             }
           }
-          resultindex += freqchannels+1;
+          scratchspace->copyindex += freqchannels+1;
         }
       }
     }
   }
-  //clear the bin count if necessary - NO LONGER NECESSARY
-  //if(config->pulsarBinOn(procslots[index].configindex))
-  //  currentpolyco->incrementBinCount();
 
-  //unlock the copy lock
-  perr = pthread_mutex_unlock(&(procslots[index].copylock));
+  //unlock the thread extra "copy" lock (datastream section)
+  perr = pthread_mutex_unlock(&(procslots[index].copylocks[numbaselines]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying unlock copy mutex!!!" << endl;
 
@@ -969,8 +800,277 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   perr = pthread_mutex_unlock(&(procslots[index].slotlocks[threadid]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying unlock mutex " << index << endl; 
+}
 
-  delete [] dsweights;
+void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, Polyco * currentpolyco, threadscratchspace * scratchspace)
+{
+  int status, startbaseline, savedcopyindex, binloop;
+  int freqindex, freqchannels, nyquistoffset, channelinc;
+
+  //first scale the pulsar data if necessary
+  if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
+  {
+    f64 * binweights = currentpolyco->getBinWeights();
+
+    for(int i=0;i<numbaselines;i++)
+    {
+      for(int j=0;j<config->getBNumFreqs(procslots[index].configindex, i);j++)
+      {
+        freqchannels = config->getFNumChannels(config->getBFreqIndex(procslots[index].configindex, i, j));
+        //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event
+        //that one datastream has USB and the other has LSB
+        nyquistoffset = 0;
+        if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, i, j))) {
+          nyquistoffset = 1;
+        }
+        //for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
+        for(int s=0;s<1;s++) //currently hardcoded to only one phase centre for pulsar binning
+        {
+          for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
+          {
+            for(int l=0;l<procslots[index].numpulsarbins;l++)
+            {
+              //Scale the accumulation space
+              status = vectorMulC_f32_I((f32)(binweights[l]), (f32*)(&(scratchspace->pulsaraccumspace[i][j][s][k][l][nyquistoffset])), 2*freqchannels);
+              if(status != vecNoErr)
+                csevere << startl << "Error trying to scale for scrunch!!!" << endl;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  scratchspace->resultindex = 0;
+  scratchspace->copyindex = 0;
+  startbaseline = (threadid*numbaselines)/numprocessthreads;
+  binloop = 1;
+  if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
+    binloop = procslots[index].numpulsarbins;
+
+  //skip ahead to the position in threadresults where this thread will start
+  for(int i=0;i<startbaseline;i++)
+  {
+    //get to where we will start
+    for(int j=0;j<config->getBNumFreqs(procslots[index].configindex, i);j++)
+    {
+      freqindex = config->getBFreqIndex(procslots[index].configindex, i, j);
+      freqchannels = config->getFNumChannels(freqindex);
+      channelinc = config->getFChannelsToAverage(freqindex);
+      for(int b=0;b<binloop;b++)
+      {
+        for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
+        {
+          scratchspace->resultindex += freqchannels + 1;
+          for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
+            scratchspace->copyindex += freqchannels/channelinc + 1;
+        }
+      }
+    }
+  }
+
+  //now rotate (if necessary) and average in frequency (if necessary) while copying
+  //from threadresults to the slot results
+  for(int i=startbaseline;i<numbaselines;i++)
+  {
+    uvshiftAndAverageBaseline(index, threadid, nsoffset, scratchspace, i);
+  }
+
+  //save the copyindex so we know where the autocorrelations will go
+  savedcopyindex = scratchspace->copyindex;
+
+  //back to the start and do the others we skipped earlier
+  scratchspace->resultindex = 0;
+  scratchspace->copyindex = 0;
+  for(int i=0;i<startbaseline;i++)
+  {
+    uvshiftAndAverageBaseline(index, threadid, nsoffset, scratchspace, i);
+  }
+
+  //clear the pulsar accumulation vector if necessary
+  //threadresults is cleared at the start of processData() so no need to do that now
+  if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
+  {
+    for(int i=0;i<numbaselines;i++)
+    {
+      for(int j=0;j<config->getBNumFreqs(procslots[index].configindex, i);j++)
+      {
+        //for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
+        for(int s=0;s<1;s++) //currently hardcoded to only one phase centre result when pulsar binning
+        {
+          for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,i,j);k++)
+          {
+            for(int l=0;l<procslots[index].numpulsarbins;l++)
+            {
+              //zero the accumulation space for next time
+              status = vectorZero_cf32(scratchspace->pulsaraccumspace[i][j][s][k][l], freqchannels+1);
+              if(status != vecNoErr)
+                csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  //replace the copyindex for the autocorrelations
+  scratchspace->copyindex = savedcopyindex;
+}
+
+void Core::uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, threadscratchspace * scratchspace, int baseline)
+{
+  int status, perr, binloop, srcoffset;
+  int freqindex, freqchannels, nyquistchannel, nyquistoffset, channelinc, sidebandinc;
+  int startchannel, endchannel, atchannel, channelcount, numaverages;
+  int antenna1index, antenna2index;
+  float baselineweight;
+  double bandwidth, lofrequency, pointingcentredelay1, pointingcentredelay2, applieddelay, turns, edgeturns;
+  double * phasecentredelay1;
+  double * phasecentredelay2;
+  cf32* srcpointer;
+
+  binloop = 1;
+  if(procslots[index].pulsarbin)
+    binloop = procslots[index].numpulsarbins;
+
+  //allocate space for the phase centre delays if necessary, and calculate pointing centre delays
+  if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
+  {
+    phasecentredelay1 = new double[model->getNumPhaseCentres(procslots[index].offsets[0])];
+    phasecentredelay2 = new double[model->getNumPhaseCentres(procslots[index].offsets[0])];
+
+    antenna1index = config->getDModelFileIndex(procslots[index].configindex, config->getBDataStream1Index(procslots[index].configindex, baseline));
+    antenna2index = config->getDModelFileIndex(procslots[index].configindex, config->getBDataStream2Index(procslots[index].configindex, baseline));
+    model->calculateDelayInterpolator(procslots[index].offsets[0], procslots[index].offsets[1] + double(procslots[index].offsets[2]+nsoffset)/1000000000.0, 0.0, 0, antenna1index, 0, 0, &pointingcentredelay1);
+    model->calculateDelayInterpolator(procslots[index].offsets[0], procslots[index].offsets[1] + double(procslots[index].offsets[2]+nsoffset)/1000000000.0, 0.0, 0, antenna2index, 0, 0, &pointingcentredelay2);
+    for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
+    {
+      model->calculateDelayInterpolator(procslots[index].offsets[0], procslots[index].offsets[1] + double(procslots[index].offsets[2]+nsoffset)/1000000000.0, 0.0, 0, antenna1index, s+1, 0, &phasecentredelay1[s]);
+      model->calculateDelayInterpolator(procslots[index].offsets[0], procslots[index].offsets[1] + double(procslots[index].offsets[2]+nsoffset)/1000000000.0, 0.0, 0, antenna2index, s+1, 0, &phasecentredelay2[s]);
+    }
+  }
+
+  //lock the mutex for this segment of the copying
+  perr = pthread_mutex_lock(&(procslots[index].copylocks[baseline]));
+  if(perr != 0)
+    csevere << startl << "PROCESSTHREAD " << threadid << " error trying lock copy mutex for baseline " << baseline << "!!!" << endl;
+
+  for(int j=0;j<config->getBNumFreqs(procslots[index].configindex, baseline);j++)
+  {
+    freqindex = config->getBFreqIndex(procslots[index].configindex, baseline, j);
+    freqchannels = config->getFNumChannels(freqindex);
+    channelinc = config->getFChannelsToAverage(freqindex);
+    bandwidth = config->getFreqTableBandwidth(freqindex);
+    lofrequency = config->getFreqTableFreq(freqindex);
+    numaverages = freqchannels/channelinc;
+    sidebandinc = 1;
+    startchannel = 0;
+    nyquistoffset = 0;
+    nyquistchannel = freqchannels;
+    endchannel = freqchannels;
+    if(config->getFreqTableLowerSideband(freqindex))
+    {
+      sidebandinc = -1;
+      startchannel = freqchannels;
+      endchannel = 0;
+      nyquistchannel = 0;
+      nyquistoffset = 1;
+    }
+
+    for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
+    {
+      srcoffset = 0;
+      channelcount = 0;
+      if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
+      {
+        //work out the correct rotator for this frequency and phase centre
+        applieddelay = (phasecentredelay2[s]-phasecentredelay1[s]) - (pointingcentredelay2-pointingcentredelay1);
+        if(fabs(applieddelay) > 1.0e-20)
+        {
+          edgeturns = applieddelay*lofrequency;
+          edgeturns -= floor(edgeturns);
+          for(int r=startchannel;r!=endchannel;r+=sidebandinc)
+          {
+            atchannel = r-nyquistoffset;
+            turns = applieddelay*double(channelcount)*bandwidth/double(freqchannels) + edgeturns;
+            scratchspace->argument[atchannel] = (turns-floor(turns))*TWO_PI;
+            channelcount++;
+          }
+          status = vectorSinCos_f32(scratchspace->argument, &(scratchspace->argument[freqchannels]), &(scratchspace->argument[2*freqchannels]), freqchannels);
+          if(status != vecNoErr)
+            csevere << startl << "Error in phase shift, sin/cos!!!" << status << endl;
+          status = vectorRealToComplex_f32(&(scratchspace->argument[2*freqchannels]), &(scratchspace->argument[freqchannels]), scratchspace->rotator, freqchannels);
+          if(status != vecNoErr)
+            csevere << startl << "Error in phase shift, real to complex!!!" << status << endl;
+        }
+      }
+      for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,baseline,j);k++)
+      {
+        if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
+          baselineweight = scratchspace->pulsaraccumspace[baseline][j][0][k][0][nyquistchannel].im;
+        else
+          baselineweight = scratchspace->threadresults[scratchspace->resultindex+srcoffset+nyquistchannel].im;
+        for(int b=0;b<binloop;b++)
+        {
+          if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1 && fabs(applieddelay) > 1.0e-20)
+          {
+            if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
+              status = vectorMul_cf32(scratchspace->rotator, &(scratchspace->pulsaraccumspace[baseline][j][0][k][b][nyquistoffset]), scratchspace->rotated, freqchannels);
+            else
+              status = vectorMul_cf32(scratchspace->rotator, &(scratchspace->threadresults[scratchspace->resultindex+srcoffset+nyquistoffset]), scratchspace->rotated, freqchannels);
+            if(status != vecNoErr)
+              csevere << startl << "Error in phase shift, multiplication!!!" << status << endl;
+            srcpointer = scratchspace->rotated;
+          }
+          else
+          {
+            if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
+              srcpointer = scratchspace->pulsaraccumspace[baseline][j][0][k][b];
+            else
+              srcpointer = scratchspace->threadresults + scratchspace->resultindex + srcoffset + nyquistoffset;
+          }
+
+          //now average (or just copy) from the designated pointer to the main result buffer
+          if(channelinc == 1) //this frequency is not averaged
+          {
+            status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[scratchspace->copyindex+nyquistoffset]), freqchannels);
+            if(status != vecNoErr)
+              cerror << startl << "Error trying to copy frequency " << j << " of baseline " << baseline << " when not averaging in frequency" << endl;
+            procslots[index].results[scratchspace->copyindex+nyquistchannel].im = baselineweight;
+            if(b==binloop-1 || !procslots[index].scrunchoutput) //don't advance too early when scrunching
+              scratchspace->copyindex += freqchannels+1;
+          }
+          else //this frequency *is* averaged - deal with it
+          {
+            for(int l=0;l<numaverages;l++)
+            {
+              status = vectorMean_cf32(&(srcpointer[l*channelinc]), channelinc, &(scratchspace->channelsums[l]), vecAlgHintFast);
+              if(status != vecNoErr)
+                cerror << startl << "Error trying to average frequency " << j << " of baseline " << baseline << endl;
+            }
+            status = vectorAdd_cf32_I(scratchspace->channelsums, &(procslots[index].results[scratchspace->copyindex+nyquistoffset]), numaverages);
+            procslots[index].results[scratchspace->copyindex+nyquistchannel/channelinc].im = baselineweight;
+            if(b==binloop-1 || !procslots[index].scrunchoutput) //don't advance too early when scrunching
+              scratchspace->copyindex += numaverages+1;
+          }
+          srcoffset += freqchannels+1;
+        }
+      }
+    }
+    scratchspace->resultindex += srcoffset;
+  }
+
+  //unlock the mutex for this segment of the copying
+  perr = pthread_mutex_unlock(&(procslots[index].copylocks[baseline]));
+  if(perr != 0)
+    csevere << startl << "PROCESSTHREAD " << threadid << " error trying lock copy mutex for baseline " << baseline << "!!!" << endl;
+
+  //free the phasecentredelay vectors if necessary
+  if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
+  {
+    delete [] phasecentredelay1;
+    delete [] phasecentredelay2;
+  }
 }
 
 void Core::createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfigindex, int oldconfigindex, int threadid)
@@ -985,7 +1085,8 @@ void Core::createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfiginde
       for(int j=0;j<config->getBNumFreqs(oldconfigindex, i);j++)
       {
         freqchannels = config->getFNumChannels(config->getBFreqIndex(oldconfigindex, i, j));
-        for(int s=0;j<config->getMaxPhaseCentres(oldconfigindex);s++)
+        //for(int s=0;s<config->getMaxPhaseCentres(oldconfigindex);s++)
+        for(int s=0;s<1;s++) //forced to single pulsar ephemeris for now
         {
           for(int k=0;k<config->getBNumPolProducts(oldconfigindex,i,j);k++)
           {
@@ -1014,7 +1115,8 @@ void Core::createPulsarAccumSpace(cf32****** pulsaraccumspace, int newconfiginde
       {
         freqchannels = config->getFNumChannels(config->getBFreqIndex(newconfigindex, i, j));
         pulsaraccumspace[i][j] = new cf32***[config->getMaxPhaseCentres(newconfigindex)];
-        for(int s=0;s<config->getMaxPhaseCentres(newconfigindex);s++)
+        //for(int s=0;s<config->getMaxPhaseCentres(newconfigindex);s++)
+        for(int s=0;s<1;s++) //forced to single pulsar ephemeris for now
         {
           pulsaraccumspace[i][j][s] = new cf32**[config->getBNumPolProducts(newconfigindex,i,j)];
           for(int k=0;k<config->getBNumPolProducts(newconfigindex,i,j);k++)
@@ -1085,7 +1187,7 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
       if(threadid == 0)
         threadbytes[threadid] += polycos[i]->getEstimatedBytes();
     }
-    cinfo << startl << "Core " << mpiid << " thread " << threadid << ": polycos created/copied successfully!"  << endl;
+    //cinfo << startl << "Core " << mpiid << " thread " << threadid << ": polycos created/copied successfully!"  << endl;
   }
 }
 

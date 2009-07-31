@@ -401,6 +401,8 @@ bool Model::readScanData(ifstream * input)
     scantable[i].durationseconds = atoi(line.c_str());
     config->getinputline(input, &(scantable[i].obsmodename), "SCAN ", i);
     config->getinputline(input, &line, "SCAN ", i);
+    scantable[i].maxnsbetweenuvshifts = atoi(line.c_str());
+    config->getinputline(input, &line, "SCAN ", i);
     scantable[i].pointingcentre = &(sourcetable[atoi(line.c_str())]);
     config->getinputline(input, &line, "SCAN ", i);
     scantable[i].numphasecentres = atoi(line.c_str());

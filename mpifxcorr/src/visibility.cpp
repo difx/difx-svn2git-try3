@@ -52,7 +52,7 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, i
     *mon_socket = -1;
   maxproducts = config->getMaxProducts();
   autocorrwidth = 1;
-  if (maxproducts > 1 && config->writeAutoCorrs(config->getScanConfigIndex(currentscan)))
+  if (maxproducts > 2 && config->writeAutoCorrs(config->getScanConfigIndex(currentscan)))
     autocorrwidth = 2;
   first = true;
   configuredok = true;
@@ -460,7 +460,7 @@ void Visibility::writedata()
       }
     }
   }
-  cout << "Finished grabbing the baseline weights" << endl;
+
   for(int i=0;i<numdatastreams;i++)
   {
     for(int j=0;j<autocorrwidth;j++)
@@ -975,7 +975,7 @@ void Visibility::changeConfig(int configindex)
   //get the new parameters for this configuration from the config object
   currentconfigindex = configindex;
   autocorrwidth = 1;
-  if (maxproducts > 1 && config->writeAutoCorrs(configindex))
+  if (maxproducts > 2 && config->writeAutoCorrs(configindex))
     autocorrwidth = 2;
   pulsarbinon = config->pulsarBinOn(configindex);
   pulsarwidth = 1;

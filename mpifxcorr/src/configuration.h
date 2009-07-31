@@ -85,6 +85,7 @@ public:
   inline int getBlocksPerSend(int configindex) { return configs[configindex].blockspersend; }
   inline double getIntTime(int configindex) { return configs[configindex].inttime; }
   inline bool writeAutoCorrs(int configindex) { return configs[configindex].writeautocorrs; }
+  inline int getMinPostAvFreqChannels(int configindex) { return configs[configindex].minpostavfreqchannels; }
   inline outputformat getOutputFormat() { return outformat; }
   inline string getOutputFilename() { return outputfilename; }
   inline bool pulsarBinOn(int configindex) { return configs[configindex].pulsarbin; }
@@ -503,6 +504,7 @@ private:
     bool pulsarbin;
     int numpolycos;
     int numbins;
+    int minpostavfreqchannels;
     bool scrunchoutput;
     int numphasecentres;
     string pulsarconfigfilename;

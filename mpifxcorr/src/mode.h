@@ -136,19 +136,17 @@ public:
 
  /**
   * Returns a pointer to the FFT'd data of the specified product
-  * @param phasecentre The number of the phase centre (0 based)
   * @param outputband The band to get
   * @return Pointer to the FFT'd data (complex 32 bit float)
   */
-  inline cf32* getFreqs(int phasecentre, int outputband) { return fftoutputs[phasecentre][outputband]; };
+  inline cf32* getFreqs(int outputband) { return fftoutputs[outputband]; };
 
  /**
   * Returns a pointer to the FFT'd and conjugated data of the specified product
-  * @param phasecentre The number of the phase centre (0 based)
   * @param outputband The band to get
   * @return Pointer to the conjugate of the FFT'd data (complex 32 bit float)
   */
-  inline cf32* getConjugatedFreqs(int phasecentre, int outputband) { return conjfftoutputs[phasecentre][outputband]; }
+  inline cf32* getConjugatedFreqs(int outputband) { return conjfftoutputs[outputband]; }
 
  /**
   * Returns the estimated number of bytes used by the Mode
@@ -176,7 +174,7 @@ protected:
   virtual float unpack(int sampleoffset);
   
   Configuration * config;
-  int configindex, datastreamindex, recordedbandchannels, channelstoaverage, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, currentscan, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, unpackstartsamples, maxphasecentres, estimatedbytes;
+  int configindex, datastreamindex, recordedbandchannels, channelstoaverage, blockspersend, guardsamples, twicerecordedbandchannels, numrecordedfreqs, numrecordedbands, numzoombands, numbits, bytesperblocknumerator, bytesperblockdenominator, currentscan, offsetseconds, offsetns, order, flag, fftbuffersize, unpacksamples, unpackstartsamples, estimatedbytes;
   int fringerotationorder, arraystridelength, numstrides;
   double recordedbandwidth, blockclock, sampletime; //MHz, microseconds
   double a0, b0, c0, a, b, c, quadadd1, quadadd2;
@@ -191,10 +189,8 @@ protected:
   s16 * lookup;
   s16 * linearunpacked;
   f32** unpackedarrays;
-  cf32*** fftoutputs;
-  cf32*** conjfftoutputs;
-  //cf32*** phasecentreoutputs;
-  //cf32*** conjphasecentreoutputs;
+  cf32** fftoutputs;
+  cf32** conjfftoutputs;
   s32 * validflags;
   cf32*** autocorrelations;
   vecFFTSpecR_f32 * pFFTSpecR;
@@ -202,7 +198,7 @@ protected:
   u8 * fftbuffer;
   vecHintAlg hint;
   Model * model;
-  f64 ** interpolators;
+  f64 * interpolator;
 
   //new arrays for strided complex multiply for fringe rotation and fractional sample correction
   cf32 * complexrotator;

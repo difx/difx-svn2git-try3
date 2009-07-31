@@ -127,9 +127,12 @@ Configuration::Configuration(const char * configfile, int id)
   }
   input->close();
   delete input;
-  //work out which frequencies are used in each config
+  //work out which frequencies are used in each config, and the minimum #channels
+  freqdata freq;
   for(int i=0;i<numconfigs;i++)
   {
+    freq = freqtable[getBFreqIndex(i,0,0)];
+    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
     configs[i].frequsedbybaseline = new bool[freqtablelength];
     for(int j=0;j<freqtablelength;j++)
       configs[i].frequsedbybaseline[j] = false;
@@ -138,7 +141,10 @@ Configuration::Configuration(const char * configfile, int id)
       for(int k=0;k<baselinetable[configs[i].baselineindices[j]].numfreqs;k++)
       {
         //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
+        freq = freqtable[getBFreqIndex(i,j,k)];
         configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)] = true;
+        if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
+          configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
       }
     }
   }
@@ -1273,7 +1279,10 @@ bool Configuration::populateResultLengths()
   {
     len = 0;
     postavlen = 0;
-    bandsperautocorr = (configs[c].writeautocorrs)?2:1;
+    if(getMaxProducts(c) > 2)
+      bandsperautocorr = 2;
+    else
+      bandsperautocorr = 1;
 
     //add up all the bands in the baselines
     for(int i=0;i<numbaselines;i++) {
@@ -1304,7 +1313,7 @@ bool Configuration::populateResultLengths()
       }
     }
     if(found) {
-      len *= maxconfigphasecentres;
+      //len *= maxconfigphasecentres;
       postavlen *= maxconfigphasecentres;
     }
     else
@@ -1688,7 +1697,7 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
   {
     for(int j=0;j<numsubpolycos[i];j++)
     {
-      cinfo << startl << "About to create polyco file " << polycocount << " from filename " << polycofilenames[i] << ", subcount " << j << endl;
+      //cinfo << startl << "About to create polyco file " << polycocount << " from filename " << polycofilenames[i] << ", subcount " << j << endl;
       configs[configindex].polycos[polycocount] = new Polyco(polycofilenames[i], j, configindex, configs[configindex].numbins, getMaxNumChannels(), binphaseends, binweights, double(configs[configindex].subintns)/60000000000.0);
       if (!configs[configindex].polycos[polycocount]->initialisedOK())
         return false;

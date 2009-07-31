@@ -223,6 +223,14 @@ protected:
   virtual int readnetwork(int sock, char* ptr, int bytestoread, int* nread);
 
  /**
+  * Tests that sync has not been lost (assuming the format supports this)
+  * @param configindex The current configuration index
+  * @param buffersegment The segment of the databuffer that the sync will be tested in
+  * @return The number of bytes which must be read in (0 unless sync was lost and must be regained)
+  */
+  virtual int testForSync(int configindex, int buffersegment);
+
+ /**
   * Launches the read thread (whether from file or network) and waits until it has initialised itself
   */
   void initialiseMemoryBuffer();
@@ -240,7 +248,7 @@ protected:
   void waitForBuffer(int buffersegment);
 
   string stationname;
-  int mpiid, delaystartday, delaystartseconds, filestartday, filestartseconds, numcores, numsent, delayincms, lastnearestindex, lastscan, lastvalidsegment, totaldelays, maxsendspersegment, waitsegment, portnumber, tcpwindowsizebytes, socketnumber;
+  int mpiid, filestartday, filestartseconds, numcores, numsent, delayincms, lastnearestindex, lastscan, lastvalidsegment, totaldelays, maxsendspersegment, waitsegment, portnumber, tcpwindowsizebytes, socketnumber;
   int * coreids;
   int * filesread;
   int * confignumfiles;

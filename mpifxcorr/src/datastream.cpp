@@ -183,8 +183,6 @@ void DataStream::execute()
     offsetsec = receiveinfo[2];
     offsetns = receiveinfo[3];
 
-    if(mpiid ==1)
-      cdebug << startl << "About to try and locate some data for scan " << scan << ", seconds " << offsetsec << ", ns " << offsetns << endl;
     //now get another instruction while we process
     MPI_Irecv(receiveinfo, 4, MPI_INT, fxcorr::MANAGERID, MPI_ANY_TAG, MPI_COMM_WORLD, &msgrequest);
 
@@ -214,9 +212,6 @@ void DataStream::execute()
         //data is ok
         MPI_Issend(&databuffer[startpos], bufferinfo[atsegment].sendbytes, MPI_UNSIGNED_CHAR, targetcore, CR_PROCESSDATA, MPI_COMM_WORLD, &(bufferinfo[atsegment].datarequests[bufferinfo[atsegment].numsent]));
         MPI_Issend(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent], bufferinfo[atsegment].controllength, MPI_INT, targetcore, CR_PROCESSCONTROL, MPI_COMM_WORLD, &(bufferinfo[atsegment].controlrequests[bufferinfo[atsegment].numsent]));
-	if(mpiid == 1) {
-          cout << "Datastream " << mpiid << " just sent data which starts at time scan " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] << ", second " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] << ", ns " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] << ", when we were asked for time " << scan << ", " << offsetsec << ", " << offsetns << endl;
-        }
       }
 
       bufferinfo[atsegment].numsent++;
@@ -269,25 +264,25 @@ void DataStream::execute()
 //the returned value MUST be between 0 and bufferlength
 int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
-  int firstoffsetns, lastoffsetns, bufferindex, perr, blockbytes, segoffbytes, segoffns;
+  int firstoffsetns, lastoffsetns, bufferindex, perr, blockbytes, segoffbytes, segoffns, srcindex;
   double delayus1, delayus2;
   bool foundok;
 
+  srcindex = 0;
+  if(model->getNumPhaseCentres(scan) == 1 && !model->isPointingCentreCorrelated(scan))
+    srcindex = 1;
   //cinfo << startl << "Working on scan " << scan << " offsetsec " << offsetsec << ", offsetns " << offsetns << endl;
   //work out the first delay and the last delay and place in control buffer
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = scan;
-  foundok = model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus1);
+  foundok = model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), srcindex, 0, &delayus1);
   delayus1 -= intclockseconds;
   firstoffsetns = offsetns - static_cast<int>(delayus1*1000);
-  foundok = foundok && model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns + bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), 0, 0, &delayus2);
+  foundok = foundok && model->calculateDelayInterpolator(scan, (double)offsetsec + ((double)offsetns + bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens)/1000000000.0, 0.0, 0, config->getDModelFileIndex(bufferinfo[atsegment].configindex, streamnum), srcindex, 0, &delayus2);
   delayus2 -= intclockseconds;
   if(!foundok) {
     cerror << startl << "Could not find a Model interpolator for scan " << scan << " offsetseconds " << offsetsec << " offsetns " << offsetns << " - will torch this subint!" << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0; //note exit here!!!!
-  }
-  if(mpiid == 1) {
-    cout << setprecision(15) << "For scan " << scan << ", offset sec " << offsetsec << ", ns " << offsetns << ", datastream1 got delays of " << delayus1 << ", " << delayus2 << endl;
   }
   lastoffsetns = offsetns + int(bufferinfo[atsegment].numchannels*bufferinfo[atsegment].blockspersend*2*bufferinfo[atsegment].sampletimens - 1000*delayus2 + 0.5);
   //cout << mpiid << ": delayus1 is " << delayus1 << ", delayus2 is " << delayus2 << endl;
@@ -345,8 +340,8 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   //can't continue, fill control buffer with -1 and bail out
   if((scan < bufferinfo[atsegment].scan) || (offsetsec < bufferinfo[atsegment].scanseconds - 1) || ((offsetsec - bufferinfo[atsegment].scanseconds < 2) && ((offsetsec - bufferinfo[atsegment].scanseconds)*1000000000 + lastoffsetns - bufferinfo[atsegment].scanns < 0)))
   {
-    if(mpiid == 1)
-      cout << "Bailing out: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
+    //if(mpiid == 1)
+    //  cout << "Bailing out: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0; //note exit here!!!!
   }
@@ -354,8 +349,8 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   // FIXME -- talk to Adam about this next check.  -WFB
   if(offsetsec > bufferinfo[atsegment].scanseconds + 1)
   {
-    if(mpiid == 1)
-      cout << "Bailing out2: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
+    //if(mpiid == 1)
+    //  cout << "Bailing out2: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     return 0; //note exit here!!!!
   }
@@ -368,8 +363,8 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
     double dbufferindex = atsegment*readbytes + (((double(offsetsec - bufferinfo[atsegment].scanseconds)*1000000000.0 + (firstoffsetns - bufferinfo[atsegment].scanns))/bufferinfo[atsegment].sampletimens)*bufferinfo[atsegment].bytespersamplenum)/bufferinfo[atsegment].bytespersampledenom;
     if(dbufferindex < double(-blockbytes*bufferinfo[atsegment].blockspersend) || dbufferindex > double(bufferbytes)) //its way off, bail out
     {
-      if(mpiid == 1)
-        cout << "Bailing out3: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
+      //if(mpiid == 1)
+      //  cout << "Bailing out3: was asked for scan " << scan << ", offset " << offsetsec << "/" << lastoffsetns << " and the segment I'm at is scan " << bufferinfo[atsegment].scan << ", offset " << bufferinfo[atsegment].scanseconds << "/" << bufferinfo[atsegment].scanns << endl;
       bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
       return 0; //note exit here!!!!
     }
@@ -415,9 +410,6 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   segoffns = int(double(segoffbytes*bufferinfo[atsegment].bytespersampledenom/bufferinfo[atsegment].bytespersamplenum)* bufferinfo[atsegment].sampletimens + 0.5);
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] += segoffns/1000000000;
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + segoffns%1000000000;
-  if(mpiid == 1) {
-    cout << "Segoffns is " << segoffns << " and send time will be " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] << " sec + " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] << " ns " << ", bytesbetweenintegerns is " << bufferinfo[atsegment].bytesbetweenintegerns << endl;
-  }
 
   //cout << "Count for datastream " << mpiid << " is " << count << ", and at this stage the first controlbuffer value is " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][3] << endl;
   if((bufferinfo[atsegment].validbytes - segoffbytes >= bufferinfo[atsegment].sendbytes) || (bufferinfo[atsegment].validbytes == readbytes && ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 + bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns) == bufferinfo[atsegment].nsinc && (bufferinfo[atsegment].validbytes-segoffbytes+bufferinfo[(atsegment+1)%numdatasegments].validbytes) > bufferinfo[atsegment].sendbytes)) //they're all ok
@@ -963,7 +955,7 @@ int DataStream::initialiseFrame(char * frameheader)
 void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
 {
   char *ptr;
-  int bytestoread, nread, status;
+  int bytestoread, nread, status, synccatchbytes;
 
   //do the buffer housekeeping
   waitForBuffer(buffersegment);
@@ -977,7 +969,6 @@ void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
   ptr = (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
 
   status = readnetwork(socketnumber, ptr, bytestoread, &nread);
-
   if (status==-1) { // Error reading socket
     cerror << startl << "Datastream " << mpiid << ": Error reading socket" << endl;
     keepreading=false;
@@ -988,9 +979,25 @@ void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
     framebytesremaining -= nread;
     bufferinfo[buffersegment].readto = true;
   }
-
   if (framebytesremaining<=0) {
     dataremaining = false;
+  }
+
+  synccatchbytes = testForSync(bufferinfo[buffersegment].configindex, buffersegment);
+  if(synccatchbytes > 0) {
+    status = readnetwork(socketnumber, ptr, synccatchbytes, &nread);
+    if (status==-1) { // Error reading socket
+      cerror << startl << "Datastream " << mpiid << ": Error reading socket" << endl;
+      keepreading=false;
+    } else if (status==0) {  // Socket closed remotely
+      keepreading=false;
+    } else {
+      bufferinfo[buffersegment].validbytes -= (synccatchbytes - nread);
+      framebytesremaining -= nread;
+    }
+    if (framebytesremaining<=0) {
+      dataremaining = false;
+    }
   }
 
   readnanoseconds += bufferinfo[buffersegment].nsinc;
@@ -1190,6 +1197,8 @@ void DataStream::initialiseFile(int configindex, int fileindex)
 
 void DataStream::diskToMemory(int buffersegment)
 {
+  int synccatchbytes;
+
   //do the buffer housekeeping
   waitForBuffer(buffersegment);
   
@@ -1197,6 +1206,11 @@ void DataStream::diskToMemory(int buffersegment)
   input.read((char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)], readbytes);
   bufferinfo[buffersegment].validbytes = input.gcount();
   bufferinfo[buffersegment].readto = true;
+  synccatchbytes = testForSync(bufferinfo[buffersegment].configindex, buffersegment);
+  if(synccatchbytes > 0) {
+    input.read((char*)&databuffer[(buffersegment+1)*(bufferbytes/numdatasegments) - synccatchbytes], synccatchbytes);
+    bufferinfo[buffersegment].validbytes -= (synccatchbytes - input.gcount());
+  }
   readnanoseconds += bufferinfo[buffersegment].nsinc;
   readseconds += readnanoseconds/1000000000;
   readnanoseconds %= 1000000000;
@@ -1214,6 +1228,11 @@ void DataStream::diskToMemory(int buffersegment)
     dataremaining = false;
   }
 }
+int DataStream::testForSync(int configindex, int buffersegment)
+{
+  //can't test for sync with LBA files
+  return 0;
+}
 
 void DataStream::waitForBuffer(int buffersegment)
 {
@@ -1221,7 +1240,6 @@ void DataStream::waitForBuffer(int buffersegment)
   bufferinfo[buffersegment].scanns = readnanoseconds;
   bufferinfo[buffersegment].scanseconds = readseconds;
   bufferinfo[buffersegment].scan = readscan;
-  cout << "Datastream " << mpiid << " just set buffersegment " << buffersegment << " to scan " << readscan << ", scanseconds " << readseconds << endl;
 
   //if we need to, change the config
   if(config->getScanConfigIndex(readscan) != bufferinfo[buffersegment].configindex)

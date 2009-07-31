@@ -91,8 +91,24 @@ private:
     bool pulsarbin;
     bool scrunchoutput;
     pthread_mutex_t * slotlocks;
-    pthread_mutex_t copylock;
+    pthread_mutex_t * copylocks;
   } processslot;
+
+  ///Structure containing all of the pointers to scratch space for a single thread
+  typedef struct {
+    cf32 * threadresults;
+    s32 ** bins;
+    cf32* pulsarscratchspace;
+    cf32****** pulsaraccumspace;
+    cf32 * rotated;
+    cf32 * rotator;
+    cf32 * channelsums;
+    f32 * argument;
+    f32 * dsweights;
+    DifxMessageSTARecord * starecord;
+    int resultindex;
+    int copyindex;
+  } threadscratchspace;
 
   /// Structure containing a pointer to the current Core and the sequence id of the thread that will be launched, so it knows which part of the time slice to process
   typedef struct {
@@ -123,20 +139,36 @@ private:
   void receivedata(int index, bool * terminate);
 
  /**
-  * Receives data from all telescopes into the given index of the circular send/receive buffer, as well as control info from the FxManager
+  * Processes a single thread's section of a single subintegration
   * @param index The index in the circular send/receive buffer to be processed
   * @param threadid The id of the thread which is doing the processing
   * @param startblock The first FFT block which is this thread's responsibility
   * @param numblocks The number of FFT blocks which this thread will take care of
   * @param modes The Mode objects which handle the station-based processing
   * @param currentpolyco The correct Polyco object for this time slice - null if not pulsar binning
-  * @param threadresults Pre-allocated space for this thread to place its partial results (Nbaselines*nproducts*(numchannels+1) long)
-  * @param bins Pre-allocated space for the bins for each subband/channel combination - null if not pulsar binning
-  * @param pulsarscratchspace Room to perform the pulsar binning if required - null if not pulsar binning (numchannels + 1 long)
-  * @param pulsaraccumspace Room in which to accumulate the binned results ([#baselines][#frequencies][#phasecentres][#polproducts][#bins][#channels+1])
-  * @param starecord Message to be sent to a process listening for STA results
+  * @param scratchspace Space for all of the intermediate results for this thread
   */
-  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32****** pulsaraccumspace, DifxMessageSTARecord * starecord);
+  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
+
+ /**
+  * Does any uvshifting necessary and averages down in frequency into the threadresults
+  * @param index The index in the circular send/receive buffer to be processed
+  * @param threadid The id of the thread which is doing the processing
+  * @param nsoffset The offset from start of subintegration (for calculating UV shifts)
+  * @param currentpolyco The correct Polyco object for this time slice - null if not pulsar binning
+  * @param scratchspace Space for all of the intermediate results for this thread
+  */
+  void uvshiftAndAverage(int index, int threadid, double nsoffset, Polyco * currentpolyco, threadscratchspace * scratchspace);
+
+ /**
+  * Does any uvshifting necessary and averages down in frequency into the threadresults
+  * @param index The index in the circular send/receive buffer to be processed
+  * @param threadid The id of the thread which is doing the processing
+  * @param nsoffset The offset from start of subintegration (for calculating UV shifts)
+  * @param scratchspace Space for all of the intermediate results for this thread
+  * @param baseline The baseline to process
+  */
+  void uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, threadscratchspace * scratchspace, int baseline);
 
  /**
   * Updates all the parameters for processing thread when the configuration changes

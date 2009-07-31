@@ -84,6 +84,8 @@ protected:
 
   virtual int readnetwork(int sock, char* ptr, int bytestoread, int* nread);
 
+  virtual int testForSync(int configindex, int buffersegment);
+
   virtual int openframe();
 
   int framebytes, payloadbytes, framespersecond;
@@ -98,7 +100,8 @@ protected:
   double lasttime;
   char *udp_buf, *invalid_buf;
   vector<bool> packets_arrived;
-
+  char formatname[64];
+  struct mark5_stream * syncteststream;
 };
 
 #endif

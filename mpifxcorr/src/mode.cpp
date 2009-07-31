@@ -38,7 +38,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
   estimatedbytes = 0;
 
   model = config->getModel();
-  maxphasecentres = config->getMaxPhaseCentres(configindex);
   initok = true;
   intclockseconds = int(floor(config->getDClockOffset(configindex, dsindex)/1000000.0 + 0.5));
   numstrides = twicerecordedbandchannels/arraystridelength;
@@ -86,34 +85,31 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
       estimatedbytes += 4*unpacksamples;
     }
 
-    fftoutputs = new cf32**[maxphasecentres+1];
-    conjfftoutputs = new cf32**[maxphasecentres+1];
-    interpolators = new f64*[maxphasecentres+1];
-    for(int i=0;i<maxphasecentres+1;i++) {
-      fftoutputs[i] = new cf32*[numrecordedbands + numzoombands];
-      conjfftoutputs[i] = new cf32*[numrecordedbands + numzoombands];
-      interpolators[i] = new f64[3];
-      for(int j=0;j<numrecordedbands;j++)
-      {
-        fftoutputs[i][j] = vectorAlloc_cf32(recordedbandchannels + 1);
-        conjfftoutputs[i][j] = vectorAlloc_cf32(recordedbandchannels + 1);
-        estimatedbytes += 2*8*(recordedbandchannels + 1);
-        //zero the Nyquist channel
-        if(config->getDRecordedLowerSideband(configindex, datastreamindex, config->getDLocalRecordedFreqIndex(configindex, datastreamindex, j))) {
-          fftoutputs[i][j][0].re = 0.0;
-          fftoutputs[i][j][0].im = 0.0;
-        }
-        else {
-          fftoutputs[i][j][recordedbandchannels].re = 0.0;
-          fftoutputs[i][j][recordedbandchannels].im = 0.0;
-        }
+    interpolator = new f64[3];
+
+    fftoutputs = new cf32*[numrecordedbands + numzoombands];
+    conjfftoutputs = new cf32*[numrecordedbands + numzoombands];
+    for(int j=0;j<numrecordedbands;j++)
+    {
+      fftoutputs[j] = vectorAlloc_cf32(recordedbandchannels + 1);
+      conjfftoutputs[j] = vectorAlloc_cf32(recordedbandchannels + 1);
+      estimatedbytes += 2*8*(recordedbandchannels + 1);
+
+      //zero the Nyquist channel
+      if(config->getDRecordedLowerSideband(configindex, datastreamindex, config->getDLocalRecordedFreqIndex(configindex, datastreamindex, j))) {
+        fftoutputs[j][0].re = 0.0;
+        fftoutputs[j][0].im = 0.0;
       }
-      for(int j=0;j<numzoombands;j++)
-      {
-        localfreqindex = config->getDLocalZoomFreqIndex(confindex, dsindex, i);
-        fftoutputs[i][j+numrecordedbands] = &(fftoutputs[i][config->getDZoomFreqParentFreqIndex(confindex, dsindex, localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
-        conjfftoutputs[i][j+numrecordedbands] = &(conjfftoutputs[i][config->getDZoomFreqParentFreqIndex(confindex, dsindex, localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
+      else {
+        fftoutputs[j][recordedbandchannels].re = 0.0;
+        fftoutputs[j][recordedbandchannels].im = 0.0;
       }
+    }
+    for(int j=0;j<numzoombands;j++)
+    {
+      localfreqindex = config->getDLocalZoomFreqIndex(confindex, dsindex, j);
+      fftoutputs[j+numrecordedbands] = &(fftoutputs[config->getDZoomFreqParentFreqIndex(confindex, dsindex, localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
+      conjfftoutputs[j+numrecordedbands] = &(conjfftoutputs[config->getDZoomFreqParentFreqIndex(confindex, dsindex, localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
     }
     dataweight = 0.0;
 
@@ -280,19 +276,14 @@ Mode::~Mode()
   cdebug << startl << "Starting a mode destructor" << endl;
 
   vectorFree(validflags);
-  for(int i=0;i<maxphasecentres;i++) {
-    for(int j=0;j<numrecordedbands;j++)
-    {
-      vectorFree(fftoutputs[i][j]);
-      vectorFree(conjfftoutputs[i][j]);
-    }
-    delete [] fftoutputs[i];
-    delete [] conjfftoutputs[i];
-    delete [] interpolators[i];
+  for(int j=0;j<numrecordedbands;j++)
+  {
+    vectorFree(fftoutputs[j]);
+    vectorFree(conjfftoutputs[j]);
   }
   delete [] fftoutputs;
   delete [] conjfftoutputs;
-  delete [] interpolators;
+  delete [] interpolator;
 
   for(int i=0;i<numrecordedbands;i++)
     vectorFree(unpackedarrays[i]);
@@ -412,9 +403,9 @@ float Mode::unpack(int sampleoffset)
 
 float Mode::process(int index)  //frac sample error, fringedelay and wholemicroseconds are in microseconds 
 {
-  double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance, walltimesecs, fftcentre, delay1, delay2, phasecentredelay;
+  double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance, walltimesecs, fftcentre, delay1, delay2;
   f32 phaserotationfloat, fracsampleerror;
-  int status, count, nearestsample, integerdelay, sidebandoffset, fftslot;
+  int status, count, nearestsample, integerdelay, sidebandoffset;
   cf32* fftptr;
   cf32* fracsampptr1;
   cf32* fracsampptr2;
@@ -424,28 +415,21 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   //cout << "For Mode of datastream " << datastreamindex << ", index " << index << ", validflags is " << validflags[index/FLAGS_PER_INT] << ", after shift you get " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
   if((datalengthbytes <= 1) || (offsetseconds == INVALID_SUBINT) || (((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) == 0))
   {
-    for(int p=0;p<model->getNumPhaseCentres(currentscan);p++)
+    for(int i=0;i<numrecordedbands;i++)
     {
-      for(int i=0;i<numrecordedbands;i++)
-      {
-        status = vectorZero_cf32(fftoutputs[p][i], recordedbandchannels+1);
-        if(status != vecNoErr)
-          csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
-        status = vectorZero_cf32(conjfftoutputs[p][i], recordedbandchannels+1);
-        if(status != vecNoErr)
-          csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
-      }
+      status = vectorZero_cf32(fftoutputs[i], recordedbandchannels+1);
+      if(status != vecNoErr)
+        csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
+      status = vectorZero_cf32(conjfftoutputs[i], recordedbandchannels+1);
+      if(status != vecNoErr)
+        csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
     }
     //cout << "Mode for DS " << datastreamindex << " is bailing out of index " << index << " because datalengthbytes is " << datalengthbytes << ", delays[index] was " << delays[index] << " and delays[index+1] was " << delays[index+1] << endl;
     return 0.0; //don't process crap data
   }
 
-  fftslot = maxphasecentres;
   fftcentre = index+0.5;
-  averagedelay = interpolators[0][0]*fftcentre*fftcentre + interpolators[0][1]*fftcentre + interpolators[0][2];
-  if(datastreamindex == 0 && index == 0) {
-    cout << setprecision(15) << "averagedelay for index " <<  index << " is " << averagedelay << ", Index Time is " << offsetseconds + ((double)offsetns)/1000000000.0 << ", Data Time is " << datasec + ((double)datans)/1000000000.0 << endl;
-  }
+  averagedelay = interpolator[0]*fftcentre*fftcentre + interpolator[1]*fftcentre + interpolator[2];
   fftstartmicrosec = index*twicerecordedbandchannels*sampletime;
   starttime = (offsetseconds-datasec)*1000000.0 + double(offsetns - datans)/1000.0 + fftstartmicrosec - averagedelay;
   //cout << "starttime for " << datastreamindex << " is " << starttime << endl;
@@ -488,8 +472,8 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       integerdelay = int(averagedelay);
       break;
     case 1: //linear
-      delay1 = interpolators[0][0]*index*index + interpolators[0][1]*index + interpolators[0][2];
-      delay2 = interpolators[0][0]*(index+1)*(index+1) + interpolators[0][1]*(index+1) + interpolators[0][2];
+      delay1 = interpolator[0]*index*index + interpolator[1]*index + interpolator[2];
+      delay2 = interpolator[0]*(index+1)*(index+1) + interpolator[1]*(index+1) + interpolator[2];
       integerdelay = int(delay1);
       a = delay2-delay1;
       b = delay1 - integerdelay;
@@ -505,9 +489,9 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         csevere << startl << "Error in linearinterpolate, subval addition!!!" << endl;
       break;
     case 2: //quadratic
-      a = interpolators[0][0];
-      b = interpolators[0][1] + index*interpolators[0][0]*2.0;
-      c = interpolators[0][2] + index*interpolators[0][1] + index*index*interpolators[0][0];
+      a = interpolator[0];
+      b = interpolator[1] + index*interpolator[0]*2.0;
+      c = interpolator[2] + index*interpolator[1] + index*index*interpolator[0];
       if(datastreamindex == 0)
         cout << "I got a c value of " << c << " when my average delay was " << averagedelay << ", the difference is " << c-averagedelay << endl;
       integerdelay = int(c);
@@ -647,155 +631,136 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         break;
     }
 
-    for(int p=0;p<model->getNumPhaseCentres(currentscan);p++)
-    {
-      if(model->getNumPhaseCentres(currentscan) == 1 || model->isPointingCentre(currentscan, p))
-        phasecentredelay = 0.0;
-      else
-      {
-        phasecentredelay = interpolators[p+1][0]*fftcentre*fftcentre + interpolators[p+1][1]*fftcentre + interpolators[p+1][2] - averagedelay;
-      }
-      //status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, subfracsamparg, arraystridelength);
-      status = vectorMulC_f32(subchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, subfracsamparg, arraystridelength);
-      if(status != vecNoErr) {
-        csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
-        exit(1);
-      }
-      status = vectorMulC_f32(currentstepchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay, stepfracsamparg, numstrides/2);
-      if(datastreamindex == 9 && index==200)
-        cout << "Just multiplied " << fracsampleerror - recordedfreqclockoffsets[i] - phasecentredelay << " by up to 8 MHz - too big for a float?" << endl;
+    status = vectorMulC_f32(subchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i], subfracsamparg, arraystridelength);
+    if(status != vecNoErr) {
+      csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
+      exit(1);
+    }
+    status = vectorMulC_f32(currentstepchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i], stepfracsamparg, numstrides/2);
+    if(status != vecNoErr)
+      csevere << startl << "Error in frac sample correction, arg generation (step)!!!" << status << endl;
+
+    //sort out any LO offsets (+ fringe rotation if its post-F)
+    if(fringerotationorder == 0) { // do both LO offset and fringe rotation
+      phaserotation = (averagedelay-integerdelay)*lofreq;
+      if(fractionalLoFreq)
+        phaserotation += integerdelay*(lofreq-int(lofreq));
+      phaserotation -= walltimesecs*recordedfreqlooffsets[i];
+      phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
+      status = vectorAddC_f32_I(phaserotationfloat, subfracsamparg, arraystridelength);
       if(status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, arg generation (step)!!!" << status << endl;
-  
-      //sort out any LO offsets (+ fringe rotation if its post-F)
-      if(fringerotationorder == 0) { // do both LO offset and fringe rotation
-        phaserotation = (phasecentredelay+averagedelay-integerdelay)*lofreq;
-        if(fractionalLoFreq)
-          phaserotation += integerdelay*(lofreq-int(lofreq));
-        phaserotation -= walltimesecs*recordedfreqlooffsets[i];
+        csevere << startl << "Error in post-f phase rotation addition (+ maybe LO offset correction), sub!!!" << status << endl;
+      fracsamprotator[sidebandoffset*recordedbandchannels].re = cos(phaserotationfloat);
+      fracsamprotator[sidebandoffset*recordedbandchannels].im = sin(phaserotationfloat);
+    }
+    else { //not post-F, but must take care of LO offsets if present
+      if(recordedfreqlooffsets[i] > 0.0 || recordedfreqlooffsets[i] < 0.0)
+      {
+        phaserotation = -walltimesecs*recordedfreqlooffsets[i];
         phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
         status = vectorAddC_f32_I(phaserotationfloat, subfracsamparg, arraystridelength);
         if(status != vecNoErr)
-          csevere << startl << "Error in post-f phase rotation addition (+ maybe LO offset correction), sub!!!" << status << endl;
+          csevere << startl << "Error in LO offset correction (sub)!!!" << status << endl;
         fracsamprotator[sidebandoffset*recordedbandchannels].re = cos(phaserotationfloat);
         fracsamprotator[sidebandoffset*recordedbandchannels].im = sin(phaserotationfloat);
       }
-      else { //not post-F, must take care of LO offsets if present
-        if(recordedfreqlooffsets[i] > 0.0 || recordedfreqlooffsets[i] < 0.0)
-        {
-          phaserotation = -walltimesecs*recordedfreqlooffsets[i];
-          phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
-          status = vectorAddC_f32_I(phaserotationfloat, subfracsamparg, arraystridelength);
-          if(status != vecNoErr)
-            csevere << startl << "Error in LO offset correction (sub)!!!" << status << endl;
-          fracsamprotator[sidebandoffset*recordedbandchannels].re = cos(phaserotationfloat);
-          fracsamprotator[sidebandoffset*recordedbandchannels].im = sin(phaserotationfloat);
-        }
-      }
-  
-      //create the fractional sample correction array
-      status = vectorSinCos_f32(subfracsamparg, subfracsampsin, subfracsampcos, arraystridelength);
-      if(status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
-      status = vectorSinCos_f32(stepfracsamparg, stepfracsampsin, stepfracsampcos, numstrides/2);
-      if(status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
-      status = vectorRealToComplex_f32(subfracsampcos, subfracsampsin, fracsampptr1, arraystridelength);
-      if(status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, real to complex (sub)!!!" << status << endl;
-      status = vectorRealToComplex_f32(stepfracsampcos, stepfracsampsin, stepfracsampcplx, numstrides/2);
-      if(status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, real to complex (step)!!!" << status << endl;
-      for(int j=1;j<numstrides/2;j++) {
-        status = vectorMulC_cf32(fracsampptr1, stepfracsampcplx[j], &(fracsampptr2[(j-1)*arraystridelength]), arraystridelength);
-        if(status != vecNoErr)
-          csevere << startl << "Error doing the time-saving complex multiplication in frac sample correction!!!" << endl;
-      }
-  
-      for(int j=0;j<numrecordedbands;j++)
-      {
-        if(config->matchingRecordedBand(configindex, datastreamindex, i, j))
-        {
-          if(p==0)
-          {
-            indices[count++] = j;
-            switch(fringerotationorder) {
-              case 0: //post-F
-                fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[fftslot][j]:fftoutputs[fftslot][j];
-    
-                //do the fft
-                status = vectorFFT_RtoC_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), (f32*)fftptr, pFFTSpecR, fftbuffer);
-                if(status != vecNoErr)
-                  csevere << startl << "Error in FFT!!!" << status << endl;
-                //fix the lower sideband if required
-                if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
-                {
-                  status = vectorConjFlip_cf32(fftptr, fftoutputs[fftslot][j], recordedbandchannels + 1);
-                  if(status != vecNoErr)
-                    csevere << startl << "Error in conjugate!!!" << status << endl;
-                }
-                break;
-              case 1:
-              case 2:
-                status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, twicerecordedbandchannels);
-                if(status != vecNoErr)
-                  csevere << startl << "Error in real->complex conversion" << endl;
-                status = vectorMul_cf32_I(complexrotator, complexunpacked, twicerecordedbandchannels);
-                if(status != vecNoErr)
-                  csevere << startl << "Error in fringe rotation!!!" << status << endl;
-                status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
-                if(status != vecNoErr)
-                  csevere << startl << "Error doing the FFT!!!" << endl;
-                if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-                  status = vectorCopy_cf32(&(fftd[recordedbandchannels+1]), &(fftoutputs[fftslot][j][1]), recordedbandchannels-1);
-                  fftoutputs[fftslot][j][recordedbandchannels] = fftd[0];
-                }
-                else {
-                  status = vectorCopy_cf32(fftd, fftoutputs[fftslot][j], recordedbandchannels);
-                }
-                if(status != vecNoErr)
-                  csevere << startl << "Error copying FFT results!!!" << endl;
-                break;
-            }
-          }
+    }
 
-          //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
-          status = vectorMul_cf32(fracsamprotator, fftoutputs[fftslot][j], fftoutputs[p][j], recordedbandchannels + 1);
-          if(status != vecNoErr)
-            csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
-  
-          //do the conjugation
-          status = vectorConj_cf32(fftoutputs[p][j], conjfftoutputs[p][j], recordedbandchannels + 1);
-          if(status != vecNoErr)
-            csevere << startl << "Error in conjugate!!!" << status << endl;
-  
-          //do the autocorrelation (skipping Nyquist channel)
-          if(p==0)
-          {
-            status = vectorAddProduct_cf32(fftoutputs[0][j]+sidebandoffset, conjfftoutputs[0][j]+sidebandoffset, autocorrelations[0][j]+sidebandoffset, recordedbandchannels);
-            if(status != vecNoErr)
-              csevere << startl << "Error in autocorrelation!!!" << status << endl;
-  
-            //Add the weight in magic location (imaginary part of Nyquist channel)
-            autocorrelations[0][j][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
-          }
-        }
-      }
-  
-      //if we need to, do the cross-polar autocorrelations
-      if(calccrosspolautocorrs && count > 1 && p==0)
+    //create the fractional sample correction array
+    status = vectorSinCos_f32(subfracsamparg, subfracsampsin, subfracsampcos, arraystridelength);
+    if(status != vecNoErr)
+      csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
+    status = vectorSinCos_f32(stepfracsamparg, stepfracsampsin, stepfracsampcos, numstrides/2);
+    if(status != vecNoErr)
+      csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
+    status = vectorRealToComplex_f32(subfracsampcos, subfracsampsin, fracsampptr1, arraystridelength);
+    if(status != vecNoErr)
+      csevere << startl << "Error in frac sample correction, real to complex (sub)!!!" << status << endl;
+    status = vectorRealToComplex_f32(stepfracsampcos, stepfracsampsin, stepfracsampcplx, numstrides/2);
+    if(status != vecNoErr)
+      csevere << startl << "Error in frac sample correction, real to complex (step)!!!" << status << endl;
+    for(int j=1;j<numstrides/2;j++) {
+      status = vectorMulC_cf32(fracsampptr1, stepfracsampcplx[j], &(fracsampptr2[(j-1)*arraystridelength]), arraystridelength);
+      if(status != vecNoErr)
+        csevere << startl << "Error doing the time-saving complex multiplication in frac sample correction!!!" << endl;
+    }
+
+    for(int j=0;j<numrecordedbands;j++)
+    {
+      if(config->matchingRecordedBand(configindex, datastreamindex, i, j))
       {
-        //cinfo << startl << "For frequency " << i << ", datastream " << datastreamindex << " has chosen bands " << indices[0] << " and " << indices[1] << endl; 
-        status = vectorAddProduct_cf32(fftoutputs[0][indices[0]]+sidebandoffset, conjfftoutputs[0][indices[1]]+sidebandoffset, autocorrelations[1][indices[0]]+sidebandoffset, recordedbandchannels);
+        indices[count++] = j;
+        switch(fringerotationorder) {
+          case 0: //post-F
+            fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j]:fftoutputs[j];
+
+            //do the fft
+            status = vectorFFT_RtoC_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), (f32*)fftptr, pFFTSpecR, fftbuffer);
+            if(status != vecNoErr)
+              csevere << startl << "Error in FFT!!!" << status << endl;
+            //fix the lower sideband if required
+            if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+            {
+              status = vectorConjFlip_cf32(fftptr, fftoutputs[j], recordedbandchannels + 1);
+              if(status != vecNoErr)
+                csevere << startl << "Error in conjugate!!!" << status << endl;
+            }
+            break;
+          case 1:
+          case 2:
+            status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, twicerecordedbandchannels);
+            if(status != vecNoErr)
+              csevere << startl << "Error in real->complex conversion" << endl;
+            status = vectorMul_cf32_I(complexrotator, complexunpacked, twicerecordedbandchannels);
+            if(status != vecNoErr)
+              csevere << startl << "Error in fringe rotation!!!" << status << endl;
+            status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
+            if(status != vecNoErr)
+              csevere << startl << "Error doing the FFT!!!" << endl;
+            if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+              status = vectorCopy_cf32(&(fftd[recordedbandchannels+1]), &(fftoutputs[j][1]), recordedbandchannels-1);
+              fftoutputs[j][recordedbandchannels] = fftd[0];
+            }
+            else {
+              status = vectorCopy_cf32(fftd, fftoutputs[j], recordedbandchannels);
+            }
+            if(status != vecNoErr)
+              csevere << startl << "Error copying FFT results!!!" << endl;
+            break;
+        }
+
+        //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
+        status = vectorMul_cf32_I(fracsamprotator, fftoutputs[j], recordedbandchannels + 1);
         if(status != vecNoErr)
-          csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-        status = vectorAddProduct_cf32(fftoutputs[0][indices[1]]+sidebandoffset, conjfftoutputs[0][indices[0]]+sidebandoffset, autocorrelations[1][indices[1]]+sidebandoffset, recordedbandchannels);
+          csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
+
+        //do the conjugation
+        status = vectorConj_cf32(fftoutputs[j], conjfftoutputs[j], recordedbandchannels + 1);
         if(status != vecNoErr)
-          csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-        //add the weight in magic location (imaginary part of Nyquist channel)
-        autocorrelations[1][indices[0]][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
-        autocorrelations[1][indices[1]][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
+          csevere << startl << "Error in conjugate!!!" << status << endl;
+
+        //do the autocorrelation (skipping Nyquist channel)
+        status = vectorAddProduct_cf32(fftoutputs[j]+sidebandoffset, conjfftoutputs[j]+sidebandoffset, autocorrelations[0][j]+sidebandoffset, recordedbandchannels);
+        if(status != vecNoErr)
+          csevere << startl << "Error in autocorrelation!!!" << status << endl;
+
+        //Add the weight in magic location (imaginary part of Nyquist channel)
+        autocorrelations[0][j][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
       }
+    }
+
+    //if we need to, do the cross-polar autocorrelations
+    if(calccrosspolautocorrs && count > 1)
+    {
+      status = vectorAddProduct_cf32(fftoutputs[indices[0]]+sidebandoffset, conjfftoutputs[indices[1]]+sidebandoffset, autocorrelations[1][indices[0]]+sidebandoffset, recordedbandchannels);
+      if(status != vecNoErr)
+        csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
+      status = vectorAddProduct_cf32(fftoutputs[indices[1]]+sidebandoffset, conjfftoutputs[indices[0]]+sidebandoffset, autocorrelations[1][indices[1]]+sidebandoffset, recordedbandchannels);
+      if(status != vecNoErr)
+        csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
+      //add the weight in magic location (imaginary part of Nyquist channel)
+      autocorrelations[1][indices[0]][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
+      autocorrelations[1][indices[1]][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
     }
   }
 
@@ -815,13 +780,13 @@ void Mode::averageFrequency()
       sidebandoffset = 0;
       if(config->getDRecordedLowerSideband(configindex, datastreamindex, config->getDRecordedFreqIndex(configindex, datastreamindex, j)))
         sidebandoffset = 1;
-      status = vectorSum_cf32(&(autocorrelations[i][j][sidebandoffset]), channelstoaverage, &tempsum, vecAlgHintFast);
+      status = vectorMean_cf32(&(autocorrelations[i][j][sidebandoffset]), channelstoaverage, &tempsum, vecAlgHintFast);
       if(status != vecNoErr)
         cerror << startl << "Error trying to average in frequency!" << endl;
       autocorrelations[i][j][sidebandoffset] = tempsum;
       for(int k=1;k<outputchans;k++)
       {
-        status = vectorSum_cf32(&(autocorrelations[i][j][k*channelstoaverage+sidebandoffset]), channelstoaverage, &(autocorrelations[i][j][k+sidebandoffset]), vecAlgHintFast);
+        status = vectorMean_cf32(&(autocorrelations[i][j][k*channelstoaverage+sidebandoffset]), channelstoaverage, &(autocorrelations[i][j][k+sidebandoffset]), vecAlgHintFast);
         if(status != vecNoErr)
           cerror << startl << "Error trying to average in frequency!" << endl;
       }
@@ -842,7 +807,8 @@ void Mode::zeroAutocorrelations()
 
 void Mode::setOffsets(int scan, int seconds, int ns)
 {
-  bool foundok = true;
+  bool foundok;
+  int srcindex;
   currentscan = scan;
   offsetseconds = seconds;
   offsetns = ns;
@@ -857,29 +823,12 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   }
 
   //fill in the quadratic interpolator values from model
-  for(int i=1;i<=model->getNumPhaseCentres(currentscan);i++) {
-    //cout << "About to do intepolators " << i << endl;
-    foundok = foundok && model->calculateDelayInterpolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), i, 2, interpolators[i]);
-     interpolators[i][2] -= intclockseconds*1000000.0; //integer second clock offsets are subtracted by the Datastream
-    //cout << "Interpolators = " << interpolators[i][0] << ", " << interpolators[i][1] << ", " << interpolators[i][2] << endl;
-  }
-  if(model->getNumPhaseCentres(currentscan) == 1 || model->isPointingCentreCorrelated(currentscan))
-  {
-    //copy the first phase centre to the pointing centre
-    interpolators[0][0] = interpolators[1][0];
-    interpolators[0][1] = interpolators[1][1];
-    interpolators[0][2] = interpolators[1][2];
-    //cout << "The phase centre interpolator is " << interpolators[0][0] << ", " << interpolators[0][1] << ", " << interpolators[0][2] << endl;
-  }
+  if(model->getNumPhaseCentres(currentscan) == 1)
+    srcindex = 1;
   else
-  {
-    //need the actual pointing centre values, which we didn't get already
-    foundok = foundok && model->calculateDelayInterpolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), 0, 2, interpolators[0]);
-     interpolators[0][2] -= intclockseconds*1000000.0; //integer second clock offsets are subtracted by the Datastream
-  }
+    srcindex = 0;
 
-  //if(datastreamindex == 0)
-  //  cout << setprecision(15) << "delay at the start of the scan is " << interpolators[0][2] << ", delay at the end of the scan is " << interpolators[0][0]*config->getBlocksPerSend(configindex)*config->getBlocksPerSend(configindex) + interpolators[0][1]*config->getBlocksPerSend(configindex) + interpolators[0][2] << endl;
+  foundok = model->calculateDelayInterpolator(currentscan, (double)offsetseconds + ((double)offsetns)/1000000000.0, blockspersend*2*recordedbandchannels*sampletime/1e6, blockspersend, config->getDModelFileIndex(configindex, datastreamindex), srcindex, 2, interpolator);
 
   if(!foundok) {
     cerror << startl << "Could not find a Model interpolator for scan " << scan << " offsetseconds " << seconds << " offsetns " << ns << " - will torch this subint!" << endl;
@@ -902,8 +851,6 @@ void Mode::setData(u8 * d, int dbytes, int dscan, int dsec, int dns)
   datasec = dsec;
   datans = dns;
   unpackstartsamples = -999999999;
-  if(datastreamindex == 0)
-    cout << "Mode for datastream " << datastreamindex << " just set the datascan to " << datascan << ", datasec " << datasec << ", datans " << datans << endl;
 }
 
 const float Mode::decorrelationpercentage[] = {0.63662, 0.88, 0.94, 0.96, 0.98, 0.99, 0.996, 0.998}; //note these are just approximate!!!
