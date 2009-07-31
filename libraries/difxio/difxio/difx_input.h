@@ -241,6 +241,7 @@ typedef struct
 	int durSeconds; 			/* Duration of the scan */
         char identifier[32];          		/* Usually a zero-based number */
 	char obsModeName[32];			/* Identifying the "mode" of observation */
+	int maxNSBetweenUVShifts;		/* Maximum interval until data must be shifted/averaged */
         int pointingCentreSrc;  		/* index to source array */
         int nPhaseCentres;      		/* Number of correlation centres */
         int phsCentreSrcs[MAX_PHS_CENTRES]; 	/* indices to source array */
@@ -602,9 +603,6 @@ int DifxInputSortAntennas(DifxInput *D, int verbose);
 int DifxInputSimFXCORR(DifxInput *D);
 
 /* Writing functions */
-int writeDifxDelay(const DifxInput *D, const char *filename);
-int writeDifxRate(const DifxInput *D, const char *filename);
-int writeDifxUVW(const DifxInput *D, const char *filename);
 int writeDifxIM(const DifxInput *D, const char *filename);
 int writeDifxCalc(const DifxInput *D, const char *filename);
 int writeDifxInput(const DifxInput *D, const char *filename);

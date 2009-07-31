@@ -292,7 +292,7 @@ int writeDifxDateLines(FILE *out, double mjd)
 	mi = mjdfrac;
 	mjdfrac -= mi;
 	mjdfrac *= 60.0;
-	se = mjdfrac;
+	se = mjdfrac + 0.5;
 
 	writeDifxLineInt(out, "START YEAR", yr);
 	writeDifxLineInt(out, "START MONTH", mo);
