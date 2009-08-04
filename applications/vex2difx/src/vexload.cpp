@@ -228,6 +228,11 @@ int getAntennas(VexData *V, Vex *v, const CorrParams& params)
 		{
 			A->clocks.push_back(*paramClock);
 		}
+		const AntennaSetup *antennaSetup = params.getAntennaSetup(antName);
+		if(antennaSetup)
+		{
+			A->basebandFiles = antennaSetup->basebandFiles;
+		}
 		else if(block)
 		{
 			defs = ((struct block *)block->ptr)->items;
@@ -679,7 +684,7 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 
 				vex_field(T_CHAN_DEF, p, 5, &link, &name, &value, &units);
 				recChanId = getRecordChannel(value, ch2tracks, F, i);
-				cout << "Track map: " << value << " -> " << recChanId << endl;
+				//cerr << "Track map: " << value << " -> " << recChanId << endl;
 				if(recChanId >= 0)
 				{
 					F.ifs.push_back(VexIF());
