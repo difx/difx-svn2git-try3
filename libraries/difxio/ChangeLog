@@ -1,3 +1,6 @@
+2.10.1
+* Infrastructure for writing files
+
 2.10
 * Deallocation option of function DifxBaselineAllocPolProds()
   - needed for more flexible frequency selection in vex2difx
