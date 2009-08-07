@@ -797,15 +797,15 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		if(opts->pulsarBin == 0)
 		{
 			sprintf(outFitsName, "%s%s.%d.FITS",
-				D->job[0].obsCode,
-				D->job[0].obsSession,
+				CorrModel->job[0].obsCode,
+				CorrModel->job[0].obsSession,
 				passNum);
 		}
 		else
 		{
 			sprintf(outFitsName, "%s%s.%d.bin%04d.FITS",
-				D->job[0].obsCode,
-				D->job[0].obsSession,
+				CorrModel->job[0].obsCode,
+				CorrModel->job[0].obsSession,
 				passNum,
 				opts->pulsarBin);
 		}

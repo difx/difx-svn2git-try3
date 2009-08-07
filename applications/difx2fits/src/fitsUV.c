@@ -53,32 +53,35 @@ int baseline2index(int a1, int a2, int nAnt)
 	{
 		return nAnt*(nAnt-1)/2 + a1;
 	}
+	return -1;
 }
 
 int getFrequencies(VisBuffer *vb)
 {
 	/*FIXME put ref_pixel in algorithm */
-	int i, j, isUSB;
-	int startChan = vb->D->startChan;
+	int i, j;
 	double chanBW, bandFreq;
-	float ref_pixel = 1.0;
+	//float ref_pixel = 1.0;
 
 #ifdef DEBUG
 			printf("band\tchan\tfrequency\n");
 #endif
+/* n.b. for uvshifting purposes, it is important that we calculate the
+ * *incoming* data frequencies. I.e. before spectral averaging
+ */
 	for(i = 0; i < vb->nBand; i++) 
 	{
 		bandFreq = vb->config->IF[i].freq;
 		chanBW = (vb->config->IF[i].bw/vb->D->nInChan);/*in MHz*/
-		for(j = 0; j < vb->D->nOutChan; j++)
+		for(j = 0; j < vb->D->nInChan; j++)
 		{
 			if(vb->config->IF[i].sideband == 'U')
 			{
-				vb->freq[i][j] = bandFreq + (j + startChan) * chanBW;
+				vb->freq[i][j] = bandFreq + j * chanBW;
 			}
 			else
 			{
-				vb->freq[i][j] = bandFreq - (j + startChan) * chanBW;
+				vb->freq[i][j] = bandFreq - j * chanBW;
 			}
 #ifdef DEBUG
 			printf("%d\t%d\t%f\n", i, j, vb->freq[i][j]);
@@ -198,17 +201,17 @@ static void startGlob(VisBuffer *vb)
 	char *globstr;
 	const char suffix[] = ".difx/DIFX*";
 
-	globstr = calloc(strlen(vb->D->job[vb->jobId].fileBase)+
+	globstr = calloc(strlen(vb->CorrModel->job[vb->jobId].fileBase)+
 		strlen(suffix)+8, 1);
 
-	sprintf(globstr, "%s%s", vb->D->job[vb->jobId].fileBase, suffix);
+	sprintf(globstr, "%s%s", vb->CorrModel->job[vb->jobId].fileBase, suffix);
 
 	glob(globstr, 0, 0, vb->globbuf);
 	vb->nFile = vb->globbuf->gl_pathc;
 	if(vb->nFile == 0)
 	{
 		fprintf(stderr, "Error: No files found for job %d %s\n",
-				vb->jobId, vb->D->job[vb->jobId].fileBase);
+				vb->jobId, vb->CorrModel->job[vb->jobId].fileBase);
 	}
 	vb->globbuf->gl_offs = 0;
 
@@ -256,13 +259,13 @@ int nextFile(VisBuffer *vb)
 	return 0;
 }
 
-double getScaleFactor(const DifxInput *D, double s, int verbose)
+double getScaleFactor(const DifxInput *D, double s, int timeAvg, int verbose)
 {
 	double scale;
 
 	if(D->inputFileVersion == 0) /* Perth merge and after */
 	{
-		scale = 4.576*D->nOutChan/D->nInChan;
+		scale = 4.576*D->nOutChan/(D->nInChan*timeAvg);
 	}
 	else
 	{
@@ -376,10 +379,10 @@ int updateShiftDelay(VisBuffer *vb)
 	terms2 = im2->order + 1;
 	termsCorr1 = imCorr1->order + 1;
 	termsCorr2 = imCorr2->order + 1;
-	delay1    = evalPoly(im1[vb->n].delay, terms1, dt);
-	delay2    = evalPoly(im2[vb->n].delay, terms2, dt);
-	delayCorr1 = evalPoly(imCorr1[vb->nCorr].delay, termsCorr1, dtCorr);
-	delayCorr2 = evalPoly(imCorr2[vb->nCorr].delay, termsCorr2, dtCorr);
+	delay1    = evalPoly(im1[n].delay, terms1, dt);
+	delay2    = evalPoly(im2[n].delay, terms2, dt);
+	delayCorr1 = evalPoly(imCorr1[nCorr].delay, termsCorr1, dtCorr);
+	delayCorr2 = evalPoly(imCorr2[nCorr].delay, termsCorr2, dtCorr);
 	vb->shiftDelay =  (delay2 - delay1) - (delayCorr2 - delayCorr1);
 
 	return 0;
@@ -434,7 +437,7 @@ int updateConfig(VisBuffer *oldvb, VisBuffer *vb)
 	if(vb->verbose >= 1)
 	{
 		printf("        MJD=%11.5f jobId=%d scanId=%d Source=%s  FITS SourceId=%d\n", 
-			vb->mjd, vb->jobId, vb->scanId, vb->D->scan[vb->scanId].name, vb->D->source[vb->sourceId].fitsSourceId+1);
+			vb->mjdCentroid, vb->jobId, vb->scanId, vb->D->scan[vb->scanId].name, vb->D->source[vb->sourceId].fitsSourceId+1);
 	}
 
 	vb->freqId = vb->config->freqId;
@@ -481,7 +484,7 @@ int updateConfig(VisBuffer *oldvb, VisBuffer *vb)
 		vb->freq = (double **)calloc(vb->nBand, sizeof(double *));
 		for(i = 0; i < vb->nBand; i++)
 		{
-			vb->freq[i] = (double *)calloc(vb->D->nOutChan, sizeof(double));
+			vb->freq[i] = (double *)calloc(vb->D->nInChan, sizeof(double));
 		}
 		/*recalculate frequencies*/
 		getFrequencies(vb);
@@ -507,6 +510,7 @@ int updateConfig(VisBuffer *oldvb, VisBuffer *vb)
 	CorrScan = vb->CorrModel->scan + vb->scanId;
 	scan = vb->D->scan + vb->scanId;
 	
+	/*
 	vb->n = getDifxScanIMIndex(scan, vb->header->mjd, &vb->dt);
 	if(vb->n < 0)
 	{
@@ -521,13 +525,16 @@ int updateConfig(VisBuffer *oldvb, VisBuffer *vb)
 		vb->scanId, vb->header->mjd,
 		vb->aa1, vb->aa2);
 	}
+	*/
 
-	vb->scale = getScaleFactor(vb->D, vb->user_scale, vb->verbose);
+	vb->scale = getScaleFactor(vb->D, vb->user_scale, vb->timeAvg, vb->verbose);
 	vb->nOutChan = vb->D->nOutChan;
 	if(oldvb->first)
 	{
+		/*
 		oldvb->n = vb->n;
 		oldvb->nCorr = vb->nCorr;
+		*/
 
 		oldvb->scale = vb->scale;
 		oldvb->nOutChan = vb->nOutChan;
@@ -569,7 +576,6 @@ int updateJob(VisBuffer *vb)
 	
 int updateVisBuffer(VisBuffer *oldvb, VisBuffer *vb)
 {
-	int configId;
 	DifxHeader *h, *oldh;
 	int newBand = 0; int newBl = 0; int newMjd = 0; int newInt = 0; int newScan = 0; int newConfig = 0; 
 	h = vb->header; oldh = oldvb->header;
@@ -740,7 +746,7 @@ int getPolStart(const DifxInput *D)
 	}
 }
 
-VisBuffer *newVisBuffer(const DifxInput *D, const DifxInput *CorrModel, int nComplex, float timeAvg, float scale, int pulsarBin, int verbose)
+VisBuffer *newVisBuffer(const DifxInput *D, const DifxInput *CorrModel, int nComplex, int timeAvg, float scale, int pulsarBin, int verbose)
 {
 	/* This should set *everything* that is the same for all jobs
 	 * Anything else is set in updateVisBuffer etc. */
@@ -781,7 +787,7 @@ VisBuffer *newVisBuffer(const DifxInput *D, const DifxInput *CorrModel, int nCom
 
 	vb->timeAvg = timeAvg;
 	vb->user_scale = scale;
-	vb->scale = getScaleFactor(D, scale, verbose);
+	vb->scale = getScaleFactor(D, scale, timeAvg, verbose);
 	vb->polStart = getPolStart(D);
 
 	vb->nBl = D->nBaseline + D->nAntenna;
@@ -819,8 +825,10 @@ int moveVisBuffer(VisBuffer *vb, VisBuffer *oldvb)
 	oldvb->binId = vb->binId;
 	oldvb->mjdCentroid = vb->mjdCentroid;
 	oldvb->mjdStart = vb->mjdStart;
+	/*
 	oldvb->n = vb->n;
 	oldvb->nCorr = vb->nCorr;
+	*/
 	oldvb->tIntIn = vb->tIntIn;
 	oldvb->tIntOut = vb->tIntOut;
 	oldvb->shiftDelay = vb->shiftDelay;
@@ -1542,21 +1550,17 @@ int shiftPhase(VisBuffer *vb)
 		return(0);
 	}
 	/*shift phase for a single spectrum (subband)*/
-	int i, index, nInChan, nChan, startChan;
+	int i, index;
 	float real, imag, preal, pimag; 
 	float *d;
 	double shift;
 
-	startChan = vb->D->startChan;
-	nChan = vb->D->nOutChan*vb->D->specAvg;
-
 	d = vb->spectrum;
-	nInChan = vb->D->nInChan;
 	
-	for(i = 0; i < nInChan; i++)
+	for(i = 0; i < vb->D->nInChan; i++)
 	{
-		index = (startChan + i) * 2;
-		shift = TWO_PI * fmod(vb->freq[vb->bandId][startChan + i] * vb->shiftDelay, 1.0);/* us and MHz cancel*/
+		index = i*2;
+		shift = TWO_PI * fmod(vb->freq[vb->bandId][i] * vb->shiftDelay, 1.0);/* us and MHz cancel*/
 		preal = cos(shift); 
 		pimag = sin(shift);
 		real = d[index] * preal - d[index+1] * pimag;

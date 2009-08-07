@@ -80,7 +80,7 @@ typedef struct
 	int sourceId;
 	int difxbl;
 
-	double mjdStart, mjdCentroid, mjd; /*mjd at start and centre of current integration and currently read mjd*/
+	double mjdStart, mjdCentroid; /*mjd at start and centre of current integration and currently read mjd*/
 	int timeAvg;/*straight from command-line input*/
 	int verbose;
 	float tIntIn; /*from DifxScan*/
@@ -114,10 +114,6 @@ typedef struct
 	int nFloat; /*number of floats per channel in .difx file */
 	int nChanIn;
 	float *spectrum;/*buffer to hold the data when it's read from file*/
-
-	/*model indices*/
-	int n, nCorr;
-	double dt, dtCorr;
 
 	double shiftDelay;
 	double **freq;/*freq[nIF][nChanOut]*/
