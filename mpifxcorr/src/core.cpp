@@ -736,7 +736,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
         nyquistoffset = (config->getFreqTableLowerSideband(freqindex))?1:0;
         //put autocorrs in resultsbuffer
-        status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[scratchspace->copyindex+nyquistoffset], freqchannels);
+        status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[scratchspace->copyindex], freqchannels+1);
         if(status != vecNoErr)
           csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << endl;
         if(k>=config->getDNumRecordedBands(procslots[index].configindex, j)) {
@@ -764,7 +764,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
           freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
           nyquistoffset = (config->getFreqTableLowerSideband(freqindex))?1:0;
           //put autocorrs in resultsbuffer
-          status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[scratchspace->copyindex]+nyquistoffset, freqchannels);
+          status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[scratchspace->copyindex], freqchannels+1);
           if(status != vecNoErr)
             csevere << startl << "Error copying cross-polar autocorrelations for datastream " << j << ", band " << k << endl;
           if(k>=config->getDNumRecordedBands(procslots[index].configindex, j)) {
@@ -994,7 +994,7 @@ void Core::uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, t
             atchannel = r-nyquistoffset;
             turns = applieddelay*double(channelcount)*bandwidth/double(freqchannels) + edgeturns;
             scratchspace->argument[atchannel] = (turns-floor(turns))*TWO_PI;
-            channelcount++;
+            channelcount += sidebandinc;
           }
           status = vectorSinCos_f32(scratchspace->argument, &(scratchspace->argument[freqchannels]), &(scratchspace->argument[2*freqchannels]), freqchannels);
           if(status != vecNoErr)
@@ -1049,7 +1049,7 @@ void Core::uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, t
                 cerror << startl << "Error trying to average frequency " << j << " of baseline " << baseline << endl;
             }
             status = vectorAdd_cf32_I(scratchspace->channelsums, &(procslots[index].results[scratchspace->copyindex+nyquistoffset]), numaverages);
-            procslots[index].results[scratchspace->copyindex+nyquistchannel/channelinc].im = baselineweight;
+            procslots[index].results[scratchspace->copyindex+nyquistchannel/channelinc].im += baselineweight;
             if(b==binloop-1 || !procslots[index].scrunchoutput) //don't advance too early when scrunching
               scratchspace->copyindex += numaverages+1;
           }

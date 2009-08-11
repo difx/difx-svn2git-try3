@@ -179,7 +179,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   syncteststream = new_mark5_stream(
     new_mark5_stream_file(datafilenames[configindex][fileindex].c_str(), 0),
     new_mark5_format_generic_from_string(formatname) );
-  cout << "Value of mark5stream was " << syncteststream << endl;
+  cout << "Value of syncteststream was " << syncteststream << endl;
   if(syncteststream->nchan != config->getDNumRecordedBands(configindex, streamnum))
   {
     cerror << startl << "Error - number of recorded bands for datastream " << streamnum << " (" << nrecordedbands << ") does not match with MkV file " << datafilenames[configindex][fileindex] << " (" << syncteststream->nchan << "), will be ignored!!!" << endl;
@@ -205,6 +205,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   //close the stream used to get the offset, create the one we will use to test
   delete_mark5_stream(syncteststream);
   syncteststream = new_mark5_stream(new_mark5_stream_unpacker(0), new_mark5_format_generic_from_string(formatname) );
+  cverbose << startl << "Value of syncteststream after reopening was " << syncteststream << endl;
 
   cverbose << startl << "About to seek to byte " << offset << " to get to the first frame" << endl;
 
@@ -224,13 +225,16 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
   corrday = config->getStartMJD();
   corrsec = config->getStartSeconds();
   syncteststream->frame = (uint8_t *)(&(databuffer[buffersegment*(bufferbytes/numdatasegments)]));
+  // resolve any day ambiguities
+  mark5_stream_fix_mjd(syncteststream, corrday);
   mark5_stream_get_frame_time(syncteststream, &mjd, &sec, &ns);
-  mark5stream->frame = 0;
-  deltatime = 86400*(corrday - mjd) + (model->getScanStartSec(readscan, corrday, corrsec) + readseconds + corrsec - sec) + double(readnanoseconds-ns)/1e9;
+  syncteststream->frame = 0;
+  deltatime = 86400*(corrday - mjd) + (model->getScanStartSec(bufferinfo[buffersegment].scan, corrday, corrsec) + bufferinfo[buffersegment].scanseconds + corrsec - sec) + double(bufferinfo[buffersegment].scanns-ns)/1e9;
 
   if(fabs(deltatime) > 1e-10) //oh oh, a problem
   {
-    cerror << startl << "Lost Sync! Will attempt to resync" << endl;
+    cerror << startl << "Lost Sync! Will attempt to resync. Deltatime was " << deltatime << endl;
+    cdebug << startl << "Corrday was " << corrday << ", corrsec was " << corrsec << ". MJD was " << mjd << ", sec was " << sec << "> Readseconds was " << bufferinfo[buffersegment].scanseconds << ". readns was " << bufferinfo[buffersegment].scanns << ", ns was " << ns << endl;
     mark5stream = new_mark5_stream(
     new_mark5_stream_memory(&databuffer[buffersegment*(bufferbytes/numdatasegments)], bufferinfo[buffersegment].validbytes), new_mark5_format_generic_from_string(formatname) );
 

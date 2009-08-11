@@ -137,6 +137,12 @@ bool Model::interpolateUVW(int scanindex, double offsettime, int antennaindex1, 
   //work out the correct sample and offset from that sample
   polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + modelstartseconds + scantable[scanindex].offsetseconds - scantable[scanindex].polystartseconds;
   scansample = int((offsettime+polyoffset)/double(modelincsecs));
+  if(scansample == scantable[scanindex].nummodelsamples && ((offsettime+polyoffset - scansample*modelincsecs) < 1e-6)) {
+    //Asked for a value at the exact end of a scan, which is ok, but need to adjust or check
+ below would complain
+    scansample--;
+  }
+
   if(scansample < 0 || scansample >= scantable[scanindex].nummodelsamples)
     return false;
   deltat = offsettime+polyoffset - scansample*modelincsecs;
@@ -179,7 +185,7 @@ bool Model::calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timesp
   //work out the correct sample and offset for the midrange of the timespan
   polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + modelstartseconds + scantable[scanindex].offsetseconds - scantable[scanindex].polystartseconds;
   scansample = int((offsettime+polyoffset)/double(modelincsecs));
-  if(scansample == scantable[scanindex].nummodelsamples && ((offsettime+polyoffset - scansample*modelincsecs) < 1e-9)) {
+  if(scansample == scantable[scanindex].nummodelsamples && ((offsettime+polyoffset - scansample*modelincsecs) < 1e-6)) {
     //Asked for a value at the exact end of a scan, which is ok, but need to adjust or check below would complain
     scansample--;
   }
