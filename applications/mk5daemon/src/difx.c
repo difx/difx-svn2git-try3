@@ -65,6 +65,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	const char *mpiOptions;
 	const char *mpiWrapper;
 	const char *difxProgram;
+	int returnValue;
 
 
 	S = &G->body.start;
@@ -299,10 +300,20 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 		sprintf(message, "Spawning %d processes", 1 + S->nDatastream + S->nProcess);
 		difxMessageSendDifxStatus2(jobName, DIFX_STATE_SPAWNING, message);
-		system(command);
-		difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
+		returnValue = system(command);
+		if(returnValue == 0)
+		{
+			difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
+			difxMessageSendDifxAlert("mpifxcorr process done", DIFX_ALERT_LEVEL_INFO);
+		}
+		else
+		{
+			sprintf(message, "Error code = %d");
+			difxMessageSendDifxStatus2(jobName, DIFX_STATE_CRASHED, message);
+			sprintf(message, "Job %s crashed.  Error code = %d\n", jobName, returnValue);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_FATAL);
+		}
 
-		difxMessageSendDifxAlert("mpifxcorr process done", DIFX_ALERT_LEVEL_INFO);
 		exit(0);
 	}
 
