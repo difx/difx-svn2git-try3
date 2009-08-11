@@ -404,7 +404,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		return DATA_READ_ERROR;
 	}
 
-	if(bin != pulsarBin)
+	if(bin != pulsarBin && !(bl%257==0)) //don't skip autocorrelations, ever
 	{
 		return SKIPPED_RECORD;
 	}
@@ -437,13 +437,13 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		fprintf(stderr, "configId doesn't match - skipping!\n");
 		return SKIPPED_RECORD;
 	}
-	if(phasecentre > scan->nPhaseCentres)
+	if(phasecentre > scan->nPhaseCentres && !(bl%257==0)) // don't skip autocorrelations, ever
 	{
 		return SKIPPED_RECORD;
 	}
-	if(srcindex != scan->phsCentreSrcs[phasecentre])
+	if(srcindex != scan->phsCentreSrcs[phasecentre] && !(bl%257==0)) // don't skip autocorrelations, ever
 	{
-		printf("Skipping record with srcindex %d because phasecentresrc[%d] is %d\n", srcindex, phasecentre,  scan->phsCentreSrcs[phasecentre]);
+		//printf("Skipping record with srcindex %d because phasecentresrc[%d] is %d\n", srcindex, phasecentre,  scan->phsCentreSrcs[phasecentre]);
 		return SKIPPED_RECORD;
 	}
 
