@@ -422,8 +422,8 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	/* All reads of a module must be 64 bit aligned */
 	bytes = readbytes;
 	start = readpointer;
-	data = buf = (unsigned long *)&databuffer[(buffersegment*bufferbytes)/
-		numdatasegments];
+	data = buf = (unsigned long *)&databuffer[buffersegment*(bufferbytes/
+		numdatasegments)];
 	if(start & 4)
 	{
 		start += 4;
@@ -614,7 +614,6 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	readnanoseconds += bufferinfo[buffersegment].nsinc;
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
-	cdebug << startl << "readseconds is " << readseconds << ", duration of this scan is " << model->getScanDuration(readscan) << endl;
         if(readseconds >= model->getScanDuration(readscan)) {
           if(readscan < model->getNumScans()-1) {
             readscan++;

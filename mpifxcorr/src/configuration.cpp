@@ -1048,26 +1048,26 @@ bool Configuration::processRuleTable(ifstream * input)
   while(count<numrules && !input->eof())
   {
     getinputkeyval(input, &key, &val);
-    if(key.find_first_of("CONFIG NAME") != std::string::npos) {
+    if(strstr(key.c_str(), "CONFIG NAME")) {
       rules[count].configname = val;
       count++;
     }
-    else if(key.find_first_of("SOURCE NAME") != std::string::npos) {
+    else if(strstr(key.c_str(), "SOURCE")) {
       rules[count].sourcename = val;
     }
-    else if(key.find_first_of("SCAN ID") != std::string::npos) {
+    else if(strstr(key.c_str(), "SCAN ID")) {
       rules[count].scanId = val;
     }
-    else if(key.find_first_of("CALCODE") != std::string::npos) {
+    else if(strstr(key.c_str(), "CALCODE")) {
       rules[count].calcode = val;
     }
-    else if(key.find_first_of("QUAL") != std::string::npos) {
+    else if(strstr(key.c_str(), "QUAL")) {
       rules[count].qual = atoi(val.c_str());
     }
-    else if(key.find_first_of("MJD START") != std::string::npos) {
+    else if(strstr(key.c_str(), "MJD START")) {
       rules[count].mjdStart = atof(val.c_str());
     }
-    else if(key.find_first_of("MJD STOP") != std::string::npos) {
+    else if(strstr(key.c_str(), "MJD STOP")) {
       rules[count].mjdStop = atof(val.c_str());
     }
     else {
@@ -1195,7 +1195,7 @@ void Configuration::processNetworkTable(ifstream * input)
 
 bool Configuration::populateScanConfigList()
 {
-  bool applies;
+  bool applies, srcnameapplies, calcodeapplies, qualapplies;
   Model::source * src;
   ruledata r;
 
@@ -1213,17 +1213,26 @@ bool Configuration::populateScanConfigList()
       if(r.mjdStop > 0 && r.mjdStop > model->getScanEndMJD(i))
         applies = false;
       //cout << "Looking at scan " << i+1 << "/" << model->getNumScans() << endl;
+      srcnameapplies = false;
+      calcodeapplies = false;
+      qualapplies = false;
+      if(r.sourcename.compare("") == 0)
+        srcnameapplies = true;
+      if(r.calcode.compare("") == 0)
+        calcodeapplies = true;
+      if(r.qual < 0)
+        qualapplies = true;
       for(int k=0;k<model->getNumPhaseCentres(i);k++) {
         //cout << "Looking at source " << k << " of scan " << i << endl;
         src = model->getScanPhaseCentreSource(i, k);
-        if((r.sourcename.compare("") != 0) && (r.sourcename.compare(src->name) != 0))
-          applies = false;
-        if((r.calcode.compare("") != 0) && (r.calcode.compare(src->calcode) != 0))
-          applies = false;
-        if(r.qual >= 0 && r.qual != src->qual)
-          applies = false;
+        if(r.sourcename.compare(src->name) == 0)
+          srcnameapplies = true;
+        if(r.calcode.compare(src->calcode) == 0)
+          calcodeapplies = true;
+        if(r.qual == src->qual)
+          calcodeapplies = true;
       }
-      if(applies) {
+      if(applies && srcnameapplies && calcodeapplies && qualapplies) {
         if(scanconfigindices[i] < 0 || scanconfigindices[i] == r.configindex) {
           scanconfigindices[i] = r.configindex;
         }
@@ -1318,7 +1327,7 @@ bool Configuration::populateResultLengths()
     }
     else
     {
-      csevere << "Did not find a scan matching config index " << c << endl;
+      csevere << startl << "Did not find a scan matching config index " << c << endl;
     }
 
     //add all the bands from all the datastreams

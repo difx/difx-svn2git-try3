@@ -138,8 +138,7 @@ bool Model::interpolateUVW(int scanindex, double offsettime, int antennaindex1, 
   polyoffset = (modelmjd - scantable[scanindex].polystartmjd)*86400 + modelstartseconds + scantable[scanindex].offsetseconds - scantable[scanindex].polystartseconds;
   scansample = int((offsettime+polyoffset)/double(modelincsecs));
   if(scansample == scantable[scanindex].nummodelsamples && ((offsettime+polyoffset - scansample*modelincsecs) < 1e-6)) {
-    //Asked for a value at the exact end of a scan, which is ok, but need to adjust or check
- below would complain
+    //Asked for a value at the exact end of a scan, which is ok, but need to adjust or check below would complain
     scansample--;
   }
 
