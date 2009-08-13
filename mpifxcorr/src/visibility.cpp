@@ -75,7 +75,7 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, i
   //set up the initial time period this Visibility will be responsible for
   offsetns = offsetns + offsetnsperintegration;
   subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
-  if(offsetns >= config->getSubintNS(currentconfigindex)/2)
+  if(offsetns > config->getSubintNS(currentconfigindex)/2)
   {
     offsetns -= config->getSubintNS(currentconfigindex)/2;
     subintsthisintegration++;
@@ -124,7 +124,10 @@ bool Visibility::addData(cf32* subintresults)
     csevere << startl << "Error copying results in Vis. " << visID << endl;
   currentsubints++;
 
-  return (currentsubints==subintsthisintegration); //are we finished integrating?
+  if(currentsubints>subintsthisintegration)
+    cerror << startl << "Somehow Visibility " << visID << " ended up with " << currentsubints << " subintegrations - was expecting only " << subintsthisintegration << endl;
+
+  return (currentsubints>=subintsthisintegration); //are we finished integrating?
 }
 
 void Visibility::increment()
@@ -166,7 +169,7 @@ void Visibility::updateTime()
 
   offsetns = offsetns+offsetnsperintegration;
   subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
-  if(offsetns >= config->getSubintNS(currentconfigindex)/2)
+  if(offsetns > config->getSubintNS(currentconfigindex)/2)
   {
     offsetns -= config->getSubintNS(currentconfigindex);
     subintsthisintegration++;
@@ -183,7 +186,7 @@ void Visibility::updateTime()
     currentstartns = 0;
     offsetns = offsetnsperintegration;
     subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
-    if(offsetns >= config->getSubintNS(currentconfigindex)/2)
+    if(offsetns > config->getSubintNS(currentconfigindex)/2)
     {
       offsetns -= config->getSubintNS(currentconfigindex);
       subintsthisintegration++;
