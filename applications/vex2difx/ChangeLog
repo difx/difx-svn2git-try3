@@ -5,6 +5,9 @@ Version 0.2.1
    convention and the VLBA, DiFX and FITS all use the other.
 * Don't let VSN=None get through.
 * Allow file-based correlation using ANTENNA block values file= and filelist=
+* Fix splitting jobs at clock boundaries
+* Add minLength parameter
+* break= parameter to force job breaks at particular times
 
 Version 0.2
 ~~~~~~~~~~~

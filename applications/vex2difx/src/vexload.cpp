@@ -1005,6 +1005,7 @@ VexData *loadVexFile(const CorrParams& P)
 	getExper(V, v, P);
 
 	calculateScanSizes(V, P);
+	V->addBreaks(P.manualBreaks);
 
 	return V;
 }
