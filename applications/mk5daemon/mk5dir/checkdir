@@ -1,0 +1,213 @@
+#!/usr/bin/env python
+
+program = 'checkdir'
+version = '0.1'
+author  = 'Walter Brisken'
+verdate = '20090817'
+
+from sys import exit, argv
+from os.path import isfile, isdir
+from os import getenv
+from string import split, strip
+from glob import glob
+import datetime
+
+dirPath = getenv("MARK5_DIR_PATH")
+
+mjd0 = datetime.datetime(1858, 11, 17, 0, 0)
+
+def mjd2vex(mjd, dateonly=False):
+	if mjd < 50001 or mjd > 99999:
+		return ''
+	md = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+	d = int(mjd)
+	s = int((mjd - d)*86400.0 + 0.5)
+	dt = datetime.timedelta(d, s)
+	t = mjd0 + dt
+	d = t.day + md[t.month-1]
+	if t.year % 4 == 0 and t.month > 2:
+		d += 1
+	if dateonly:
+		return '%dy%03dd' % \
+			(t.year, d)
+	else:
+		return '%dy%03dd%02dh%02dm%02ds' % \
+			(t.year, d, t.hour, t.minute, t.second)
+
+class Scan:
+	def __init__(self, text):
+		self.error = None
+		self.startMJD = 0.0
+		self.stopMJD = 0.0
+		self.endBytes = 0
+		s = split(text)
+		if len(s) < 12:
+			self.error = 'Too few columns in directory (%d < 12)' % len(s)
+		else:
+			try:
+				self.startBytes   = int(s[0])
+				self.bytes        = int(s[1])
+				self.startDay     = int(s[2])
+				self.startSec     = int(s[3])
+				self.startFrame   = int(s[4])
+				self.framesPerSec = int(s[5])
+				self.duration     = float(s[6])
+				self.bytesPerFrame= int(s[7])
+				self.byteOffset   = int(s[8])
+				self.nTrack       = int(s[9])
+				self.format       = int(s[10])
+				self.name         = s[11]
+			except ValueError:
+				self.error = 'Conversion error'
+	
+	def checkTime(self):
+		if self.startDay < 51000 or self.startDay > 100000:
+			return "MJD out of range"
+		if self.startSec < 0 or self.startSec >= 86400:
+			return "Seconds out of range"
+		if self.framesPerSec < 1 or self.framesPerSec > 1000000:
+			return "Frames per second out of range"
+		if self.startFrame < 0 or self.startFrame >= self.framesPerSec:
+			return "Start frame out of range"
+		if self.duration < 0.0 or self.duration > 864000.0:
+			return "Duration out of range"
+
+		self.startMJD = self.startDay + (self.startSec + float(self.startFrame)/float(self.framesPerSec))/86400.0
+		self.stopMJD = self.startMJD + self.duration/86400.0
+
+		return None
+
+	def checkFormat(self):
+		if self.format < 0:
+			return "Undecoded scan"
+		elif self.format == 0:
+			if not self.nTrack in [8,16,32,64]:
+				return "VLBA format with illegal number of tracks (%d)" % self.nTrack
+			if not self.bytesPerFrame in [20160, 40320, 80640, 161280]:
+				return "VLBA format with illegal bytes per frame (%d)" % self.bytesPerFrame
+			if not self.framesPerSec in [100, 200, 400]:
+				return "VLBA format with illegal frames per second (%d)" % self.framesPerSec
+		elif self.format == 1:
+			if not self.nTrack in [8,16,32,64]:
+				return "MKIV format with illegal number of tracks (%d)" % self.nTrack
+			if not self.bytesPerFrame in [20000, 40000, 80000, 160000]:
+				return "MKIV format with illegal bytes per frame (%d)" % self.bytesPerFrame
+			if not self.framesPerSec in [100, 200, 400]:
+				return "MKIV format with illegal frames per second (%d)" % self.framesPerSec
+		elif self.format == 2:
+			if not self.bytesPerFrame in [10016]:
+				return "VLBA format with illegal bytes per frame (%d)" % self.bytesPerFrame
+			if not self.framesPerSec in [100,200,400,800,1600,3200,6400,12800,25600]:
+				return "MKIV format with illegal frames per second (%d)" % self.framesPerSec
+
+		else:
+			return "Unknown format (%d)" % self.format
+
+		return None
+
+	def checkBytes(self):
+		self.endBytes = self.startBytes + self.bytes
+		if self.endBytes < self.startBytes:
+			return "startBytes > endBytes"
+		if self.startBytes % 4 != 0:
+			return "startBytes != 4n"
+		if self.endBytes % 4 != 0:
+			return "endBytes != 4n"
+		return None
+
+
+def checkFile(module, verbose=False):
+	
+	fn = dirPath + '/' + module + '.dir'
+
+	if not isfile(fn):
+		print '%s : No directory found' % module
+		return 0
+
+	text = open(fn).readlines()
+
+	if len(text) < 1:
+		print '%s : No data in directory file' % module
+		return 0
+
+	header = split(text[0])
+	if len(header) < 4:
+		print '%s : Header malformed' % module
+		return 0
+
+	if header[0] != module:
+		print '%s : Module ID is incorrect (%s)' % (module, header[0])
+		return 0
+
+	try:
+		nScan = int(header[1])
+	except ValueError:
+		print '%s : Header number of scans value is malformed: %s' % (module, header[1])
+		return 0
+	
+	if nScan > len(text) - 1:
+		print '%s : Header number of scans is too large: %d > %d' % (module, nScan, len(text) - 1)
+		return 0
+	
+	scans = []
+	errors = []
+	mjdStart = 1.0e9
+	mjdStop = -1.0e9
+	for t in text[1:]:
+		scan = Scan(t)
+		scans.append(scan)
+		if scan.error == None:
+			scan.error = scan.checkTime()
+		if scan.error == None:
+			scan.error = scan.checkFormat()
+		if scan.error == None:
+			scan.error = scan.checkBytes()
+		if scan.startMJD < mjdStart:
+			mjdStart = scan.startMJD
+		if scan.stopMJD > mjdStop:
+			mjdStop = scan.stopMJD
+
+	for s in range(len(scans)):
+		if scans[s].error != None:
+			errors.append('Scan %d : %s' % (s+1, scans[s].error))
+	
+	if len(errors) > 0:
+		if verbose:
+			print '%s : Module has errors' % module
+			for e in errors:
+				print '  %s' % e
+		else:
+			print '%s : %d / %d scans have errors' % (module, len(errors), len(scans))
+		return 0
+
+
+	print '%s : %d scans  %s to %s' % (module, nScan, mjd2vex(mjdStart), mjd2vex(mjdStop))
+
+# main
+
+if dirPath == None:
+	print 'Error: env. var. MARK5_DIR_PATH not defined.'
+	exit(0)
+
+if not isdir(dirPath):
+	print 'Error: env. var. MARK5_DIR_PATH does not point to a directory.'
+	exit(0)
+
+modules = []
+verbose = False
+
+for a in argv[1:]:
+	if a[0] == '-':
+		if a == '-v':
+			verbose = true
+	else:
+		modules.append(a[:8])
+
+modules.sort()
+
+lastm = ''
+
+for m in modules:
+	if m != lastm:
+		checkFile(m, verbose)
+		lastm = m

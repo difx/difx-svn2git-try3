@@ -5,6 +5,9 @@ bin_PROGRAMS = \
 	mk5cp \
 	mk5dir
 
+dist_bin_SCRIPTS = \
+	checkdir
+
 mk5cp_LDADD = \
 	${M5ACCESS_LIBS}
 
