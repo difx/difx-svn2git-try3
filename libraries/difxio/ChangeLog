@@ -1,5 +1,6 @@
 2.10.1
-* Infrastructure for writing files
+* Infrastructure for writing for file-based correlation
+* When sorting antennas, update the scan table (nAntenna, im and model)
 
 2.10
 * Deallocation option of function DifxBaselineAllocPolProds()
