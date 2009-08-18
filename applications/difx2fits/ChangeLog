@@ -1,5 +1,6 @@
 Version 2.4.1
 * Write autocorrs for all pulsar bins
+* Fix indexing by antennas after merging.  Affects: UV, MC, ML tables
 
 Version 2.4
 * Post NRAO-DiFX 1.1 development
