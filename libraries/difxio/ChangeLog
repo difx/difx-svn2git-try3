@@ -1,6 +1,7 @@
 2.10.1
 * Infrastructure for writing for file-based correlation
 * When sorting antennas, update the scan table (nAntenna, im and model)
+* Fix and simplify DifxInputGetScanIdByAntennaId
 
 2.10
 * Deallocation option of function DifxBaselineAllocPolProds()
