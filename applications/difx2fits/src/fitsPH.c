@@ -108,7 +108,7 @@ static int parsePulseCal(const char *line,
 		return -3;
 	}
 
-        if(phasecentre > D->scan[scanId].nPhaseCentres)
+        if(phasecentre >= D->scan[scanId].nPhaseCentres)
         {
           printf("Skipping scan %d as the requested phase centre was not used\n", scanId);
           return -3;

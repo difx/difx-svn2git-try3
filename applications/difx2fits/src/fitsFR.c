@@ -83,7 +83,7 @@ const DifxInput *DifxInput2FitsFR(const DifxInput *D,
 			IF = config->IF + i;
 			bandFreq[i] = (IF->freq - D->refFreq)*1.0e6;
 			chanBW[i] = (IF->bw*D->specAvg/D->nOutChan)*1.0e6;
-			printf("D->specAvg is %d, IF->bw was already %f\n", D->specAvg, IF->bw);
+			printf("D->specAvg is %d, D->refFreq is %f, D->nOutChan is %d, IF->bw was already %f, so chanBW is %f\n", D->specAvg, D->refFreq, D->nOutChan, IF->bw, chanBW[i]);
 			bandBW[i] = chanBW[i]*D->nOutChan;
 			netSide[i] = ( IF->sideband == 'U' ? 1 : -1 );
 			bbChan[i] = 0;	/* vistigial */

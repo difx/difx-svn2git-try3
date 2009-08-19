@@ -41,6 +41,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
 	int phasecentre)
 {
+	printf("Starting DifxInput2FitsML\n");
 	char bandFormDouble[4];
 	char bandFormFloat[4];
 
@@ -113,6 +114,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 
 	nBand = p_fits_keys->no_band;
 	nPol = D->nPol;
+	printf("D->nPol is %d\n", nPol);
   
 	/* set FITS header to reflect number of bands in observation */
 	sprintf(bandFormDouble, "%dD", array_N_POLY * nBand);  
@@ -173,6 +175,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	for(s = 0; s < D->nScan; s++)
 	{
 	   scan = D->scan + s;
+	   printf("starting scan %d, D->scan is %d\n", s, D->scan);
 	   jobId = scan->jobId;
 	   job = D->job + jobId;
 	   configId = scan->configId;
@@ -180,7 +183,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	   {
 	   	continue;
 	   }
-	   if(phasecentre > scan->nPhaseCentres)
+	   if(phasecentre >= scan->nPhaseCentres)
 	   {
 	     printf("Skipping scan %d as the requested phase centre was not used\n", s);
 	     continue;
@@ -188,25 +191,34 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 
 	   config = D->config + configId;
 	   freqId1 = config->freqId + 1;
+	   printf("Working on phase centre %d\n", phasecentre);
+	   printf("scan->phsCentreSrcs[phasecentre] is %d\n", scan->phsCentreSrcs[phasecentre]);
 	   sourceId1 = D->source[scan->phsCentreSrcs[phasecentre]].fitsSourceId + 1;
-
+	   printf("Found the sourceId1 to be %d\n", sourceId1);
 	   start = D->scan[s].mjdStart - (int)(D->mjdStart);
 	   
 	   if(scan->im)
 	   {
+	        printf("About to read nPoly\n");
 	   	np = scan->nPoly;
+		printf("About to work out timeInt\n");
 		timeInt = job->polyInterval / 86400.0;
+		printf("Done\n");
 	   }
 	   else
 	   {
 		fprintf(stderr, "No IM info available - skipping generation of ML table\n");
 		continue;
 	   }
+	   printf("np is %d\n", np);
+	   printf("scan->nAntenna is %d\n", scan->nAntenna);
 
 	   for(p = 0; p < np; p++)
 	   {
+	      //printf("np is %d, scan->nAntenna is %d\n", np, scan->nAntenna);
 	      for(a = 0; a < scan->nAntenna; a++)
 	      {
+	        //printf("Doing poly %d, antenna %d\n", p, a);
 		dsId = config->ant2dsId[a];
 		if(dsId < 0 || dsId >= D->nDatastream)
 		{

@@ -348,6 +348,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	int d1, d2, aa1, aa2;	/* FIXME -- temporary */
 	int bin, srcindex;
 
+	//printf("About to try and read another visibility\n");
 	resetDifxParameters(dv->dp);
 
 	for(i = 0; i < 13; i++)
@@ -393,6 +394,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	freqNum      = atoi(DifxParametersvalue(dv->dp, rows[5]));
 	bin          = atoi(DifxParametersvalue(dv->dp, rows[7]));
 	srcindex     = atoi(DifxParametersvalue(dv->dp, rows[4]));
+	//printf("Baseline is %s, seconds is %s, srcindex is %s\n", DifxParametersvalue(dv->dp, rows[0]), DifxParametersvalue(dv->dp, rows[2]), DifxParametersvalue(dv->dp, rows[4]));
 
 	/* if chan weights are written the data volume is 3/2 as large */
 	/* for now, force nFloat = 2 (one weight for entire vis record) */
@@ -424,6 +426,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		return SKIPPED_RECORD;
 	}
 
+	//printf("Got scanId %d, numscans is %d\n", scanId, dv->D->nScan);
 	scan = dv->D->scan + scanId;
 	configId = scan->configId;
 	if(configId >= dv->D->nConfig) 
@@ -437,11 +440,22 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		fprintf(stderr, "configId doesn't match - skipping!\n");
 		return SKIPPED_RECORD;
 	}
-	if(phasecentre > scan->nPhaseCentres && !(bl%257==0)) // don't skip autocorrelations, ever
+	if(phasecentre >= scan->nPhaseCentres)
 	{
 		return SKIPPED_RECORD;
 	}
-	if(srcindex != scan->phsCentreSrcs[phasecentre] && !(bl%257==0)) // don't skip autocorrelations, ever
+	if((bl % 257 == 0) && ((scan->nPhaseCentres == 1 && srcindex != scan->phsCentreSrcs[0]) || 
+	   (scan->nPhaseCentres > 1  && srcindex != scan->pointingCentreSrc)))
+	{
+		printf("srcindex has been incorrectly recorded for baseline %d as %d - overriding!\n", bl, srcindex);
+		printf("number of phase centres for scan %d is %d, pointing centre source was %d and 1st phase centre source was %d\n", scanId, scan->nPhaseCentres, scan->pointingCentreSrc, scan->phsCentreSrcs[0]);
+		if(scan->nPhaseCentres == 1)
+			srcindex = scan->phsCentreSrcs[0];
+		else
+			srcindex = scan->pointingCentreSrc;
+	}
+	//printf("Sourceindex is %d, scanId is %d, baseline is %d\n", srcindex, scanId, bl);
+	if(srcindex != scan->phsCentreSrcs[phasecentre] && bl%257 != 0) //don't skip autocorrelations
 	{
 		//printf("Skipping record with srcindex %d because phasecentresrc[%d] is %d\n", srcindex, phasecentre,  scan->phsCentreSrcs[phasecentre]);
 		return SKIPPED_RECORD;
@@ -488,8 +502,9 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	
 	if(verbose >= 1 && scanId != dv->scanId)
 	{
-		printf("        MJD=%11.5f jobId=%d scanId=%d Source=%s  FITS SourceId=%d\n", 
-			mjd, dv->jobId, scanId, scan->obsModeName, 
+		printf("        MJD=%11.5f jobId=%d scanId=%d dv->scanId=%d Source=%s  FITS SourceId=%d\n", 
+			mjd, dv->jobId, scanId, dv->scanId, 
+			dv->D->source[scan->phsCentreSrcs[phasecentre]].name, 
 			dv->D->source[scan->phsCentreSrcs[phasecentre]].fitsSourceId+1);
 	}
 
@@ -498,6 +513,8 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	dv->freqId = config->freqId;
 	dv->bandId = config->baselineFreq2IF[aa1][aa2][freqNum];
 	dv->polId  = getPolProdId(dv, DifxParametersvalue(dv->dp, rows[6]));
+
+	//printf("Have stashed some more data\n");
 
 	/* stash the weight for later incorporation into a record */
 	if(dv->D->inputFileVersion == 0)
@@ -509,8 +526,11 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		dv->recweight = 1.0;
 	}
 
+	//printf("About to see if anything has changed\n");
+
 	if(bl != dv->baseline || fabs(mjd - dv->mjd) > 1.0/86400000.0)
 	{
+		//printf("Something has changed!\n");
 		changed = 1;
 		dv->baseline = bl;
 		dv->mjd = mjd;
@@ -525,6 +545,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		/* recompute from polynomials if possible */
 		if(scan->im)
 		{
+			//printf("About to recompute from polynomials\n");
 			double u,v,w;
 			int n;
 
@@ -534,18 +555,28 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 			v = dv->V;
 			w = dv->W;
 
+			//printf("About to get the im structures, a1 is %d and a2 is %d, phasecentre is %d\n", a1, a2, phasecentre);
+			//printf("Scan->im[a1] is %p\n", scan->im[a1]);
+			//printf("Scan->im[a2] is %p\n", scan->im[a2]);
 			/* use .difx/ antenna indices for model tables */
-			im1 = scan->im[aa1][phasecentre+1];
-			im2 = scan->im[aa2][phasecentre+1];
-			if(im1 && im2)
+			if(scan->im[a1] && scan->im[a2])
 			{
-				if(n < 0)
+				//printf("About to look at the actual im object\n");
+				im1 = scan->im[a1][phasecentre+1];
+	                        im2 = scan->im[a2][phasecentre+1];
+				//printf("Got the im structures - they are %p and %p\n", im1, im2);
+				if(!(im1 && im2))
+				{
+					fprintf(stderr, "Warning: one or the other antenna models is missing (im1=%p, im2=%p)\n", im1, im2);
+				}
+				else if(n < 0)
 				{
 					fprintf(stderr, "Error: interferometer model index out of range: scanId=%d mjd=%12.6f\n",
 					scanId, mjd);
 				}
 				else
 				{
+					//printf("About to actually evalPoly\n");
 					terms1 = im1->order + 1;
 					terms2 = im2->order + 1;
 					dv->U = evalPoly(im2[n].u, terms2, dt) 
@@ -555,6 +586,10 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 					dv->W = evalPoly(im2[n].w, terms2, dt) 
 					       -evalPoly(im1[n].w, terms1, dt);
 				}
+			}
+			else
+			{
+				printf("Cannot check UVW values!\n");
 			}
 
 			if((fabs(u - dv->U) > 10.0 ||
@@ -615,7 +650,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	/* reorder data and set weights if weights not provided */
 	if(nFloat < dv->nComplex)
 	{
-		for(i = 3*dv->D->nInChan-3; i > 0; i -= 3)
+		for(i = 3*dv->D->nOutChan-3; i > 0; i -= 3)
 		{
 			i1 = i*2/3;
 			dv->spectrum[i+2] = 1.0;                 /* weight */
@@ -627,7 +662,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 	}
 
 	/* scale data by weight */
-	for(i = 0; i < dv->D->nInChan; i++)
+	for(i = 0; i < dv->D->nOutChan; i++)
 	{
 		dv->spectrum[i*dv->nComplex] *= dv->recweight;
 		dv->spectrum[i*dv->nComplex+1] *= dv->recweight;
@@ -1018,9 +1053,11 @@ static int DifxVisConvert(const DifxInput *D,
 	/* First prime each structure with some data */
 	for(j = 0; j < nJob; j++)
 	{
+		printf("Priming job %d/%d\n", j+1, nJob);
 		readvisrecord(dvs[j], verbose, pulsarBin, phasecentre);
 	}
 
+	printf("About to loop until done\n");
 	/* Now loop until done, looking at */
 	while(nJob > 0)
 	{
