@@ -107,6 +107,7 @@ public:
 	bool doPolar;		// false for no cross pol, true for full pol
 	bool doAuto;		// write autocorrelations
 	int subintNS;		// Duration of a subintegration in nanoseconds
+	int guardNS;		// Number of "guard" ns tacked on to end of a send
 	int nChan;		// For the narrowest band 
 				// (all others will have same spectral resolution)
 	int specAvg;

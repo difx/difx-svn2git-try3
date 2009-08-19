@@ -860,7 +860,7 @@ int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, const Ve
 			config->subintNS -= (config->subintNS % fftdurNS);
 	}
 		
-	config->guardNS = 1000;
+	config->guardNS = corrSetup->guardNS;
 	config->fringeRotOrder = corrSetup->fringeRotOrder;
 	config->strideLength = corrSetup->strideLength;
 	config->pulsarId = -1;		// FIXME -- from setup

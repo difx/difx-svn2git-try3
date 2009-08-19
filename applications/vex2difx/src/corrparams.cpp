@@ -130,6 +130,7 @@ CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 	fringeRotOrder = 1;
 	strideLength = 16;
 	subintNS = 0;
+	guardNS = 1000;
 	maxNSBetweenUVShifts = 2000000000;
 }
 
@@ -159,6 +160,10 @@ void CorrSetup::setkv(const string &key, const string &value)
 	{
 		ss >> subintNS;
 	}
+	else if(key == "guardNS")
+	{
+		ss >> guardNS;
+	}
 	else if(key == "maxNSBetweenUVShifts")
 	{
 		ss >> maxNSBetweenUVShifts;
@@ -170,6 +175,10 @@ void CorrSetup::setkv(const string &key, const string &value)
 	else if(key == "fringeRotOrder")
 	{
 		ss >> fringeRotOrder;
+	}
+	else if(key == "strideLength")
+	{
+		ss >> strideLength;
 	}
 	else if(key == "binConfig")
 	{

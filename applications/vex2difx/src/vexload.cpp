@@ -802,7 +802,7 @@ int getEOPs(VexData *V, Vex *v, const CorrParams& params)
 
 		if(nEop < 5)
 		{
-			cerr << "Warning: Fewer than 5 EOP values provided." << endl;
+			cerr << "Warning: Fewer than 5 EOP values provided (" << nEop << "." << endl;
 			cerr << "vex2difx will continue, but expect problems downstream." << endl;
 		}
 
