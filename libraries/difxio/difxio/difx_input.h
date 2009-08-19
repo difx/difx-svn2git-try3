@@ -203,6 +203,8 @@ typedef struct
 	char vsn[12];		/* vsn for module */
 	char shelf[20];		/* shelf location of module */
 	int spacecraftId;	/* -1 if not a spacecraft */
+	int nFile;              /* number of files */
+        char **file;            /* list of files to correlate (if not VSN) */
 } DifxAntenna;
 
 typedef struct
@@ -379,7 +381,8 @@ int writeDifxFreqArray(FILE *out, int nFreq, const DifxFreq *df);
 
 /* DifxAntenna functions */
 DifxAntenna *newDifxAntennaArray(int nAntenna);
-void deleteDifxAntennaArray(DifxAntenna *da);
+void deleteDifxAntennaArray(DifxAntenna *da, int nAntenna);
+void allocateDifxAntennaFiles(DifxAntenna *da, int nFile);
 void printDifxAntenna(const DifxAntenna *da);
 void fprintDifxAntenna(FILE *fp, const DifxAntenna *da);
 void fprintDifxAntennaSummary(FILE *fp, const DifxAntenna *da);
@@ -504,11 +507,12 @@ void printDifxScan(const DifxScan *ds);
 void fprintDifxScanSummary(FILE *fp, const DifxScan *ds);
 void printDifxScanSummary(const DifxScan *ds);
 void copyDifxScan(DifxScan *dest, const DifxScan *src,
-	const int *jobIdRemap, const int *configIdRemap, 
-	const int *antennaIdRemap);
+	const int *sourceIdRemap, const int *jobIdRemap, 
+	const int *configIdRemap, const int *antennaIdRemap);
 DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
-	const DifxScan *ds2, int nds2, const int *jobIdRemap,
-	const int *configIdRemap, const int *antennaIdRemap, int *nds);
+	const DifxScan *ds2, int nds2, const int *sourceIdRemap, 
+	const int *jobIdRemap, const int *configIdRemap, 
+	const int *antennaIdRemap, int *nds);
 int getDifxScanIMIndex(const DifxScan *ds, double mjd, double *dt);
 int writeDifxScan(FILE *out, const DifxScan *ds, int scanId, 
 	const DifxConfig *dc);
@@ -549,6 +553,9 @@ void printDifxSource(const DifxSource *ds);
 void fprintDifxSource(FILE *fp, const DifxSource *ds);
 void printDifxSourceSummary(const DifxSource *ds);
 void fprintDifxSourceSummary(FILE *fp, const DifxSource *ds);
+int isSameDifxSource(const DifxSource *ds1, const DifxSource *ds2);
+void copyDifxSource(DifxSource *dest, const DifxSource *src);
+DifxSource *mergeDifxSourceArrays(const DifxSource *ds1, int nds1, const DifxSource *ds2, int nds2, int *sourceIdRemap, int *nds);
 
 /* DifxIF functions */
 DifxIF *newDifxIFArray(int nIF);

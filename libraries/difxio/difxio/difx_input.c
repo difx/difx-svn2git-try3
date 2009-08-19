@@ -68,7 +68,7 @@ void deleteDifxInput(DifxInput *D)
 		}
 		if(D->antenna)
 		{
-			deleteDifxAntennaArray(D->antenna);
+			deleteDifxAntennaArray(D->antenna, D->nAntenna);
 		}
 		if(D->scan)
 		{
@@ -1277,36 +1277,61 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D,
 static DifxInput *parseDifxInputDataTable(DifxInput *D, 
 	const DifxParameters *ip)
 {
-	const char dataKeys[][MAX_DIFX_KEY_LEN] = 
-	{
-		"FILE %d/0"
-	};
-	const int N_DATA_ROWS = sizeof(dataKeys)/sizeof(dataKeys[0]);
-	int a, N;
-	int rows[N_DATA_ROWS];
+	int a, i, N;
+	int r = 1;
 	const char *value;
-
-	if(!D || !ip)
-	{
+	DifxAntenna *da;
+	 
+  	if(!D || !ip)
+ 	{
 		return 0;
-	}
+ 	}
 
-	rows[N_DATA_ROWS-1] = 0;		/* initialize start */
 	for(a = 0; a < D->nAntenna; a++)
 	{
-		strcpy(D->antenna[a].vsn, "none");
-		N = DifxParametersbatchfind1(ip, rows[N_DATA_ROWS-1], dataKeys,
-			a, N_DATA_ROWS, rows);
-		if(N == N_DATA_ROWS)
+		da = D->antenna + a;
+		strcpy(da->vsn, "none");
+		r = DifxParametersfind1(ip, r, "D/STREAM %d FILES", a);
+		if(r < 0)
 		{
-			value = DifxParametersvalue(ip, rows[0]);
-			if(strlen(value) == 8)
+			fprintf(stderr, "D/STREAM %d FILES not found\n", a);
+			return 0;
+		}
+		N = atoi(DifxParametersvalue(ip, r));
+		if(N < 1)
+		{
+			fprintf(stderr, "D/STREAM %d FILES has illegal value [%s]\n", a,
+				DifxParametersvalue(ip, r));
+			return 0;
+		}
+		if(N > 1)
+		{
+			allocateDifxAntennaFiles(da, N);
+		}
+		for(i = 0; i < N; i++)
+		{
+			r = DifxParametersfind2(ip, r, "FILE %d/%d", a, i);
+			if(r < 0)
+ 			{
+				fprintf(stderr, "FILE %d/%d not found\n", a, i);
+				return 0;
+ 			}
+			value = DifxParametersvalue(ip, r);
+			if(N == 1 && strlen(value) == 8 && value[0] != '/')
 			{
-				strncpy(D->antenna[a].vsn, value, 8);
-				D->antenna[a].vsn[8] = 0;
+				strncpy(da->vsn, value, 8);
+				da->vsn[8] = 0;
+			}
+			else
+			{
+				if(N == 1)
+				{
+					allocateDifxAntennaFiles(da, 1);
+				}
+				da->file[i] = strdup(value);
 			}
 		}
-	}
+ 	}
 
 	return D;
 }
@@ -1808,20 +1833,24 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		    }
 		    D->scan[i].phsCentreSrcs[j] = atoi(DifxParametersvalue(cp, row));
                 }
-		printf("D->nRule is %d\n", D->nRule);
+		D->scan[i].configId = -1;
 		for(r=0;r<D->nRule;r++)
 		{
-			applies = 1;
+			applies = 0;
 			for(src=0;src<D->scan[i].nPhaseCentres;src++)
 			{
 				//printf("Checking if rule %d applies to scan %d, phase centre %d\n", r, i, src);
 				//printf("The phase centre src index is %d\n", D->scan[i].phsCentreSrcs[src]);
 				//printf("And its name is %s\n", D->source[D->scan[i].phsCentreSrcs[src]].name);
 				//printf("Rule sourcename is %s\n", D->rule[r].sourcename);
-				if(ruleApplies(&(D->rule[r]), &(D->scan[i]), &(D->source[D->scan[i].phsCentreSrcs[src]])) == 0)
+				if(ruleApplies(&(D->rule[r]), &(D->scan[i]), &(D->source[D->scan[i].phsCentreSrcs[src]])) != 0)
 				{
-					applies = 0;
+					applies = 1;
 				}
+			}
+			if(ruleApplies(&(D->rule[r]), &(D->scan[i]), &(D->source[D->scan[i].pointingCentreSrc])) != 0)
+			{
+				applies = 1;
 			}
 			if(applies > 0)
 			{
@@ -1830,7 +1859,14 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 				{
 					if(strcmp(D->rule[r].configName, D->config[c].name) == 0)
 					{
-						D->scan[i].configId = c;
+						if(D->scan[i].configId < 0 || D->scan[i].configId == c)
+						{
+							D->scan[i].configId = c;
+						}
+						else
+						{
+							fprintf(stderr, "Warning! Rules produce conflicting configs for scan %d!\n", i);
+						}
 						applies = 0;
 					}
 				}
@@ -2856,11 +2892,14 @@ int DifxInputGetScanIdByJobId(const DifxInput *D, double mjd, int jobId)
 		return -1;
 	}
 
+	//printf("D->nScan is %d\n", D->nScan);
 	for(scanId = 0; scanId < D->nScan; scanId++)
 	{
-		if(mjd < D->scan[scanId].mjdEnd && 
+		//printf("mjd is %f, scan->mjdEnd is %f, jobId is %d, scan->jobId is %d\n", mjd, D->scan[scanId].mjdEnd, jobId, D->scan[scanId].jobId);
+		if(mjd <= D->scan[scanId].mjdEnd && 
 		   D->scan[scanId].jobId == jobId)
 		{
+			//printf("Found scanId, which was %d\n", scanId);
 			return scanId;
 		}
 	}
@@ -3159,6 +3198,14 @@ int DifxInputSimFXCORR(DifxInput *D)
 	{
 		mjdStart += tInt/86400.0;
 	}
+
+	/* Work around problem that occurs if frac sec >= 0.5 */
+	while(86400.0*mjdStart - (long long)(86400.0*mjdStart) > 0.49999)
+	{
+		mjdStart += tInt/86400.0;
+	}
+
+
 	D->mjdStart = mjdStart;
 	D->job[0].jobStart = D->mjdStart;
 	D->fracSecondStartTime = 1;

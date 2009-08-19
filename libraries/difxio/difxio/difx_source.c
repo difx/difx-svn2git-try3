@@ -44,6 +44,13 @@ DifxSource *newDifxSourceArray(int nSource)
 	{
 		ds[s].spacecraftId = -1;
 		ds[s].fitsSourceId = -1;
+		ds[s].pmRA = 0.0;
+		ds[s].pmDec = 0.0;
+		ds[s].parallax = 0.0;
+		ds[s].pmEpoch = 0.0;
+		ds[s].qual = 0;
+		sprintf(ds[s].calCode, "");
+		sprintf(ds[s].name, "");
 	}
 	
 	return ds;
@@ -90,6 +97,97 @@ void printDifxSourceSummary(const DifxSource *ds)
 {
 	fprintDifxSourceSummary(stdout, ds);
 }
+
+int isSameDifxSource(const DifxSource *ds1, const DifxSource *ds2)
+{
+	//printf("About to do the source compare on two sources with values %p, %p\n", ds1, ds2);
+	//printf("Comparing source called %s with %s\n", ds1->name, ds2->name);
+        if(strcmp(ds1->name, ds2->name) == 0      &&
+           ds1->ra           == ds2->ra           &&
+           ds1->dec          == ds2->dec          &&
+           strcmp(ds1->calCode,ds2->calCode) == 0 &&
+           ds1->qual         == ds2->qual         &&
+           ds1->spacecraftId == ds2->spacecraftId &&
+           ds1->fitsSourceId == ds2->fitsSourceId &&
+	   ds1->pmRA         == ds2->pmRA         &&
+	   ds1->pmDec        == ds2->pmDec        &&
+	   ds1->parallax     == ds2->parallax     &&
+	   ds1->pmEpoch      == ds2->pmEpoch)
+        {
+                return 1;
+        }
+        else
+        {
+                return 0;
+        }
+}
+
+void copyDifxSource(DifxSource *dest, const DifxSource *src)
+{
+        dest->ra           = src->ra;
+        dest->dec          = src->dec;
+        dest->qual         = src->qual;
+        dest->spacecraftId = src->spacecraftId;
+        dest->fitsSourceId = src->fitsSourceId;
+        dest->pmRA         = src->pmRA;
+	dest->pmDec        = src->pmDec;
+	dest->parallax     = src->parallax;
+	dest->pmEpoch      = src->pmEpoch;
+	strcpy(dest->calCode, src->calCode);
+	strcpy(dest->name, src->name);
+}
+
+/* merge two DifxSource tables into an new one.  sourceIdRemap will contain the
+ * mapping from ds2's old source entries to that of the merged set
+ */
+DifxSource *mergeDifxSourceArrays(const DifxSource *ds1, int nds1,
+        const DifxSource *ds2, int nds2, int *sourceIdRemap,
+        int *nds)
+{
+        DifxSource *ds;
+        int i, j;
+
+        *nds = nds1;
+	printf("Starting with %d entries\n", nds1);
+
+        /* first identify entries that differ and assign new sourceIds to them */
+        for(j = 0; j < nds2; j++)
+        {
+                for(i = 0; i < nds1; i++)
+                {
+                        if(isSameDifxSource(ds1 + i, ds2 + j))
+                        {
+                                sourceIdRemap[j] = i;
+                                break;
+                        }
+                }
+                if(i == nds1)
+                {
+                        sourceIdRemap[j] = *nds;
+                        (*nds)++;
+                }
+        }
+	printf("Will finally need %d entries\n", *nds);
+
+        /* Allocate and copy */
+        ds = newDifxSourceArray(*nds);
+        for(i = 0; i < nds1; i++)
+        {
+                copyDifxSource(ds + i, ds1 + i);
+        }
+        for(j = 0; j < nds2; j++)
+        {
+                i = sourceIdRemap[j];
+                if(i >= nds1)
+                {
+			printf("Copying to position %d\n", i);
+                        copyDifxSource(ds + i, ds2 + j);
+                }
+        }
+
+        return ds;
+}
+
 
 int writeDifxSourceArray(FILE *out, int nSource, const DifxSource *ds,
         int doCalcode, int doQual, int doSpacecraftID, 

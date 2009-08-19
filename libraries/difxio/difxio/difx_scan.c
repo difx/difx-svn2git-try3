@@ -82,7 +82,7 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 	fprintf(fp, "    Start = MJD %12.6f\n", ds->mjdStart);
 	fprintf(fp, "    End   = MJD %12.6f\n", ds->mjdEnd);
 	fprintf(fp, "    Observing mode = %s\n", ds->obsModeName);
-	fprintf(fp, "    Max NS between UV shifts = %s\n", ds->maxNSBetweenUVShifts);
+	fprintf(fp, "    Max NS between UV shifts = %d\n", ds->maxNSBetweenUVShifts);
 	fprintf(fp, "    Pointing centre source index = %d\n", ds->pointingCentreSrc);
         fprintf(fp, "    Number of phase centres = %d\n", ds->nPhaseCentres);
 	for(i=0;i<ds->nPhaseCentres;i++) {
@@ -136,8 +136,8 @@ void printDifxScanSummary(const DifxScan *ds)
 }
 
 void copyDifxScan(DifxScan *dest, const DifxScan *src,
-	const int *jobIdRemap, const int *configIdRemap, 
-	const int *antennaIdRemap)
+	const int *sourceIdRemap, const int *jobIdRemap, 
+	const int *configIdRemap, const int *antennaIdRemap)
 {
 	int i, j, srcAntenna, destAntenna;
 
@@ -148,8 +148,27 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 	dest->maxNSBetweenUVShifts = src->maxNSBetweenUVShifts;
 	strcpy(dest->identifier, src->identifier);
 	strcpy(dest->obsModeName, src->obsModeName);
-	dest->pointingCentreSrc = src->pointingCentreSrc;
 	dest->nPhaseCentres = src->nPhaseCentres;
+	if(sourceIdRemap)
+	{
+		printf("About to do the source re-mapping\n");
+		printf("Source pointing centre was %d\n", src->pointingCentreSrc);
+		printf("This will be re-mapped to %d\n", sourceIdRemap[src->pointingCentreSrc]);
+		dest->pointingCentreSrc = sourceIdRemap[src->pointingCentreSrc];
+		for(i=0;i<src->nPhaseCentres;i++)
+		{
+			dest->phsCentreSrcs[i] = sourceIdRemap[src->phsCentreSrcs[i]];
+		}
+		printf("Done with source re-mapping\n");
+	}
+	else
+	{
+		dest->pointingCentreSrc = src->pointingCentreSrc;
+		for(i=0;i<src->nPhaseCentres;i++)
+		{
+			dest->phsCentreSrcs[i] = src->phsCentreSrcs[i];
+		}
+	}
 	if(jobIdRemap)
 	{
 		dest->jobId = jobIdRemap[src->jobId];
@@ -198,9 +217,9 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 			{
 				destAntenna = srcAntenna;
 			}
-			dest->im[destAntenna] = (DifxPolyModel **)calloc(dest->nPhaseCentres,
+			dest->im[destAntenna] = (DifxPolyModel **)calloc(dest->nPhaseCentres+1,
 							sizeof(DifxPolyModel *));
-			for(j=0;j<src->nPhaseCentres;j++)
+			for(j=0;j<src->nPhaseCentres+1;j++)
 			{
 				dest->im[destAntenna][j] = dupDifxPolyModelColumn(
 						src->im[srcAntenna][j], dest->nPoly);
@@ -217,8 +236,9 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
  * more than two DifxInputs in any order.
  */
 DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
-	const DifxScan *ds2, int nds2, const int *jobIdRemap, 
-	const int *configIdRemap, const int *antennaIdRemap, int *nds)
+	const DifxScan *ds2, int nds2, const int *sourceIdRemap, 
+	const int *jobIdRemap, const int *configIdRemap, 
+	const int *antennaIdRemap, int *nds)
 {
 	DifxScan *ds;
 	int i=0, i1=0, i2=0, src;
@@ -226,6 +246,7 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 	*nds = nds1 + nds2;
 	ds = newDifxScanArray(*nds);
 
+	printf("ds1 has %d scans; ds2 has %d scans\n", nds1, nds2);
 	for(;;)
 	{
 		if(i1 >= nds1)
@@ -258,13 +279,19 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 		{
 			src = 2;
 		}
+		printf("Taking scan from src %d: ", src);
+		if(i1>=0)
+			printf("ds1[%d] starts at %f; ", i1, ds1[i1].mjdStart);
+		if(i2>=0)
+                        printf("ds2[%d] starts at %f", i2, ds2[i2].mjdStart);
+		printf("\n");
 
 		/* do the copy and increments */
 		if(src == 1)
 		{
 			if(ds1[i1].configId >= 0)
 			{
-				copyDifxScan(ds + i, ds1 + i1, 0, 0, 0);
+				copyDifxScan(ds + i, ds1 + i1, 0, 0, 0, 0);
 				i++;
 			}
 			i1++;
@@ -273,8 +300,8 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 		{
 			if(ds2[i2].configId >= 0)
 			{
-				copyDifxScan(ds + i, ds2 + i2, jobIdRemap, 
-					configIdRemap, antennaIdRemap);
+				copyDifxScan(ds + i, ds2 + i2, sourceIdRemap,
+					jobIdRemap, configIdRemap, antennaIdRemap);
 				i++;
 			}
 			i2++;
@@ -283,6 +310,7 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 
 	*nds = i;
 
+	printf("After merging two inputs, which had nScan %d and %d, the result has nScan %d\n", nds1, nds2, *nds);
 	return ds;
 }
 
