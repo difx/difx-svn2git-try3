@@ -718,9 +718,10 @@ static int RecordIsInvalid(const DifxVis *dv)
 
 			printf("Warning -- record with !finite value: ");
 			printf("a1=%d a1=%d mjd=%13.7f\n",
-				(dv->baseline/256) - 1,
-				(dv->baseline%256) - 1,
-				dv->mjd);
+				(dv->record->baseline/256) - 1,
+				(dv->record->baseline%256) - 1,
+				(int)(dv->record->jd - 2400000.0) + 
+				  dv->record->iat);
 			return 1;
 		}
 	}
@@ -730,9 +731,10 @@ static int RecordIsInvalid(const DifxVis *dv)
 		{
 			printf("Warning -- record with extreme value: ");
 			printf("a1=%d a1=%d mjd=%13.7f value=%e\n",
-				(dv->baseline/256) - 1,
-				(dv->baseline%256) - 1,
-				dv->mjd,
+				(dv->record->baseline/256) - 1,
+				(dv->record->baseline%256) - 1,
+				(int)(dv->record->jd - 2400000.0) + 
+				  dv->record->iat,
 				d[i]);
 			return 1;
 		}
@@ -777,9 +779,9 @@ static int RecordIsFlagged(const DifxVis *dv)
 		return 0;
 	}
 
-	a1  = (dv->baseline/256) - 1;
-	a2  = (dv->baseline%256) - 1;
-	mjd = dv->mjd;
+	a1  = (dv->record->baseline/256) - 1;
+	a2  = (dv->record->baseline%256) - 1;
+	mjd = (int)(dv->record->jd - 2400000.0) + dv->record->iat;
 
 	for(i = 0; i < dv->D->nFlag; i++)
 	{
