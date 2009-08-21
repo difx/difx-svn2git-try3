@@ -718,8 +718,8 @@ static int RecordIsInvalid(const DifxVis *dv)
 
 			printf("Warning -- record with !finite value: ");
 			printf("a1=%d a1=%d mjd=%13.7f\n",
-				(dv->record->baseline/256) - 1,
-				(dv->record->baseline%256) - 1,
+				(dv->baseline/256) - 1,
+				(dv->baseline%256) - 1,
 				dv->mjd);
 			return 1;
 		}
@@ -730,8 +730,8 @@ static int RecordIsInvalid(const DifxVis *dv)
 		{
 			printf("Warning -- record with extreme value: ");
 			printf("a1=%d a1=%d mjd=%13.7f value=%e\n",
-				(dv->record->baseline/256) - 1,
-				(dv->record->baseline%256) - 1,
+				(dv->baseline/256) - 1,
+				(dv->baseline%256) - 1,
 				dv->mjd,
 				d[i]);
 			return 1;
@@ -744,7 +744,6 @@ static int RecordIsInvalid(const DifxVis *dv)
 static int RecordIsZero(const DifxVis *dv)
 {
 	int i, n;
-	int invalid=1;
 	const float *d;
 
 	d = dv->data;
@@ -755,11 +754,11 @@ static int RecordIsZero(const DifxVis *dv)
 		/* don't look at weight in deciding whether data is valid */
 		if((d[i] != 0.0) && (i % dv->nComplex != 2))
 		{
-			invalid = 0;
+			return 0;
 		}
 	}
 	
-	return invalid;
+	return 1;
 }
 
 static int RecordIsTransitioning(const DifxVis *dv)
@@ -778,8 +777,8 @@ static int RecordIsFlagged(const DifxVis *dv)
 		return 0;
 	}
 
-	a1  = (dv->record->baseline/256) - 1;
-	a2  = (dv->record->baseline%256) - 1;
+	a1  = (dv->baseline/256) - 1;
+	a2  = (dv->baseline%256) - 1;
 	mjd = dv->mjd;
 
 	for(i = 0; i < dv->D->nFlag; i++)
