@@ -514,7 +514,6 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 	vector<VexJobFlag> flags;
 	map<string,int> antIds;
 	map<string,string>::const_iterator a;
-	list<VexEvent>::const_iterator e;
 	map<string,VexInterval>::const_iterator sa;
 	int nAnt;
 	ofstream of;
@@ -548,11 +547,11 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		if(ant->basebandFiles.size() > 0)
 		{
 			// Aha -- not module based so unflag JOB_FLAG_RECORD
-			flagMask[antIds[e->name]] &= ~VexJobFlag::JOB_FLAG_RECORD;
+			flagMask[antIds[a->first]] &= ~VexJobFlag::JOB_FLAG_RECORD;
 		}
 	}
 
-	for(e = eventList.begin(); e != eventList.end(); e++)
+	for(list<VexEvent>::const_iterator e = eventList.begin(); e != eventList.end(); e++)
 	{
 		if(e->eventType == VexEvent::RECORD_START)
 		{
