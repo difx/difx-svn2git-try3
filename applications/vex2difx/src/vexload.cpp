@@ -223,15 +223,15 @@ int getAntennas(VexData *V, Vex *v, const CorrParams& params)
 		r = (struct dvalue *)get_station_lowl(stn, T_AXIS_OFFSET, B_ANTENNA, v);
 		fvex_double(&(r->value), &(r->units), &A->axisOffset);
 
-		const VexClock *paramClock = params.getAntennaClock(antName);
-		if(paramClock)
-		{
-			A->clocks.push_back(*paramClock);
-		}
 		const AntennaSetup *antennaSetup = params.getAntennaSetup(antName);
 		if(antennaSetup)
 		{
 			A->basebandFiles = antennaSetup->basebandFiles;
+		}
+		const VexClock *paramClock = params.getAntennaClock(antName);
+		if(paramClock)
+		{
+			A->clocks.push_back(*paramClock);
 		}
 		else if(block)
 		{
