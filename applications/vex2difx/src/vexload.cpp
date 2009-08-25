@@ -541,6 +541,7 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 				polarization = value[0];
 				if(swapPol)
 				{
+					cout << "Swapping polarizations on antenna " << antName << endl;
 					polarization = swapPolarization(polarization);
 				}
 				vex_field(T_IF_DEF, p, 1, &link, &name, &value, &units);

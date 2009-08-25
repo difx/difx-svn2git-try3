@@ -42,8 +42,8 @@
 #include "vexload.h"
 
 const string program("vex2difx");
-const string version("0.3");
-const string verdate("20090627");
+const string version("0.2.2");
+const string verdate("20090825");
 const string author("Walter Brisken");
 
 const double MJD_UNIX0 = 40587.0;	/* MJD at beginning of unix time */

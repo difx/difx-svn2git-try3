@@ -532,6 +532,26 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		VexJobFlag::JOB_FLAG_SCAN);
 	vector<double> flagStart(nAnt, mjdStart);
 
+	// Don't preset RECORD flag for antennas not on Mark5 Modules
+	for(a = vsns.begin(); a != vsns.end(); a++)
+	{
+		const VexAntenna *ant = V.getAntenna(a->first);
+
+		if(!ant)
+		{
+			cerr << "Developer error: generateFlagFile: antenna " <<
+				a->first << " not found in antenna table." << endl;
+
+				exit(0);
+		}
+
+		if(ant->basebandFiles.size() > 0)
+		{
+			// Aha -- not module based so unflag JOB_FLAG_RECORD
+			flagMask[antIds[e->name]] &= ~VexJobFlag::JOB_FLAG_RECORD;
+		}
+	}
+
 	for(e = eventList.begin(); e != eventList.end(); e++)
 	{
 		if(e->eventType == VexEvent::RECORD_START)

@@ -1,3 +1,9 @@
+Version 0.2.2
+~~~~~~~~~~~~~
+* Fix clock offset of up to 6 picoseconds in simFXCORR mode
+* Don't write flag based on RECORD if correlating files
+* Fix some initialization information
+
 Version 0.2.1
 ~~~~~~~~~~~~~
 * Change sign convention associated with vex file

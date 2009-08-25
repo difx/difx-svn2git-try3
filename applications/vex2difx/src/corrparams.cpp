@@ -446,6 +446,10 @@ void SourceSetup::setkv(const string &key, const string &value)
 
 AntennaSetup::AntennaSetup(const string &name) : vexName(name)
 {
+	polSwap = false;
+	X = 0.0;
+	Y = 0.0;
+	Z = 0.0;
 }
 
 void AntennaSetup::setkv(const string &key, const string &value)
