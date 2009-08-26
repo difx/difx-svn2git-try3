@@ -484,8 +484,8 @@ void Visibility::writedata()
           autocorrweights[i][j][k] = results[skip+count+nyquistchannel].im/fftsperintegration;
           results[skip+count+nyquistchannel].im = 0.0;
 
-          //work out the band average, for use in calibration (allows us to calculate fractional correlation)
-          if(j==0) {
+          //if needed work out the band average, for use in calibration (allows us to calculate fractional correlation)
+          if(j==0 && config->getDTsys(currentconfigindex, i) > 0.0) {
             status = vectorMean_cf32(&results[skip + count + nyquistoffset], freqchannels, &autocorrcalibs[i][k], vecAlgHintFast);
             if(status != vecNoErr)
               csevere << startl << "Error in getting average of autocorrelation!!!" << status << endl;
@@ -555,29 +555,31 @@ void Visibility::writedata()
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
             freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+            scale = 0.0;
             //calibrate the data
-            divisor = sqrt(autocorrcalibs[i][k].re*autocorrcalibs[i][(j==0)?k:config->getDMatchingBand(currentconfigindex, i, k)].re);
-            if(divisor > 0.0)
+            if(config->getDTsys(currentconfigindex, i) > 0.0)
             {
-              scale = config->getDTsys(currentconfigindex, i)/divisor;
-              if(scale > 0.0)
+              //we want to calibrate "online" with a-priori tsys and band average of autocorrelations
+              divisor = sqrt(autocorrcalibs[i][k].re*autocorrcalibs[i][(j==0)?k:config->getDMatchingBand(currentconfigindex, i, k)].re);
+              if(divisor > 0.0)
               {
-                status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(freqchannels+1));
-                if(status != vecNoErr)
-                  csevere << startl << "Error trying to amplitude calibrate the datastream data!!!" << endl;
+                scale = config->getDTsys(currentconfigindex, i)/divisor;
               }
-              else
+            }
+            else
+            {
+              //We want normalised correlation coefficients, so scale by number of contributing
+              //samples rather than datastream tsys and decorrelation correction
+              if(autocorrweights[i][j][k] > 0.0)
               {
-                //We want normalised correlation coefficients, so scale by number of contributing
-                //samples rather than datastream tsys and decorrelation correction
-                if(autocorrweights[i][j][k] > 0.0)
-                {
-                  scale = 1.0/(autocorrweights[i][j][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels*config->getFChannelsToAverage(freqindex))));
-                  status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(freqchannels+1));
-                  if(status != vecNoErr)
-                    csevere << startl << "Error trying to amplitude calibrate the datastream data for the correlation coefficient case!!!" << endl;
-                }
+                scale = 1.0/(autocorrweights[i][j][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels*config->getFChannelsToAverage(freqindex))));
               }
+            }
+            if(scale > 0.0)
+            {
+              status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(freqchannels+1));
+              if(status != vecNoErr)
+                csevere << startl << "Error trying to amplitude calibrate the datastream data!!!" << endl;
             }
             count += freqchannels+1;
           }
@@ -802,17 +804,20 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
             config->getBPolPair(currentconfigindex, i, j, k, polpair);
 
             //open the file for appending in ascii and write the ascii header
-            output.open(filename, ios::app);
-            writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][b][k], buvw);
+            if(baselineweights[i][j][b][k] > 0.0)
+            {
+              output.open(filename, ios::app);
+              writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][b][k], buvw);
 
-            //close, reopen in binary and write the binary data, then close again
-            output.close();
-            output.open(filename, ios::app|ios::binary);
-            //For both USB and LSB data, the Nyquist channel is excised.  Thus, the numchannels that are written out represent the
-            //the valid part of the band in both cases, and run from lowest frequency to highest frequency in both cases.  For USB
-            //data, the first channel is the DC - for LSB data, the last channel is the DC
-            output.write((char*)(results + count + lsboffset), freqchannels*sizeof(cf32));
-            output.close();
+              //close, reopen in binary and write the binary data, then close again
+              output.close();
+              output.open(filename, ios::app|ios::binary);
+              //For both USB and LSB data, the Nyquist channel is excised.  Thus, the numchannels that are written out represent the
+              //the valid part of the band in both cases, and run from lowest frequency to highest frequency in both cases.  For USB
+              //data, the first channel is the DC - for LSB data, the last channel is the DC
+              output.write((char*)(results + count + lsboffset), freqchannels*sizeof(cf32));
+              output.close();
+            }
 
             count += freqchannels + 1;
           }
@@ -821,6 +826,10 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
     }
   }
 
+  if(model->getNumPhaseCentres(currentscan) == 1)
+    sourceindex = model->getPhaseCentreSourceIndex(currentscan, 0);
+  else
+    sourceindex = model->getPointingCentreSourceIndex(currentscan);
   //now each autocorrelation visibility point if necessary
   if(config->writeAutoCorrs(currentconfigindex)) // FIXME -- bug lurks within?
   {
@@ -837,24 +846,27 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
             freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
-            //open, write the header and close
-            if(k<config->getDNumRecordedBands(currentconfigindex, i))
-              polpair[0] = config->getDRecordedBandPol(currentconfigindex, i, k);
-            else
-              polpair[0] = config->getDZoomBandPol(currentconfigindex, i, k-config->getDNumRecordedBands(currentconfigindex, i));
-            if(j==0)
-              polpair[1] = polpair[0];
-            else
-              polpair[1] = config->getOppositePol(polpair[0]);
-            output.open(filename, ios::app);
-            writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, 0, 0, autocorrweights[i][j][k], buvw);
-            output.close();
-  
-            //open, write the binary data and close
-            output.open(filename, ios::app|ios::binary);
-            //see baseline writing section for description of treatment of USB/LSB data and the Nyquist channel
-            output.write((char*)(results + lsboffset + count), freqchannels*sizeof(cf32));
-            output.close();
+            if(autocorrweights[i][j][k] > 0.0)
+            {
+              //open, write the header and close
+              if(k<config->getDNumRecordedBands(currentconfigindex, i))
+                polpair[0] = config->getDRecordedBandPol(currentconfigindex, i, k);
+              else
+                polpair[0] = config->getDZoomBandPol(currentconfigindex, i, k-config->getDNumRecordedBands(currentconfigindex, i));
+              if(j==0)
+                polpair[1] = polpair[0];
+              else
+                polpair[1] = config->getOppositePol(polpair[0]);
+              output.open(filename, ios::app);
+              writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, 0, 0, autocorrweights[i][j][k], buvw);
+              output.close();
+    
+              //open, write the binary data and close
+              output.open(filename, ios::app|ios::binary);
+              //see baseline writing section for description of treatment of USB/LSB data and the Nyquist channel
+              output.write((char*)(results + lsboffset + count), freqchannels*sizeof(cf32));
+              output.close();
+            }
             count += freqchannels + 1;
           }
         }

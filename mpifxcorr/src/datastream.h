@@ -147,6 +147,7 @@ protected:
   virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
   
   const int databufferfactor, numdatasegments;
+  int activescan, activesec, activens;
   int streamnum, atsegment, readscan, readseconds, corrstartday, corrstartseconds, readbytes, bufferbytes, readnanoseconds, intclockseconds, estimatedbytes;
   bool dataremaining;
   readinfo * bufferinfo;

@@ -122,6 +122,7 @@ class Model{
     inline int getMaxNSBetweenUVShifts(int scan) { return scantable[scan].maxnsbetweenuvshifts; }
 
     ///accessor methods for source information from a scan
+    inline int getPointingCentreSourceIndex(int scan) { return scantable[scan].pointingcentre->index; }
     inline int getPhaseCentreSourceIndex(int scan, int phasecentre) { return scantable[scan].phasecentres[phasecentre]->index; }
     inline source * getScanPhaseCentreSource(int scan, int phasecentre) { return scantable[scan].phasecentres[phasecentre]; }
 

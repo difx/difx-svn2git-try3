@@ -42,6 +42,9 @@ DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int *
   for(int i=0;i<numcores;i++)
     coreids[i] = cids[i];
   model = config->getModel();
+  activescan = 0;
+  activesec = 0;
+  activens = 0;
 }
 
 
@@ -158,7 +161,7 @@ void DataStream::execute()
   controlstatuses = new MPI_Status[maxsendspersegment];
   MPI_Request msgrequest;
   MPI_Status msgstatus;
-  int targetcore, scan, offsetsec, offsetns, status, action, startpos, bufferremaining, perr;
+  int targetcore, status, action, startpos, bufferremaining, perr;
   int receiveinfo[4];
   
   waitsegment = 0;
@@ -179,9 +182,9 @@ void DataStream::execute()
     //store what the message tells us to do
     action = msgstatus.MPI_TAG;
     targetcore = receiveinfo[0];
-    scan = receiveinfo[1];
-    offsetsec = receiveinfo[2];
-    offsetns = receiveinfo[3];
+    activescan = receiveinfo[1];
+    activesec = receiveinfo[2];
+    activens = receiveinfo[3];
 
     //now get another instruction while we process
     MPI_Irecv(receiveinfo, 4, MPI_INT, fxcorr::MANAGERID, MPI_ANY_TAG, MPI_COMM_WORLD, &msgrequest);
@@ -190,7 +193,7 @@ void DataStream::execute()
     {
       //work out the index from which to send data - if this overlsps with an existing send, call readdata
       //(waits until all sends in the zone have been received, then reads, and calculates the control array values)
-      startpos = calculateControlParams(scan, offsetsec, offsetns);
+      startpos = calculateControlParams(activescan, activesec, activens);
 
       //ensure that if we need to wrap around the end of the array the overflow is copied back
       bufferremaining = bufferbytes - startpos;

@@ -157,9 +157,10 @@ void Mk5DataStream::updateConfig(int segmentindex)
 void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 {
   int offset;
-  int nbits, nrecordedbands, framebytes, fanout;
+  int nbits, nrecordedbands, framebytes, fanout, jumpseconds, currentdsseconds;
   Configuration::dataformat format;
-  double bw;
+  double bw, bytespersecond;
+  long long dataoffset;
 
   format = config->getDataFormat(configindex, streamnum);
   nbits = config->getDNumBits(configindex, streamnum);
@@ -193,8 +194,25 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 
   offset = syncteststream->frameoffset;
 
+  bytespersecond = syncteststream->framebytes/syncteststream->framens * 1e9;
+
   readseconds = 86400*(syncteststream->mjd-corrstartday) + syncteststream->sec-corrstartseconds + intclockseconds;
   readnanoseconds = int(syncteststream->ns);
+  currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
+
+  if (currentdsseconds  > readseconds+1)
+  {
+    jumpseconds = currentdsseconds - readseconds;
+    if (activens < readnanoseconds)
+    {
+      jumpseconds--;
+    }
+
+    // set byte offset to the requested time
+    dataoffset = (long long)(jumpseconds * bytespersecond);
+    readseconds += jumpseconds;
+  }
+
   while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
     readscan++;
   while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
@@ -209,7 +227,11 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 
   cverbose << startl << "About to seek to byte " << offset << " to get to the first frame" << endl;
 
-  input.seekg(offset);
+  input.seekg(offset + dataoffset);
+  if (input.peek() == EOF) {
+    dataremaining = false;
+    input.clear();
+  }
 }
 
 int Mk5DataStream::testForSync(int configindex, int buffersegment)
