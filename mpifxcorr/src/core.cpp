@@ -454,7 +454,6 @@ void Core::receivedata(int index, bool * terminate)
   if(*terminate)
     return; //don't try to read, we've already finished
 
-  //cinfo << startl << "Core is about to receive from manager" << endl; 
   //Get the instructions on the time offset from the FxManager node
   MPI_Recv(&(procslots[index].offsets), 2, MPI_INT, fxcorr::MANAGERID, MPI_ANY_TAG, return_comm, &mpistatus);
   if(mpistatus.MPI_TAG == CR_TERMINATE)
@@ -486,19 +485,16 @@ void Core::receivedata(int index, bool * terminate)
   //now grab the data and delay info from the individual datastreams
   for(int i=0;i<numdatastreams;i++)
   {
-    //cinfo << startl << "Core is about to post receive request for datastream " << i << endl;
     //get data
     MPI_Irecv(procslots[index].databuffer[i], databytes, MPI_UNSIGNED_CHAR, datastreamids[i], CR_PROCESSDATA, MPI_COMM_WORLD, &datarequests[i]);
     //also receive the offsets and rates
     MPI_Irecv(procslots[index].controlbuffer[i], controllength, MPI_DOUBLE, datastreamids[i], CR_PROCESSCONTROL, MPI_COMM_WORLD, &controlrequests[i]);
   }
-  //cinfo << startl << "Core is about to wait for all" << endl;
   //wait for everything to arrive, store the length of the messages
   MPI_Waitall(numdatastreams, datarequests, msgstatuses);
   for(int i=0;i<numdatastreams;i++)
     MPI_Get_count(&(msgstatuses[i]), MPI_UNSIGNED_CHAR, &(procslots[index].datalengthbytes[i]));
   MPI_Waitall(numdatastreams, controlrequests, msgstatuses);
-  //cinfo << startl << "Core finished waiting for all!" << endl;
 
   //lock the next slot, unlock the one we just finished with
   for(int i=0;i<numprocessthreads;i++)
@@ -520,7 +516,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   f32 bweight;
   float * dsweights = new float[numdatastreams];
   Mode * m1, * m2;
-  s32 *** polycobincounts;
   cf32 * vis1;
   cf32 * vis2;
   cf32 * accumulationvector;
@@ -636,10 +631,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     }
   }
 
-  //grab the bin counts if necessary - not any more
-  //if(procslots[index].pulsarbin)
-  //  polycobincounts = currentpolyco->getBinCounts();
-
   //if we are pulsar binning, do the necessary scaling (from scratch space to results if scrunching, otherwise in-place)
   if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
   {
@@ -678,23 +669,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
           threadresults[resultindex + nyquistchannel].im = baselineweight;
           resultindex += procslots[index].numchannels+1;
         }
-        /*else
-        {
-          for(int k=0;k<procslots[index].numpulsarbins;k++)
-          {
-            for(int l=0;l<config->getBNumPolProducts(procslots[index].configindex,i,j);l++)
-            {
-              //Scale the bin
-              status = vectorMulC_f32_I((f32)(binweights[k]), (f32*)(&(threadresults[resultindex])), 2*procslots[index].numchannels+2);
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to scale pulsar binned (non-scrunched) results!!!" << endl;
-              if(k==0)
-                //renormalise the weight
-                threadresults[resultindex + nyquistchannel].im /= binweights[k];
-              resultindex += procslots[index].numchannels+1;
-            }
-          }
-        }*/
       }
     }
   }
@@ -709,21 +683,17 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     for (int i=0;i<numdatastreams;i++) {
       starecord->antId = i;
       for (int j=0;j<config->getDNumInputBands(procslots[index].configindex, i);j++) {
-        //cout << "Doing band " << j << " of datastream " << i << endl;
         starecord->bandId = j;
         int nyquistoffset = (config->getFreqTableLowerSideband(config->getDFreqIndex(procslots[index].configindex, i, j)))?1:0;
         acdata = (f32*)(modes[i]->getAutocorrelation(false, j));
         for (int k=0;k<starecord->nChan;k++) {
-          //cout << "Doing channel " << k << endl;
           starecord->data[k] = acdata[2*(k*channelinc + nyquistoffset)];
           for (int l=1;l<channelinc;l++)
             starecord->data[k] += acdata[2*(k*channelinc+l+nyquistoffset)];
         }
-        //cout << "About to send the binary message" << endl;
         difxMessageSendBinary((const char *)starecord, BINARY_STA, sizeof(DifxMessageSTARecord) + sizeof(f32)*config->getSTADumpChannels());
       }
     }
-    //cout << "Finished doing some STA stuff" << endl;
   }
 
   //lock the thread "copy" lock, meaning we're the only one adding to the result array
@@ -760,9 +730,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       }
     }
   }
-  //clear the bin count if necessary - NO LONGER NECESSARY
-  //if(config->pulsarBinOn(procslots[index].configindex))
-  //  currentpolyco->incrementBinCount();
 
   //unlock the copy lock
   perr = pthread_mutex_unlock(&(procslots[index].copylock));
@@ -878,7 +845,6 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
       //if we are not the first thread, create a copy of the Polyco for our use
       polycos[i] = (threadid==0)?currentpolycos[i]:new Polyco(*currentpolycos[i]);
     }
-    // cinfo << startl << "Core " << mpiid << " thread " << threadid << ": polycos created/copied successfully!"  << endl;
 
     //create the bins array
     *bins = new s32*[maxfreqs];

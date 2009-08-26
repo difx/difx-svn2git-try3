@@ -565,10 +565,13 @@ void Visibility::writedata()
       autocorrweights[i][j] = results[skip+count+nyquistchannel].im/fftsperintegration;
       results[skip+count+nyquistchannel].im = 0.0;
       
-      //work out the band average, for use in calibration (allows us to calculate fractional correlation)
-      status = vectorMean_cf32(&results[skip + count], numchannels+1, &autocorrcalibs[i][j], vecAlgHintFast);
-      if(status != vecNoErr)
-        csevere << startl << "Error in getting average of autocorrelation!!!" << status << endl;
+      //if needed, work out the band average for use in calibration (allows us to calculate fractional correlation)
+      if(config->getDTsys(currentconfigindex, i) > 0.0)
+      {
+        status = vectorMean_cf32(&results[skip + count], numchannels+1, &autocorrcalibs[i][j], vecAlgHintFast);
+        if(status != vecNoErr)
+          csevere << startl << "Error in getting average of autocorrelation!!!" << status << endl;
+      }
       count += numchannels + 1;
     }
     if(config->writeAutoCorrs(currentconfigindex) && autocorrincrement > 1)  { 
@@ -638,29 +641,37 @@ void Visibility::writedata()
         for(int k=0;k<config->getDNumOutputBands(currentconfigindex, i); k++) //for each band
         {
           //calibrate the data
-          divisor = sqrt(autocorrcalibs[i][k].re*autocorrcalibs[i][(j==0)?k:config->getDMatchingBand(currentconfigindex, i, k)].re);
-          if(divisor > 0.0)
+          if(config->getDTsys(currentconfigindex, i) > 0.0)
           {
-            scale = config->getDTsys(currentconfigindex, i)/divisor;
-	    if(scale > 0.0)
-	    {
-              status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(numchannels+1));
-              if(status != vecNoErr)
-                csevere << startl << "Error trying to amplitude calibrate the datastream data!!!" << endl;
+            //we want to calibrate "online" with a-priori tsys and band average of autocorrelations
+            divisor = sqrt(autocorrcalibs[i][k].re*autocorrcalibs[i][(j==0)?k:config->getDMatchingBand(currentconfigindex, i, k)].re);
+            if(divisor > 0.0)
+            {
+              scale = config->getDTsys(currentconfigindex, i)/divisor;
             }
             else
             {
-              //We want normalised correlation coefficients, so scale by number of contributing            
-              //samples rather than datastream tsys and decorrelation correction            
-              if(autocorrweights[i][k+j*config->getDNumOutputBands(currentconfigindex, i)] > 0.0)
-              {
-                //scale = 1.0/(((float)(subintsthisintegration))*((float)(config->getBlocksPerSend(currentconfigindex)*2*numchannels)));
-                scale = 1.0/(autocorrweights[i][k+j*config->getDNumOutputBands(currentconfigindex, i)]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*numchannels)));
-                status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(numchannels+1));
-                if(status != vecNoErr)
-                  csevere << startl << "Error trying to amplitude calibrate the datastream data for the correlation coefficient case!!!" << endl;
-              }
+              scale = 0.0;
             }
+          }
+          else
+          {
+            //We want normalised correlation coefficients, so scale by number of contributing
+            //samples rather than datastream tsys and decorrelation correction
+            if(autocorrweights[i][k+j*config->getDNumOutputBands(currentconfigindex, i)] > 0.0)
+            {
+              scale = 1.0/(autocorrweights[i][k+j*config->getDNumOutputBands(currentconfigindex, i)]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*numchannels)));
+            }
+            else
+            {
+              scale = 0.0;
+            }
+          }
+          if(scale > 0.0) //only bother scaling if there is data to scale
+          {
+            status = vectorMulC_f32_I(scale, (f32*)(&(results[count])), 2*(numchannels+1));
+            if(status != vecNoErr)
+              csevere << startl << "Error trying to amplitude calibrate the datastream data!!!" << endl;
           }
           count += numchannels+1;
         }
