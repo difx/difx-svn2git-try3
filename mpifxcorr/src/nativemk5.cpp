@@ -439,8 +439,8 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	/* All reads of a module must be 64 bit aligned */
 	bytes = readbytes;
 	start = readpointer;
-	data = buf = (unsigned long *)&databuffer[(buffersegment*bufferbytes)/
-		numdatasegments];
+	data = buf = (unsigned long *)&databuffer[buffersegment*(bufferbytes/
+		numdatasegments)];
 	if(start & 4)
 	{
 		start += 4;
