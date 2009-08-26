@@ -973,20 +973,22 @@ void Visibility::writedifx()
         {
           config->getBPolPair(currentconfigindex, i, j, k, polpair);
 
-          //open the file for appending in ascii and write the ascii header
-          output.open(filename, ios::app);
-          writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][b][k], buvw);
+          if(baselineweights[i][j][b][k] > 0.0)
+	  {
+            //open the file for appending in ascii and write the ascii header
+            output.open(filename, ios::app);
+            writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, baselineweights[i][j][b][k], buvw);
 
-          //close, reopen in binary and write the binary data, then close again
-          output.close();
-          output.open(filename, ios::app|ios::binary);
-          //For both USB and LSB data, the Nyquist channel is excised.  Thus, the numchannels that are written out represent the
-          //the valid part of the band in both cases, and run from lowest frequency to highest frequency in both cases.  For USB
-          //data, the first channel is the DC - for LSB data, the last channel is the DC
-          output.write((char*)(results + (count*(numchannels+1)) + lsboffset), numchannels*sizeof(cf32));
-          output.close();
-
-          count++;
+            //close, reopen in binary and write the binary data, then close again
+            output.close();
+            output.open(filename, ios::app|ios::binary);
+            //For both USB and LSB data, the Nyquist channel is excised.  Thus, the numchannels that are written out represent the
+            //the valid part of the band in both cases, and run from lowest frequency to highest frequency in both cases.  For USB
+            //data, the first channel is the DC - for LSB data, the last channel is the DC
+            output.write((char*)(results + (count*(numchannels+1)) + lsboffset), numchannels*sizeof(cf32));
+            output.close();
+	  }
+	  count++;
         }
       }
     }
@@ -1020,16 +1022,19 @@ void Visibility::writedifx()
           {
             if(datastreampolbandoffsets[i][j][k] >= 0)
             {
-              //open, write the header and close
-              output.open(filename, ios::app);
-              writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polnames[k].c_str(), 0, 0, autocorrweights[i][datastreampolbandoffsets[i][j][k]], buvw);
-              output.close();
+	      if(autocorrweights[i][datastreampolbandoffsets[i][j][k]] > 0.0)
+              {
+                //open, write the header and close
+                output.open(filename, ios::app);
+                writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polnames[k].c_str(), 0, 0, autocorrweights[i][datastreampolbandoffsets[i][j][k]], buvw);
+                output.close();
 
-              //open, write the binary data and close
-              output.open(filename, ios::app|ios::binary);
-              //see baseline writing section for description of treatment of USB/LSB data and the Nyquist channel
-              output.write((char*)(results + lsboffset + (count+datastreampolbandoffsets[i][j][k])*(numchannels+1)), numchannels*sizeof(cf32));
-              output.close();
+                //open, write the binary data and close
+                output.open(filename, ios::app|ios::binary);
+                //see baseline writing section for description of treatment of USB/LSB data and the Nyquist channel
+                output.write((char*)(results + lsboffset + (count+datastreampolbandoffsets[i][j][k])*(numchannels+1)), numchannels*sizeof(cf32));
+                output.close();
+              }
             }
           }
         }

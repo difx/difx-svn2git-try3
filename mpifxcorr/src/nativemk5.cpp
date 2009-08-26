@@ -250,7 +250,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 	{
 		doUpdate = 1;
 		cinfo << startl << "getting module info" << endl;
-		v = getCachedMark5Module(&module, xlrDevice, corrstartday, 
+		v = getCachedMark5Module(&module, &xlrDevice, corrstartday, 
 			datafilenames[configindex][fileindex].c_str(), 
 			mk5dirpath, &dirCallback, &mk5status, 0);
 
