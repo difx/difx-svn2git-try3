@@ -37,7 +37,7 @@ Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedb
     // since we allocated the max amount of space needed above, we need to change
     // this to the number actually needed.
     unpacksamples = recordedbandchan*2;
-  
+    this->framesamples = framesamples;
     samplestounpack = recordedbandchan*2;
     if(fanout > 1)
       samplestounpack += fanout;
