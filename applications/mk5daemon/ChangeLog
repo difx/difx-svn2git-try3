@@ -57,3 +57,8 @@ Version 0.9
 Version 1.0
 ~~~~~~~~~~~
 * Version for DiFX-1.5
+
+Version 1.1
+~~~~~~~~~~~
+* XLRClose / XLROpen after XLRSelectBank to prevent read errors
+* add checkdir

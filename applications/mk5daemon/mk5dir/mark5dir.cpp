@@ -1,14 +1,32 @@
+
 /***************************************************************************
- *   Copyright (C) 2007 by Walter Brisken                                  *
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
  *                                                                         *
- *   This program is free for non-commercial use: see the license file     *
- *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
- *   details.                                                              *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.                  *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id:$
+ * $HeadURL:$
+ * $LastChangedRevision:$
+ * $Author:$
+ * $LastChangedDate:$
+ *
+ *==========================================================================*/
 
 
 #include <iostream>
@@ -32,13 +50,13 @@ char Mark5DirDescription[][20] =
 };
 
 /* returns active bank, or -1 if none */
-int Mark5BankGet(SSHANDLE xlrDevice)
+int Mark5BankGet(SSHANDLE *xlrDevice)
 {
 	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
 	int b = -1;
 
-	xlrRC = XLRGetBankStatus(xlrDevice, BANK_A, &bank_stat);
+	xlrRC = XLRGetBankStatus(*xlrDevice, BANK_A, &bank_stat);
 	if(xlrRC == XLR_SUCCESS)
 	{
 		if(bank_stat.Selected)
@@ -48,7 +66,7 @@ int Mark5BankGet(SSHANDLE xlrDevice)
 	}
 	if(b == -1)
 	{
-		xlrRC = XLRGetBankStatus(xlrDevice, BANK_B, &bank_stat);
+		xlrRC = XLRGetBankStatus(*xlrDevice, BANK_B, &bank_stat);
 		if(xlrRC == XLR_SUCCESS)
 		{
 			if(bank_stat.Selected)
@@ -62,34 +80,35 @@ int Mark5BankGet(SSHANDLE xlrDevice)
 }
 
 /* returns 0 or 1 for bank A or B, or < 0 if module not found */
-int Mark5BankSetByVSN(SSHANDLE xlrDevice, const char *vsn)
+int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 {
 	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
 	int b = -1;
 
-	xlrRC = XLRGetBankStatus(xlrDevice, BANK_A, &bank_stat);
+	xlrRC = XLRGetBankStatus(*xlrDevice, BANK_A, &bank_stat);
 	if(xlrRC == XLR_SUCCESS)
 	{
 		if(strncasecmp(bank_stat.Label, vsn, 8) == 0)
 		{
 			b = 0;
-			xlrRC = XLRSelectBank(xlrDevice, BANK_A);
+			xlrRC = XLRSelectBank(*xlrDevice, BANK_A);
 			if(xlrRC != XLR_SUCCESS)
 			{
 				b = -2;
 			}
 		}
 	}
+
 	if(b == -1)
 	{
-		xlrRC = XLRGetBankStatus(xlrDevice, BANK_B, &bank_stat);
+		xlrRC = XLRGetBankStatus(*xlrDevice, BANK_B, &bank_stat);
 		if(xlrRC == XLR_SUCCESS)
 		{
 			if(strncasecmp(bank_stat.Label, vsn, 8) == 0)
 			{
 				b = 1;
-				xlrRC = XLRSelectBank(xlrDevice, BANK_B);
+				xlrRC = XLRSelectBank(*xlrDevice, BANK_B);
 				if(xlrRC != XLR_SUCCESS)
 				{
 					b = -3;
@@ -98,10 +117,19 @@ int Mark5BankSetByVSN(SSHANDLE xlrDevice, const char *vsn)
 		}
 	}
 
+	/* Close and Open the XLR device after a bank change -- a workaround to 
+	 * a streamstor bug */
+	XLRClose(*xlrDevice);
+	xlrRC = XLROpen(1, xlrDevice);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		b = -4;
+	}
+
 	return b;
 }
 
-static int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mjdref, 
+static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int mjdref, 
 	int (*callback)(int, int, int, void *), void *data, float *replacedFrac)
 {
 	XLR_RETURN_CODE xlrRC;
@@ -128,20 +156,20 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mj
 		return -1;
 	}
 
-	xlrRC = XLRGetLabel(xlrDevice, label);
+	xlrRC = XLRGetLabel(*xlrDevice, label);
 	if(xlrRC != XLR_SUCCESS)
 	{
 		return -1;
 	}
 	label[8] = 0;
 
-	len = XLRGetUserDirLength(xlrDevice);
+	len = XLRGetUserDirLength(*xlrDevice);
 	if(len < (signed int)sizeof(struct Mark5Directory))
 	{
 		return -1;
 	}
 
-	xlrRC = XLRGetUserDir(xlrDevice, sizeof(struct Mark5Directory), 
+	xlrRC = XLRGetUserDir(*xlrDevice, sizeof(struct Mark5Directory), 
 		0, &m5dir);
 	if(xlrRC != XLR_SUCCESS)
 	{
@@ -207,7 +235,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, int mj
 		a = scan->start>>32;
 		b = scan->start % (1LL<<32);
 
-		xlrRC = XLRReadData(xlrDevice, buffer, a, b, bufferlen);
+		xlrRC = XLRReadData(*xlrDevice, buffer, a, b, bufferlen);
 
 		countReplaced(buffer, bufferlen/4, &wGood, &wBad);
 
@@ -465,7 +493,7 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 /* retrieves directory (either from cache or module) and makes sure
  * desired module is the active one.  On any failure return < 0 
  */
-int getCachedMark5Module(struct Mark5Module *module, SSHANDLE xlrDevice, 
+int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
 	int (*callback)(int, int, int, void *), void *data,
 	float *replacedFrac)
