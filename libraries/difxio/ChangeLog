@@ -5,6 +5,9 @@
 * Fix for parsing of .flag file.  
 * Start some infrastructure for supporting proper flagging in cases of partially 
   overlapping scans
+* Add difxcalculator under utils.  This is an implementation of 
+  http://cira.ivec.org/dokuwiki/lib/exe/fetch.php/difx/difx_calculator.xls
+  as a stand-alone program
 
 2.10
 * Deallocation option of function DifxBaselineAllocPolProds()

@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: testdifxinput.c 797 2008-09-15 13:48:56Z WalterBrisken $
- * $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/mark5access/mark5_stream.c $
- * $LastChangedRevision: 797 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2008-09-15 07:48:56 -0600 (Mon, 15 Sep 2008) $
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 
@@ -54,6 +54,7 @@ int main(int argc, char **argv)
 	double basebandMessageSize;
 	double basebandReadSize, coreInputRatio, coreOutputRatio, coreInputRate;
 	double coreOutputRate, manInputRate, diskDataRate, datasetSize;
+	double databufferDur, managerSlack, tSubint, corebufferDur, subintsPerInt;
 	int visSize;
 	double dsBufferSize;	
 	double modeSize, coreSize, manSize;
@@ -127,6 +128,7 @@ int main(int argc, char **argv)
 		}
 		nc = 0;
 		nPpB /= nPol;
+		bandwidth = 0.0;
 		for(i = 0; i < config->nDatastream; i++)
 		{
 			ds = config->datastreamId[i];
@@ -205,6 +207,21 @@ int main(int argc, char **argv)
 		printf("Size of a Mode (MB)       %5.3f\n", modeSize);
 		printf("Core memory usage (MB)    %5.3f\n", coreSize);
 		printf("Manager mem usage (MB)    %5.3f\n", manSize);
+
+		databufferDur = dsBufferSize*8/recDataRate;
+		managerSlack = visLength*tInt/2.0;
+		tSubint = 1000.0/(recDataRate/(8.0*basebandMessageSize*1.024*1.024));
+		corebufferDur = nCore*4.0*tSubint/1000.0;
+		subintsPerInt = tInt/(tSubint/1000.0);
+
+		printf("\n");
+		printf("TIMES                     VALUE        NOTE\n");
+		printf("DS buffer dur. (sec)      %5.3f\n", databufferDur);
+		printf("Manager slack (sec)       %5.3f\n", managerSlack);
+		printf("Subint time (ms)          %5.3f\n", tSubint);
+		printf("Core buffer dur. (sec)    %5.3f\n", corebufferDur);
+		printf("Subints. per int.         %5.3f\n", subintsPerInt);
+		printf("\n");
 	}
 
 	deleteDifxInput(D);
