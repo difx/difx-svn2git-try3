@@ -76,6 +76,7 @@ public:
   inline int getEstimatedBytes() { return estimatedbytes; }
   inline int getVisBufferLength() { return visbufferlength; }
   inline bool consistencyOK() {return consistencyok; }
+  inline int getArrayStrideLength(int configindex) { return configs[configindex].arraystridelen; }
   inline int getResultLength(int configindex) { return configresultlengths[configindex]; }
   inline int getPostavResultLength(int configindex) { return configpostavresultlengths[configindex]; }
   inline int getMaxResultLength() { return maxresultlength; }

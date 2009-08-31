@@ -276,7 +276,7 @@ int Core::getEstimatedBytes()
 
 void Core::loopprocess(int threadid)
 {
-  int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos, maxbins, maxchan, maxpolycos, stadumpchannels;
+  int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos, maxbins, maxchan, maxpolycos, stadumpchannels, strideplussteplen, maxstrideplussteplength;
   double sec;
   bool pulsarbin, somepulsarbin, somescrunch, dumpingsta, nowdumpingsta;
   processslot * currentslot;
@@ -302,10 +302,18 @@ void Core::loopprocess(int threadid)
   maxpolycos = 0;
   maxchan = config->getMaxNumChannels();
   maxbins = config->getMaxNumPulsarBins();
-  scratchspace->rotator = vectorAlloc_cf32(maxchan);
+  maxstrideplussteplength = config->getArrayStrideLength(0) + maxchan/config->getArrayStrideLength(0);
+  for(int i=1;i<config->getNumConfigs();i++)
+  {
+    strideplussteplen = config->getArrayStrideLength(i) + maxchan/config->getArrayStrideLength(i);
+    if(strideplussteplen > maxstrideplussteplength)
+      maxstrideplussteplength = strideplussteplen;
+  }
+  scratchspace->chanfreqs = vectorAlloc_f64(maxstrideplussteplength);
+  scratchspace->rotator = vectorAlloc_cf32(maxstrideplussteplength);
   scratchspace->rotated = vectorAlloc_cf32(maxchan);
   scratchspace->channelsums = vectorAlloc_cf32(maxchan);
-  scratchspace->argument = vectorAlloc_f32(3*maxchan);
+  scratchspace->argument = vectorAlloc_f32(3*maxstrideplussteplength);
 
   //work out whether we'll need to do any pulsar binning, and work out the maximum # channels (and # polycos if applicable)
   for(int i=0;i<config->getNumConfigs();i++)
@@ -451,6 +459,7 @@ void Core::loopprocess(int threadid)
   }
   delete [] scratchspace->dsweights;
   vectorFree(scratchspace->threadresults);
+  vectorFree(scratchspace->chanfreqs);
   vectorFree(scratchspace->rotator);
   vectorFree(scratchspace->rotated);
   vectorFree(scratchspace->channelsums);
@@ -919,16 +928,18 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, Polyco * 
 
 void Core::uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, threadscratchspace * scratchspace, int baseline)
 {
-  int status, perr, binloop, srcoffset;
-  int freqindex, freqchannels, nyquistchannel, nyquistoffset, channelinc, sidebandinc;
-  int startchannel, endchannel, atchannel, channelcount, numaverages;
+  int status, perr, binloop, srcoffset, arraystridelength, numstrides, numaverages;
+  int freqindex, freqchannels, nyquistchannel, nyquistoffset, channelinc, strideplusstep;
+  //int startchannel, endchannel, atchannel, channelcount, sidebandinc;
   int antenna1index, antenna2index;
   float baselineweight;
-  double bandwidth, lofrequency, pointingcentredelay1, pointingcentredelay2, applieddelay, turns, edgeturns;
+  double bandwidth, lofrequency, channelbandwidth, stepbandwidth;
+  double pointingcentredelay1, pointingcentredelay2, applieddelay, turns, edgeturns;
   double * phasecentredelay1;
   double * phasecentredelay2;
   cf32* srcpointer;
 
+  arraystridelength = config->getArrayStrideLength(procslots[index].configindex);
   binloop = 1;
   if(procslots[index].pulsarbin)
     binloop = procslots[index].numpulsarbins;
@@ -963,24 +974,45 @@ void Core::uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, t
     bandwidth = config->getFreqTableBandwidth(freqindex);
     lofrequency = config->getFreqTableFreq(freqindex);
     numaverages = freqchannels/channelinc;
-    sidebandinc = 1;
-    startchannel = 0;
+    //sidebandinc = 1;
+    //startchannel = 0;
     nyquistoffset = 0;
     nyquistchannel = freqchannels;
-    endchannel = freqchannels;
+    //endchannel = freqchannels;
+    channelbandwidth = bandwidth/double(freqchannels);
+    numstrides = freqchannels/arraystridelength;
+    strideplusstep = arraystridelength+numstrides;
+    stepbandwidth = arraystridelength*channelbandwidth;
     if(config->getFreqTableLowerSideband(freqindex))
     {
-      sidebandinc = -1;
-      startchannel = freqchannels;
-      endchannel = 0;
+      //sidebandinc = -1;
+      //startchannel = freqchannels;
+      //endchannel = 0;
       nyquistchannel = 0;
       nyquistoffset = 1;
+    }
+    if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
+    {
+      if(config->getFreqTableLowerSideband(freqindex))
+      {
+        for(int c=0;c<arraystridelength;c++)
+          scratchspace->chanfreqs[c] = -(arraystridelength-(c+1))*channelbandwidth;
+        for(int c=0;c<numstrides;c++)
+          scratchspace->chanfreqs[arraystridelength+c] = -(numstrides-(c+1))*stepbandwidth;
+      }
+      else
+      {
+        for(int c=0;c<arraystridelength;c++)
+          scratchspace->chanfreqs[c] = c*channelbandwidth;
+        for(int c=0;c<numstrides;c++)
+          scratchspace->chanfreqs[arraystridelength+c] = c*stepbandwidth;
+      }
     }
 
     for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
     {
       srcoffset = 0;
-      channelcount = 0;
+      //channelcount = 0;
       if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
       {
         //work out the correct rotator for this frequency and phase centre
@@ -989,17 +1021,29 @@ void Core::uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, t
         {
           edgeturns = applieddelay*lofrequency;
           edgeturns -= floor(edgeturns);
-          for(int r=startchannel;r!=endchannel;r+=sidebandinc)
+          for(int r=0;r<arraystridelength;r++)
           {
-            atchannel = r-nyquistoffset;
-            turns = applieddelay*double(channelcount)*bandwidth/double(freqchannels) + edgeturns;
-            scratchspace->argument[atchannel] = (turns-floor(turns))*TWO_PI;
-            channelcount += sidebandinc;
+            turns = applieddelay*scratchspace->chanfreqs[r] + edgeturns;
+            scratchspace->argument[r] = (turns-floor(turns))*TWO_PI;
           }
-          status = vectorSinCos_f32(scratchspace->argument, &(scratchspace->argument[freqchannels]), &(scratchspace->argument[2*freqchannels]), freqchannels);
+          for(int r=arraystridelength;r<arraystridelength+numstrides;r++)
+          {
+            turns = applieddelay*scratchspace->chanfreqs[r];
+            scratchspace->argument[r] = (turns-floor(turns))*TWO_PI;
+          }
+          //for(int r=startchannel;r!=endchannel;r+=sidebandinc)
+          //{
+          //  atchannel = r-nyquistoffset;
+          //  turns = applieddelay*double(channelcount)*channelbandwidth + edgeturns;
+          //  scratchspace->argument[atchannel] = (turns-floor(turns))*TWO_PI;
+          //  channelcount += sidebandinc;
+          //}
+          //status = vectorSinCos_f32(scratchspace->argument, &(scratchspace->argument[freqchannels]), &(scratchspace->argument[2*freqchannels]), freqchannels);
+          status = vectorSinCos_f32(scratchspace->argument, &(scratchspace->argument[strideplusstep]), &(scratchspace->argument[2*strideplusstep]), strideplusstep);
           if(status != vecNoErr)
             csevere << startl << "Error in phase shift, sin/cos!!!" << status << endl;
-          status = vectorRealToComplex_f32(&(scratchspace->argument[2*freqchannels]), &(scratchspace->argument[freqchannels]), scratchspace->rotator, freqchannels);
+          //status = vectorRealToComplex_f32(&(scratchspace->argument[2*freqchannels]), &(scratchspace->argument[freqchannels]), scratchspace->rotator, freqchannels);
+          status = vectorRealToComplex_f32(&(scratchspace->argument[2*strideplusstep]), &(scratchspace->argument[strideplusstep]), scratchspace->rotator, strideplusstep);
           if(status != vecNoErr)
             csevere << startl << "Error in phase shift, real to complex!!!" << status << endl;
         }
@@ -1015,19 +1059,26 @@ void Core::uvshiftAndAverageBaseline(int index, int threadid, double nsoffset, t
           if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1 && fabs(applieddelay) > 1.0e-20)
           {
             if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
-              status = vectorMul_cf32(scratchspace->rotator, &(scratchspace->pulsaraccumspace[baseline][j][0][k][b][nyquistoffset]), scratchspace->rotated, freqchannels);
+              srcpointer = &(scratchspace->pulsaraccumspace[baseline][j][0][k][b][nyquistoffset]);
             else
-              status = vectorMul_cf32(scratchspace->rotator, &(scratchspace->threadresults[scratchspace->resultindex+srcoffset+nyquistoffset]), scratchspace->rotated, freqchannels);
-            if(status != vecNoErr)
-              csevere << startl << "Error in phase shift, multiplication!!!" << status << endl;
+              srcpointer = &(scratchspace->threadresults[scratchspace->resultindex+srcoffset+nyquistoffset]);
+            for(int r=0;r<numstrides;r++)
+            {
+              status = vectorMul_cf32(scratchspace->rotator, &(srcpointer[r*arraystridelength]), &(scratchspace->rotated[r*arraystridelength]), arraystridelength);
+              if(status != vecNoErr)
+                csevere << startl << "Error in phase shift, multiplication1!!!" << status << endl;
+              status = vectorMulC_cf32_I(scratchspace->rotator[arraystridelength+r], &(scratchspace->rotated[r*arraystridelength]), arraystridelength);
+              if(status != vecNoErr)
+                csevere << startl << "Error in phase shift, multiplication2!!!" << status << endl;
+            }
             srcpointer = scratchspace->rotated;
           }
           else
           {
             if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
-              srcpointer = scratchspace->pulsaraccumspace[baseline][j][0][k][b];
+              srcpointer = &(scratchspace->pulsaraccumspace[baseline][j][0][k][b][nyquistoffset]);
             else
-              srcpointer = scratchspace->threadresults + scratchspace->resultindex + srcoffset + nyquistoffset;
+              srcpointer = &(scratchspace->threadresults[scratchspace->resultindex+srcoffset+nyquistoffset]);
           }
 
           //now average (or just copy) from the designated pointer to the main result buffer

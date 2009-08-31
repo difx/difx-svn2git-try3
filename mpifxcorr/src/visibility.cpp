@@ -74,7 +74,7 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, int eseconds, i
 
   //set up the initial time period this Visibility will be responsible for
   offsetns = offsetns + offsetnsperintegration;
-  subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
+  subintsthisintegration = (int)(((long long)(config->getIntTime(currentconfigindex)*1000000000.0))/config->getSubintNS(currentconfigindex));
   if(offsetns > config->getSubintNS(currentconfigindex)/2)
   {
     offsetns -= config->getSubintNS(currentconfigindex)/2;
@@ -168,7 +168,7 @@ void Visibility::updateTime()
   int configindex;
 
   offsetns = offsetns+offsetnsperintegration;
-  subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
+  subintsthisintegration = (int)(((long long)(config->getIntTime(currentconfigindex)*1000000000.0))/config->getSubintNS(currentconfigindex));
   if(offsetns > config->getSubintNS(currentconfigindex)/2)
   {
     offsetns -= config->getSubintNS(currentconfigindex);
@@ -185,7 +185,7 @@ void Visibility::updateTime()
     currentstartseconds = 0;
     currentstartns = 0;
     offsetns = offsetnsperintegration;
-    subintsthisintegration = (int)((((long long)config->getIntTime(currentconfigindex))*1000000000)/config->getSubintNS(currentconfigindex));
+    subintsthisintegration = (int)(((long long)(config->getIntTime(currentconfigindex)*1000000000.0))/config->getSubintNS(currentconfigindex));
     if(offsetns > config->getSubintNS(currentconfigindex)/2)
     {
       offsetns -= config->getSubintNS(currentconfigindex);

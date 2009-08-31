@@ -100,6 +100,7 @@ private:
     s32 ** bins;
     cf32* pulsarscratchspace;
     cf32****** pulsaraccumspace;
+    f64 * chanfreqs;
     cf32 * rotated;
     cf32 * rotator;
     cf32 * channelsums;

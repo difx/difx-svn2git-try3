@@ -394,7 +394,7 @@ void FxManager::receiveData(bool resend)
       extrareceived[sourceid]++;
     }
     if (visindex < 0)
-      cerror << startl << "Error - stale data was received from core " << sourceid << " regarding scan " << subintscan << ", time " << time << " seconds - it will be ignored!!!" << endl;
+      cerror << startl << "Error - stale data was received from core " << sourceid << " regarding scan " << subintscan << ", time " << scantime << " seconds - it will be ignored!!!" << endl;
     else
     {
       //now store the data appropriately - if we have reached sufficient sub-accumulations, release this Visibility so the writing thread can write it out
