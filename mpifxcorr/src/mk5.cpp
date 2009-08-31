@@ -160,7 +160,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   int nbits, nrecordedbands, framebytes, fanout, jumpseconds, currentdsseconds;
   Configuration::dataformat format;
   double bw, bytespersecond;
-  long long dataoffset;
+  long long dataoffset = 0;
 
   format = config->getDataFormat(configindex, streamnum);
   nbits = config->getDNumBits(configindex, streamnum);
@@ -225,9 +225,9 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   syncteststream = new_mark5_stream(new_mark5_stream_unpacker(0), new_mark5_format_generic_from_string(formatname) );
   cverbose << startl << "Value of syncteststream after reopening was " << syncteststream << endl;
 
-  cverbose << startl << "About to seek to byte " << offset << " to get to the first frame" << endl;
+  cverbose << startl << "About to seek to byte " << offset << " plus " << dataoffset << " to get to the first frame" << endl;
 
-  input.seekg(offset + dataoffset);
+  input.seekg(offset + dataoffset, ios_base::cur);
   if (input.peek() == EOF) {
     dataremaining = false;
     input.clear();
@@ -306,7 +306,7 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
             readscan--;
           readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 
-          cinfo << "After regaining sync, the frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
+          cinfo << startl << "After regaining sync, the frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
         }
       }
       delete_mark5_stream(mark5stream);
