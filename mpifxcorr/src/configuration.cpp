@@ -768,6 +768,7 @@ bool Configuration::processConfig(ifstream * input)
     configs[i].fringerotationorder = atoi(line.c_str());
     getinputline(input, &line, "ARRAY STRIDE LEN");
     configs[i].arraystridelen = atoi(line.c_str());
+    configs[i].xmacstridelen = 64; //FIXME should set this properly in input file
     getinputline(input, &line, "WRITE AUTOCORRS");
     configs[i].writeautocorrs = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
     getinputline(input, &line, "PULSAR BINNING");

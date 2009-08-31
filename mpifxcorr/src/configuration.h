@@ -77,6 +77,7 @@ public:
   inline int getVisBufferLength() { return visbufferlength; }
   inline bool consistencyOK() {return consistencyok; }
   inline int getArrayStrideLength(int configindex) { return configs[configindex].arraystridelen; }
+  inline int getXmacStrideLength(int configindex) {return configs[configindex].xmacstridelen; }
   inline int getResultLength(int configindex) { return configresultlengths[configindex]; }
   inline int getPostavResultLength(int configindex) { return configpostavresultlengths[configindex]; }
   inline int getMaxResultLength() { return maxresultlength; }
@@ -501,6 +502,7 @@ private:
     int guardns;
     int fringerotationorder;
     int arraystridelen;
+    int xmacstridelen;
     bool writeautocorrs;
     bool pulsarbin;
     int numpolycos;

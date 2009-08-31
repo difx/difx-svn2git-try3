@@ -543,6 +543,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   int resultindex, copyindex, cindex, ds1index, ds2index, maxproducts, binloop, blockcount, maxblocks, shiftcount;
   int freqchannels, freqindex, channelinc, copylength, copiedchans, safelength, currentlength;
   int nyquistchannel, nyquistoffset;
+  int xmacstridelength, xmacpasses, xmaclen, xmacstart, destbin, destchan;
   double offsetmins, blockns;
   f32 bweight;
   Mode * m1, * m2;
@@ -556,6 +557,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 
   writecrossautocorrs = modes[0]->writeCrossAutoCorrs();
   maxproducts = config->getMaxProducts();
+  xmacstridelength = config->getXmacStrideLength(procslots[index].configindex);
 
   //set up the mode objects that will do the station-based processing
   for(int j=0;j<numdatastreams;j++)
@@ -578,8 +580,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   maxblocks = ((int)(model->getMaxNSBetweenUVShifts(procslots[index].offsets[0])/blockns));
   for(int i=startblock;i<startblock+numblocks;i++)
   {
-    resultindex = 0;
-
     //do the station-based processing for this FFT chunk
     for(int j=0;j<numdatastreams;j++)
     {
@@ -593,76 +593,115 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       currentpolyco->getBins(offsetmins, scratchspace->bins);
     }
 
-    //do the cross multiplication - gets messy for the pulsar binning
-    for(int j=0;j<numbaselines;j++)
+    for(int f=0;f<config->getFreqTableLength();f++)
     {
-      //get the two modes that contribute to this baseline
-      ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
-      ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
-      m1 = modes[ds1index];
-      m2 = modes[ds2index];
-
-      //add the desired results into the resultsbuffer, for each phasecentre/freq/pulsar bin/polarisation pair
-      for(int k=0;k<config->getBNumFreqs(procslots[index].configindex, j);k++)
+      if(config->isFrequencyUsed(procslots[index].configindex, f))
       {
-        freqchannels = config->getFNumChannels(config->getBFreqIndex(procslots[index].configindex, j, k));
-        //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event
-        //that one datastream has USB and the other has LSB
-        nyquistchannel = freqchannels;
-        if(config->getFreqTableLowerSideband(config->getBFreqIndex(procslots[index].configindex, j, k))) {
-          nyquistchannel = 0;
-        }
-
-        //loop through each polarisation for this frequency
-        for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,k);p++)
+        nyquistoffset = (config->getFreqTableLowerSideband(f))?1:0;
+        xmacpasses = config->getFNumChannels(f)/xmacstridelength;
+        if(config->getFNumChannels(f)%xmacstridelength > 0)
+          xmacpasses++;
+        for(int x=0;x<xmacpasses;x++)
         {
-          //get the appropriate arrays to multiply
-          vis1 = m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, k, p));
-          vis2 = m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p));
+          xmacstart = x*xmacstridelength + nyquistoffset;
+          xmaclen = xmacstridelength;
+          if(x == xmacpasses-1)
+            xmaclen = config->getFNumChannels(f) - x*xmacstridelength;
 
-          if(procslots[index].pulsarbin)
+          resultindex = 0;
+          //do the cross multiplication - gets messy for the pulsar binning
+          for(int j=0;j<numbaselines;j++)
           {
-            //multiply into scratch space
-            status = vectorMul_cf32(vis1,vis2, scratchspace->pulsarscratchspace, freqchannels+1);
-            if(status != vecNoErr)
-              csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
+            //get the two modes that contribute to this baseline
+            ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
+            ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
+            m1 = modes[ds1index];
+            m2 = modes[ds2index];
 
-            //if scrunching, add into temp accumulate space, otherwise add into normal space
-            if(procslots[index].scrunchoutput)
+            //add the desired results into the resultsbuffer, for each phasecentre/freq/pulsar bin/polarisation pair
+            for(int k=0;k<config->getBNumFreqs(procslots[index].configindex, j);k++)
             {
-              bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index];
-              for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
+              freqindex = config->getBFreqIndex(procslots[index].configindex, j, k);
+              freqchannels = config->getFNumChannels(freqindex);
+              if(freqindex == f)
               {
-                //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
-                scratchspace->pulsaraccumspace[j][k][0][p][scratchspace->bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].re += scratchspace->pulsarscratchspace[l].re;
-                scratchspace->pulsaraccumspace[j][k][0][p][scratchspace->bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]][l].im += scratchspace->pulsarscratchspace[l].im;
+                //the Nyquist channel referred to here is for the *first* datastream of the baseline, in the event
+                //that one datastream has USB and the other has LSB
+                nyquistchannel = freqchannels;
+                if(config->getFreqTableLowerSideband(freqindex)) {
+                  nyquistchannel = 0;
+                }
+
+                //loop through each polarisation for this frequency
+                for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,k);p++)
+                {
+                  //get the appropriate arrays to multiply
+                  vis1 = &(m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, k, p))[xmacstart]);
+                  vis2 = &(m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p))[xmacstart]);
+
+                  if(procslots[index].pulsarbin)
+                  {
+                    //multiply into scratch space
+                    status = vectorMul_cf32(vis1, vis2, scratchspace->pulsarscratchspace, xmaclen);
+                    if(status != vecNoErr)
+                      csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
+        
+                    //if scrunching, add into temp accumulate space, otherwise add into normal space
+                    if(procslots[index].scrunchoutput)
+                    {
+                      for(int l=0;l<xmaclen;x++)
+                      {
+                        //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
+                        destchan = l+xmacstart;
+                        destbin = scratchspace->bins[freqindex][destchan];
+                        scratchspace->pulsaraccumspace[j][k][0][p][destbin][destchan].re += scratchspace->pulsarscratchspace[l].re;
+                        scratchspace->pulsaraccumspace[j][k][0][p][destbin][destchan].im += scratchspace->pulsarscratchspace[l].im;
+                      }
+                      if(x==0)
+                      {
+                        bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index];
+                        scratchspace->pulsaraccumspace[j][k][0][p][0][nyquistchannel].im += bweight;
+                      }
+                    }
+                    else
+                    {
+                      bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index]/(freqchannels+1);
+                      for(int l=0;l<xmaclen;x++)
+                      {
+                        destchan = l+xmacstart;
+                        cindex = resultindex + (scratchspace->bins[freqindex][destchan]*config->getBNumPolProducts(procslots[index].configindex,j,k) + p)*(freqchannels+1) + destchan;
+                        scratchspace->threadresults[cindex].re += scratchspace->pulsarscratchspace[l].re;
+                        scratchspace->threadresults[cindex].im += scratchspace->pulsarscratchspace[l].im;
+                        scratchspace->threadresults[cindex-destchan+nyquistchannel].im += bweight;
+                      }
+                    }
+                  }
+                  else
+                  {
+                    //not pulsar binning, so this is nice and simple - just cross multiply accumulate
+                    status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadresults[resultindex+xmacstart]), xmaclen);
+                    if(status != vecNoErr)
+                      csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
+                    if(x==0)
+                    {
+                      scratchspace->threadresults[resultindex+nyquistchannel].im += scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index];
+                    }
+                    resultindex += freqchannels+1;
+                  }
+                }
+                if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
+                  //finished all the products of this frequency, so add the requisite increment to resultindex
+                  resultindex += config->getBNumPolProducts(procslots[index].configindex,j,k)*procslots[index].numpulsarbins*(freqchannels+1);
               }
-              scratchspace->pulsaraccumspace[j][k][0][p][0][nyquistchannel].im += bweight;
-            }
-            else
-            {
-              bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index]/(freqchannels+1);
-              for(int l=1-nyquistchannel/freqchannels;l<freqchannels+1-nyquistchannel/freqchannels;l++)
+              else
               {
-                cindex = resultindex + (scratchspace->bins[config->getBFreqIndex(procslots[index].configindex, j, k)][l]*config->getBNumPolProducts(procslots[index].configindex,j,k) + p)*(freqchannels+1) + l;
-                scratchspace->threadresults[cindex].re += scratchspace->pulsarscratchspace[l].re;
-                scratchspace->threadresults[cindex].im += scratchspace->pulsarscratchspace[l].im;
-                scratchspace->threadresults[cindex-l+nyquistchannel].im += bweight;
+                if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
+                  resultindex += config->getBNumPolProducts(procslots[index].configindex,j,k)*procslots[index].numpulsarbins*(freqchannels+1);
+                else
+                  resultindex += config->getBNumPolProducts(procslots[index].configindex,j,k)*(freqchannels+1);
               }
             }
           }
-          else
-          {
-            //not pulsar binning, so this is nice and simple - just cross multiply accumulate
-            status = vectorAddProduct_cf32(&(vis1[1-nyquistchannel/freqchannels]), &(vis2[1-nyquistchannel/freqchannels]), &(scratchspace->threadresults[resultindex+1-nyquistchannel/freqchannels]), freqchannels);
-            if(status != vecNoErr)
-              csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
-            scratchspace->threadresults[resultindex+nyquistchannel].im += scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index];
-            resultindex += freqchannels+1;
-          }
-          if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-            //finished all the products of this frequency, so add the requisite increment to resultindex
-            resultindex += config->getBNumPolProducts(procslots[index].configindex,j,k)*procslots[index].numpulsarbins*(freqchannels+1);
         }
       }
     }
