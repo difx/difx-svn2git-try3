@@ -421,8 +421,8 @@ CalcParams *newCalcParams(const CommandLineOptions *opts)
 
 	p = (CalcParams *)calloc(1, sizeof(CalcParams));
 
-	p->increment = 120;
-	p->order = 5;
+	p->increment = opts->polyInterval;
+	p->order = opts->polyOrder;
 	p->delta = opts->delta;
 
 	strncpy(p->calcServer, opts->calcServer, 31);
