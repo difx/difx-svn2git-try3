@@ -28,10 +28,13 @@
  *==========================================================================*/
 
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <algorithm>
 #include <cmath>
 #include "vextables.h"
+
+const double RAD2ASEC=180.0*3600.0/M_PI;
 
 using namespace std;
 
@@ -43,9 +46,10 @@ const char VexEvent::eventName[][20] =
 	"Scan Stop",
 	"Job Stop",
 	"Observe Stop",
-	"Manual Break",
 	"Record Stop",
 	"Clock Break",
+	"Leap Second",
+	"Manual Break",
 	"Record Start",
 	"Observe Start",
 	"Job Start",
@@ -238,6 +242,37 @@ bool operator == (VexSubband& s1, VexSubband& s2)
 	if(s1.pol != s2.pol) return false;
 
 	return true;
+}
+
+int VexData::sanityCheck()
+{
+	int nWarn = 0;
+
+	if(eops.size() < 5)
+	{
+		cerr << "Warning: Fewer than 5 EOPs specified" << endl;
+		nWarn++;
+	}
+
+	for(vector<VexAntenna>::const_iterator it = antennas.begin(); it != antennas.end(); it++)
+	{
+		if(it->clocks.size() == 0)
+		{
+			cerr << "Warning: no clock values for antenna " << it->name << " ." << endl;
+			nWarn++;
+		}
+	}
+
+	for(vector<VexAntenna>::const_iterator it = antennas.begin(); it != antennas.end(); it++)
+	{
+		if(it->vsns.size() == 0 && it->basebandFiles.size() == 0)
+		{
+			cerr << "Warning: no media specified for antenna " << it->name << " ." << endl;
+			nWarn++;
+		}
+	}
+
+	return nWarn;
 }
 
 VexSource *VexData::newSource()
@@ -509,11 +544,27 @@ void VexJobGroup::genEvents(const list<VexEvent>& eventList)
 	}
 }
 
+bool VexJob::hasScan(const string &scanName) const
+{
+	vector<string>::const_iterator it;
+
+	for(it = scans.begin(); it != scans.end(); it++)
+	{
+		if(*it == scanName)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned int invalidMask) const
 {
 	vector<VexJobFlag> flags;
 	map<string,int> antIds;
 	map<string,string>::const_iterator a;
+	list<VexEvent>::const_iterator e;
 	map<string,VexInterval>::const_iterator sa;
 	int nAnt;
 	ofstream of;
@@ -524,6 +575,7 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		antIds[a->first] = nAnt;
 	}
 
+	// Assume all flags from the start.  
 	vector<unsigned int> flagMask(nAnt, 
 		VexJobFlag::JOB_FLAG_RECORD | 
 		VexJobFlag::JOB_FLAG_POINT | 
@@ -531,7 +583,7 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		VexJobFlag::JOB_FLAG_SCAN);
 	vector<double> flagStart(nAnt, mjdStart);
 
-	// Don't preset RECORD flag for antennas not on Mark5 Modules
+	// Except -- if not a Mark5 Module case, don't assume RECORD flag is on
 	for(a = vsns.begin(); a != vsns.end(); a++)
 	{
 		const VexAntenna *ant = V.getAntenna(a->first);
@@ -540,8 +592,7 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		{
 			cerr << "Developer error: generateFlagFile: antenna " <<
 				a->first << " not found in antenna table." << endl;
-
-				exit(0);
+			exit(0);
 		}
 
 		if(ant->basebandFiles.size() > 0)
@@ -551,7 +602,8 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		}
 	}
 
-	for(list<VexEvent>::const_iterator e = eventList.begin(); e != eventList.end(); e++)
+	// Then go through each event, adjusting current flag state.  
+	for(e = eventList.begin(); e != eventList.end(); e++)
 	{
 		if(e->eventType == VexEvent::RECORD_START)
 		{
@@ -563,43 +615,55 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		}
 		else if(e->eventType == VexEvent::SCAN_START)
 		{
-			const VexScan *scan = V.getScan(e->name);
+			if(hasScan(e->scan))
+			{
+				const VexScan *scan = V.getScan(e->scan);
 
-			if(!scan)
-			{
-				cerr << "Developer error: generateFlagFile: SCAN_START, scan=0" << endl;
-				exit(0);
-			}
-			for(sa = scan->stations.begin(); sa != scan->stations.end(); sa++)
-			{
-				if(antIds.find(sa->first) == antIds.end())
+				if(!scan)
 				{
-					cerr << "Developer error: generateFlagFile: antenna " << sa->first << " not in antIds" << endl;
+					cerr << "Developer error: generateFlagFile: SCAN_START, scan=0" << endl;
+					exit(0);
 				}
-				flagMask[antIds[sa->first]] &= ~VexJobFlag::JOB_FLAG_SCAN;
+				for(sa = scan->stations.begin(); sa != scan->stations.end(); sa++)
+				{
+					if(antIds.find(sa->first) == antIds.end())
+					{
+						cerr << "Developer error: generateFlagFile: antenna " << sa->first << " not in antIds" << endl;
+					}
+					flagMask[antIds[sa->first]] &= ~VexJobFlag::JOB_FLAG_SCAN;
+				}
 			}
 		}
 		else if(e->eventType == VexEvent::SCAN_STOP)
 		{
-			const VexScan *scan = V.getScan(e->name);
+			if(hasScan(e->scan))
+			{
+				const VexScan *scan = V.getScan(e->scan);
 
-			if(!scan)
-			{
-				cerr << "Developer error! generateFlagFile: SCAN_STOP, scan=0" << endl;
-				exit(0);
-			}
-			for(sa = scan->stations.begin(); sa != scan->stations.end(); sa++)
-			{
-				flagMask[antIds[sa->first]] |= VexJobFlag::JOB_FLAG_SCAN;
+				if(!scan)
+				{
+					cerr << "Developer error! generateFlagFile: SCAN_STOP, scan=0" << endl;
+					exit(0);
+				}
+				for(sa = scan->stations.begin(); sa != scan->stations.end(); sa++)
+				{
+					flagMask[antIds[sa->first]] |= VexJobFlag::JOB_FLAG_SCAN;
+				}
 			}
 		}
 		else if(e->eventType == VexEvent::ANT_SCAN_START)
 		{
-			flagMask[antIds[e->name]] &= ~VexJobFlag::JOB_FLAG_POINT;
+			if(hasScan(e->scan))
+			{
+				flagMask[antIds[e->name]] &= ~VexJobFlag::JOB_FLAG_POINT;
+			}
 		}
 		else if(e->eventType == VexEvent::ANT_SCAN_STOP)
 		{
-			flagMask[antIds[e->name]] |= VexJobFlag::JOB_FLAG_POINT;
+			if(hasScan(e->scan))
+			{
+				flagMask[antIds[e->name]] |= VexJobFlag::JOB_FLAG_POINT;
+			}
 		}
 		else if(e->eventType == VexEvent::JOB_START)
 		{
@@ -613,7 +677,7 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		}
 		else if(e->eventType == VexEvent::JOB_STOP)
 		{
-			if(fabs(e->mjd - mjdStart) < 0.5/86400.0)
+			if(fabs(e->mjd - mjdStop) < 0.5/86400.0)
 			{
 				for(int antId = 0; antId < nAnt; antId++)
 				{
@@ -630,7 +694,12 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 				{
 					if(e->mjd - flagStart[antId] > 0.5/86400.0)
 					{
-						flags.push_back(VexJobFlag(flagStart[antId], e->mjd, antId));
+						VexJobFlag f(flagStart[antId], e->mjd, antId);
+						// only add flag if it overlaps in time with this job
+						if(overlap(f))
+						{
+							flags.push_back(f);
+						}
 					}
 					flagStart[antId] = -1;
 				}
@@ -645,14 +714,19 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		}
 	}
 
-	// add final flags if needed (probably not!)
+	// At end of loop see if any flag->unflag (or vice-versa) occurs.
 	for(int antId = 0; antId < nAnt; antId++)
 	{
 		if( (flagMask[antId] & invalidMask) != 0)
 		{
 			if(mjdStop - flagStart[antId] > 0.5/86400.0)
 			{
-				flags.push_back(VexJobFlag(flagStart[antId], mjdStop, antId));
+				VexJobFlag f(flagStart[antId], mjdStop, antId);
+				// only add flag if it overlaps in time with this job
+				if(overlap(f))
+				{
+					flags.push_back(f);
+				}
 			}
 		}
 	}
@@ -669,7 +743,6 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 	return flags.size();
 }
 
-// FIXME -- this does not allow concurrent scans
 void VexJobGroup::createJobs(vector<VexJob>& jobs, VexInterval& jobTimeRange, const VexData *V, double maxLength, double maxSize) const
 {
 	list<VexEvent>::const_iterator s, e;
@@ -680,7 +753,6 @@ void VexJobGroup::createJobs(vector<VexJob>& jobs, VexInterval& jobTimeRange, co
 	string id("");
 
 	// note these are backwards now -- will set these to minimum range covering scans
-
 	J->setTimeRange(jobTimeRange.mjdStop, jobTimeRange.mjdStart);
 
 	for(e = events.begin(); e != events.end(); e++)
@@ -777,6 +849,40 @@ void VexData::getScanList(list<string> &scanList) const
 	{
 		scanList.push_back(it->name);
 	}
+}
+
+int VexEOP::setkv(const string &key, const string &value)
+{
+	stringstream ss;
+	int nWarn = 0;
+
+	ss << value;
+
+	if(key == "tai_utc")
+	{
+		ss >> tai_utc;
+	}
+	else if(key == "ut1_utc")
+	{
+		ss >> ut1_utc;
+	}
+	else if(key == "xPole")
+	{
+		ss >> xPole;
+		xPole /= RAD2ASEC;
+	}
+	else if(key == "yPole")
+	{
+		ss >> yPole;
+		yPole /= RAD2ASEC;
+	}
+	else
+	{
+		cerr << "Warning: EOP: Unknown parameter '" << key << "'." << endl;
+		nWarn++;
+	}
+
+	return nWarn;
 }
 
 VexAntenna *VexData::newAntenna()
@@ -909,10 +1015,10 @@ string VexData::getVSN(const string& antName, const VexInterval& timeRange) cons
 
 	for(v = A->vsns.begin(); v != A->vsns.end(); v++)
 	{
-		double overlap = timeRange.overlap(*v);
-		if(overlap > best)
+		double timeOverlap = timeRange.overlap(*v);
+		if(timeOverlap > best)
 		{
-			best = overlap;
+			best = timeOverlap;
 			bestVSN = v->name;
 		}
 	}
@@ -975,6 +1081,25 @@ void VexData::addEvent(double mjd, VexEvent::EventType eventType, const string &
 {
 	events.push_back(VexEvent(mjd, eventType, name, scan));
 	events.sort();
+}
+
+void VexData::findLeapSeconds()
+{
+	int n = eops.size();
+
+	if(n < 2)
+	{
+		return;
+	}
+
+	for(int i = 1; i < n; i++)
+	{
+		if(eops[i-1].tai_utc != eops[i].tai_utc)
+		{
+			addEvent(eops[i].mjd, VexEvent::LEAP_SECOND, "Leap second");
+			cout << "Leap second detected at day " << eops[i].mjd << endl;
+		}
+	}
 }
 
 void VexData::addBreaks(const vector<double> &breaks)
@@ -1118,7 +1243,7 @@ ostream& operator << (ostream& os, const VexMode& x)
 
 ostream& operator << (ostream& os, const VexEOP& x)
 {
-	os << "EOP(" << x.mjd << ", " << x.tai_utc << ", " << x.ut1_utc << ", " << x.xPole << ", " << x.yPole << ")";
+	os << "EOP(" << x.mjd << ", " << x.tai_utc << ", " << x.ut1_utc << ", " << (x.xPole*RAD2ASEC) << ", " << (x.yPole*RAD2ASEC) << ")";
 
 	return os;
 }
@@ -1193,7 +1318,7 @@ ostream& operator << (ostream& os, const VexJobFlag& x)
 
 	os.precision(12);
 
-	os << (const VexInterval&)x << " " << x.antId;
+	os << x.mjdStart << " " << x.mjdStop << " " << x.antId;
 
 	os.precision(p);
 

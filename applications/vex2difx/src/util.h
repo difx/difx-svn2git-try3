@@ -21,9 +21,9 @@
  *
  * $Id$
  * $HeadURL$
- * $LastChangedRevision:$
- * $Author:$
- * $LastChangedDate:$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 

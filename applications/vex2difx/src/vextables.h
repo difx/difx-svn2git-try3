@@ -36,6 +36,8 @@
 #include <iostream>
 #include <map>
 
+extern const double RAD2ASEC;
+
 using namespace std;
 
 class VexData;
@@ -52,6 +54,7 @@ public:
 		OBSERVE_STOP,
 		RECORD_STOP,
 		CLOCK_BREAK,
+		LEAP_SECOND,
 		MANUAL_BREAK,
 		RECORD_START,
 		OBSERVE_START,
@@ -179,6 +182,7 @@ public:
 	double sampRate;		// (Hz)
 	vector<VexSubband> subbands;
 	map<string,VexFormat> formats;	// indexed by antenna name
+	list<int> overSamp;		// list of the oversample factors used by this mode
 };
 
 class VexVSN : public VexInterval
@@ -234,6 +238,8 @@ public:
 	double tai_utc;		// seconds
 	double ut1_utc;		// seconds
 	double xPole, yPole;	// radian
+
+	int setkv(const string &key, const string &value);
 };
 
 class VexExper : public VexInterval
@@ -251,6 +257,7 @@ public:
 
 	void assignVSNs(const VexData& V);
 	string getVSN(const string &antName) const;
+	bool hasScan(const string &scanName) const;
 	int generateFlagFile(const VexData& V, const string &fileName, unsigned int invalidMask=0xFFFFFFFF) const;
 
 	// return the approximate number of Operations required to compute this scan
@@ -265,7 +272,7 @@ public:
 	double dataSize;		// [bytes] estimate of data output size
 };
 
-class VexJobFlag
+class VexJobFlag : public VexInterval
 {
 public:
 	static const unsigned int JOB_FLAG_RECORD = 1 << 0;
@@ -273,9 +280,8 @@ public:
 	static const unsigned int JOB_FLAG_TIME   = 1 << 2;
 	static const unsigned int JOB_FLAG_SCAN   = 1 << 3;
 	VexJobFlag() {}
-	VexJobFlag(double start, double stop, int ant) : timeRange(start, stop), antId(ant) {}
+	VexJobFlag(double start, double stop, int ant) : VexInterval(start, stop), antId(ant) {}
 
-	VexInterval timeRange;
 	int antId;
 };
 
@@ -306,11 +312,14 @@ private:
 	string directory;
 
 public:
+	int sanityCheck();
+
 	VexSource *newSource();
 	VexScan *newScan();
 	VexMode *newMode();
 	VexAntenna *newAntenna();
 	VexEOP *newEOP();
+	void findLeapSeconds();
 	void addBreaks(const vector<double> &breaks);
 
 	double obsStart() const

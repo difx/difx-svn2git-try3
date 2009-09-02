@@ -115,7 +115,7 @@ static int getRecordChannel(const string chanName, const map<string,Tracks>& ch2
 
 		return (track-2)/delta;
 	}
-	else if(F.format == "S2")
+	else if(F.format == "S2" || F.format == "LBASTD" || F.format == "LBAVSOP")
 	{
 		return n;
 	}
@@ -190,11 +190,6 @@ int getAntennas(VexData *V, Vex *v, const CorrParams& params)
 			fvex_double(&(p->x->value), &(p->x->units), &A->dx);
 			fvex_double(&(p->y->value), &(p->y->units), &A->dy);
 			fvex_double(&(p->z->value), &(p->z->units), &A->dz);
-
-			// Correct for various definitions of year: yr_vex = 365.2524  yr_goddard=365.25
-			A->dx *= (365.25/365.2425);
-			A->dy *= (365.25/365.2425);
-			A->dz *= (365.25/365.2425);
 		}
 		else
 		{
@@ -329,6 +324,71 @@ int getSources(VexData *V, Vex *v, const CorrParams& params)
 	return 0;
 }
 
+static VexInterval adjustTimeRange(map<string, double> &antStart, map<string, double> &antStop, int minSubarraySize)
+{
+	list<double> start;
+	list<double> stop;
+	map<string, double>::iterator it;
+	double mjdStart, mjdStop;
+
+	if(antStart.size() != antStop.size())
+	{
+		cerr << "Developer error: adjustTimeRange: size mismatch" << endl;
+		exit(0);
+	}
+
+	if(antStart.size() < minSubarraySize)
+	{
+		// Return an acausal interval
+		return VexInterval(1, 0);
+	}
+
+	for(it = antStart.begin(); it != antStart.end(); it++)
+	{
+		start.push_back(it->second);
+	}
+	start.sort();
+	// Now the start times are sorted chronologically
+
+	for(it = antStop.begin(); it != antStop.end(); it++)
+	{
+		stop.push_back(it->second);
+	}
+	stop.sort();
+	// Now stop times are sorted chronologically
+
+	// Pick off times where min subarray condition is met
+	// If these are in the wrong order (i.e., no such interval exists)
+	// Then these will form an acausal interval which will be caught by
+	// the caller.
+	for(int i = 0; i < minSubarraySize-1; i++)
+	{
+		start.pop_front();
+		stop.pop_back();
+	}
+	mjdStart = start.front();
+	mjdStop = stop.back();
+
+	// Adjust start times where needed
+	for(it = antStart.begin(); it != antStart.end(); it++)
+	{
+		if(it->second < mjdStart)
+		{
+			it->second = mjdStart;
+		}
+	}
+
+	for(it = antStop.begin(); it != antStop.end(); it++)
+	{
+		if(it->second > mjdStop)
+		{
+			it->second = mjdStop;
+		}
+	}
+
+	return VexInterval(mjdStart, mjdStop);
+}
+
 int getScans(VexData *V, Vex *v, const CorrParams& params)
 {
 	VexScan *S;
@@ -397,6 +457,16 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 			continue;
 		}
 
+		// Adjust start and stop times so that the minimum subarray size is
+		// always honored.  The return value becomes
+		VexInterval timeRange = adjustTimeRange(antStart, antStop, params.minSubarraySize);
+
+		// If the min subarray condition never occurs, then skip the scan
+		if(!timeRange.isCausal())
+		{
+			continue;
+		}
+
 		string scanName(scanId);
 		string sourceName((char *)get_scan_source(L));
 		string modeName((char *)get_scan_mode(L));
@@ -438,7 +508,7 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 
 		// Make scan
 		S = V->newScan();
-		S->setTimeRange(startScan, stopScan);
+		S->setTimeRange(timeRange);
 		S->name = scanName;
 		S->stations = stations;
 		S->modeName = modeName;
@@ -446,8 +516,8 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 		S->corrSetupName = corrSetupName;
 
 		// Add to event list
-		V->addEvent(startScan, VexEvent::SCAN_START, scanId, scanId);
-		V->addEvent(stopScan,  VexEvent::SCAN_STOP,  scanId, scanId);
+		V->addEvent(S->mjdStart, VexEvent::SCAN_START, scanId, scanId);
+		V->addEvent(S->mjdStop,  VexEvent::SCAN_STOP,  scanId, scanId);
 		for(it = antStart.begin(); it != antStart.end(); it++)
 		{
 			V->addEvent(max(it->second, startScan), VexEvent::ANT_SCAN_START, it->first, scanId);
@@ -518,6 +588,12 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 			antennaSetup = params.getAntennaSetup(antName2);
 			if(antennaSetup)
 			{
+				if(antennaSetup->format.size() > 0)
+				{
+					cout << "Setting antenna format to " << 
+						antennaSetup->format << 
+				        	 " for antenna " << antName << endl;
+				}
 				F.format = antennaSetup->format;
 			}
 
@@ -646,7 +722,10 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 
 				vex_field(T_S2_RECORDING_MODE, p, 1, &link, &name, &value, &units);
 				string s2mode(value);
-				F.format = "S2";
+				if(F.format == "")
+				{
+					F.format = "S2";
+				}
 
 				f = s2mode.find_last_of("x");
 				g = s2mode.find_last_of("-");
@@ -685,7 +764,7 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 
 				vex_field(T_CHAN_DEF, p, 5, &link, &name, &value, &units);
 				recChanId = getRecordChannel(value, ch2tracks, F, i);
-				//cerr << "Track map: " << value << " -> " << recChanId << endl;
+
 				if(recChanId >= 0)
 				{
 					F.ifs.push_back(VexIF());
@@ -701,6 +780,29 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 				cerr << "Warning: nchan=" << i << " != F.nRecordChan=" << F.nRecordChan << endl;
 			}
 		}
+
+		for(vector<VexSubband>::iterator it = M->subbands.begin(); it != M->subbands.end(); it++)
+		{
+			int overSamp = static_cast<int>(M->sampRate/(2.0*it->bandwidth) + 0.001);
+			if(params.overSamp > 0)
+			{
+				if(params.overSamp > overSamp)
+				{
+					cerr << "Warning: Mode " << M->name << " subband " << M->overSamp.size() << 
+						": requested oversample factor " << params.overSamp << 
+						" is greater than the observed oversample factor " << overSamp << endl;
+				}
+				overSamp = params.overSamp;
+			}
+			else if(overSamp > 8)
+			{
+				overSamp = 8;
+			}
+	
+			M->overSamp.push_back(overSamp);
+		}
+		M->overSamp.sort();
+		M->overSamp.unique();
 	}
 
 	return 0;
@@ -830,74 +932,80 @@ int getEOPs(VexData *V, Vex *v, const CorrParams& params)
 
 	block = find_block(B_EOP, v);
 
-	if(!block)
+	if(block)
 	{
-		return -1;
+		for(defs=((struct block *)block->ptr)->items;
+		    defs;
+		    defs=defs->next)
+		{
+			statement = ((Lowl *)defs->ptr)->statement;
+			if(statement == T_COMMENT || statement == T_COMMENT_TRAILING)
+			{
+				continue;
+			}
+			if(statement != T_DEF)
+			{
+				break;
+			}
+
+			refs = ((Def *)((Lowl *)defs->ptr)->item)->refs;
+
+			lowls = find_lowl(refs, T_TAI_UTC);
+			r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
+			fvex_double(&r->value, &r->units, &tai_utc);
+
+			lowls = find_lowl(refs, T_EOP_REF_EPOCH);
+			p = (((Lowl *)lowls->ptr)->item);
+			refEpoch = vexDate((char *)p);
+
+			lowls = find_lowl(refs, T_NUM_EOP_POINTS);
+			r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
+			nEop = atoi(r->value);
+			N += nEop;
+
+			lowls = find_lowl(refs, T_EOP_INTERVAL);
+			r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
+			fvex_double(&r->value, &r->units, &interval);
+
+			for(int i = 0; i < nEop; i++)
+			{	
+				lowls = find_lowl(refs, T_UT1_UTC);
+				vex_field(T_UT1_UTC, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
+				fvex_double(&value, &units, &ut1_utc);
+
+				lowls = find_lowl(refs, T_X_WOBBLE);
+				vex_field(T_X_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
+				fvex_double(&value, &units, &x_wobble);
+
+				lowls = find_lowl(refs, T_Y_WOBBLE);
+				vex_field(T_Y_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
+				fvex_double(&value, &units, &y_wobble);
+
+				E = V->newEOP();
+				E->mjd = refEpoch + i*interval/86400.0;
+				E->tai_utc = tai_utc;
+				E->ut1_utc = ut1_utc;
+				E->xPole = x_wobble;
+				E->yPole = y_wobble;
+			}
+		}
 	}
 
-	for(defs=((struct block *)block->ptr)->items;
-	    defs;
-	    defs=defs->next)
+	if(params.eops.size() > 0)
 	{
-		statement = ((Lowl *)defs->ptr)->statement;
-		if(statement == T_COMMENT || statement == T_COMMENT_TRAILING)
+		if(N > 0)
 		{
-			continue;
+			cerr << "Warning: Mixing EOP values from vex and v2d files.  Your mileage may vary!" << endl;
 		}
-		if(statement != T_DEF)
+		for(vector<VexEOP>::const_iterator e = params.eops.begin(); e != params.eops.end(); e++)
 		{
-			break;
-		}
-
-		refs = ((Def *)((Lowl *)defs->ptr)->item)->refs;
-
-		lowls = find_lowl(refs, T_TAI_UTC);
-		r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
-		fvex_double(&r->value, &r->units, &tai_utc);
-
-		lowls = find_lowl(refs, T_EOP_REF_EPOCH);
-		p = (((Lowl *)lowls->ptr)->item);
-		refEpoch = vexDate((char *)p);
-
-		lowls = find_lowl(refs, T_NUM_EOP_POINTS);
-		r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
-		nEop = atoi(r->value);
-		N += nEop;
-
-		lowls = find_lowl(refs, T_EOP_INTERVAL);
-		r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
-		fvex_double(&r->value, &r->units, &interval);
-
-		for(int i = 0; i < nEop; i++)
-		{	
-			lowls = find_lowl(refs, T_UT1_UTC);
-			vex_field(T_UT1_UTC, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
-			fvex_double(&value, &units, &ut1_utc);
-
-			lowls = find_lowl(refs, T_X_WOBBLE);
-			vex_field(T_X_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
-			fvex_double(&value, &units, &x_wobble);
-
-			lowls = find_lowl(refs, T_Y_WOBBLE);
-			vex_field(T_Y_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
-			fvex_double(&value, &units, &y_wobble);
-
 			E = V->newEOP();
-			E->mjd = refEpoch + i*interval/86400.0;
-			E->tai_utc = tai_utc;
-			E->ut1_utc = ut1_utc;
-			E->xPole = x_wobble;
-			E->yPole = y_wobble;
+			*E = *e;
+			N++;
 		}
 	}
 
-	if(N < 5)
-	{
-		cerr << "Warning: Fewer than 5 EOP values provided." << endl;
-		cerr << "vex2difx will continue, but expect problems downstream." << endl;
-	}
-
-	return 0;
+	return N;
 }
 
 int getExper(VexData *V, Vex *v, const CorrParams& params)
@@ -1006,6 +1114,7 @@ VexData *loadVexFile(const CorrParams& P)
 	getExper(V, v, P);
 
 	calculateScanSizes(V, P);
+	V->findLeapSeconds();
 	V->addBreaks(P.manualBreaks);
 
 	return V;
