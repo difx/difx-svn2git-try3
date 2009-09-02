@@ -1,3 +1,33 @@
+/***************************************************************************
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id: sniffer.c 1417 2009-08-27 23:17:55Z WalterBrisken $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/sniffer.c $
+ * $LastChangedRevision: 1417 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2009-08-27 17:17:55 -0600 (Thu, 27 Aug 2009) $
+ *
+ *==========================================================================*/
+
+
 #include <stdlib.h>
 #include <string.h>
 #include "sniffer.h"
@@ -19,7 +49,8 @@ typedef struct
 
 struct _Sniffer
 {
-	FILE *apd;
+	FILE *apd;	/* amp, phase, dalay (, rate) file */
+	FILE *apc;	/* amp, phase, chan (, rate) file */
 	FILE *wts;
 	FILE *acb;
 	FILE *xcb;
@@ -34,7 +65,8 @@ struct _Sniffer
 	int minInt;
 	int configId;
 	int fftOversample;
-	fftw_plan plan;
+	fftw_plan plan1;
+	fftw_plan plan2;
 	fftw_complex *fftbuffer;
 	int fft_nx, fft_ny;
 	Accumulator **accum;
@@ -203,7 +235,7 @@ Sniffer *newSniffer(const DifxInput *D, int nComplex,
 	}
 	S->solInt = tMax * S->nTime;
 	
-	/* Open fringe fit file */
+	/* Open fringe fit files */
 	sprintf(filename, "%s.apd", filebase);
 	S->apd = fopen(filename, "w");
 	if(!S->apd)
@@ -213,6 +245,16 @@ Sniffer *newSniffer(const DifxInput *D, int nComplex,
 		return 0;
 	}
 	fprintf(S->apd, "%s\n", D->job->obsCode);
+
+	sprintf(filename, "%s.apc", filebase);
+	S->apc = fopen(filename, "w");
+	if(!S->apc)
+	{
+		fprintf(stderr, "Cannot open %s for write\n", filename);
+		deleteSniffer(S);
+		return 0;
+	}
+	fprintf(S->apc, "%s\n", D->job->obsCode);
 
 	/* Open weights file */
 	sprintf(filename, "%s.wts", filebase);
@@ -263,8 +305,18 @@ Sniffer *newSniffer(const DifxInput *D, int nComplex,
 	S->fft_ny = S->fftOversample*S->nTime;
 	S->fftbuffer = (fftw_complex*)fftw_malloc(S->fft_nx*S->fft_ny*
 		sizeof(fftw_complex));
-	S->plan = fftw_plan_dft_2d(S->fft_ny, S->fft_nx, S->fftbuffer,
-		S->fftbuffer, FFTW_FORWARD, FFTW_MEASURE);
+	S->plan1 = fftw_plan_many_dft(1, &(S->fft_ny), S->fft_nx,
+		S->fftbuffer, 0,
+		S->fft_nx, 1,
+		S->fftbuffer, 0,
+		S->fft_nx, 1,
+		FFTW_FORWARD, FFTW_MEASURE);
+	S->plan2 = fftw_plan_many_dft(1, &(S->fft_nx), S->fft_ny,
+		S->fftbuffer, 0,
+		1, S->fft_nx,
+		S->fftbuffer, 0,
+		1, S->fft_nx,
+		FFTW_FORWARD, FFTW_MEASURE);
 
 	return S;
 }
@@ -284,6 +336,11 @@ void deleteSniffer(Sniffer *S)
 		{
 			fclose(S->apd);
 			S->apd = 0;
+		}
+		if(S->apc)
+		{
+			fclose(S->apc);
+			S->apc = 0;
 		}
 		if(S->wts)
 		{
@@ -313,9 +370,13 @@ void deleteSniffer(Sniffer *S)
 		{
 			free(S->fftbuffer);
 		}
-		if(S->plan)
+		if(S->plan1)
 		{
-			fftw_destroy_plan(S->plan);
+			fftw_destroy_plan(S->plan1);
+		}
+		if(S->plan2)
+		{
+			fftw_destroy_plan(S->plan2);
 		}
 		free(S);
 	}
@@ -350,6 +411,8 @@ static int dump(Sniffer *S, Accumulator *A, double mjd)
 	fftw_complex z;
 	double amp2, max2, x, y;
 	double amp, phase, delay, rate;
+	double specAmp, specPhase, specRate;
+	int specChan;
 	double peak[3];
 	double w;
 	char startStr[32], stopStr[32];
@@ -519,12 +582,20 @@ static int dump(Sniffer *S, Accumulator *A, double mjd)
 			S->D->antenna[a2].name,
 			A->nBBC);
 
+		fprintf(S->apc, "%5d %8.5f %2d %-10s %2d %2d %-3s %-3s %2d",
+			(int)mjd, 24.0*(mjd-(int)mjd), A->sourceId+1,
+			S->D->source[A->sourceId].name, a1+1, a2+1,
+			S->D->antenna[a1].name,
+			S->D->antenna[a2].name,
+			A->nBBC);
+
 		for(bbc = 0; bbc < A->nBBC; bbc++)
 		{
 			if(A->nRec[bbc] < S->nTime/2 || 
 			   A->weightSum[bbc] == 0.0)
 			{
 				fprintf(S->apd, " 0 0 0 0");
+				fprintf(S->apc, " 0 0 0 0");
 				continue;
 			}
 			array = A->spectrum[bbc];
@@ -538,7 +609,57 @@ static int dump(Sniffer *S, Accumulator *A, double mjd)
 						array[j][i];
 				}
 			}
-			fftw_execute(S->plan);
+
+			/* First transform in time to form rates.  Here we do
+			 * the spectral line sniffing to look for peak in 
+			 * rate/chan space*/
+			fftw_execute(S->plan1);
+			max2 = 0.0;
+			besti = bestj = 0;
+			for(j = 0; j < S->fft_ny; j++)
+			{
+				for(i = 0; i < S->fft_nx; i++)
+				{
+					z = S->fftbuffer[j*S->fft_nx + i];
+					amp2 = z*~z;
+					if(amp2 > max2)
+					{
+						besti = i;
+						bestj = j;
+						max2 = amp2;
+					}
+				}
+			}
+			z = S->fftbuffer[bestj*S->fft_nx + besti];
+			specAmp = sqrt(max2);
+			specChan = besti;
+			specPhase = (180.0/M_PI)*atan2(cimag(z), creal(z));
+			
+			peak[1] = specAmp;
+			if(bestj == 0)
+			{
+				z = S->fftbuffer[(S->fft_ny-1)*S->fft_nx+besti];
+			}
+			else
+			{
+				z = S->fftbuffer[(bestj-1)*S->fft_nx + besti];
+			}
+			peak[0] = sqrt(z*~z);
+			if(bestj == S->fft_ny-1)
+			{
+				z = S->fftbuffer[besti];
+			}
+			else
+			{
+				z = S->fftbuffer[(bestj+1)*S->fft_nx + besti];
+			}
+			peak[2] = sqrt(z*~z);
+			specRate = peakup(peak, bestj, 
+				S->fft_ny, S->solInt*S->fftOversample);
+
+			/* Now do second axis of FFT -- in frequency to look for 
+			 * a peak in rate/delay space */
+			fftw_execute(S->plan2);
 
 			max2 = 0.0;
 			besti = bestj = 0;
@@ -601,11 +722,15 @@ static int dump(Sniffer *S, Accumulator *A, double mjd)
 			rate = peakup(peak, bestj, 
 				S->fft_ny, S->solInt*S->fftOversample);
 
+			/* correct for negative frequency axis if LSB */
 			if(A->isLSB[bbc])
 			{
 				phase = -phase;
 				delay = -delay;
 				rate = -rate;
+				specPhase = -specPhase;
+				specChan = S->fft_nx-1-specChan;
+				specRate = -specRate;
 			}
 
 			fprintf(S->apd, " %10.4f %6.4f %10.4f %10.6f", 
@@ -613,8 +738,15 @@ static int dump(Sniffer *S, Accumulator *A, double mjd)
 				2.0*amp/(A->weightSum[bbc]*S->nChan), 
 				phase, 
 				rate);
+
+			fprintf(S->apc, " %4d %6.4f %10.4f %10.6f", 
+				specChan, 
+				2.0*specAmp/(A->weightSum[bbc]*S->nChan), 
+				specPhase, 
+				specRate);
 		}
 		fprintf(S->apd, "\n");
+		fprintf(S->apc, "\n");
 	}
 
 	return 0;
@@ -712,7 +844,7 @@ int feedSnifferFITS(Sniffer *S, const struct UVrow *data)
 
 	if(index < 0 || index >= A->nTime)
 	{
-		fprintf(stderr, "Bad index = %d\n", index);
+		fprintf(stderr, "Developer Error: Sniffer: bad time index = %d\n", index);
 		return -1;
 	}
 

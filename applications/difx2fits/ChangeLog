@@ -1,3 +1,20 @@
+Version 2.6
+* Apply flags properly, even in cases with crazy subarraying
+* Require difxio 2.12
+* Write file that summarizes jobs that went into FITS
+* Pass full command line option structure to UV writing
+* Normalize calling to all table writing functions
+* Properly populate GATEMODL table
+* Write .jobmatrix file
+* Require difxio 2.12
+* Write new WEIGHTYP keyword
+* Version for DiFX-1.5.1
+
+Version 2.5
+* Require difxio 2.11
+* Post DiFX-1.5
+* Sniffer: look for spectral lines
+
 Version 2.4.1
 * Write autocorrs for all pulsar bins
 * Fix indexing by antennas after merging.  Affects: UV, MC, ML tables

@@ -35,6 +35,7 @@
 #include <assert.h>
 #include "config.h"
 #include "fitsUV.h"
+#include "jobmatrix.h"
 #ifdef HAVE_FFTW
 #include "sniffer.h"
 #endif
@@ -101,14 +102,14 @@ static void DifxVisStartGlob(DifxVis *dv)
 
 	glob(globstr, 0, 0, &dv->globbuf);
 	dv->nFile = dv->globbuf.gl_pathc;
-
+	
 	if(dv->nFile == 0)
 	{
 		fprintf(stderr, "Error: no data files for job %s\n",
 			dv->D->job[dv->jobId].fileBase);
 		exit(0);
 	}
-	
+
 	dv->globbuf.gl_offs = 0;
 
 	free(globstr);
@@ -720,8 +721,7 @@ static int RecordIsInvalid(const DifxVis *dv)
 			printf("a1=%d a1=%d mjd=%13.7f\n",
 				(dv->record->baseline/256) - 1,
 				(dv->record->baseline%256) - 1,
-				(int)(dv->record->jd - 2400000.0) + 
-				  dv->record->iat);
+				dv->mjd);
 			return 1;
 		}
 	}
@@ -733,8 +733,7 @@ static int RecordIsInvalid(const DifxVis *dv)
 			printf("a1=%d a1=%d mjd=%13.7f value=%e\n",
 				(dv->record->baseline/256) - 1,
 				(dv->record->baseline%256) - 1,
-				(int)(dv->record->jd - 2400000.0) + 
-				  dv->record->iat,
+				dv->mjd,
 				d[i]);
 			return 1;
 		}
@@ -760,6 +759,7 @@ static int RecordIsZero(const DifxVis *dv)
 		}
 	}
 	
+	// haven't found a non-zero value :(
 	return 1;
 }
 
@@ -770,26 +770,29 @@ static int RecordIsTransitioning(const DifxVis *dv)
 
 static int RecordIsFlagged(const DifxVis *dv)
 {
+	DifxJob *job;
 	double mjd;
 	int a1, a2;
 	int i;
 
-	if(dv->D->nFlag <= 0)
+	job = dv->D->job + dv->jobId;
+
+	if(job->nFlag <= 0)
 	{
 		return 0;
 	}
 
+	mjd = (int)(dv->record->jd - 2400000.0) + dv->record->iat;
 	a1  = (dv->record->baseline/256) - 1;
 	a2  = (dv->record->baseline%256) - 1;
-	mjd = (int)(dv->record->jd - 2400000.0) + dv->record->iat;
 
-	for(i = 0; i < dv->D->nFlag; i++)
+	for(i = 0; i < job->nFlag; i++)
 	{
-		if(dv->D->flag[i].mjd1 <= mjd &&
-		   dv->D->flag[i].mjd2 >= mjd)
+		if(job->flag[i].mjd1 <= mjd &&
+		   job->flag[i].mjd2 >= mjd)
 		{
-			if(dv->D->flag[i].antennaId == a1 ||
-			   dv->D->flag[i].antennaId == a2)
+			if(job->flag[i].antennaId == a1 ||
+			   job->flag[i].antennaId == a2)
 			{
 				return 1;
 			}
@@ -906,7 +909,7 @@ static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 
 static int DifxVisConvert(const DifxInput *D, 
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, 
-	double s, int verbose, double sniffTime, int pulsarBin)
+	struct CommandLineOptions *opts)
 {
 	int i, j, l, v;
 	float visScale = 1.0;
@@ -928,6 +931,7 @@ static int DifxVisConvert(const DifxInput *D,
 	double scale;
 	DifxVis **dvs;
 	DifxVis *dv;
+	JobMatrix *jobMatrix = 0;
 #ifdef HAVE_FFTW
 	Sniffer *S = 0;
 #endif
@@ -952,21 +956,18 @@ static int DifxVisConvert(const DifxInput *D,
 
 	/* allocate one DifxVis per job */
 
-	scale = getDifxScaleFactor(D, s, verbose);
+	scale = getDifxScaleFactor(D, opts->scale, opts->verbose);
 
 	dvs = (DifxVis **)calloc(D->nJob, sizeof(DifxVis *));
 	assert(dvs);
 	for(j = 0; j < D->nJob; j++)
 	{
 		dvs[j] = newDifxVis(D, j);
+		assert(dvs[j]);
 		if(!dvs[j])
 		{
 			fprintf(stderr, "Error allocating DifxVis[%d/%d]\n",
 				j, D->nJob);
-			assert(dvs[j]);
-#ifdef HAVE_FFTW
-			deleteSniffer(S);
-#endif
 			return 0;
 		}
 		dvs[j]->scale = scale;
@@ -978,7 +979,7 @@ static int DifxVisConvert(const DifxInput *D,
 	nWeight = dv->nFreq*D->nPolar;
 
 	/* Start up sniffer */
-	if(sniffTime > 0.0)
+	if(opts->sniffTime > 0.0)
 	{
 		strcpy(fileBase, out->filename);
 		l = strlen(fileBase);
@@ -991,8 +992,14 @@ static int DifxVisConvert(const DifxInput *D,
 			}
 		}
 #ifdef HAVE_FFTW
-		S = newSniffer(D, dv->nComplex, fileBase, sniffTime);
+		S = newSniffer(D, dv->nComplex, fileBase, opts->sniffTime);
 #endif
+	}
+
+	/* Start up jobmatrix */
+	if(opts->jobMatrixDeltaT > 0)
+	{
+		jobMatrix = newJobMatrix(D, fileBase, opts->jobMatrixDeltaT);
 	}
 
 	/* set the number of weight and flux values*/
@@ -1010,6 +1017,9 @@ static int DifxVisConvert(const DifxInput *D,
 	   a FITS string and save it in the FITS header */
 	mjd2fits((int)D->mjdStart, dateStr);
 	fitsWriteString(out, "DATE-OBS", dateStr, "");
+
+// Soon! fitsWriteString(out, "EQUINOX", "J2000", "");
+	fitsWriteString(out, "WEIGHTYP", "CORRELAT", "");
 
 	fitsWriteString(out, "TELESCOP", "VLBA", "");
 	fitsWriteString(out, "OBSERVER", "PLUTO", "");
@@ -1065,7 +1075,7 @@ static int DifxVisConvert(const DifxInput *D,
 	/* First prime each structure with some data */
 	for(j = 0; j < nJob; j++)
 	{
-		readvisrecord(dvs[j], verbose, pulsarBin);
+		readvisrecord(dvs[j], opts->verbose, opts->pulsarBin);
 	}
 
 	/* Now loop until done, looking at */
@@ -1088,6 +1098,7 @@ static int DifxVisConvert(const DifxInput *D,
 
 		/* dv now points to earliest data. */
 
+		
 		if(RecordIsInvalid(dv))
 		{
 			nInvalid++;
@@ -1109,12 +1120,14 @@ static int DifxVisConvert(const DifxInput *D,
 #ifdef HAVE_FFTW
 			feedSnifferFITS(S, dv->record);
 #endif
+			if(dv->record->baseline % 257 == 0)
+			{
+				feedJobMatrix(jobMatrix, dv->record, dv->jobId);
+			}
 #ifndef WORDS_BIGENDIAN
 			FitsBinRowByteSwap(columns, nColumn, 
 				dv->record);
 #endif
-
-//			printf("Record out: %f %d\n", dv->mjd, dv->pulsarBin);
 
 			fitsWriteBinRow(out, (char *)dv->record);
 			nWritten++;
@@ -1139,7 +1152,7 @@ static int DifxVisConvert(const DifxInput *D,
 				return -3;
 			}
 
-			readvisrecord(dv, verbose, pulsarBin);
+			readvisrecord(dv, opts->verbose, opts->pulsarBin);
 		}
 	}
 
@@ -1148,7 +1161,7 @@ static int DifxVisConvert(const DifxInput *D,
 	printf("      %d all zero records dropped\n", nZero);
 	printf("      %d scan boundary records dropped\n", nTrans);
 	printf("      %d records written\n", nWritten);
-	if(verbose > 1)
+	if(opts->verbose > 1)
 	{
 		printf("        Note : 1 record is all data from 1 baseline\n");
 		printf("        for 1 timestamp\n");
@@ -1159,21 +1172,28 @@ static int DifxVisConvert(const DifxInput *D,
 #ifdef HAVE_FFTW
 	deleteSniffer(S);
 #endif
+	if(jobMatrix)
+	{
+		writeJobMatrix(jobMatrix);
+		deleteJobMatrix(jobMatrix);
+	}
 
 	return 0;
 }
 
+/* FIXME -- merge this function with DifxVisConvert */
 const DifxInput *DifxInput2FitsUV(const DifxInput *D,
 	struct fits_keywords *p_fits_keys,
-	struct fitsPrivate *out, double scale,
-	int verbose, double sniffTime, int pulsarBin)
+	struct fitsPrivate *out, struct CommandLineOptions *opts)
 {
 	if(D == 0)
 	{
 		return 0;
 	}
 
-	DifxVisConvert(D, p_fits_keys, out, scale, verbose, sniffTime, pulsarBin);
+	printf("\n");
+	DifxVisConvert(D, p_fits_keys, out, opts);
+	printf("                            ");
 
 	return D;
 }

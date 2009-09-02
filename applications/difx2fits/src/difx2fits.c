@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id:$
- * $HeadURL:$
- * $LastChangedRevision:$
- * $Author:$
- * $LastChangedDate:$
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 
@@ -38,8 +38,6 @@
 const char program[] = PACKAGE_NAME;
 const char author[]  = PACKAGE_BUGREPORT;
 const char version[] = VERSION;
-
-#define MAX_INPUT_FILES 4096
 
 
 static int usage(const char *pgm)
@@ -106,6 +104,9 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  -s      <scale>     Scale visibility data "
 		"by <scale>\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --deltat <deltat>\n");
+	fprintf(stderr, "  -t       <deltat>   Set interval (sec) in printing job matrix\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "  --keep-order\n");
 	fprintf(stderr, "  -k                  Keep antenna order\n");
 	fprintf(stderr, "\n");
@@ -123,27 +124,6 @@ static int usage(const char *pgm)
 	return 0;
 }
 
-struct CommandLineOptions
-{
-	char *fitsFile;
-	char *baseFile[MAX_INPUT_FILES];
-	int nBaseFile;
-	int writemodel;
-	int pretend;
-	double scale;
-	int verbose;
-	/* some overrides */
-	int specAvg;
-	int doalldifx;
-	float nOutChan;
-	float startChan;
-	int keepOrder;
-	int dontCombine;
-	int overrideVersion;
-	double sniffTime;
-	int pulsarBin;
-};
-
 struct CommandLineOptions *newCommandLineOptions()
 {
 	struct CommandLineOptions *opts;
@@ -153,6 +133,7 @@ struct CommandLineOptions *newCommandLineOptions()
 	
 	opts->writemodel = 1;
 	opts->sniffTime = 30.0;
+	opts->jobMatrixDeltaT = 20.0;
 
 	return opts;
 }
@@ -250,6 +231,12 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					opts->scale = atof(argv[i]);
 					printf("Scaling data by %f\n", 
 						opts->scale);
+				}
+				else if(strcmp(argv[i], "--deltat") == 0 ||
+				        strcmp(argv[i], "-t") == 0)
+				{
+					i++;
+					opts->jobMatrixDeltaT = atof(argv[i]);
 				}
 				else if(strcmp(argv[i], "--average") == 0 ||
 				        strcmp(argv[i], "-a") == 0)
@@ -403,8 +390,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 }
 
 static const DifxInput *DifxInput2FitsTables(const DifxInput *D, 
-	struct fitsPrivate *out, int write_model, double scale, int verbose,
-	double sniffTime, int pulsarBin)
+	struct fitsPrivate *out, struct CommandLineOptions *opts)
 {
 	struct fits_keywords keys;
 	long long last_bytes = 0;
@@ -443,14 +429,11 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
-	if(write_model)
-	{
-		printf("  ML -- model               ");
-		fflush(stdout);
-		D = DifxInput2FitsML(D, &keys, out);
-		printf("%lld bytes\n", out->bytes_written - last_bytes);
-		last_bytes = out->bytes_written;
-	}
+	printf("  ML -- model               ");
+	fflush(stdout);
+	D = DifxInput2FitsML(D, &keys, out, opts);
+	printf("%lld bytes\n", out->bytes_written - last_bytes);
+	last_bytes = out->bytes_written;
 
 	printf("  CT -- correlator (eop)    ");
 	fflush(stdout);
@@ -478,14 +461,13 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  GM -- pulsar gate model   ");
 	fflush(stdout);
-	D = DifxInput2FitsGM(D, &keys, out);
+	D = DifxInput2FitsGM(D, &keys, out, opts);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
-	printf("  UV -- visibility          \n");
+	printf("  UV -- visibility          ");
 	fflush(stdout);
-	D = DifxInput2FitsUV(D, &keys, out, scale, verbose, sniffTime, pulsarBin);
-	printf("                            ");
+	D = DifxInput2FitsUV(D, &keys, out, opts);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
@@ -604,9 +586,6 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 					opts->baseFile[i]);
 				return 0;
 			}
-
-			deleteDifxInput(D1);
-			deleteDifxInput(D2);
 		}
 		else
 		{
@@ -664,7 +643,6 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 
 	if(opts->verbose > 1)
 	{
-		printf("MERGED:\n");
 		printDifxInput(D);
 	}
 
@@ -711,11 +689,6 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		if(!opts->keepOrder)
 		{
 			DifxInputSortAntennas(D, opts->verbose);
-			if(opts->verbose > 2)
-			{
-				printf("POST-SORT:\n");
-				printDifxInput(D);
-			}
 		}
 
 		if(opts->verbose > 2)
@@ -730,9 +703,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			return 0;
 		}
 
-		if(DifxInput2FitsTables(D, &outfile, opts->writemodel, 
-			opts->scale, opts->verbose, opts->sniffTime,
-			opts->pulsarBin) == D)
+		if(DifxInput2FitsTables(D, &outfile, opts) == D)
 		{
 			printf("\nConversion successful\n\n");
 		}
