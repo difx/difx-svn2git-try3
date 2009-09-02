@@ -80,10 +80,6 @@ void deleteDifxInput(DifxInput *D)
 		{
 			deleteDifxEOPArray(D->eop);
 		}
-		if(D->flag)
-		{
-			deleteDifxAntennaFlagArray(D->flag);
-		}
 		if(D->job)
 		{
 			deleteDifxJobArray(D->job);
@@ -210,11 +206,6 @@ void fprintDifxInput(FILE *fp, const DifxInput *D)
 		fprintDifxPulsar(fp, D->pulsar + i);
 	}
 
-	/*
-	fprintf(fp, "  nFlags = %d\n", D->nFlag);
-	fprintDifxAntennaFlagArray(fp, D->flag, D->nFlag);
-	*/
-
 	fprintf(fp, "\n");
 }
 
@@ -293,12 +284,6 @@ void fprintDifxInputSummary(FILE *fp, const DifxInput *D)
 	for(i = 0; i < D->nPulsar; i++)
 	{
 		fprintDifxPulsar(fp, D->pulsar + i);
-	}
-
-	if(D->nFlag > 0)
-	{
-		fprintf(fp, "  nFlags = %d\n", D->nFlag);
-		fprintDifxAntennaFlagArray(fp, D->flag, D->nFlag);
 	}
 }
 
@@ -708,6 +693,7 @@ static int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 	DifxParameters *pp;
 	DifxPulsar *dp;
 	int i, r;
+	int nPolycoFiles;
 
 	pp = newDifxParametersfromfile(fileName);
 	if(!pp)
@@ -726,12 +712,13 @@ static int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 		fprintf(stderr, "NUM POLYCO FILES not found\n");
 		return -1;
 	}
-	dp->nPolyco = atoi(DifxParametersvalue(pp, r));
-	dp->polyco = newDifxPolycoArray(dp->nPolyco);
+	nPolycoFiles = atoi(DifxParametersvalue(pp, r));
+	dp->nPolyco = 0;
+	dp->polyco = 0;
 
 	strcpy(dp->fileName, fileName);
 
-	for(i = 0; i < dp->nPolyco; i++)
+	for(i = 0; i < nPolycoFiles; i++)
 	{
 		r = DifxParametersfind1(pp, r, "POLYCO FILE %d", i);
 		if(r < 0)
@@ -740,7 +727,7 @@ static int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 			fprintf(stderr, "POLYCO FILE %d not found\n", i);
 			return -1;
 		}
-		r = loadPulsarPolycoFile(&dp->polyco[i], 
+		r = loadPulsarPolycoFile(&dp->polyco, &dp->nPolyco,
 			DifxParametersvalue(pp, r));
 		if(r < 0)
 		{
@@ -864,9 +851,10 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D,
 		dc->nBaseline    = D->job->activeBaselines;
 
 		/* pulsar stuff */
-		if(strcmp(DifxParametersvalue(ip, rows[5]), "TRUE") == 0)
+		if(strcmp(DifxParametersvalue(ip, rows[10]), "TRUE") == 0)
 		{
-			r = DifxParametersfind(ip, rows[5], 
+			
+			r = DifxParametersfind(ip, rows[10], 
 				"PULSAR CONFIG FILE");
 			if(r <= 0)
 			{
@@ -1327,6 +1315,38 @@ static DifxInput *parseDifxInputDataTable(DifxInput *D,
 	return D;
 }
 
+static DifxInput *parseDifxInputNetworkTable(DifxInput *D, 
+	const DifxParameters *ip)
+{
+	int a;
+	int r;
+	DifxAntenna *da;
+
+	if(!D || !ip)
+	{
+		return 0;
+	}
+
+	for(a = 0; a < D->nAntenna; a++)
+	{
+		da = D->antenna + a;
+
+		r = DifxParametersfind1(ip, 1, "PORT NUM %d", a);
+		if(r > 0)
+		{
+			D->antenna[a].networkPort = atoi(DifxParametersvalue(ip, r));
+		}
+
+		r = DifxParametersfind1(ip, 1, "TCP WINDOW (KB) %d", a);
+		if(r > 0)
+		{
+			D->antenna[a].windowSize = atoi(DifxParametersvalue(ip, r));
+		}
+	}
+
+	return D;
+}
+
 static DifxInput *deriveDifxInputValues(DifxInput *D)
 {
 	int a, b, c, e, qb, nChan = 0, nc;
@@ -1449,6 +1469,9 @@ static DifxInput *populateInput(DifxInput *D, const DifxParameters *ip)
 
 	/* DATA TABLE */
 	D = parseDifxInputDataTable(D, ip);
+
+	/* NETWORK TABLE */
+	D = parseDifxInputNetworkTable(D, ip);
 
 	return D;
 }
@@ -2536,6 +2559,9 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 	int i, j=0, n=0, a, p;
 	char line[1000];
 	int nUndecoded = 0;
+	DifxJob *J;
+
+	J = D->job;
 
 	in = fopen(flagfile, "r");
 	if(!in)
@@ -2554,8 +2580,8 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 	p = sscanf(line, "%d", &n);
 	if(p == 1 && n > 0 && n < 10000)
 	{
-		D->nFlag = n;
-		D->flag = newDifxAntennaFlagArray(D->nFlag);
+		J->nFlag = n;
+		J->flag = newDifxAntennaFlagArray(J->nFlag);
 		for(i = 0; i < n; i++)
 		{
 			fgets(line, 999, in);
@@ -2563,7 +2589,7 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 			{
 				fprintf(stderr, "Warning: premature end of file %s\n", 
 					flagfile);
-				D->nFlag = i;
+				J->nFlag = i;
 				break;
 			}
 			line[999] = 0;
@@ -2577,10 +2603,19 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 			}
 			if(p == 3)
 			{
-				D->flag[j].mjd1  = mjd1;
-				D->flag[j].mjd2  = mjd2;
-				D->flag[j].antennaId = a;
-				j++;
+				if(a < 0 || a >= D->nAntenna)
+				{
+					fprintf(stderr, "populateFlags : file=%s line=%d: a=%d\n",
+						flagfile, i+2, a);
+					nUndecoded++;
+				}
+				else
+				{
+					J->flag[j].mjd1  = mjd1;
+					J->flag[j].mjd2  = mjd2;
+					J->flag[j].antennaId = a;
+					j++;
+				}
 			}
 			else
 			{
@@ -2598,7 +2633,7 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 	{
 		fprintf(stderr, "Warning: %d flags from file %s were not properly parsed\n",
 			nUndecoded, flagfile);
-		D->nFlag = j;
+		J->nFlag = j;
 	}
 
 	fclose(in);
@@ -2606,15 +2641,15 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 	return n;
 }
 
-int isAntennaFlagged(const DifxInput *D, double mjd, int antennaId)
+int isAntennaFlagged(const DifxJob *J, double mjd, int antennaId)
 {
 	int f;
 
-	for(f = 0; f < D->nFlag; f++)
+	for(f = 0; f < J->nFlag; f++)
 	{
-		if(D->flag[f].antennaId == antennaId)
+		if(J->flag[f].antennaId == antennaId)
 		{
-			if(mjd > D->flag[f].mjd1 && mjd < D->flag[f].mjd2)
+			if(mjd > J->flag[f].mjd1 && mjd < J->flag[f].mjd2)
 			{
 				return 1;
 			}
@@ -3220,6 +3255,7 @@ int DifxInputGetScanIdByJobId(const DifxInput *D, double mjd, int jobId)
 int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd, 
 	int antennaId)
 {
+	DifxScan *scan;
 	int scanId;
 	int hasModel;
 
@@ -3230,6 +3266,8 @@ int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd,
 
 	for(scanId = 0; scanId < D->nScan; scanId++)
 	{
+		scan = D->scan + scanId;
+
 		/* see if this scan contains the antenna.  If so, one of
 		 * the model tables should exist */
 		if(D->scan[scanId].nAntenna <= antennaId)
@@ -3237,16 +3275,16 @@ int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd,
 			continue;
 		}
 		hasModel = 0;
-		if(D->scan[scanId].model)
+		if(scan->model)
 		{
-			if(D->scan[scanId].model[antennaId])
+			if(scan->model[antennaId])
 			{
 				hasModel = 1;
 			}
 		}
-		if(D->scan[scanId].im)
+		if(scan->im)
 		{
-			if(D->scan[scanId].im[antennaId])
+			if(scan->im[antennaId])
 			{
 				hasModel = 1;
 			}
@@ -3255,9 +3293,13 @@ int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd,
 		{
 			continue;
 		}
-		
-		if(mjd <  D->scan[scanId].mjdEnd   &&
-		   mjd >= D->scan[scanId].mjdStart)
+	
+		if(isAntennaFlagged(D->job + scan->jobId, mjd, antennaId))
+		{
+			continue;
+		}
+
+		if(mjd < scan->mjdEnd && mjd >= scan->mjdStart)
 		{
 			return scanId;
 		}
@@ -3332,9 +3374,10 @@ static int AntennaCompare(const void *a1, const void *a2)
  * damage */ 
 int DifxInputSortAntennas(DifxInput *D, int verbose)
 {
-	int a, a2, d, f, s;
+	int a, a2, d, f, s, j;
 	int *old2new;
 	int changed = 0;
+	DifxJob *job;
 	DifxModel **m2;
 	DifxPolyModel **p2;
 
@@ -3392,17 +3435,23 @@ int DifxInputSortAntennas(DifxInput *D, int verbose)
 
 	/* OK -- antennas have been reordered.  Fix the tables. */
 
-	/* 1. Datastream table -- must be working */
+	/* 1. Datastream table */
 	for(d = 0; d < D->nDatastream; d++)
 	{
 		D->datastream[d].antennaId =
 			old2new[D->datastream[d].antennaId];
 	}
 
-	/* 2. Flags -- tested and confirmed to work */
-	for(f = 0; f < D->nFlag; f++)
+	/* 2. Flags */
+	for(j = 0; j < D->nJob; j++)
 	{
-		D->flag[f].antennaId = old2new[D->flag[f].antennaId];
+		job = D->job + j;
+
+		for(f = 0; f < job->nFlag; f++)
+		{
+			job->flag[f].antennaId = 
+				old2new[job->flag[f].antennaId];
+		}
 	}
 
 	/* 3. The model tables for each scah */

@@ -31,8 +31,28 @@
 #include <stdlib.h>
 #include "difx_input.h"
 
+const char program[] = "difxcalculator";
+const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
+const char version[] = "0.1";
+const char verdate[] = "20090831";
+
 const int nNode = 10;
 const int nCore = 7;
+
+int usage()
+{
+	fprintf(stderr, "\n%s ver. %s  %s  %s\n\n", program, version,
+		author, verdate);
+	fprintf(stderr, "A program to calculate software correlator resource usage.\n");
+	fprintf(stderr, "This is based on Adam Deller's difx_calculator.xls .\n");
+	fprintf(stderr, "\nUsage: %s <input file base name> [<speedUp factor>]\n", program);
+	fprintf(stderr, "\n<input file base name> is the prefix of the difx .input file\n");
+	fprintf(stderr, "        to study.  Files ending in .input and .calc are needed.\n");
+	fprintf(stderr, "\n<speedUp factor> is a floating point number which is the ratio\n");
+	fprintf(stderr, "        of correlation speed to observation speed.\n\n");
+
+	return 0;
+}
 
 int main(int argc, char **argv)
 {
@@ -56,14 +76,14 @@ int main(int argc, char **argv)
 	double coreOutputRate, manInputRate, diskDataRate, datasetSize;
 	double databufferDur, managerSlack, tSubint, corebufferDur, subintsPerInt;
 	int visSize;
+	int decimation;
 	double dsBufferSize;	
 	double modeSize, coreSize, manSize;
 
 
 	if(argc < 2)
 	{
-		printf("Usage : %s <inputfilebase> [<speedUp>]\n", argv[0]);
-		return 0;
+		return usage();
 	}
 	
 	if(argc > 2)
@@ -71,7 +91,7 @@ int main(int argc, char **argv)
 		speedUp = atof(argv[2]);
 	}
 
-	D = loadDifxInput(argv[1]);
+	D = loadDifxCalc(argv[1]);
 	if(!D)
 	{
 		fprintf(stderr, "D == 0.  quitting\n");
@@ -97,6 +117,7 @@ int main(int argc, char **argv)
 		printf("\nCONFIG %d\n", c);
 
 		config = D->config + c;
+		decimation = config->decimation;
 		BPS = config->blocksPerSend;
 		nChan = config->nChan;
 
@@ -153,6 +174,7 @@ int main(int argc, char **argv)
 		printf("Number of baselines       %d\n", nBL);
 		printf("Number of IFs             %3.1f\n", nFreq);
 		printf("Bandwidth (MHz)           %6.4f\n", bandwidth);
+		printf("Decimation factor         %d\n", decimation);
 		printf("Number of polarizations   %d\n", nPol);
 		printf("Pol. products / band      %3.1f\n", nPpB);
 		printf("Bits / sample             %3.1f\n", quantBits);
@@ -170,12 +192,12 @@ int main(int argc, char **argv)
 
 		visSize = (nAnt+nBL)*(8*nChan*nFreq*nPol*nPpB);
 
-		recDataRate = nFreq*bandwidth*nPol*quantBits*2.0;
-		basebandMessageSize = BPS*nChan*2.0*nFreq*nPol/(8*1024*1024);
+		recDataRate = nFreq*bandwidth*nPol*quantBits*decimation*2.0;
+		basebandMessageSize = quantBits*BPS*nChan*2.0*nFreq*nPol*decimation/(8*1024*1024);
 		basebandReadSize = basebandMessageSize*dataBufferFactor/nDataSeg;
 		coreInputRatio = nAnt/(float)nNode;
 		coreInputRate = recDataRate*coreInputRatio*speedUp;
-		coreOutputRatio = visSize/(1024*1024*basebandMessageSize);
+		coreOutputRatio = visSize/(nAnt*1024*1024*basebandMessageSize);
 		coreOutputRate = coreInputRate*coreOutputRatio;
 		manInputRate = coreOutputRate*nNode;
 		diskDataRate = visSize/(tInt*1024*1024);
@@ -195,7 +217,7 @@ int main(int argc, char **argv)
 		printf("Dataset size (GB)         %5.3f\n", datasetSize);
 
 		dsBufferSize = basebandMessageSize*dataBufferFactor;
-		modeSize = basebandMessageSize +((nFreq*nPol*nChan*4)*(2+2+2+1)+nChan*4.0*(2+2+2+2+2+2+2+3+5))/(1024*1024);
+		modeSize = basebandMessageSize/decimation +((nFreq*nPol*nChan*4)*(2+2+2+1)+nChan*4.0*(2+2+2+2+2+2+2+3+5))/(1024*1024);
 		coreSize = ((nAnt*modeSize)+(nAnt+nBL)*visSize/(1024*1024))*4+nCore*visSize/(1024*1024);
 		manSize = visSize*visLength/(1024*1024);
 

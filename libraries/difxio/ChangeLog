@@ -1,3 +1,11 @@
+2.12
+* Merge fixes from trunk
+* Add network table infrastructure
+* Load > 1 pulsar polynomial from a file
+* Move flags to DifxJob so combinig multiple subarrays results in accurate
+  application of flags.  NOTE: This breaks the API
+* Version for DiFX-1.5.1
+
 2.10.1
 * Infrastructure for writing for file-based correlation
 * When sorting antennas, update the scan table (nAntenna, im and model)
