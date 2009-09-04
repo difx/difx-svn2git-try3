@@ -1,3 +1,24 @@
+Version 1.0
+~~~~~~~~~~~
+* oms2v2d: correct use of POLARIZATION
+* Version for DiFX-1.5.1
+
+Version 0.2.3
+~~~~~~~~~~~~~
+* Mark5B support
+* format override support
+* Pulsar profile mode
+* Split jobs at leap second
+* ANTENNA blocks get antenna names capitalized
+* Clean up parsing of .v2d a little bit
+* (Adam) Initialize some ANTENNA block variables
+* (Adam) Clean up LBA format
+* Support a wider range of time formats in the .v2d file
+* Make .v2d parameters "mjdStart" and "mjdStop" operate at specified times, not 
+  at scan boundaries
+* EOP table support from within .v2d file
+* Support eVLBI via writing of Network table
+
 Version 0.2.2
 ~~~~~~~~~~~~~
 * Fix clock offset of up to 6 picoseconds in simFXCORR mode
@@ -6,6 +27,7 @@ Version 0.2.2
 
 Version 0.2.1
 ~~~~~~~~~~~~~
+* Post DiFX-1.5
 * Change sign convention associated with vex file
    Note on clock sign conventions: As far as I (WFB) can tell, vex uses one sign
    convention and the VLBA, DiFX and FITS all use the other.
