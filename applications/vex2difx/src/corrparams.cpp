@@ -702,11 +702,11 @@ int CorrParams::setkv(const string &key, const string &value)
 			vexFile = inFile;
 		}
 	}
-	else if(key == "mjdStart")
+	else if(key == "mjdStart" || key == "start")
 	{
 		mjdStart = parseTime(value);
 	}
-	else if(key == "mjdStop")
+	else if(key == "mjdStop" || key == "stop")
 	{
 		mjdStop = parseTime(value);
 	}
