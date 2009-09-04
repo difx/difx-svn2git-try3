@@ -23,8 +23,8 @@ from time import asctime
 
 program = 'errormon'
 author  = 'Walter Brisken'
-version = '0.2'
-verdate = '20080912'
+version = '0.3'
+verdate = '20090904'
 
 alertLevels = ['FATAL', 'SEVERE', 'ERROR', 'WARNING', 'INFO', 'VERBOSE', 'DEBUG']
 
@@ -75,7 +75,7 @@ class Parser:
 	else:
 		return ''
 
-def run():
+def run(maxlevel):
 	
 	port = getenv('DIFX_MESSAGE_PORT')
 	if port == None:
@@ -102,9 +102,14 @@ def run():
 			p.feed(message)
 			info = p.getinfo()
 			p.close()
-			if len(info) > 0:
+			if len(info) > 0 and p.severity <= maxlevel:
 				print asctime(), info
 		except socket.timeout:
 			pass
 
-run()
+if len(argv) > 1:
+	maxlevel = int(argv[1])
+else:
+	maxlevel = 8
+
+run(maxlevel)
