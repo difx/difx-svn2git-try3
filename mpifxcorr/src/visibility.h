@@ -179,6 +179,7 @@ private:
   f32 **** baselineweights;
   std::string * telescopenames;
   cf32 * results;
+  f32 * floatresults;
   f32 *** binweightsums;
   cf32 *** binscales;
   f32 * binweightdivisor;

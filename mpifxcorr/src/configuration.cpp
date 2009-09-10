@@ -95,6 +95,11 @@ Configuration::Configuration(const char * configfile, int id)
           consistencyok = processDatastreamTable(input);
         break;
       case BASELINE:
+        if(!configread || !freqread)
+        {
+          cfatal << startl << "Error - input file out of order! Attempted to read baselines without knowledge of freqs - aborting!!!" << endl;
+          consistencyok = false;
+        }
         consistencyok = processBaselineTable(input);
         break;
       case DATA:
@@ -420,7 +425,7 @@ int Configuration::getMaxNumRecordedFreqs(int configindex)
     if(datastreamtable[configs[configindex].datastreamindices[i]].numrecordedfreqs > maxnumfreqs)
       maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[i]].numrecordedfreqs;
   }
-  
+
   return maxnumfreqs;
 }
 
@@ -622,6 +627,7 @@ bool Configuration::processBaselineTable(ifstream * input)
   int ** tempintptr;
   string line;
   datastreamdata dsdata;
+  baselinedata bldata;
 
   getinputline(input, &line, "BASELINE ENTRIES");
   baselinetablelength = atoi(line.c_str());
@@ -636,6 +642,7 @@ bool Configuration::processBaselineTable(ifstream * input)
   for(int i=0;i<baselinetablelength;i++)
   {
     //read in the info for this baseline
+    baselinetable[i].localfreqindices = new int[freqtablelength];
     baselinetable[i].totalbands = 0;
     getinputline(input, &line, "D/STREAM A INDEX ", i);
     baselinetable[i].datastream1index = atoi(line.c_str());
@@ -643,6 +650,7 @@ bool Configuration::processBaselineTable(ifstream * input)
     baselinetable[i].datastream2index = atoi(line.c_str());
     getinputline(input, &line, "NUM FREQS ", i);
     baselinetable[i].numfreqs = atoi(line.c_str());
+    baselinetable[i].oddlsbfreqs = new int[baselinetable[i].numfreqs];
     baselinetable[i].numpolproducts = new int[baselinetable[i].numfreqs];
     baselinetable[i].datastream1bandindex = new int*[baselinetable[i].numfreqs];
     baselinetable[i].datastream2bandindex = new int*[baselinetable[i].numfreqs];
@@ -650,6 +658,7 @@ bool Configuration::processBaselineTable(ifstream * input)
     baselinetable[i].polpairs = new char**[baselinetable[i].numfreqs];
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
+      baselinetable[i].oddlsbfreqs[j] = 0;
       getinputline(input, &line, "POL PRODUCTS ", i);
       baselinetable[i].numpolproducts[j] = atoi(line.c_str());
       baselinetable[i].datastream1bandindex[j] = new int[baselinetable[i].numpolproducts[j]];
@@ -696,6 +705,19 @@ bool Configuration::processBaselineTable(ifstream * input)
       tempintptr = baselinetable[i].datastream1bandindex;
       baselinetable[i].datastream1bandindex = baselinetable[i].datastream2bandindex;
       baselinetable[i].datastream2bandindex = tempintptr;
+    }
+  }
+  for(int f=0;f<freqtablelength;f++)
+  {
+    for(int i=0;i<baselinetablelength;i++)
+    {
+      bldata = baselinetable[i];
+      bldata.localfreqindices[f] = -1;
+      for(int j=0;j<bldata.numfreqs;j++)
+      {
+        if(bldata.freqtableindices[j] == f)
+          bldata.localfreqindices[f] = j;
+      }
     }
   }
   baselineread = true;
@@ -746,7 +768,7 @@ bool Configuration::processConfig(ifstream * input)
   bool found;
 
   maxnumpulsarbins = 0;
-  numindependentchannelconfigs = 0;
+  maxnumxmacstrides = 0;
 
   getinputline(input, &line, "NUM CONFIGURATIONS");
   numconfigs = atoi(line.c_str());
@@ -1277,85 +1299,160 @@ bool Configuration::populateModelDatastreamMap()
 
 bool Configuration::populateResultLengths()
 {
-  datastreamdata currentdatastream;
+  datastreamdata dsdata;
+  baselinedata bldata;
   bool found;
-  int len, postavlen, bandsperautocorr, freqindex, freqchans, maxconfigphasecentres;
+  int threadfindex, threadbindex, coreresultindex, toadd;
+  int bandsperautocorr, freqindex, freqchans, chanstoaverage, maxconfigphasecentres, xmacstridelen, binloop;
 
-  maxresultlength = 0;
-  maxpostavresultlength = 0;
-  configresultlengths = new int[numconfigs];
-  configpostavresultlengths = new int[numconfigs];
+  maxthreadresultlength = 0;
+  maxcoreresultlength = 0;
   for(int c=0;c<numconfigs;c++)
   {
-    len = 0;
-    postavlen = 0;
+    xmacstridelen = configs[c].xmacstridelen;
+    binloop = 1;
+    if(configs[c].pulsarbin && !configs[c].scrunchoutput)
+      binloop = configs[c].numbins;
     if(getMaxProducts(c) > 2)
       bandsperautocorr = 2;
     else
       bandsperautocorr = 1;
 
-    //add up all the bands in the baselines
-    for(int i=0;i<numbaselines;i++) {
-      for(int j=0;j<getBNumFreqs(c, i);j++) {
-        //cout << "Looking at baseline " << i << "/" << numbaselines << ", frequency " << j << "/" << getBNumFreqs(c, i) << endl;
-        freqindex = getBFreqIndex(c, i, j);
-        freqchans = getFNumChannels(freqindex);
-        len += getBNumPolProducts(c, i, j)*(freqchans+1);
-        postavlen += getBNumPolProducts(c, i, j)*(freqchans/getFChannelsToAverage(freqindex)+1);
-      }
-    }
-
-    //multiply this by number of pulsar bins if necessary
-    if(configs[c].pulsarbin && !configs[c].scrunchoutput) {
-      len *= configs[c].numbins;
-      postavlen *= configs[c].numbins;
-    }
-
-    found = false;
     //find a scan that matches this config
+    found = false;
     maxconfigphasecentres = 1;
     for(int i=0;i<model->getNumScans();i++) {
       if(scanconfigindices[i] == c) {
-        //multiply length by number of phase centres
         if(model->getNumPhaseCentres(i) > maxconfigphasecentres)
           maxconfigphasecentres = model->getNumPhaseCentres(i);
         found = true;
       }
     }
-    if(found) {
-      //len *= maxconfigphasecentres;
-      postavlen *= maxconfigphasecentres;
-    }
-    else
-    {
-      csevere << startl << "Did not find a scan matching config index " << c << endl;
-    }
+    if(!found)
+      cwarn << startl << "Did not find a scan matching config index " << c << endl;
 
-    //add all the bands from all the datastreams
+    //work out the offsets for threadresult, and the total length too
+    configs[c].completestridelength = new int[freqtablelength];
+    configs[c].numxmacstrides = new int[freqtablelength];
+    configs[c].threadresultfreqoffset = new int[freqtablelength];
+    configs[c].threadresultbaselineoffset = new int*[freqtablelength];
+    threadfindex = 0;
+    for(int i=0;i<freqtablelength;i++)
+    {
+      if(configs[c].frequsedbybaseline[i])
+      {
+        configs[c].threadresultfreqoffset[i] = threadfindex;
+        freqchans = freqtable[i].numchannels;
+        configs[c].numxmacstrides[i] = freqtable[i].numchannels/xmacstridelen;
+        configs[c].threadresultbaselineoffset[i] = new int[numbaselines];
+        threadbindex = 0;
+        for(int j=0;j<numbaselines;j++)
+        {
+          configs[c].threadresultbaselineoffset[i][j] = threadbindex;
+          bldata = baselinetable[configs[c].baselineindices[j]];
+          if(bldata.localfreqindices[i] >= 0)
+          {
+            configs[c].threadresultbaselineoffset[i][j] = threadbindex;
+            threadbindex += binloop*bldata.numpolproducts[bldata.localfreqindices[i]]*xmacstridelen;
+          }
+        }
+        configs[c].completestridelength[i] = threadbindex;
+        threadfindex += configs[c].numxmacstrides[i]*configs[c].completestridelength[i];
+      }
+    }
+    configs[c].threadresultlength = threadfindex;
+    if(configs[c].threadresultlength > maxthreadresultlength)
+      maxthreadresultlength = configs[c].threadresultlength;
+
+    //work out the offsets for coreresult, and the total length too
+    configs[c].coreresultbaselineoffset = new int*[freqtablelength];
+    configs[c].coreresultbweightoffset  = new int*[freqtablelength];
+    configs[c].coreresultautocorroffset = new int[numdatastreams];
+    configs[c].coreresultacweightoffset = new int[numdatastreams];
+    coreresultindex = 0;
+    for(int i=0;i<freqtablelength;i++)
+    {
+      if(configs[c].frequsedbybaseline[i])
+      {
+        freqchans = freqtable[i].numchannels;
+        chanstoaverage = freqtable[i].channelstoaverage;
+        configs[c].coreresultbaselineoffset[i] = new int[numbaselines];
+        for(int j=0;j<numbaselines;j++)
+        {
+          bldata = baselinetable[configs[c].baselineindices[j]];
+          if(bldata.localfreqindices[i] >= 0)
+          {
+            configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
+            coreresultindex += maxconfigphasecentres*binloop*bldata.numpolproducts[bldata.localfreqindices[i]]*freqchans/chanstoaverage;
+          }
+        }
+      }
+    }
+    for(int i=0;i<freqtablelength;i++)
+    {
+      if(configs[c].frequsedbybaseline[i])
+      {
+        configs[c].coreresultbweightoffset[i] = new int[numbaselines];
+        for(int j=0;j<numbaselines;j++)
+        {
+          bldata = baselinetable[configs[c].baselineindices[j]];
+          if(bldata.localfreqindices[i] >= 0)
+          {
+            configs[c].coreresultbweightoffset[i][j] = coreresultindex;
+            //baselineweights are only floats so need to divide by 2...
+            toadd = binloop*bldata.numpolproducts[bldata.localfreqindices[i]]/2;
+            if(toadd == 0)
+              toadd = 1; 
+            coreresultindex += toadd;
+          }
+        }
+      }
+    }
     for(int i=0;i<numdatastreams;i++)
     {
+      dsdata = datastreamtable[configs[c].datastreamindices[i]];
+      configs[c].coreresultautocorroffset[i] = coreresultindex;
       for(int j=0;j<getDNumRecordedBands(c, i);j++) {
         if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
           freqindex = getDRecordedFreqIndex(c, i, j);
-          len += (getFNumChannels(freqindex)+1)*bandsperautocorr;
-          postavlen += (getFNumChannels(freqindex)/getFChannelsToAverage(freqindex)+1)*bandsperautocorr;
+          freqchans = getFNumChannels(freqindex);
+          chanstoaverage = getFChannelsToAverage(freqindex);
+          coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
         }
       }
       for(int j=0;j<getDNumZoomBands(c, i);j++) {
         if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
           freqindex = getDZoomFreqIndex(c, i, j);
-          len += (getFNumChannels(freqindex)+1)*bandsperautocorr;
-          postavlen += (getFNumChannels(freqindex)/getFChannelsToAverage(freqindex)+1)*bandsperautocorr;
+          freqchans = getFNumChannels(freqindex);
+          chanstoaverage = getFChannelsToAverage(freqindex);
+          coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
         }
       }
     }
-
-    configresultlengths[c] = len;
-    configpostavresultlengths[c] = postavlen;
-    if(len > maxresultlength)
-      maxresultlength = len;
-    if(postavlen > maxpostavresultlength)
-      maxpostavresultlength = postavlen;
+    for(int i=0;i<numdatastreams;i++)
+    {
+      dsdata = datastreamtable[configs[c].datastreamindices[i]];
+      configs[c].coreresultacweightoffset[i] = coreresultindex;
+      toadd = 0;
+      for(int j=0;j<getDNumRecordedBands(c, i);j++) {
+        if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
+          toadd += bandsperautocorr;
+        }
+      }
+      for(int j=0;j<getDNumZoomBands(c, i);j++) {
+        if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
+          toadd += bandsperautocorr;
+        }
+      }
+      //this will also be just floats, not complex, so need to divide by 2
+      toadd /= 2;
+      if(toadd == 0)
+        toadd = 1;
+      coreresultindex += toadd;
+    }
+    configs[c].coreresultlength = coreresultindex;
+    if(configs[c].coreresultlength > maxcoreresultlength)
+      maxcoreresultlength = configs[c].coreresultlength;
   }
 
   return true;
@@ -1363,9 +1460,10 @@ bool Configuration::populateResultLengths()
 
 bool Configuration::consistencyCheck()
 {
-  int tindex, count;
-  double bandwidth, sampletimens, ffttime, numffts;
-  datastreamdata ds;
+  int tindex, count, dsband, freqindex, freq1index, freq2index;
+  double bandwidth, sampletimens, ffttime, numffts, f1, f2;
+  datastreamdata ds1, ds2;
+  baselinedata bl;
 
   //check entries in the datastream table
   for(int i=0;i<datastreamtablelength;i++)
@@ -1504,6 +1602,7 @@ bool Configuration::consistencyCheck()
   //also check that guardns is large enough
   int numpulsarconfigs = 0;
   int numscrunchconfigs = 0;
+  int nchan, chantoav;
   double samplens;
   for(int i=0;i<numconfigs;i++)
   {
@@ -1515,10 +1614,11 @@ bool Configuration::consistencyCheck()
     //check that arraystridelen is ok, and guardns is ok
     for(int j=0;j<numdatastreams;j++) {
       for(int k=0;k<datastreamtable[configs[i].datastreamindices[j]].numrecordedfreqs;k++) {
-        if(freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[k]].numchannels % configs[i].arraystridelen != 0) {
+        nchan = freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[k]].numchannels;
+        if(nchan % configs[i].arraystridelen != 0) {
     //for(int j=0;j<freqtablelength;j++) {
       //if(freqtable[j].numchannels % configs[i].arraystridelen != 0) {
-          cerror << startl << "Error - config[" << i << "] has a stride length of " << configs[i].arraystridelen << " which is not an integral divisor of the number of channels in frequency[" << j << "] (which is " << freqtable[j].numchannels << ") - aborting!" << endl;
+          cerror << startl << "Error - config[" << i << "] has a stride length of " << configs[i].arraystridelen << " which is not an integral divisor of the number of channels in frequency[" << k << "] of datastream " << j << " (which is " << nchan << ") - aborting!" << endl;
           return false;
         }
       }
@@ -1593,12 +1693,34 @@ bool Configuration::consistencyCheck()
       lastt2 = datastreamtable[baselinetable[b].datastream2index].telescopeindex;
     }
 
+    for(int j=0;j<numbaselines;j++)
+    {
+      bl = baselinetable[configs[i].baselineindices[j]];
+      for(int k=0;k<bl.numfreqs;k++)
+      {
+        chantoav = freqtable[bl.freqtableindices[k]].channelstoaverage;
+        nchan = freqtable[bl.freqtableindices[k]].numchannels;
+        if(configs[i].xmacstridelen%chantoav != 0 && chantoav%configs[i].xmacstridelen != 0)
+        {
+          cerror << startl << "Error - config[" << i << "] has an xmac stride length of " << configs[i].xmacstridelen << " which is not 2^N x the channels to average in frequency [" << k << "] of baseline " << j << " (which is " << chantoav << ") - aborting!" << endl;
+          return false;
+        }
+        if(nchan%configs[i].xmacstridelen != 0)
+        {
+          cerror << startl << "Error - config[" << i << "] has an xmac stride length of " << configs[i].xmacstridelen << " which is not an integer divisor of the number of channels in frequency[" << k << "] of baseline " << j << " (which is " << nchan << ") - aborting!" << endl;
+          return false;
+        }
+      }
+    }
+
     //check that if pulsar binning is turned on, that scrunch matches for all
     //if(configs[i].pulsarbin)
     //  numpulsarconfigs++;
     //if(configs[i].scrunchoutput)
     //  numscrunchconfigs++;
   }
+
+
   //if(numpulsarconfigs != numscrunchconfigs) {
   //  cerror << startl << "Error - there are " << numpulsarconfigs << " configurations with pulsar binning enabled, but only " << numscrunchconfigs << " have scrunching enabled.  If one is scrunching, all must - aborting!" << endl;
   //  return false;
@@ -1614,23 +1736,95 @@ bool Configuration::consistencyCheck()
       return false;
     }
 
-    //check the band indices
+    ds1 = datastreamtable[baselinetable[i].datastream1index];
+    ds2 = datastreamtable[baselinetable[i].datastream2index];
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
+      freq1index = baselinetable[i].freqtableindices[j];
+      if(baselinetable[i].datastream2bandindex[j][0] >= ds2.numrecordedbands) //zoom band
+        freq2index = ds2.zoomfreqtableindices[ds2.zoombandlocalfreqindices[baselinetable[i].datastream2bandindex[j][0]]-ds2.numrecordedbands];
+      else
+        freq2index = ds2.recordedfreqtableindices[ds2.recordedbandlocalfreqindices[baselinetable[i].datastream2bandindex[j][0]]];
+      if(freq1index != freq2index)
+      {
+        //these had better be compatible, otherwise bail
+        f1 = freqtable[freq1index].bandedgefreq;
+        f2 = freqtable[freq2index].bandedgefreq;
+        if(freqtable[freq1index].lowersideband)
+          f1 -= freqtable[freq1index].bandwidth;
+        if(freqtable[freq2index].lowersideband)
+          f2 -= freqtable[freq2index].bandwidth;
+        if(freqtable[freq1index].bandedgefreq == freqtable[freq2index].bandedgefreq &&  freqtable[freq1index].bandedgefreq == freqtable[freq2index].bandedgefreq)
+        {
+          //different freqs, same value??
+          cwarn << startl << "Baseline " << i << " frequency " << j << " points at two different frequencies that are apparently identical - this is not wrong, but very strange.  Check the input file" << endl;
+        }
+        else if(f1 == f2 && freqtable[freq1index].bandwidth == freqtable[freq2index].bandwidth)
+        {
+          //correlating a USB with an LSB
+          cinfo << startl << "Baseline " << i << " frequency " << j << " is correlating an USB frequency with a LSB frequency" << endl;
+          if(freqtable[freq1index].lowersideband)
+            baselinetable[i].oddlsbfreqs[j] == 1; //datastream1 has the LSB (2 is USB)
+          else
+            baselinetable[i].oddlsbfreqs[j] == 2; //datastream2 has the LSB (1 is USB)
+        }
+        else
+        {
+          cwarn << startl << "Warning! Baseline table entry " << i << ", frequency " << j << " is trying to correlate two different frequencies!  Correlation will go on, but the results for these bands will probably be garbage!" << endl;
+          if(freqtable[freq1index].lowersideband && !freqtable[freq2index].lowersideband)
+            baselinetable[i].oddlsbfreqs[j] == 1;
+          else if(freqtable[freq2index].lowersideband && !freqtable[freq1index].lowersideband)
+            baselinetable[i].oddlsbfreqs[j] == 2;
+        }
+      }
       for(int k=0;k<baselinetable[i].numpolproducts[j];k++)
       {
-        ds = datastreamtable[baselinetable[i].datastream1index];
-        if((baselinetable[i].datastream1bandindex[j][k] < 0) || (baselinetable[i].datastream1bandindex[j][k] >= (ds.numrecordedbands + ds.numzoombands)))
+        //check the band indices
+        if((baselinetable[i].datastream1bandindex[j][k] < 0) || (baselinetable[i].datastream1bandindex[j][k] >= (ds1.numrecordedbands + ds1.numzoombands)))
         {
           cerror << startl << "Error! Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 1 refers to a band outside datastream 1's range (" << baselinetable[i].datastream1bandindex[j][k] << ") - aborting!!!" << endl;
           return false;
         }
-        ds = datastreamtable[baselinetable[i].datastream2index];
-        if((baselinetable[i].datastream2bandindex[j][k] < 0) || (baselinetable[i].datastream2bandindex[j][k] >= (ds.numrecordedbands + ds.numzoombands)))
+        ds1 = datastreamtable[baselinetable[i].datastream2index];
+        if((baselinetable[i].datastream2bandindex[j][k] < 0) || (baselinetable[i].datastream2bandindex[j][k] >= (ds1.numrecordedbands + ds1.numzoombands)))
         {
           cerror << startl << "Error! Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 refers to a band outside datastream 2's range (" << baselinetable[i].datastream2bandindex[j][k] << ") - aborting!!!" << endl;
           return false;
         }
+
+        //check that the freqs pointed at match
+        if(baselinetable[i].datastream1bandindex[j][k] >= ds1.numrecordedbands) //zoom band
+          freqindex = ds1.zoomfreqtableindices[ds1.zoombandlocalfreqindices[baselinetable[i].datastream1bandindex[j][k]]-ds1.numrecordedbands];
+        else
+          freqindex = ds1.recordedfreqtableindices[ds1.recordedbandlocalfreqindices[baselinetable[i].datastream1bandindex[j][k]]];
+        if(freqindex != freq1index)
+        {
+          cfatal << startl << "Error! Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 1 does not match the frequency of the first polarisation product! Aborting." << endl;
+          return false;
+        }
+        if(baselinetable[i].datastream2bandindex[j][k] >= ds2.numrecordedbands) //zoom band
+          freqindex = ds2.zoomfreqtableindices[ds2.zoombandlocalfreqindices[baselinetable[i].datastream2bandindex[j][0]]-ds2.numrecordedbands];
+        else
+          freqindex = ds2.recordedfreqtableindices[ds2.recordedbandlocalfreqindices[baselinetable[i].datastream2bandindex[j][k]]];
+        if(freqindex != freq2index)
+        {
+          cfatal << startl << "Error! Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 does not match the frequency of the first polarisation product! Aborting." << endl;
+          return false;
+        }
+      }
+    }
+  }
+
+  //for each config, check if there are any USB x LSB correlations 
+  for(int i=0;i<numconfigs;i++)
+  {
+    configs[i].anyusbxlsb = false;
+    for(int j=0;j<numbaselines;j++)
+    {
+      for(int k=0;k<baselinetable[j].numfreqs;k++)
+      {
+        if(baselinetable[j].oddlsbfreqs[k] > 0)
+          configs[i].anyusbxlsb = true;
       }
     }
   }
@@ -1737,7 +1931,7 @@ bool Configuration::setPolycoFreqInfo(int configindex)
   {
     frequencies[i] = freqtable[i].bandedgefreq;
     if(freqtable[i].lowersideband)
-      frequencies[i] -= freqtable[i].bandwidth;
+      frequencies[i] -= ((double)(freqtable[i].numchannels-1))*freqtable[i].bandwidth/((double)freqtable[i].numchannels);
     bandwidths[i] = freqtable[i].bandwidth;
     numchannels[i] = freqtable[i].numchannels;
     used[i] = configs[configindex].frequsedbybaseline[i];

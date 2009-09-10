@@ -117,6 +117,13 @@ public:
   inline cf32* getAutocorrelation(bool crosspol, int outputband) { return autocorrelations[(crosspol)?1:0][outputband]; }
 
  /**
+  * Grabs the weight for a given band
+  * @param crosspol Whether to return the crosspolarisation autocorrelation for this band
+  * @param outputband The band index
+  */
+  inline f32 getWeight(bool crosspol, int outputband) { return weights[(crosspol)?1:0][outputband]; }
+
+ /**
   * Gets the expected decorrelation ("van Vleck correction" ) for a given number of bits.
   * All cases other than 1 and 2 are approximate only!!!
   * @param nbits The number of bits
@@ -185,13 +192,14 @@ protected:
   bool filterbank, calccrosspolautocorrs, fractionalLoFreq, initok;
   double * recordedfreqclockoffsets;
   double * recordedfreqlooffsets;
-  u8 * data;
-  s16 * lookup;
-  s16 * linearunpacked;
-  f32** unpackedarrays;
+  u8  *  data;
+  s16 *  lookup;
+  s16 *  linearunpacked;
+  f32 ** unpackedarrays;
   cf32** fftoutputs;
   cf32** conjfftoutputs;
-  s32 * validflags;
+  f32 ** weights;
+  s32 *  validflags;
   cf32*** autocorrelations;
   vecFFTSpecR_f32 * pFFTSpecR;
   vecFFTSpecC_cf32 * pFFTSpecC;

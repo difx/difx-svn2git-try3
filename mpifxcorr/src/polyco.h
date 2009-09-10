@@ -118,11 +118,11 @@ public:
   */
   inline bool initialisedOK() { return readok; }
   
- /**
-  * Returns the bin counts
-  * @return The bin counts (number of times each bin has been calculated since last cleared) for this Polyco
-  */
-  inline s32 *** getBinCounts() { return currentbincounts; }
+// /**
+//  * Returns the bin counts
+//  * @return The bin counts (number of times each bin has been calculated since last cleared) for this Polyco
+//  */
+//  inline s32 *** getBinCounts() { return currentbincounts; }
  /**
   * Returns the configuration index
   * @return The configuration index this Polyco corresponds to
@@ -145,10 +145,10 @@ public:
   */
   inline f64 getBinWidth(int bin) { f64 w = binphases[bin]-binphases[(bin+numbins-1)%numbins]; return (w<0.0)?(1.0+w):w; }
 
- /**
-  * Clears the bin counts
-  */
-  void incrementBinCount();
+// /**
+//  * Clears the bin counts
+//  */
+//  void incrementBinCount();
 
  /**
   * Returns the estimated number of bytes used by the Polyco

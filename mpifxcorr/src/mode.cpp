@@ -89,6 +89,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
     fftoutputs = new cf32*[numrecordedbands + numzoombands];
     conjfftoutputs = new cf32*[numrecordedbands + numzoombands];
+    estimatedbytes += 4*(numrecordedbands + numzoombands);
     for(int j=0;j<numrecordedbands;j++)
     {
       fftoutputs[j] = vectorAlloc_cf32(recordedbandchannels + 1);
@@ -224,11 +225,11 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
     for(int i=0;i<numstrides/2;i++) {
       stepchannelfreqs[i] = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels);
-      lsbstepchannelfreqs[i] = (float)((-TWO_PI*(numstrides/2-i)*arraystridelength*recordedbandwidth)/recordedbandchannels);
+      lsbstepchannelfreqs[i] = (float)((-TWO_PI*((numstrides/2-i)*arraystridelength-1)*recordedbandwidth)/recordedbandchannels);
     }
 
-    fracsamprotator = vectorAlloc_cf32(recordedbandchannels + 1);
-    estimatedbytes += 8*(recordedbandchannels + 1);
+    fracsamprotator = vectorAlloc_cf32(recordedbandchannels);
+    estimatedbytes += 8*recordedbandchannels;
     /*cout << "Numstrides is " << numstrides << ", recordedbandchannels is " << recordedbandchannels << ", arraystridelength is " << arraystridelength << endl;
     cout << "fracsamprotator is " << fracsamprotator << endl;
     cout << "stepchannelfreqs[5] is " << stepchannelfreqs[5] << endl;
@@ -253,12 +254,14 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     else
       autocorrwidth = 1;
     autocorrelations = new cf32**[autocorrwidth];
+    weights = new f32*[autocorrwidth];
     for(int i=0;i<autocorrwidth;i++)
     {
+      weights[i] = new f32[numrecordedbands];
       autocorrelations[i] = new cf32*[numrecordedbands+numzoombands];
       for(int j=0;j<numrecordedbands;j++) {
-        autocorrelations[i][j] = vectorAlloc_cf32(recordedbandchannels+1);
-        estimatedbytes += 8*(recordedbandchannels+1);
+        autocorrelations[i][j] = vectorAlloc_cf32(recordedbandchannels);
+        estimatedbytes += 8*recordedbandchannels;
       }
       for(int j=0;j<numzoombands;j++)
       {
@@ -362,7 +365,9 @@ Mode::~Mode()
     for(int j=0;j<numrecordedbands;j++)
       vectorFree(autocorrelations[i][j]);
     delete [] autocorrelations[i];
+    delete [] weights[i];
   }
+  delete [] weights;
   delete [] autocorrelations;
 
   cdebug << startl << "Ending a mode destructor" << endl;
@@ -405,7 +410,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
 {
   double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance, walltimesecs, fftcentre, delay1, delay2;
   f32 phaserotationfloat, fracsampleerror;
-  int status, count, nearestsample, integerdelay, sidebandoffset;
+  int status, count, nearestsample, integerdelay, dcchannel;
   cf32* fftptr;
   cf32* fracsampptr1;
   cf32* fracsampptr2;
@@ -447,7 +452,6 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   if(nearestsample < -1 || (((nearestsample + twicerecordedbandchannels)/samplesperblock)*bytesperblocknumerator)/bytesperblockdenominator > datalengthbytes)
   {
     cerror << startl << "MODE error for datastream " << datastreamindex << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample << ", the max bytes should be " << datalengthbytes << ".  offsetseconds was " << offsetseconds << ", offsetns was " << offsetns << ", index was " << index << ", average delay was " << averagedelay << ", datasec was " << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
-    //exit(1);
     return 0.0;
   }
   if(nearestsample == -1)
@@ -524,21 +528,15 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   {
     count = 0;
     //updated so that Nyquist channel is not accumulated for either USB or LSB data
-    sidebandoffset = 0;
-    //currentsubchannelfreqs = subchannelfreqs;
+    //and is excised entirely, so both USB and LSB data start at the same place (no sidebandoffset)
     currentstepchannelfreqs = stepchannelfreqs;
-    fracsamprotator[recordedbandchannels].re = 1.0;
-    fracsamprotator[recordedbandchannels].im = 0.0;
-    //fracsampptr1 = &(fracsamprotator[1]);
-    //fracsampptr2 = &(fracsamprotator[1+arraystridelength]);
+    dcchannel = 0;
     fracsampptr1 = &(fracsamprotator[0]);
     fracsampptr2 = &(fracsamprotator[arraystridelength]);
-    if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-      sidebandoffset = 1;
-      //currentsubchannelfreqs = lsbsubchannelfreqs;
+    if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+    {
       currentstepchannelfreqs = lsbstepchannelfreqs;
-      //fracsampptr1 = &(fracsamprotator[recordedbandchannels-arraystridelength]);
-      //fracsampptr2 = &(fracsamprotator[0]);
+      dcchannel = recordedbandchannels-1;
     }
 
     //get ready to apply fringe rotation, if its pre-F
@@ -650,8 +648,6 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       status = vectorAddC_f32_I(phaserotationfloat, subfracsamparg, arraystridelength);
       if(status != vecNoErr)
         csevere << startl << "Error in post-f phase rotation addition (+ maybe LO offset correction), sub!!!" << status << endl;
-      fracsamprotator[sidebandoffset*recordedbandchannels].re = cos(phaserotationfloat);
-      fracsamprotator[sidebandoffset*recordedbandchannels].im = sin(phaserotationfloat);
     }
     else { //not post-F, but must take care of LO offsets if present
       if(recordedfreqlooffsets[i] > 0.0 || recordedfreqlooffsets[i] < 0.0)
@@ -661,8 +657,6 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         status = vectorAddC_f32_I(phaserotationfloat, subfracsamparg, arraystridelength);
         if(status != vecNoErr)
           csevere << startl << "Error in LO offset correction (sub)!!!" << status << endl;
-        fracsamprotator[sidebandoffset*recordedbandchannels].re = cos(phaserotationfloat);
-        fracsamprotator[sidebandoffset*recordedbandchannels].im = sin(phaserotationfloat);
       }
     }
 
@@ -701,7 +695,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
             //fix the lower sideband if required
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
             {
-              status = vectorConjFlip_cf32(fftptr, fftoutputs[j], recordedbandchannels + 1);
+              status = vectorConjFlip_cf32(fftptr, fftoutputs[j], recordedbandchannels);
               if(status != vecNoErr)
                 csevere << startl << "Error in conjugate!!!" << status << endl;
             }
@@ -718,8 +712,8 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
             if(status != vecNoErr)
               csevere << startl << "Error doing the FFT!!!" << endl;
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-              status = vectorCopy_cf32(&(fftd[recordedbandchannels+1]), &(fftoutputs[j][1]), recordedbandchannels-1);
-              fftoutputs[j][recordedbandchannels] = fftd[0];
+              status = vectorCopy_cf32(&(fftd[recordedbandchannels+1]), fftoutputs[j], recordedbandchannels-1);
+              fftoutputs[j][recordedbandchannels-1] = fftd[0];
             }
             else {
               status = vectorCopy_cf32(fftd, fftoutputs[j], recordedbandchannels);
@@ -730,37 +724,38 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         }
 
         //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
-        status = vectorMul_cf32_I(fracsamprotator, fftoutputs[j], recordedbandchannels + 1);
+        status = vectorMul_cf32_I(fracsamprotator, fftoutputs[j], recordedbandchannels);
         if(status != vecNoErr)
           csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
 
         //do the conjugation
-        status = vectorConj_cf32(fftoutputs[j], conjfftoutputs[j], recordedbandchannels + 1);
+        status = vectorConj_cf32(fftoutputs[j], conjfftoutputs[j], recordedbandchannels);
         if(status != vecNoErr)
           csevere << startl << "Error in conjugate!!!" << status << endl;
 
         //do the autocorrelation (skipping Nyquist channel)
-        status = vectorAddProduct_cf32(fftoutputs[j]+sidebandoffset, conjfftoutputs[j]+sidebandoffset, autocorrelations[0][j]+sidebandoffset, recordedbandchannels);
+        status = vectorAddProduct_cf32(fftoutputs[j], conjfftoutputs[j], autocorrelations[0][j], recordedbandchannels);
         if(status != vecNoErr)
           csevere << startl << "Error in autocorrelation!!!" << status << endl;
 
-        //Add the weight in magic location (imaginary part of Nyquist channel)
-        autocorrelations[0][j][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
+        //store the weight
+        weights[0][j] += dataweight;
       }
     }
 
     //if we need to, do the cross-polar autocorrelations
     if(calccrosspolautocorrs && count > 1)
     {
-      status = vectorAddProduct_cf32(fftoutputs[indices[0]]+sidebandoffset, conjfftoutputs[indices[1]]+sidebandoffset, autocorrelations[1][indices[0]]+sidebandoffset, recordedbandchannels);
+      status = vectorAddProduct_cf32(fftoutputs[indices[0]], conjfftoutputs[indices[1]], autocorrelations[1][indices[0]], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-      status = vectorAddProduct_cf32(fftoutputs[indices[1]]+sidebandoffset, conjfftoutputs[indices[0]]+sidebandoffset, autocorrelations[1][indices[1]]+sidebandoffset, recordedbandchannels);
+      status = vectorAddProduct_cf32(fftoutputs[indices[1]], conjfftoutputs[indices[0]], autocorrelations[1][indices[1]], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-      //add the weight in magic location (imaginary part of Nyquist channel)
-      autocorrelations[1][indices[0]][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
-      autocorrelations[1][indices[1]][recordedbandchannels*(1-sidebandoffset)].im += dataweight;
+
+      //store the weights
+      weights[1][indices[0]] += dataweight;
+      weights[1][indices[1]] += dataweight;
     }
   }
 
@@ -771,6 +766,9 @@ void Mode::averageFrequency()
 {
   cf32 tempsum;
   int status, sidebandoffset, outputchans;
+
+  if(channelstoaverage == 1)
+    return; //no need to do anything;
 
   outputchans = recordedbandchannels/channelstoaverage;
   for(int i=0;i<autocorrwidth;i++)

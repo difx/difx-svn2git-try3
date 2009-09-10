@@ -76,14 +76,22 @@ public:
   inline int getEstimatedBytes() { return estimatedbytes; }
   inline int getVisBufferLength() { return visbufferlength; }
   inline bool consistencyOK() {return consistencyok; }
+  inline bool anyUsbXLsb(int configindex) { return configs[configindex].anyusbxlsb; }
   inline int getArrayStrideLength(int configindex) { return configs[configindex].arraystridelen; }
   inline int getXmacStrideLength(int configindex) {return configs[configindex].xmacstridelen; }
-  inline int getResultLength(int configindex) { return configresultlengths[configindex]; }
-  inline int getPostavResultLength(int configindex) { return configpostavresultlengths[configindex]; }
-  inline int getMaxResultLength() { return maxresultlength; }
-  inline int getMaxPostavResultLength() { return maxpostavresultlength; }
+  inline int getThreadResultLength(int configindex) { return configs[configindex].threadresultlength; }
+  inline int getCoreResultLength(int configindex) { return configs[configindex].coreresultlength; }
+  inline int getMaxThreadResultLength() { return maxthreadresultlength; }
+  inline int getMaxCoreResultLength() { return maxcoreresultlength; }
+  inline int getNumXmacStrides(int configindex, int freqindex) { return configs[configindex].numxmacstrides[freqindex]; }
+  inline int getCompleteStrideLength(int configindex, int freqindex) { return configs[configindex].completestridelength[freqindex]; }
+  inline int getThreadResultFreqOffset(int configindex, int freqindex) { return configs[configindex].threadresultfreqoffset[freqindex]; }
+  inline int getThreadResultBaselineOffset(int configindex, int freqindex, int configbaselineindex) { return configs[configindex].threadresultbaselineoffset[freqindex][configbaselineindex]; }
+  inline int getCoreResultBaselineOffset(int configindex, int freqindex, int configbaselineindex) { return configs[configindex].coreresultbaselineoffset[freqindex][configbaselineindex]; }
+  inline int getCoreResultBWeightOffset(int configindex, int freqindex, int configbaselineindex) { return configs[configindex].coreresultbweightoffset[freqindex][configbaselineindex]; }
+  inline int getCoreResultAutocorrOffset(int configindex, int configdatastreamindex) { return configs[configindex].coreresultautocorroffset[configdatastreamindex]; }
+  inline int getCoreResultACWeightOffset(int configindex, int configdatastreamindex) { return configs[configindex].coreresultacweightoffset[configdatastreamindex]; }
   inline int getNumConfigs() { return numconfigs; }
-  inline int getNumIndependentChannelConfigs() { return numindependentchannelconfigs; }
   inline int getBlocksPerSend(int configindex) { return configs[configindex].blockspersend; }
   inline double getIntTime(int configindex) { return configs[configindex].inttime; }
   inline bool writeAutoCorrs(int configindex) { return configs[configindex].writeautocorrs; }
@@ -188,6 +196,8 @@ public:
   inline int getBFreqIndex(int configindex, int configbaselineindex, int baselinefreqindex)
   {  return baselinetable[configs[configindex].baselineindices[configbaselineindex]].freqtableindices[baselinefreqindex];
     }
+  inline int getBLocalFreqIndex(int configindex, int configbaselineindex, int freqtableindex) { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].localfreqindices[freqtableindex]; }
+  inline int getBFreqOddLSB(int configindex, int configbaselineindex, int freqtableindex) { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].oddlsbfreqs[freqtableindex]; }
   inline int getBNumPolProducts(int configindex, int configbaselineindex, int baselinefreqindex)
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].numpolproducts[baselinefreqindex]; }
   inline int getBDataStream1BandIndex(int configindex, int configbaselineindex, int baselinefreqindex, int baselinefreqdatastream1index)
@@ -487,6 +497,8 @@ private:
     int numfreqs;
     int totalbands;
     int * freqtableindices;
+    int * oddlsbfreqs;
+    int * localfreqindices; //given a freq table index, what local freq does it correspond to (-1 = none)
     int * numpolproducts;
     int ** datastream1bandindex;
     int ** datastream2bandindex;
@@ -508,14 +520,27 @@ private:
     int numpolycos;
     int numbins;
     int minpostavfreqchannels;
+    int threadresultlength;
+    int coreresultlength;
     bool scrunchoutput;
     int numphasecentres;
+    bool anyusbxlsb;
     string pulsarconfigfilename;
     Polyco ** polycos;
-    int * datastreamindices;
-    int * ordereddatastreamindices;
-    int * baselineindices;
+    int  * datastreamindices;
+    int  * ordereddatastreamindices;
+    int  * baselineindices;
     bool * frequsedbybaseline;
+    //bookkeeping info for thread results
+    int  * numxmacstrides; //[freq]
+    int  * completestridelength; //[freq]
+    int  * threadresultfreqoffset; //[freq]
+    int ** threadresultbaselineoffset; //[freq][baseline]
+    //bookkeeping info for core results
+    int ** coreresultbaselineoffset; //[freq][baseline]
+    int ** coreresultbweightoffset; //[freq][baseline]
+    int  * coreresultautocorroffset; //[datastream]
+    int  * coreresultacweightoffset; //[datastream]
   } configdata;
 
   ///storage struct for data from the rule table of the input file
@@ -695,14 +720,12 @@ private:
   int visbufferlength, databufferfactor, numdatasegments;
   int numdatastreams, numbaselines, numcoreconfs;
   int executeseconds, startmjd, startseconds, startns;
-  int maxnumchannels, maxnumpulsarbins, maxresultlength, maxpostavresultlength, numindependentchannelconfigs;
+  int maxnumchannels, maxnumpulsarbins, maxthreadresultlength, maxcoreresultlength, maxnumxmacstrides;
   int stadumpchannels, ltadumpchannels;
   int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, estimatedbytes;
   string calcfilename, modelfilename, coreconffilename, outputfilename;
   int * numprocessthreads;
   int * scanconfigindices;
-  int * configresultlengths;
-  int * configpostavresultlengths;
   configdata * configs;
   ruledata * rules;
   freqdata * freqtable;

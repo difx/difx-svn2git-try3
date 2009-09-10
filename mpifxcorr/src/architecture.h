@@ -180,6 +180,8 @@
 
 #define vectorRealToComplex_f32(real, imag, complex, length)                ippsRealToCplx_32f(real, imag, complex, length)
 
+#define vectorReal_cf32(complex, real, length)                              ippsReal_32fc(complex, real, length)
+
 #define vectorSet_f32(val, dest, length)                                    ippsSet_32f(val, dest, length)
 
 #define vectorSin_f32(src, dest, length)                                    ippsSin_32f_A11(src, dest, length)

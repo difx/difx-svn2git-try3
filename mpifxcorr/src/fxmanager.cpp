@@ -108,7 +108,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
    }
 
   numbaselines = (numdatastreams*(numdatastreams-1))/2;
-  resultlength = config->getMaxResultLength();
+  resultlength = config->getMaxCoreResultLength();
   resultbuffer = vectorAlloc_cf32(resultlength);
   estimatedbytes += resultlength*8;
   datastreamids = new int[numdatastreams];
@@ -398,6 +398,7 @@ void FxManager::receiveData(bool resend)
     else
     {
       //now store the data appropriately - if we have reached sufficient sub-accumulations, release this Visibility so the writing thread can write it out
+      //cout << "FxManager going to store some data, resultbuffer[1000].re is " << resultbuffer[1000].re << endl;
       viscomplete = visbuffer[visindex]->addData(resultbuffer);
       if(viscomplete)
       {
