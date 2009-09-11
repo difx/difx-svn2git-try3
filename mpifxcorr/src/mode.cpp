@@ -92,19 +92,9 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     estimatedbytes += 4*(numrecordedbands + numzoombands);
     for(int j=0;j<numrecordedbands;j++)
     {
-      fftoutputs[j] = vectorAlloc_cf32(recordedbandchannels + 1);
-      conjfftoutputs[j] = vectorAlloc_cf32(recordedbandchannels + 1);
-      estimatedbytes += 2*8*(recordedbandchannels + 1);
-
-      //zero the Nyquist channel
-      if(config->getDRecordedLowerSideband(configindex, datastreamindex, config->getDLocalRecordedFreqIndex(configindex, datastreamindex, j))) {
-        fftoutputs[j][0].re = 0.0;
-        fftoutputs[j][0].im = 0.0;
-      }
-      else {
-        fftoutputs[j][recordedbandchannels].re = 0.0;
-        fftoutputs[j][recordedbandchannels].im = 0.0;
-      }
+      fftoutputs[j] = vectorAlloc_cf32(recordedbandchannels);
+      conjfftoutputs[j] = vectorAlloc_cf32(recordedbandchannels);
+      estimatedbytes += 2*8*recordedbandchannels;
     }
     for(int j=0;j<numzoombands;j++)
     {
@@ -422,10 +412,10 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   {
     for(int i=0;i<numrecordedbands;i++)
     {
-      status = vectorZero_cf32(fftoutputs[i], recordedbandchannels+1);
+      status = vectorZero_cf32(fftoutputs[i], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
-      status = vectorZero_cf32(conjfftoutputs[i], recordedbandchannels+1);
+      status = vectorZero_cf32(conjfftoutputs[i], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
     }
@@ -799,7 +789,7 @@ void Mode::zeroAutocorrelations()
   for(int i=0;i<autocorrwidth;i++)
   {
     for(int j=0;j<numrecordedbands;j++)
-      vectorZero_cf32(autocorrelations[i][j], recordedbandchannels+1);
+      vectorZero_cf32(autocorrelations[i][j], recordedbandchannels);
   }
 }
 
