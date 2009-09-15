@@ -181,6 +181,12 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
     new_mark5_stream_file(datafilenames[configindex][fileindex].c_str(), 0),
     new_mark5_format_generic_from_string(formatname) );
   cout << "Value of syncteststream was " << syncteststream << endl;
+  if(syncteststream == 0)
+  {
+    cwarn << startl << " could not open file " << datafilenames[configindex][fileindex] << endl;
+    dataremaining = false;
+    return;
+  }
   if(syncteststream->nchan != config->getDNumRecordedBands(configindex, streamnum))
   {
     cerror << startl << "Error - number of recorded bands for datastream " << streamnum << " (" << nrecordedbands << ") does not match with MkV file " << datafilenames[configindex][fileindex] << " (" << syncteststream->nchan << "), will be ignored!!!" << endl;
