@@ -87,9 +87,10 @@ public:
  /**
   * Calculates fringe rotation and fractional sample correction arrays and FFTs, and autocorrelates
   * @param index The index of the FFT chunk to process
+  * @param subloopindex The "subloop" index to put the output in
   * @return Fraction of samples that were good for this FFT
   */
-  float process(int index);
+  float process(int index, int subloopindex);
 
  /**
   * Sets the autocorrelation arrays to contain 0's
@@ -144,16 +145,18 @@ public:
  /**
   * Returns a pointer to the FFT'd data of the specified product
   * @param outputband The band to get
+  * @param subloopindex The "subloop" index to get the visibilities from
   * @return Pointer to the FFT'd data (complex 32 bit float)
   */
-  inline cf32* getFreqs(int outputband) { return fftoutputs[outputband]; };
+  inline cf32* getFreqs(int outputband, int subloopindex) { return fftoutputs[outputband][subloopindex]; };
 
  /**
   * Returns a pointer to the FFT'd and conjugated data of the specified product
   * @param outputband The band to get
+  * @param subloopindex The "subloop" index to get the visibilities from
   * @return Pointer to the conjugate of the FFT'd data (complex 32 bit float)
   */
-  inline cf32* getConjugatedFreqs(int outputband) { return conjfftoutputs[outputband]; }
+  inline cf32* getConjugatedFreqs(int outputband, int subloopindex) { return conjfftoutputs[outputband][subloopindex]; }
 
  /**
   * Returns the estimated number of bytes used by the Mode
@@ -192,14 +195,14 @@ protected:
   bool filterbank, calccrosspolautocorrs, fractionalLoFreq, initok;
   double * recordedfreqclockoffsets;
   double * recordedfreqlooffsets;
-  u8  *  data;
-  s16 *  lookup;
-  s16 *  linearunpacked;
-  f32 ** unpackedarrays;
-  cf32** fftoutputs;
-  cf32** conjfftoutputs;
-  f32 ** weights;
-  s32 *  validflags;
+  u8  *   data;
+  s16 *   lookup;
+  s16 *   linearunpacked;
+  f32 **  unpackedarrays;
+  cf32*** fftoutputs;
+  cf32*** conjfftoutputs;
+  f32 **  weights;
+  s32 *   validflags;
   cf32*** autocorrelations;
   vecFFTSpecR_f32 * pFFTSpecR;
   vecFFTSpecC_cf32 * pFFTSpecC;

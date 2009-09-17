@@ -102,9 +102,8 @@ private:
   typedef struct {
     f32 **** baselineweight; //[freq][pulsarbin][baseline][pol]
     cf32 * threadcrosscorrs;
-    int ** resultxmacstrideoffset; //[freq][stride]
     //cf32 * threadresults;
-    s32 ** bins;
+    s32 *** bins; //[fftsubloop][freq][channel]
     cf32* pulsarscratchspace;
     cf32******* pulsaraccumspace; //[freq][stride][baseline][source][polproduct][bin][channel]
     f64 * chanfreqs;
@@ -112,7 +111,7 @@ private:
     cf32 * rotator;
     cf32 * channelsums;
     f32 * argument;
-    f32 * dsweights;
+    f32 ** dsweights;
     DifxMessageSTARecord * starecord;
   } threadscratchspace;
 
@@ -123,23 +122,23 @@ private:
   } processthreadinfo;
 
  /**
-  * Allocates or deallocates the required accumulation scratch space for pulsar binning
+  * Allocates or deallocates the required scratch space for pulsar binning which varies with config
   * @param pulsaraccumspace The array of scratch space [freq][xmacstride][baseline][src][pol][bin][chan]
+  * @param bins Pointer to the array for bins
   * @param newconfigindex The index of the config which is to be used
   * @param oldconfigindex The index of the config which was previously being used
   * @param threadid The thread for which this will be done
   */
-  void createPulsarAccumSpace(cf32******* pulsaraccumspace, int newconfigindex, int oldconfigindex, int threadid);
+  void createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, int newconfigindex, int oldconfigindex, int threadid);
 
  /**
   * Allocates or deallocates the required space for thread-specific arrays which vary in size with config
   * @param baselineweight The array for baseline weights [freq][bin][baseline][pol]
-  * @param resultxmacstrideoffser The array for xmacstrideoffsets [freq][xmacstride]
   * @param newconfigindex The index of the config which is to be used
   * @param oldconfigindex The index of the config which was previously being used
   * @param threadid The thread for which this will be done
   */
-  void allocateConfigSpecificThreadArrays(f32 **** baselineweight, int ** resultxmacstrideoffset, int newconfigindex, int oldconfigindex, int threadid);
+  void allocateConfigSpecificThreadArrays(f32 **** baselineweight, int newconfigindex, int oldconfigindex, int threadid);
 
  /**
   * While the correlation is continuing, processes the given thread's share of the next element in the send/receive circular buffer

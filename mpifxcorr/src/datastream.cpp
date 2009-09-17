@@ -546,6 +546,8 @@ void DataStream::loopfileread()
   dataremaining = false;
   while(!dataremaining && keepreading) {
     openfile(bufferinfo[0].configindex, filesread[bufferinfo[0].configindex]++);
+    if(!dataremaining)
+      input.close();
   }
   if(keepreading) {
     diskToMemory(numread++);

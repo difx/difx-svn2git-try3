@@ -233,8 +233,9 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 
   cverbose << startl << "About to seek to byte " << offset << " plus " << dataoffset << " to get to the first frame" << endl;
 
-  input.seekg(offset + dataoffset, ios_base::cur);
+  input.seekg(offset + dataoffset, ios_base::beg);
   if (input.peek() == EOF) {
+    cinfo << "File " << datafilenames[configindex][fileindex] << " ended before the currently desired time" << endl;
     dataremaining = false;
     input.clear();
   }

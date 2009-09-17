@@ -78,11 +78,13 @@ public:
   inline bool consistencyOK() {return consistencyok; }
   inline bool anyUsbXLsb(int configindex) { return configs[configindex].anyusbxlsb; }
   inline int getArrayStrideLength(int configindex) { return configs[configindex].arraystridelen; }
-  inline int getXmacStrideLength(int configindex) {return configs[configindex].xmacstridelen; }
+  inline int getXmacStrideLength(int configindex) { return configs[configindex].xmacstridelen; }
+  inline int getNumBufferedFFTs(int configindex) { return configs[configindex].numbufferedffts; }
   inline int getThreadResultLength(int configindex) { return configs[configindex].threadresultlength; }
   inline int getCoreResultLength(int configindex) { return configs[configindex].coreresultlength; }
   inline int getMaxThreadResultLength() { return maxthreadresultlength; }
   inline int getMaxCoreResultLength() { return maxcoreresultlength; }
+  inline int getMaxNumBufferedFFTs() { return maxnumbufferedffts; }
   inline int getNumXmacStrides(int configindex, int freqindex) { return configs[configindex].numxmacstrides[freqindex]; }
   inline int getCompleteStrideLength(int configindex, int freqindex) { return configs[configindex].completestridelength[freqindex]; }
   inline int getThreadResultFreqOffset(int configindex, int freqindex) { return configs[configindex].threadresultfreqoffset[freqindex]; }
@@ -515,6 +517,7 @@ private:
     int fringerotationorder;
     int arraystridelen;
     int xmacstridelen;
+    int numbufferedffts;
     bool writeautocorrs;
     bool pulsarbin;
     int numpolycos;
@@ -720,7 +723,7 @@ private:
   int visbufferlength, databufferfactor, numdatasegments;
   int numdatastreams, numbaselines, numcoreconfs;
   int executeseconds, startmjd, startseconds, startns;
-  int maxnumchannels, maxnumpulsarbins, maxthreadresultlength, maxcoreresultlength, maxnumxmacstrides;
+  int maxnumchannels, maxnumpulsarbins, maxthreadresultlength, maxcoreresultlength, maxnumbufferedffts;
   int stadumpchannels, ltadumpchannels;
   int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, estimatedbytes;
   string calcfilename, modelfilename, coreconffilename, outputfilename;

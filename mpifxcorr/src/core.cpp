@@ -298,9 +298,10 @@ void Core::loopprocess(int threadid)
   Mode ** modes;
   threadscratchspace * scratchspace = new threadscratchspace;
   scratchspace->threadcrosscorrs = vectorAlloc_cf32(maxthreadresultlength);
-  scratchspace->resultxmacstrideoffset = new int*[config->getFreqTableLength()];
   scratchspace->baselineweight = new f32***[config->getFreqTableLength()];
-  scratchspace->dsweights = new f32[numdatastreams];
+  scratchspace->dsweights = new f32*[numdatastreams];
+  for(int i=0;i<numdatastreams;i++)
+    scratchspace->dsweights[i] = new f32[config->getMaxNumBufferedFFTs()];
   if(scratchspace->threadcrosscorrs == NULL) {
     cfatal << startl << "Could not allocate thread cross corr space (tried to allocate " << maxthreadresultlength/(1024*1024) << " MB)!!! Aborting." << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
@@ -361,18 +362,12 @@ void Core::loopprocess(int threadid)
     if(somescrunch) //need separate accumulation space
     {
       scratchspace->pulsaraccumspace = new cf32******[config->getFreqTableLength()];
-      createPulsarAccumSpace(scratchspace->pulsaraccumspace, procslots[0].configindex, -1, threadid); //don't need to delete old space
     }
-    scratchspace->bins = new s32*[config->getFreqTableLength()];
-    for(int i=0;i<config->getFreqTableLength();i++)
-    {
-      scratchspace->bins[i] = vectorAlloc_s32(config->getFNumChannels(i));
-      threadbytes[threadid] += 4*config->getFNumChannels(i);
-    }
+    createPulsarVaryingSpace(scratchspace->pulsaraccumspace, &(scratchspace->bins), procslots[0].configindex, -1, threadid); //don't need to delete old space
   }
 
   //create the baselineweight and xmacstrideoffset arrays
-  allocateConfigSpecificThreadArrays(scratchspace->baselineweight, scratchspace->resultxmacstrideoffset, procslots[0].configindex, -1, threadid); //don't need to delete old space
+  allocateConfigSpecificThreadArrays(scratchspace->baselineweight, procslots[0].configindex, -1, threadid); //don't need to delete old space
 
   //set to first configuration and set up, creating Modes, Polycos etc
   lastconfigindex = procslots[0].configindex;
@@ -447,8 +442,8 @@ void Core::loopprocess(int threadid)
       cinfo << startl << "Core " << mpiid << " threadid " << threadid << ": changing config to " << currentslot->configindex << endl;
       updateconfig(lastconfigindex, currentslot->configindex, threadid, startblock, numblocks, numpolycos, pulsarbin, modes, polycos, false);
       cinfo << startl << "Core " << mpiid << " threadid " << threadid << ": config changed successfully - pulsarbin is now " << pulsarbin << endl;
-      createPulsarAccumSpace(scratchspace->pulsaraccumspace, currentslot->configindex, lastconfigindex, threadid);
-      allocateConfigSpecificThreadArrays(scratchspace->baselineweight, scratchspace->resultxmacstrideoffset, currentslot->configindex, lastconfigindex, threadid);
+      createPulsarVaryingSpace(scratchspace->pulsaraccumspace, &(scratchspace->bins), currentslot->configindex, lastconfigindex, threadid);
+      allocateConfigSpecificThreadArrays(scratchspace->baselineweight, currentslot->configindex, lastconfigindex, threadid);
       lastconfigindex = currentslot->configindex;
     }
   }
@@ -470,23 +465,17 @@ void Core::loopprocess(int threadid)
       for(int i=0;i<numpolycos;i++)
         delete polycos[i];
     }
-    if(somepulsarbin)
-    {
-      for(int i=0;i<config->getFreqTableLength();i++)
-      {
-        //if(config->getFWiderBandIndex(i) < 0)
-        vectorFree(scratchspace->bins[i]);
-      }
-      delete [] scratchspace->bins;
-    }
     delete [] polycos;
     vectorFree(scratchspace->pulsarscratchspace);
+    createPulsarVaryingSpace(scratchspace->pulsaraccumspace, &(scratchspace->bins), -1,
+    procslots[(numprocessed+1)%RECEIVE_RING_LENGTH].configindex, threadid);
     if(somescrunch)
     {
-      createPulsarAccumSpace(scratchspace->pulsaraccumspace, -1, procslots[(numprocessed+1)%RECEIVE_RING_LENGTH].configindex, threadid);
       delete [] scratchspace->pulsaraccumspace;
     }
   }
+  for(int i=0;i<numdatastreams;i++)
+    delete [] scratchspace->dsweights[i];
   delete [] scratchspace->dsweights;
   vectorFree(scratchspace->threadcrosscorrs);
   vectorFree(scratchspace->chanfreqs);
@@ -569,9 +558,9 @@ void Core::receivedata(int index, bool * terminate)
 
 void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace)
 {
-  int status, perr;
-  int resultindex, cindex, ds1index, ds2index, maxproducts, binloop, bin, blockcount, maxblocks, shiftcount;
-  int freqindex, freqchannels, channelinc, threadfreqstart;
+  int status, perr, i, numfftloops;
+  int resultindex, cindex, ds1index, ds2index, maxproducts, binloop, blockcount, maxblocks, shiftcount;
+  int freqindex, freqchannels, channelinc;
   int xmacstridelength, xmacpasses, xmacstart, destbin, destchan, localfreqindex, parentfreqindex;
   int outputoffset, input1offset, input2offset, xmacmullength;
   double offsetmins, blockns;
@@ -631,55 +620,46 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   //process each FFT chunk in turn
   blockcount = 0;
   shiftcount = 0;
+  numfftloops = numblocks/config->getNumBufferedFFTs(procslots[index].configindex);
+  if(numblocks%config->getNumBufferedFFTs(procslots[index].configindex) != 0)
+    numfftloops++;
   blockns = ((double)(config->getSubintNS(procslots[index].configindex)))/((double)(config->getBlocksPerSend(procslots[index].configindex)));
   maxblocks = ((int)(model->getMaxNSBetweenUVShifts(procslots[index].offsets[0])/blockns));
-  for(int i=startblock;i<startblock+numblocks;i++)
+  //for(int i=startblock;i<startblock+numblocks;i++)
+  for(int fftloop=0;fftloop<numfftloops;fftloop++)
   {
-    //do the station-based processing for this FFT chunk
+    //do the station-based processing for this batch of FFT chunks
     for(int j=0;j<numdatastreams;j++)
     {
-      scratchspace->dsweights[j] = modes[j]->process(i);
-    }
-
-    //update the baselineweight in the non-binning case
-    if(!procslots[index].pulsarbin || procslots[index].scrunchoutput)
-    {
-      for(int f=0;f<config->getFreqTableLength();f++)
+      for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);fftsubloop++)
       {
-        if(config->isFrequencyUsed(procslots[index].configindex, f))
-        {
-          for(int j=0;j<numbaselines;j++)
-          {
-            localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, j, f);
-            if(localfreqindex >= 0)
-            {
-              ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
-              ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
-              bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index];
-              for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex);p++) {
-                scratchspace->baselineweight[f][0][j][p] += bweight;
-              }
-            }
-          }
-        }
+        i = fftloop*config->getNumBufferedFFTs(procslots[index].configindex) + fftsubloop + startblock;
+	if(i >= startblock+numblocks)
+	  break; //may not have to fully complete last fftloop
+        scratchspace->dsweights[j][fftsubloop] = modes[j]->process(i, fftsubloop);
       }
     }
 
     //if necessary, work out the pulsar bins
     if(procslots[index].pulsarbin)
     {
-      offsetmins = ((double)i)*((double)config->getSubintNS(procslots[index].configindex))/(60000000000.0);
-      currentpolyco->getBins(offsetmins, scratchspace->bins);
+      for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);      fftsubloop++)
+      {
+        i = fftloop*config->getNumBufferedFFTs(procslots[index].configindex) + fftsubloop +          startblock;
+        offsetmins = ((double)i)*((double)config->getSubintNS(procslots[index].configindex))/(60000000000.0);
+        currentpolyco->getBins(offsetmins, scratchspace->bins[i]);
+      }
     }
 
+    //do the baseline-based processing for this batch of FFT chunks
+    resultindex = 0;
     for(int f=0;f<config->getFreqTableLength();f++)
     {
       if(config->isFrequencyUsed(procslots[index].configindex, f))
-      {
+        {
         //All baseline freq indices into the freq table are determined by the *first* datastream
         //in the event of correlating USB with LSB data.  Hence all Nyquist offsets/channels etc
         //are determined by the freq corresponding to the *first* datastream
-        threadfreqstart = config->getThreadResultFreqOffset(procslots[index].configindex, f);
         freqchannels = config->getFNumChannels(f);
         xmacpasses = config->getNumXmacStrides(procslots[index].configindex, f);
         for(int x=0;x<xmacpasses;x++)
@@ -719,84 +699,120 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                 }
               }
 
-              //set where the first visibility of this baseline will go
-              resultindex = threadfreqstart + x*config->getCompleteStrideLength(procslots[index].configindex, f) + config->getThreadResultBaselineOffset(procslots[index].configindex, f, j);
-
               //get the two modes that contribute to this baseline
               ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
-              ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
-              m1 = modes[ds1index];
-              m2 = modes[ds2index];
+	      ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
+	      m1 = modes[ds1index];
+	      m2 = modes[ds2index];
 
-              //add the desired results into the resultsbuffer, for each polarisation pair [and pulsar bin]
-              //loop through each polarisation for this frequency
-              for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex);p++)
+              //do the baseline-based processing for this batch of FFT chunks
+              for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);fftsubloop++)
               {
-                //get the appropriate arrays to multiply
-                vis1 = &(m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, localfreqindex, p))[xmacstart+input1offset]);
-                vis2 = &(m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, localfreqindex, p))[xmacstart+input2offset]);
+	        i = fftloop*config->getNumBufferedFFTs(procslots[index].configindex) + fftsubloop + startblock;
+	        if(i >= startblock+numblocks)
+		  break; //may not have to fully complete last fftloop
 
-                if(procslots[index].pulsarbin)
+                //add the desired results into the resultsbuffer, for each polarisation pair [and pulsar bin]
+                //loop through each polarisation for this frequency
+                for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex);p++)
                 {
-                  //multiply into scratch space
-                  status = vectorMul_cf32(vis1, vis2, scratchspace->pulsarscratchspace, xmacmullength);
-                  if(status != vecNoErr)
-                    csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
+                  //get the appropriate arrays to multiply
+                  vis1 = &(m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, localfreqindex, p), fftsubloop)[xmacstart+input1offset]);
+                  vis2 = &(m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, localfreqindex, p), fftsubloop)[xmacstart+input2offset]);
 
-                  //if scrunching, add into temp accumulate space, otherwise add into normal space
-                  if(procslots[index].scrunchoutput)
+                  if(procslots[index].pulsarbin)
                   {
-                    for(int l=0;l<xmacmullength;x++)
+                    //multiply into scratch space
+                    status = vectorMul_cf32(vis1, vis2, scratchspace->pulsarscratchspace, xmacmullength);
+                    if(status != vecNoErr)
+                      csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
+
+                    //if scrunching, add into temp accumulate space, otherwise add into normal space
+                    if(procslots[index].scrunchoutput)
                     {
-                      //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
-                      destchan = xmacstart+outputoffset+l;
-                      destbin = scratchspace->bins[f][destchan];
-                      scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][destchan].re += scratchspace->pulsarscratchspace[l].re;
-                      scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][destchan].im += scratchspace->pulsarscratchspace[l].im;
+                      for(int l=0;l<xmacmullength;x++)
+                      {
+                        //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
+                        destchan = xmacstart+outputoffset+l;
+                        destbin = scratchspace->bins[i][f][destchan];
+                        scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][destchan].re += scratchspace->pulsarscratchspace[l].re;
+                        scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][destchan].im += scratchspace->pulsarscratchspace[l].im;
+                      }
+                    }
+                    else
+                    {
+                      bweight = scratchspace->dsweights[ds1index][fftsubloop]*scratchspace->dsweights[ds2index][fftsubloop]/(freqchannels+1);
+                      for(int l=0;l<xmacmullength;x++)
+                      {
+                        destchan = xmacstart+outputoffset+l;
+                        destbin = scratchspace->bins[i][f][destchan];
+                        //cindex = resultindex + (scratchspace->bins[freqindex][destchan]*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*(freqchannels+1) + destchan;
+                        cindex = resultindex + (destbin*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*xmacstridelength + destchan;
+                        scratchspace->threadcrosscorrs[cindex].re += scratchspace->pulsarscratchspace[l].re;
+                        scratchspace->threadcrosscorrs[cindex].im += scratchspace->pulsarscratchspace[l].im;
+                        scratchspace->baselineweight[f][destbin][j][p] += bweight;
+                      }
                     }
                   }
                   else
                   {
-                    bweight = scratchspace->dsweights[ds1index]*scratchspace->dsweights[ds2index]/(freqchannels+1);
-                    for(int l=0;l<xmacmullength;x++)
-                    {
-                      destchan = xmacstart+outputoffset+l;
-                      bin = scratchspace->bins[f][destchan];
-                      //cindex = resultindex + (scratchspace->bins[freqindex][destchan]*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*(freqchannels+1) + destchan;
-                      cindex = resultindex + (bin*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*xmacstridelength + destchan;
-                      scratchspace->threadcrosscorrs[cindex].re += scratchspace->pulsarscratchspace[l].re;
-                      scratchspace->threadcrosscorrs[cindex].im += scratchspace->pulsarscratchspace[l].im;
-                      scratchspace->baselineweight[f][bin][j][p] += bweight;
-                    }
+                    //not pulsar binning, so this is nice and simple - just cross multiply accumulate
+                    status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+
+                    if(status != vecNoErr)
+                      csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
                   }
                 }
-                else
-                {
-                  //not pulsar binning, so this is nice and simple - just cross multiply accumulate
-                  status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset]), xmacmullength);
-                  if(status != vecNoErr)
-                    csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
-                  //cout << "Just Xmac'd into resultindex " << resultindex+outputoffset << ", where the 10th offset re value is " << scratchspace->threadcrosscorrs[resultindex+outputoffset+10].re << endl;
-                  resultindex += xmacstridelength;
-                }
               }
-              if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-                //finished all the products of this frequency, so add the requisite increment to resultindex
-                resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*procslots[index].numpulsarbins*xmacstridelength;
+	      if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
+	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*  procslots[index].numpulsarbins*xmacstridelength;
+              else
+	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*xmacstridelength;
             }
           }
         }
       }
-    }
-    blockcount++;
-    if(blockcount == maxblocks)
-    {
-      //shift/average and then lock results and copy data
-      uvshiftAndAverage(index, threadid, (startblock+shiftcount*maxblocks+((double)maxblocks)/2.0)*blockns, currentpolyco, scratchspace);
+      blockcount++;
+      if(blockcount == maxblocks)
+      {
+        //shift/average and then lock results and copy data
+        uvshiftAndAverage(index, threadid, (startblock+shiftcount*maxblocks+((double)maxblocks)/2.0)*blockns, currentpolyco, scratchspace);
 
-      //reset the blockcount, increment shiftcount
-      blockcount = 0;
-      shiftcount++;
+        //reset the blockcount, increment shiftcount
+        blockcount = 0;
+        shiftcount++;
+      }
+    }
+
+    //finally, update the baselineweight in the non-binning case
+    if(!procslots[index].pulsarbin || procslots[index].scrunchoutput)
+    {
+      for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);fftsubloop++)
+      {
+        i = fftloop*config->getNumBufferedFFTs(procslots[index].configindex) + fftsubloop + startblock;
+        if(i >= startblock+numblocks)
+          break; //may not have to fully complete last fftloop
+        for(int f=0;f<config->getFreqTableLength();f++)
+        {
+          if(config->isFrequencyUsed(procslots[index].configindex, f))
+          {
+            for(int j=0;j<numbaselines;j++)
+	    {
+	      localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, j, f);
+	      if(localfreqindex >= 0)
+	      {
+	        ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
+	        ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
+	        bweight = scratchspace->dsweights[ds1index][fftsubloop]*scratchspace->dsweights[ds2index][fftsubloop];
+	        for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex);p++)
+		{
+		  scratchspace->baselineweight[f][0][j][p] += bweight;
+		}
+	      }
+	    }
+	  }
+        }
+      }
     }
   }
 
@@ -1380,80 +1396,114 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   }
 }
 
-void Core::createPulsarAccumSpace(cf32******* pulsaraccumspace, int newconfigindex, int oldconfigindex, int threadid)
+void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, int newconfigindex, int oldconfigindex, int threadid)
 {
   int status, freqchannels, localfreqindex;
 
-  if(oldconfigindex >= 0 && config->pulsarBinOn(oldconfigindex) && config->scrunchOutputOn(oldconfigindex))
+  if(oldconfigindex >= 0 && config->pulsarBinOn(oldconfigindex))
   {
-    //need to delete the old pulsar accumulation space
-    for(int f=0;f<config->getFreqTableLength();f++)
+    for(int i=0;i<config->getNumBufferedFFTs(oldconfigindex);i++)
     {
-      if(config->isFrequencyUsed(oldconfigindex, f))
+      for(int f=0;f<config->getFreqTableLength();f++)
       {
-        freqchannels = config->getFNumChannels(f);
-        for(int x=0;x<config->getNumXmacStrides(oldconfigindex, f);x++)
+        if(config->isFrequencyUsed(oldconfigindex, f))
+	{
+	  freqchannels = config->getFNumChannels(f);
+	  vectorFree((*bins)[i][f]);
+          threadbytes[threadid] -= 4*freqchannels;
+	}
+      }
+      delete [] (*bins)[i];
+    }
+    delete [] *bins;
+    if(config->scrunchOutputOn(oldconfigindex))
+    {
+      //need to delete the old pulsar accumulation space/bin space
+      for(int f=0;f<config->getFreqTableLength();f++)
+      {
+        if(config->isFrequencyUsed(oldconfigindex, f))
         {
-          for(int i=0;i<numbaselines;i++)
+          freqchannels = config->getFNumChannels(f);
+	  for(int x=0;x<config->getNumXmacStrides(oldconfigindex, f);x++)
           {
-            localfreqindex = config->getBLocalFreqIndex(oldconfigindex, i, f);
-            if(localfreqindex >= 0)
+            for(int i=0;i<numbaselines;i++)
             {
-              for(int s=0;s<1;s++) //forced to single pulsar ephemeris for now
+              localfreqindex = config->getBLocalFreqIndex(oldconfigindex, i, f);
+              if(localfreqindex >= 0)
               {
-                for(int j=0;j<config->getBNumPolProducts(oldconfigindex,i,localfreqindex);j++)
+                for(int s=0;s<1;s++) //forced to single pulsar ephemeris for now
                 {
-                  for(int k=0;k<config->getNumPulsarBins(oldconfigindex);k++)
+                  for(int j=0;j<config->getBNumPolProducts(oldconfigindex,i,localfreqindex);j++)
                   {
-                    threadbytes[threadid] -= 8*freqchannels;
-                    vectorFree(pulsaraccumspace[f][x][i][s][j][k]);
+                    for(int k=0;k<config->getNumPulsarBins(oldconfigindex);k++)
+                    {
+                      threadbytes[threadid] -= 8*freqchannels;
+                      vectorFree(pulsaraccumspace[f][x][i][s][j][k]);
+                    }
+                    delete [] pulsaraccumspace[f][x][i][s][j];
                   }
-                  delete [] pulsaraccumspace[f][x][i][s][j];
+                  delete [] pulsaraccumspace[f][x][i][s];
                 }
-                delete [] pulsaraccumspace[f][x][i][s];
               }
+              delete [] pulsaraccumspace[f][x][i];
             }
-            delete [] pulsaraccumspace[f][x][i];
+            delete [] pulsaraccumspace[f][x];
           }
-          delete [] pulsaraccumspace[f][x];
-        }
-        delete [] pulsaraccumspace[f];
+          delete [] pulsaraccumspace[f];
+	}
       }
     }
   }
 
-  if(newconfigindex >= 0 && config->pulsarBinOn(newconfigindex) && config->scrunchOutputOn(newconfigindex))
+  if(newconfigindex >= 0 && config->pulsarBinOn(newconfigindex))
   {
-    //need to create a new pulsar accumulation space
-    for(int f=0;f<config->getFreqTableLength();f++)
+    *bins = new s32**[config->getNumBufferedFFTs(newconfigindex)];
+    for(int i=0;i<config->getNumBufferedFFTs(newconfigindex);i++)
     {
-      if(config->isFrequencyUsed(newconfigindex, f))
+      (*bins)[i] = new s32*[config->getFreqTableLength()];
+      for(int f=0;f<config->getFreqTableLength();f++)
       {
-        freqchannels = config->getFNumChannels(f);
-        pulsaraccumspace[f] = new cf32*****[config->getNumXmacStrides(newconfigindex, f)];
-        for(int x=0;x<config->getNumXmacStrides(newconfigindex, f);x++)
+        if(config->isFrequencyUsed(newconfigindex, f))
+	{
+	  freqchannels = config->getFNumChannels(f);
+          (*bins)[i][f] = vectorAlloc_s32(freqchannels);
+	  threadbytes[threadid] += 4*freqchannels;
+	}
+      }
+    }
+    if(config->scrunchOutputOn(newconfigindex))
+    {
+      //need to create a new pulsar accumulation space
+      for(int f=0;f<config->getFreqTableLength();f++)
+      {
+        if(config->isFrequencyUsed(newconfigindex, f))
         {
-          pulsaraccumspace[f][x] = new cf32****[numbaselines];
-          for(int i=0;i<numbaselines;i++)
+          freqchannels = config->getFNumChannels(f);
+          pulsaraccumspace[f] = new cf32*****[config->getNumXmacStrides(newconfigindex, f)];
+          for(int x=0;x<config->getNumXmacStrides(newconfigindex, f);x++)
           {
-            localfreqindex = config->getBLocalFreqIndex(newconfigindex, i, f);
-            if(localfreqindex >= 0)
+            pulsaraccumspace[f][x] = new cf32****[numbaselines];
+            for(int i=0;i<numbaselines;i++)
             {
-              pulsaraccumspace[f][x][i] = new cf32***[1]; //just 1 source for now!
-              //for(int s=0;s<config->getMaxPhaseCentres(newconfigindex);s++)
-              for(int s=0;s<1;s++) //forced to single pulsar ephemeris for now
+              localfreqindex = config->getBLocalFreqIndex(newconfigindex, i, f);
+              if(localfreqindex >= 0)
               {
-                pulsaraccumspace[f][x][i][s] = new cf32**[config->getBNumPolProducts(newconfigindex,i,localfreqindex)];
-                for(int j=0;j<config->getBNumPolProducts(newconfigindex,i,localfreqindex);j++)
+                pulsaraccumspace[f][x][i] = new cf32***[1]; //just 1 source for now!
+                //for(int s=0;s<config->getMaxPhaseCentres(newconfigindex);s++)
+                for(int s=0;s<1;s++) //forced to single pulsar ephemeris for now
                 {
-                  pulsaraccumspace[f][x][i][s][j] = new cf32*[config->getNumPulsarBins(newconfigindex)];
-                  for(int k=0;k<config->getNumPulsarBins(newconfigindex);k++)
+                  pulsaraccumspace[f][x][i][s] = new cf32**[config->getBNumPolProducts(newconfigindex,i,localfreqindex)];
+                  for(int j=0;j<config->getBNumPolProducts(newconfigindex,i,localfreqindex);j++)
                   {
-                    pulsaraccumspace[f][x][i][s][j][k] = vectorAlloc_cf32(freqchannels);
-                    threadbytes[threadid] += 8*freqchannels;
-                    status = vectorZero_cf32(pulsaraccumspace[f][x][i][s][j][k], freqchannels);
-                    if(status != vecNoErr)
-                      csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
+                    pulsaraccumspace[f][x][i][s][j] = new cf32*[config->getNumPulsarBins(newconfigindex)];
+                    for(int k=0;k<config->getNumPulsarBins(newconfigindex);k++)
+                    {
+                      pulsaraccumspace[f][x][i][s][j][k] = vectorAlloc_cf32(freqchannels);
+                      threadbytes[threadid] += 8*freqchannels;
+                      status = vectorZero_cf32(pulsaraccumspace[f][x][i][s][j][k], freqchannels);
+                      if(status != vecNoErr)
+                        csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
+                    }
                   }
                 }
               }
@@ -1465,7 +1515,7 @@ void Core::createPulsarAccumSpace(cf32******* pulsaraccumspace, int newconfigind
   }
 }
 
-void Core::allocateConfigSpecificThreadArrays(f32 **** baselineweight, int ** resultxmacstrideoffset, int newconfigindex, int oldconfigindex, int threadid)
+void Core::allocateConfigSpecificThreadArrays(f32 **** baselineweight, int newconfigindex, int oldconfigindex, int threadid)
 {
   int localfreqindex, numstrides, stridelen, status, binloop;
 
@@ -1496,7 +1546,6 @@ void Core::allocateConfigSpecificThreadArrays(f32 **** baselineweight, int ** re
         if(config->getFNumChannels(i)%config->getXmacStrideLength(oldconfigindex) != 0)
           numstrides++;
         threadbytes[threadid] -= 4*numstrides;
-        delete [] resultxmacstrideoffset[i];
       }
     }
   }
@@ -1510,27 +1559,6 @@ void Core::allocateConfigSpecificThreadArrays(f32 **** baselineweight, int ** re
     {
       if(config->isFrequencyUsed(newconfigindex, i))
       {
-        //allocate the xmacstrideoffset array
-        numstrides = config->getFNumChannels(i)/config->getXmacStrideLength(newconfigindex);
-        if(config->getFNumChannels(i)%config->getXmacStrideLength(newconfigindex) != 0)
-          numstrides++;
-        resultxmacstrideoffset[i] = vectorAlloc_s32(numstrides);
-        status = vectorZero_s32(resultxmacstrideoffset[i], numstrides);
-        if(status != vecNoErr)
-          csevere << startl << "Error trying to zero resultxmacstrideoffset!!!" << endl;
-        threadbytes[threadid] += 4*numstrides;
-        //work out the xmacstrideoffset
-        stridelen = config->getXmacStrideLength(newconfigindex);
-        for(int j=1;j<numstrides;j++)
-        {
-          resultxmacstrideoffset[i][j] = resultxmacstrideoffset[i][j-1];
-          for(int k=0;k<numbaselines;k++)
-          {
-            localfreqindex = config->getBLocalFreqIndex(newconfigindex, k, i);
-            if(localfreqindex >= 0)
-              resultxmacstrideoffset[i][j] += config->getBNumPolProducts(newconfigindex, k, localfreqindex)*stridelen;
-          }
-        }
         //allocate the baselineweight array
         baselineweight[i] = new f32**[binloop];
         for(int b=0;b<binloop;b++)

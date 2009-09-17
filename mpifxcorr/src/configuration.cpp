@@ -768,7 +768,7 @@ bool Configuration::processConfig(ifstream * input)
   bool found;
 
   maxnumpulsarbins = 0;
-  maxnumxmacstrides = 0;
+  maxnumbufferedffts = 0;
 
   getinputline(input, &line, "NUM CONFIGURATIONS");
   numconfigs = atoi(line.c_str());
@@ -790,7 +790,12 @@ bool Configuration::processConfig(ifstream * input)
     configs[i].fringerotationorder = atoi(line.c_str());
     getinputline(input, &line, "ARRAY STRIDE LEN");
     configs[i].arraystridelen = atoi(line.c_str());
-    configs[i].xmacstridelen = 64; //FIXME should set this properly in input file
+    getinputline(input, &line, "XMAC STRIDE LEN");
+    configs[i].xmacstridelen = atoi(line.c_str());
+    getinputline(input, &line, "NUM BUFFERED FFTS");
+    configs[i].numbufferedffts = atoi(line.c_str());
+    if(configs[i].numbufferedffts > maxnumbufferedffts)
+      maxnumbufferedffts = configs[i].numbufferedffts;
     getinputline(input, &line, "WRITE AUTOCORRS");
     configs[i].writeautocorrs = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
     getinputline(input, &line, "PULSAR BINNING");
@@ -1764,17 +1769,17 @@ bool Configuration::consistencyCheck()
           //correlating a USB with an LSB
           cinfo << startl << "Baseline " << i << " frequency " << j << " is correlating an USB frequency with a LSB frequency" << endl;
           if(freqtable[freq1index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] == 1; //datastream1 has the LSB (2 is USB)
+            baselinetable[i].oddlsbfreqs[j] = 1; //datastream1 has the LSB (2 is USB)
           else
-            baselinetable[i].oddlsbfreqs[j] == 2; //datastream2 has the LSB (1 is USB)
+            baselinetable[i].oddlsbfreqs[j] = 2; //datastream2 has the LSB (1 is USB)
         }
         else
         {
           cwarn << startl << "Warning! Baseline table entry " << i << ", frequency " << j << " is trying to correlate two different frequencies!  Correlation will go on, but the results for these bands will probably be garbage!" << endl;
           if(freqtable[freq1index].lowersideband && !freqtable[freq2index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] == 1;
+            baselinetable[i].oddlsbfreqs[j] = 1;
           else if(freqtable[freq2index].lowersideband && !freqtable[freq1index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] == 2;
+            baselinetable[i].oddlsbfreqs[j] = 2;
         }
       }
       for(int k=0;k<baselinetable[i].numpolproducts[j];k++)

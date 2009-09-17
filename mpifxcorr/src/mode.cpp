@@ -87,20 +87,36 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
     interpolator = new f64[3];
 
-    fftoutputs = new cf32*[numrecordedbands + numzoombands];
-    conjfftoutputs = new cf32*[numrecordedbands + numzoombands];
+    fftoutputs = new cf32**[numrecordedbands + numzoombands];
+    conjfftoutputs = new cf32**[numrecordedbands + numzoombands];
     estimatedbytes += 4*(numrecordedbands + numzoombands);
-    for(int j=0;j<numrecordedbands;j++)
+    for(int j=0;j<numrecordedbands+numzoombands;j++)
     {
-      fftoutputs[j] = vectorAlloc_cf32(recordedbandchannels);
-      conjfftoutputs[j] = vectorAlloc_cf32(recordedbandchannels);
-      estimatedbytes += 2*8*recordedbandchannels;
-    }
-    for(int j=0;j<numzoombands;j++)
-    {
-      localfreqindex = config->getDLocalZoomFreqIndex(confindex, dsindex, j);
-      fftoutputs[j+numrecordedbands] = &(fftoutputs[config->getDZoomFreqParentFreqIndex(confindex, dsindex, localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
-      conjfftoutputs[j+numrecordedbands] = &(conjfftoutputs[config->getDZoomFreqParentFreqIndex(confindex, dsindex, localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
+      fftoutputs[j] = new cf32*[config->getNumBufferedFFTs(confindex)];
+      conjfftoutputs[j] = new cf32*[config->getNumBufferedFFTs(confindex)];
+      for(int k=0;k<config->getNumBufferedFFTs(confindex);k++)
+      {
+        if(j<numrecordedbands)
+        {
+	  if(fringerotationorder == 0)
+	  {
+	    fftoutputs[j][k] = vectorAlloc_cf32(recordedbandchannels+1);
+            conjfftoutputs[j][k] = vectorAlloc_cf32(recordedbandchannels+1);
+	  }
+	  else
+	  {
+            fftoutputs[j][k] = vectorAlloc_cf32(recordedbandchannels);
+            conjfftoutputs[j][k] = vectorAlloc_cf32(recordedbandchannels);
+	  }
+          estimatedbytes += 2*4*recordedbandchannels;
+        }
+        else
+        {
+          localfreqindex = config->getDLocalZoomFreqIndex(confindex, dsindex, j-numrecordedbands);
+	  fftoutputs[j] = &(fftoutputs[config->getDZoomFreqParentFreqIndex(confindex, dsindex, localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
+	  conjfftoutputs[j] = &(conjfftoutputs[config->getDZoomFreqParentFreqIndex(confindex, dsindex,localfreqindex)][config->getDZoomFreqChannelOffset(confindex, dsindex, localfreqindex)]);
+	}
+      }
     }
     dataweight = 0.0;
 
@@ -269,10 +285,15 @@ Mode::~Mode()
   cdebug << startl << "Starting a mode destructor" << endl;
 
   vectorFree(validflags);
-  for(int j=0;j<numrecordedbands;j++)
+  for(int j=0;j<numrecordedbands+numzoombands;j++)
   {
-    vectorFree(fftoutputs[j]);
-    vectorFree(conjfftoutputs[j]);
+    for(int k=0;k<config->getNumBufferedFFTs(configindex);k++)
+    {
+      vectorFree(fftoutputs[j][k]);
+      vectorFree(conjfftoutputs[j][k]);
+    }
+    delete [] fftoutputs[j];
+    delete [] conjfftoutputs[j];
   }
   delete [] fftoutputs;
   delete [] conjfftoutputs;
@@ -323,6 +344,7 @@ Mode::~Mode()
       status = vectorFreeFFTR_f32(pFFTSpecR);
       if(status != vecNoErr)
         csevere << startl << "Error in freeing FFT spec!!!" << status << endl;
+      vectorFree(fftd);
       break;
   }
 
@@ -396,7 +418,7 @@ float Mode::unpack(int sampleoffset)
   return 1.0;
 }
 
-float Mode::process(int index)  //frac sample error, fringedelay and wholemicroseconds are in microseconds 
+float Mode::process(int index, int subloopindex)  //frac sample error, fringedelay and wholemicroseconds are in microseconds 
 {
   double phaserotation, averagedelay, nearestsampletime, starttime, finaloffset, lofreq, distance, walltimesecs, fftcentre, delay1, delay2;
   f32 phaserotationfloat, fracsampleerror;
@@ -412,10 +434,10 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   {
     for(int i=0;i<numrecordedbands;i++)
     {
-      status = vectorZero_cf32(fftoutputs[i], recordedbandchannels);
+      status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
-      status = vectorZero_cf32(conjfftoutputs[i], recordedbandchannels);
+      status = vectorZero_cf32(conjfftoutputs[i][subloopindex], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
     }
@@ -676,7 +698,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         indices[count++] = j;
         switch(fringerotationorder) {
           case 0: //post-F
-            fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j]:fftoutputs[j];
+            fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j][subloopindex]:fftoutputs[j][subloopindex];
 
             //do the fft
             status = vectorFFT_RtoC_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), (f32*)fftptr, pFFTSpecR, fftbuffer);
@@ -685,7 +707,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
             //fix the lower sideband if required
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
             {
-              status = vectorConjFlip_cf32(fftptr, fftoutputs[j], recordedbandchannels);
+              status = vectorConjFlip_cf32(fftptr, fftoutputs[j][subloopindex], recordedbandchannels);
               if(status != vecNoErr)
                 csevere << startl << "Error in conjugate!!!" << status << endl;
             }
@@ -702,11 +724,11 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
             if(status != vecNoErr)
               csevere << startl << "Error doing the FFT!!!" << endl;
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-              status = vectorCopy_cf32(&(fftd[recordedbandchannels+1]), fftoutputs[j], recordedbandchannels-1);
-              fftoutputs[j][recordedbandchannels-1] = fftd[0];
+              status = vectorCopy_cf32(&(fftd[recordedbandchannels+1]), fftoutputs[j][subloopindex], recordedbandchannels-1);
+              fftoutputs[j][subloopindex][recordedbandchannels-1] = fftd[0];
             }
             else {
-              status = vectorCopy_cf32(fftd, fftoutputs[j], recordedbandchannels);
+              status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
             }
             if(status != vecNoErr)
               csevere << startl << "Error copying FFT results!!!" << endl;
@@ -714,17 +736,17 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         }
 
         //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
-        status = vectorMul_cf32_I(fracsamprotator, fftoutputs[j], recordedbandchannels);
+        status = vectorMul_cf32_I(fracsamprotator, fftoutputs[j][subloopindex], recordedbandchannels);
         if(status != vecNoErr)
           csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
 
         //do the conjugation
-        status = vectorConj_cf32(fftoutputs[j], conjfftoutputs[j], recordedbandchannels);
+        status = vectorConj_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex], recordedbandchannels);
         if(status != vecNoErr)
           csevere << startl << "Error in conjugate!!!" << status << endl;
 
         //do the autocorrelation (skipping Nyquist channel)
-        status = vectorAddProduct_cf32(fftoutputs[j], conjfftoutputs[j], autocorrelations[0][j], recordedbandchannels);
+        status = vectorAddProduct_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex], autocorrelations[0][j], recordedbandchannels);
         if(status != vecNoErr)
           csevere << startl << "Error in autocorrelation!!!" << status << endl;
 
@@ -736,10 +758,10 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
     //if we need to, do the cross-polar autocorrelations
     if(calccrosspolautocorrs && count > 1)
     {
-      status = vectorAddProduct_cf32(fftoutputs[indices[0]], conjfftoutputs[indices[1]], autocorrelations[1][indices[0]], recordedbandchannels);
+      status = vectorAddProduct_cf32(fftoutputs[indices[0]][subloopindex], conjfftoutputs[indices[1]][subloopindex], autocorrelations[1][indices[0]], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-      status = vectorAddProduct_cf32(fftoutputs[indices[1]], conjfftoutputs[indices[0]], autocorrelations[1][indices[1]], recordedbandchannels);
+      status = vectorAddProduct_cf32(fftoutputs[indices[1]][subloopindex], conjfftoutputs[indices[0]][subloopindex], autocorrelations[1][indices[1]], recordedbandchannels);
       if(status != vecNoErr)
         csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
 
