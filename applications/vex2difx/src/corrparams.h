@@ -40,6 +40,16 @@
 
 using namespace std;
 
+extern const double MJD_UNIX0;	// MJD at beginning of unix time
+extern const double SEC_DAY;
+extern const double MUSEC_DAY;
+
+enum V2D_Mode
+{
+	V2D_MODE_NORMAL = 0,	// for almost all purposes
+	V2D_MODE_PROFILE = 1	// to produce pulsar profiles
+};
+
 // see http://cira.ivec.org/dokuwiki/doku.php/difx/configuration
 
 class PhaseCentre
@@ -91,6 +101,12 @@ public:
 	// flag
 	// media
 	bool polSwap;		// If true, swap polarizations
+	string format;		// Override format from .v2d file.  
+				// This is sometimes needed because for
+				// Possible values: S2 VLBA MkIV/Mark4 
+	vector<VexBasebandFile> basebandFiles;	// files to correlate
+	int networkPort;	// For eVLBI : port for this antenna
+	int windowSize;		// For eVLBI : TCP window size
 };
 
 class CorrSetup
@@ -115,6 +131,8 @@ public:
 	int fringeRotOrder;	// 0, 1, or 2
 	int strideLength;	// The number of channels to do at a time
 				// when fringeRotOrder > 0
+	int xmacLength;		// Number of channels to do at a time when xmac'ing
+	int numBufferedFFTs;	// Number of FFTs to do in Mode before XMAC'ing
 	string binConfigFile;
 	set<int> freqIds;	// which bands to correlate
 private:
@@ -141,7 +159,7 @@ public:
 	string corrSetupName;	/* pointer to CorrSetup */
 };
 
-class CorrParams
+class CorrParams : public VexInterval
 {
 public:
 	CorrParams();
@@ -155,6 +173,7 @@ public:
 	void defaults();
 	void defaultSetup();
 	void example();
+	int sanityCheck();
 	void addSourceSetup(SourceSetup toadd);
 
 	bool useAntenna(const string &antName) const;
@@ -169,9 +188,8 @@ public:
 	const string &findSetup(const string &scan, const string &source, const string &mode, char cal, int qual) const;
 	
 	/* global parameters */
+	int parseWarnings;
 	string vexFile;
-	double mjdStart;
-	double mjdStop;
 	unsigned int minSubarraySize;
 	double maxGap;		// days
 	bool singleScan;
@@ -181,6 +199,7 @@ public:
 	bool padScans;
 	bool simFXCORR;		// set integration and start times to match VLBA HW correlator
 	double maxLength;	// [days]
+	double minLength;	// [days]
 	double maxSize;		// [bytes] -- break jobs for output filesize
 	string jobSeries;	// prefix name to job files
 	int startSeries;	// start job series at this number
@@ -189,15 +208,22 @@ public:
 	double sendLength;	// (s) amount of data to send from datastream to core at a time
 	unsigned int invalidMask;
 	int visBufferLength;
+	int overSamp;		// A user supplied override to oversample factor
 
 	list<string> antennaList;
 	list<pair<string,string> > baselineList;
+
+	/* manual forced job breaks */
+	vector<double> manualBreaks;
 
 	/* setups to apply */
 	vector<CorrSetup> corrSetups;
 
 	/* source setups to apply */
 	vector<SourceSetup> sourceSetups;
+
+	/* manually provided EOPs */
+	vector<VexEOP> eops;
 
 	/* antenna setups to apply */
 	vector<AntennaSetup> antennaSetups;

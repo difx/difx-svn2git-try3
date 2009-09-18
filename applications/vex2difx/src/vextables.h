@@ -36,6 +36,8 @@
 #include <iostream>
 #include <map>
 
+extern const double RAD2ASEC;
+
 using namespace std;
 
 class VexData;
@@ -52,6 +54,8 @@ public:
 		OBSERVE_STOP,
 		RECORD_STOP,
 		CLOCK_BREAK,
+		LEAP_SECOND,
+		MANUAL_BREAK,
 		RECORD_START,
 		OBSERVE_START,
 		JOB_START,
@@ -91,6 +95,15 @@ public:
 	void logicalOr(const VexInterval &v);
 	bool isWithin(VexInterval &v) { return (mjdStart >= v.mjdStart) && (mjdStop <= v.mjdStop); }
 	bool isCausal() { return (mjdStart <= mjdStop); }
+};
+
+class VexBasebandFile : public VexInterval
+{
+	public:
+	string filename;
+
+	VexBasebandFile(string name, double start=-1.0e9, double stop=1.0e9) :
+		VexInterval(start, stop), filename(name) {}
 };
 
 class VexScan : public VexInterval
@@ -169,6 +182,7 @@ public:
 	double sampRate;		// (Hz)
 	vector<VexSubband> subbands;
 	map<string,VexFormat> formats;	// indexed by antenna name
+	list<int> overSamp;		// list of the oversample factors used by this mode
 };
 
 class VexVSN : public VexInterval
@@ -183,6 +197,11 @@ class VexClock
 {
 public:
 	VexClock() : mjdStart(0.0), offset(0.0), rate(0.0), offset_epoch(50000.0) {}
+	void flipSign() 
+	{ 
+		offset = -offset;
+		rate = -rate;
+	}
 
 	double mjdStart;	// (mjd)
 	double offset;		// (sec)
@@ -207,6 +226,7 @@ public:
 	double axisOffset;	// (m)
 	vector<VexClock> clocks;
 	vector<VexVSN> vsns;
+	vector<VexBasebandFile> basebandFiles;
 };
 
 class VexEOP
@@ -218,6 +238,8 @@ public:
 	double tai_utc;		// seconds
 	double ut1_utc;		// seconds
 	double xPole, yPole;	// radian
+
+	int setkv(const string &key, const string &value);
 };
 
 class VexExper : public VexInterval
@@ -235,6 +257,7 @@ public:
 
 	void assignVSNs(const VexData& V);
 	string getVSN(const string &antName) const;
+	bool hasScan(const string &scanName) const;
 	int generateFlagFile(const VexData& V, const string &fileName, unsigned int invalidMask=0xFFFFFFFF) const;
 
 	// return the approximate number of Operations required to compute this scan
@@ -249,7 +272,7 @@ public:
 	double dataSize;		// [bytes] estimate of data output size
 };
 
-class VexJobFlag
+class VexJobFlag : public VexInterval
 {
 public:
 	static const unsigned int JOB_FLAG_RECORD = 1 << 0;
@@ -257,9 +280,8 @@ public:
 	static const unsigned int JOB_FLAG_TIME   = 1 << 2;
 	static const unsigned int JOB_FLAG_SCAN   = 1 << 3;
 	VexJobFlag() {}
-	VexJobFlag(double start, double stop, int ant) : timeRange(start, stop), antId(ant) {}
+	VexJobFlag(double start, double stop, int ant) : VexInterval(start, stop), antId(ant) {}
 
-	VexInterval timeRange;
 	int antId;
 };
 
@@ -357,6 +379,7 @@ ostream& operator << (ostream& os, const VexIF& x);
 ostream& operator << (ostream& os, const VexFormat& x);
 ostream& operator << (ostream& os, const VexMode& x);
 ostream& operator << (ostream& os, const VexEOP& x);
+ostream& operator << (ostream& os, const VexBasebandFile& x);
 ostream& operator << (ostream& os, const VexVSN& x);
 ostream& operator << (ostream& os, const VexClock& x);
 ostream& operator << (ostream& os, const VexJob& x);

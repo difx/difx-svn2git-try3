@@ -35,6 +35,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <difxio/difx_input.h>
@@ -47,9 +48,6 @@ const string version("0.3");
 const string verdate("20090728");
 const string author("Walter Brisken/Adam Deller");
 
-const double MJD_UNIX0 = 40587.0;	/* MJD at beginning of unix time */
-const double SEC_DAY = 86400.0;
-const double MUSEC_DAY = 86400000000.0;
 
 double current_mjd()
 {
@@ -64,17 +62,17 @@ bool areScansCompatible(const VexScan *A, const VexScan *B, const CorrParams *P)
 	if(((B->mjdStart < A->mjdStop) && (fabs(B->mjdStart-A->mjdStop)>0.00000001)) ||
 	   (B->mjdStart > A->mjdStop + P->maxGap))
 	{
-		cout << setprecision(15) << "Scans incompatible 1: 1st scan has Stop " << A->mjdStop << " and 2nd has start " << B->mjdStart << " and maxGap is " << P->maxGap << endl;
+		//cout << setprecision(15) << "Scans incompatible 1: 1st scan has Stop " << A->mjdStop << " and 2nd has start " << B->mjdStart << " and maxGap is " << P->maxGap << endl;
 		return false;
 	}
 	if(P->singleScan)
 	{
-		cout << "Scans incompatible B" << endl;
+		//cout << "Scans incompatible B" << endl;
 		return false;
 	}
 	if(P->singleSetup && A->modeName != B->modeName)
 	{
-		cout << "Scans incompatible C" << endl;
+		//cout << "Scans incompatible C" << endl;
 		return false;
 	}
 	
@@ -99,32 +97,40 @@ void genJobGroups(vector<VexJobGroup> &JGs, const VexData *V, const CorrParams *
 		const VexScan *scan1 = V->getScan(JG.scans.back());
 		const CorrSetup *corrSetup1 = P->getCorrSetup(scan1->corrSetupName);
 
-		for(it = scans.begin(); it != scans.end();)
+		for(list<string>::iterator it = scans.begin(); it != scans.end();)
 		{
 			const VexScan *scan2 = V->getScan(*it);
 			const CorrSetup *corrSetup2 = P->getCorrSetup(scan2->corrSetupName);
+
+			// Skip any scans that don't overlap with .v2d mjdStart and mjdStop
+			if(P->overlap(*scan2) <= 0.0)
+			{
+				continue;
+			}
 
 			// FIXME -- verify modes are compatible
 			if(areCorrSetupsCompatible(corrSetup1, corrSetup2, P) &&
 			   areScansCompatible(scan1, scan2, P))
 			{
-				JG.logicalOr(*scan2);
+				JG.logicalOr(*scan2);	// expand jobGroup time to include this scan
 				JG.scans.push_back(*it);
 				it = scans.erase(it);
 				scan1 = scan2;
 				corrSetup1 = corrSetup2;
 			}
 			else
-			{
+			{	
 				it++;
 			}
 		}
 	}
 
 	const list<VexEvent> *events = V->getEvents();
-	for(v = JGs.begin(); v != JGs.end(); v++)
+	for(vector<VexJobGroup>::iterator jg = JGs.begin(); jg != JGs.end(); jg++)
 	{
-		v->genEvents(*events);
+		jg->genEvents(*events);
+		cout << "About to try and shrink job group range" << endl;
+		jg->logicalAnd(*P);		// possibly shrink job group to requested range
 	}
 }
 
@@ -160,6 +166,7 @@ void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const CorrPa
 	map<string,double> recordStop;
 	map<double,int> usage;
 	map<double,int> clockBreaks;
+	int nClockBreaks = 0;
 	list<MediaChange> changes;
 	list<double> times;
 	list<double> breaks;
@@ -168,6 +175,7 @@ void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const CorrPa
 	double mjdBest = 0.0;
 	double start;
 	int nAnt;
+	int nLoop = 0;
 
 	// first initialize recordStop and usage
 	for(e = JG.events.begin(); e != JG.events.end(); e++)
@@ -203,7 +211,11 @@ void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const CorrPa
 			if(recordStop[e->name] > 0.0)
 			{
 				changes.push_back(MediaChange(e->name, recordStop[e->name], e->mjd));
-				cout << "Media change: " << e->name << " " << (VexInterval)(changes.back()) << endl;
+				if(verbose > 0)
+				{
+					cout << "Media change: " << e->name << " " << 
+						(VexInterval)(changes.back()) << endl;
+				}
 			}
 		}
 		else if(e->eventType == VexEvent::RECORD_STOP)
@@ -218,18 +230,27 @@ void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const CorrPa
 		{
 			usage[e->mjd]--;
 		}
-		else if(e->eventType == VexEvent::CLOCK_BREAK)
+		else if(e->eventType == VexEvent::CLOCK_BREAK ||
+			e->eventType == VexEvent::LEAP_SECOND ||
+			e->eventType == VexEvent::MANUAL_BREAK)
 		{
 			clockBreaks[e->mjd]++;
+			nClockBreaks++;
 		}
 	}
 
 	// now go through and set breakpoints
-	while(!changes.empty())
+	while(!changes.empty() || nClockBreaks > 0)
 	{
+		nLoop++;
+		if(nLoop > 100000) // There is clearly a problem converging!
+		{
+			cerr << "Developer error! -- jobs not converging after " << nLoop << " tries.\n" << endl;
+			exit(0);
+		}
+
 		// look for break with highest score
 		// Try as hard as possible to minimize number of breaks
-		cout << "Doing something with a change" << endl;
 		scoreBest = -1;
 		for(t = times.begin(); t != times.end(); t++)
 		{
@@ -242,6 +263,8 @@ void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const CorrPa
 		}
 
 		breaks.push_back(mjdBest);
+		nClockBreaks -= clockBreaks[mjdBest];
+		clockBreaks[mjdBest] = 0;
 
 		// find modules that change in the new gap
 		for(c = changes.begin(); c != changes.end();)
@@ -266,7 +289,14 @@ void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const CorrPa
 	for(t = breaks.begin(); t != breaks.end(); t++)
 	{
 		VexInterval jobTimeRange(start, *t);
-		JG.createJobs(Js, jobTimeRange, V, P->maxLength, P->maxSize);
+		if(jobTimeRange.duration() > P->minLength)
+		{
+			JG.createJobs(Js, jobTimeRange, V, P->maxLength, P->maxSize);
+		}
+		else
+		{
+			cerr << "Warning: skipping short job of " << (jobTimeRange.duration()*86400.0) << " seconds duration." << endl;
+		}
 		start = *t;
 	}
 }
@@ -304,7 +334,7 @@ void makeJobs(vector<VexJob>& J, VexData *V, const CorrParams *P, int verbose)
 
 		// note -- this is an internal name only, not the job prefix that 
 		// becomes part of the filenames
-		name << j->jobSeries << j->jobId;
+		name << j->jobSeries << "_" << j->jobId;
 
 		V->addEvent(j->mjdStart, VexEvent::JOB_START, name.str());
 		V->addEvent(j->mjdStop,  VexEvent::JOB_STOP,  name.str());
@@ -312,7 +342,7 @@ void makeJobs(vector<VexJob>& J, VexData *V, const CorrParams *P, int verbose)
 	}
 }
 
-DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, const string& obsCode, int *n, int nDigit)
+DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, const string& obsCode, int *n, int nDigit, char ext)
 {
 	DifxJob *job;
 	const char *difxVer;
@@ -342,9 +372,9 @@ DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, const stri
 	job->dutyCycle = J.dutyCycle;
 
 	// The following line defines the format of the job filenames
-	sprintf(format, "%%s/%%s_%%0%dd", nDigit);
+	sprintf(format, "%%s/%%s_%%0%dd%%c", nDigit);
 
-	sprintf(job->fileBase, format, directory.c_str(), J.jobSeries.c_str(), J.jobId);
+	sprintf(job->fileBase, format, directory.c_str(), J.jobSeries.c_str(), J.jobId, ext);
 
 	return job;
 }
@@ -368,7 +398,37 @@ DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const CorrParam
 	{
 		ant = V->getAntenna(a->first);
 		strcpy(A[i].name, a->first.c_str());
-		strcpy(A[i].vsn, a->second.c_str());
+		int nFile = ant->basebandFiles.size();
+		if(nFile > 0)
+		{
+			int count = 0;
+
+			for(int j = 0; j < nFile; j++)
+			{
+				if(J.overlap(ant->basebandFiles[j]) > 0.0)
+				{
+					count++;
+				}
+			}
+
+			allocateDifxAntennaFiles(A+i, count);
+
+			count = 0;
+
+			for(int j = 0; j < nFile; j++)
+			{
+				if(J.overlap(ant->basebandFiles[j]) > 0.0)
+				{
+					A[i].file[count] = 
+						strdup(ant->basebandFiles[j].filename.c_str());
+					count++;
+				}
+			}
+		}
+		else
+		{
+			strcpy(A[i].vsn, a->second.c_str());
+		}
 		A[i].X = ant->x + ant->dx*(mjd-ant->posEpoch)*86400.0;
 		A[i].Y = ant->y + ant->dy*(mjd-ant->posEpoch)*86400.0;
 		A[i].Z = ant->z + ant->dz*(mjd-ant->posEpoch)*86400.0;
@@ -400,6 +460,8 @@ DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const CorrParam
 			{
 				strcpy(A[i].name, antSetup->difxName.c_str());
 			}
+			A[i].networkPort = antSetup->networkPort;
+			A[i].windowSize  = antSetup->windowSize;
 		}
 
 		antList.push_back(a->first);
@@ -549,9 +611,25 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, const VexMode 
 		strcpy(D->datastream[dsId].dataFormat, "MKIV");
 		D->datastream[dsId].dataFrameSize = 10000*format.nBit*n2;
 	}
+	else if(format.format == string("MARK5B"))
+	{
+		strcpy(D->datastream[dsId].dataFormat, "MARK5B");
+		D->datastream[dsId].dataFrameSize = 10016;
+	}
 	else if(format.format == string("S2"))
 	{
 		strcpy(D->datastream[dsId].dataFormat, "LBAVSOP");
+		D->datastream[dsId].dataFrameSize = 4096 + 10*format.nBit*n2*(int)(mode->sampRate+0.5)/8;
+		cerr << "Warning: S2 data can be in LBAVSOP or LBASTD format - defaulting to LBAVSOP!!" << endl;
+	}
+	else if(format.format == string("LBAVSOP"))
+	{
+		strcpy(D->datastream[dsId].dataFormat, "LBAVSOP");
+		D->datastream[dsId].dataFrameSize = 4096 + 10*format.nBit*n2*(int)(mode->sampRate+0.5)/8;
+	}
+	else if(format.format == string("LBASTD"))
+	{
+		strcpy(D->datastream[dsId].dataFormat, "LBASTD");
 		D->datastream[dsId].dataFrameSize = 4096 + 10*format.nBit*n2*(int)(mode->sampRate+0.5)/8;
 	}
 	else
@@ -561,6 +639,22 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, const VexMode 
 	}
 
 	strcpy(D->datastream[dsId].dataSource, "MODULE");
+
+	for(int a = 0; a < D->nAntenna; a++)
+	{
+		if(strcmp(D->antenna[a].name, antName.c_str()) == 0)
+		{
+			if(D->antenna[a].networkPort != 0)
+			{
+				strcpy(D->datastream[dsId].dataSource, "NETWORK");
+			}
+			else if(D->antenna[a].nFile > 0)
+			{
+				strcpy(D->datastream[dsId].dataSource, "FILE");
+			}
+		}
+	}
+
 	D->datastream[dsId].quantBits = format.nBit;
 	DifxDatastreamAllocBands(D->datastream + dsId, n2);
 
@@ -863,6 +957,8 @@ int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, const Ve
 	config->guardNS = corrSetup->guardNS;
 	config->fringeRotOrder = corrSetup->fringeRotOrder;
 	config->strideLength = corrSetup->strideLength;
+	config->xmacLength = corrSetup->xmacLength;
+	config->numBufferedFFTs = corrSetup->numBufferedFFTs;
 	config->pulsarId = -1;		// FIXME -- from setup
 	config->doPolar = corrSetup->doPolar;
 	config->doAutoCorr = 1;
@@ -894,7 +990,7 @@ int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, const Ve
 	return c;
 }
 
-void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbose, ofstream *of, int nDigit)
+int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbose, ofstream *of, int nDigit, char ext)
 {
 	DifxInput *D;
 	DifxScan *scan;
@@ -958,7 +1054,7 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
 	D->nDataSegments = P->nDataSegments;
 
 	D->antenna = makeDifxAntennas(J, V, P, &(D->nAntenna), antList);
-	D->job = makeDifxJob(V->getDirectory(), J, D->nAntenna, V->getExper()->name, &(D->nJob), nDigit);
+	D->job = makeDifxJob(V->getDirectory(), J, D->nAntenna, V->getExper()->name, &(D->nJob), nDigit, ext);
 	
 	D->nScan = J.scans.size();
 	D->scan = newDifxScanArray(D->nScan);
@@ -1040,6 +1136,11 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
 		}
 
 		const VexSource *src = V->getSource(S->sourceName);
+
+		// Determine interval where scan and job overlap
+		VexInterval scanInterval(*S);
+		scanInterval.logicalAnd(J);
+
 		corrSetup = P->getCorrSetup(S->corrSetupName);
 		sourceSetup = P->getSourceSetup(S->sourceName);
 		if(!sourceSetup)
@@ -1104,10 +1205,10 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
 			scan->phsCentreSrcs[atSource++] = foundSrcIndex; 
 		}
 
-		scan->mjdStart = S->mjdStart;
-		scan->mjdEnd = S->mjdStop;
-		scan->startSeconds = static_cast<int>((S->mjdStart - J.mjdStart)*86400.0 + 0.01);
-		scan->durSeconds = static_cast<int>(S->duration_seconds() + 0.01);
+		scan->mjdStart = scanInterval.mjdStart;
+		scan->mjdEnd = scanInterval.mjdStop;
+		scan->startSeconds = static_cast<int>((scanInterval.mjdStart - J.mjdStart)*86400.0 + 0.01);
+		scan->durSeconds = static_cast<int>(scanInterval.duration_seconds() + 0.01);
 		scan->configId = getConfigIndex(configs, D, V, P, S);
 		strcpy(scan->identifier, S->name.c_str());
 		strcpy(scan->obsModeName, S->modeName.c_str());
@@ -1136,12 +1237,10 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
 	}
 
 	// configure datastreams
-	cout << "About to configure datastreams" << endl;
 	D->datastream = makeDifxDatastreams(J, V, D->nConfig, &(D->nDatastream));
 	D->nDatastream = 0;
 	for(int c = 0; c < D->nConfig; c++)
 	{
-		cout << "Doing config " << c << "/" << D->nConfig << endl;
 		mode = V->getMode(configs[c].first);
 		if(mode == 0)
 		{
@@ -1292,14 +1391,10 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
  	//All averaging will always be in correlator by default, not difx2fits
 	D->specAvg  = 1;
 
-	cout << "About to write input file" << endl;
-
 	// write input file
 	ostringstream inputName;
 	inputName << D->job->fileBase << ".input";
 	writeDifxInput(D, inputName.str().c_str());
-
-	cout << "About to write calc file" << endl;
 
 	// write calc file
 	ostringstream calcName;
@@ -1316,11 +1411,17 @@ void writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int verbos
 		printDifxInput(D);
 	}
 
-	cout << "About to delete difxinput" << endl;
-
 	// clean up
 	deleteDifxInput(D);
 	cout << "Done writing job" << endl;
+	if(D->nBaseline > 0)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 void sanityCheckSources(const VexData *V, const CorrParams *P)
@@ -1374,6 +1475,8 @@ int main(int argc, char **argv)
 	string v2dFile;
 	bool writeParams = 0;
 	int nDigit;
+	int nJob = 0;
+	int nMulti = 0;
 
 	if(argc < 2)
 	{
@@ -1509,13 +1612,33 @@ int main(int argc, char **argv)
 		{
 			cout << *j;
 		}
-		writeJob(*j, V, P, verbose, &of, nDigit);
+		const VexScan *S = V->getScan(j->scans[0]);
+		const VexMode *M = V->getMode(S->modeName);
+		int n = 0;
+		for(list<int>::const_iterator k = M->overSamp.begin(); k != M->overSamp.end(); k++)
+		{
+			char ext=0;
+			if(M->overSamp.size() > 1)
+			{
+				ext='a'+n;
+			}
+			nJob += writeJob(*j, V, P, verbose, &of, nDigit, ext);
+			n++;
+		}
+		if(M->overSamp.size() > 1)
+		{
+			nMulti++;
+		}
 	}
 	of.close();
-	cout << J.size() << " job(s) created." << endl;
+
+	cout << endl;
+	cout << nJob << " job(s) created." << endl;
 
 	delete V;
 	delete P;
+
+	cout << endl;
 
 	return 0;
 }

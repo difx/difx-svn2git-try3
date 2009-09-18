@@ -34,9 +34,26 @@
 #include <cstdio>
 #include <cmath>
 #include <cctype>
+#include <ctime>
 #include <string.h>
 #include "util.h"
 #include "corrparams.h"
+
+const double MJD_UNIX0 = 40587.0;	// MJD at beginning of unix time
+const double SEC_DAY = 86400.0;
+const double MUSEC_DAY = 86400000000.0;
+
+
+/* round to nearest second */
+static double roundSeconds(double mjd)
+{
+	int intmjd, intsec;
+
+	intmjd = static_cast<int>(mjd);
+	intsec = static_cast<int>((mjd - intmjd)*86400.0 + 0.5);
+
+	return intmjd + intsec/86400.0;
+}
 
 bool isTrue(const string &str)
 {
@@ -50,6 +67,65 @@ bool isTrue(const string &str)
 	}
 }
 
+// Turns a string into MJD 
+// The following formats are allowd:
+// 1. decimal mjd:                 
+// 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
+// 3. VLBA-like time               2009MAR08-12:34:56.121
+// 4. vex time
+double parseTime(const string &timeStr)
+{
+	double mjd;
+	char str[64];
+	char *p;
+	double t;
+	int n;
+	struct tm tm;
+	char dummy;
+
+	strncpy(str, timeStr.c_str(), 63);
+	str[63] = 0;
+
+	// Test for ISO 8601
+	p = strptime(str, "%FT%T", &tm);
+	if(!p)
+	{
+		//Test for VLBA-like
+		p = strptime(str, "%Y%b%d-%T", &tm);
+	}
+	if(!p)
+	{
+		//Test for Vex
+		p = strptime(str, "%Yy%jd%Hh%Mm%Ss", &tm);
+	}
+	if(p)
+	{
+		t = mktime(&tm);
+		mjd = t/86400.0 + MJD_UNIX0;
+
+		return mjd;
+	}
+
+	n = sscanf(str, "%lf%c", &mjd, &dummy);
+	if(n == 1)
+	{
+		// Must be straight MJD value
+		return mjd;
+	}
+
+	// No match
+	cerr << endl;
+	cerr << "Error: date not parsable: " << timeStr << endl;
+	cerr << endl;
+	cerr << "Allowable formats are:" << endl;
+	cerr << "1. Straight MJD        54345.341944" << endl;
+	cerr << "2. Vex formatted date  2009y245d08h12m24s" << endl;
+	cerr << "3. VLBA-like format    2009SEP02-08:12:24" << endl;
+	cerr << "4. ISO 8601 format     2009-09-02T08:12:24" << endl;
+	cerr << endl;
+	exit(0);
+}
+
 double parseCoord(const char *str, char type)
 {
 	int sign = 1, l, n;
@@ -58,7 +134,7 @@ double parseCoord(const char *str, char type)
 
 	if(type != ' ' && type != 'R' && type != 'D')
 	{
-		cerr << "Programmer error: parseTime: parameter 'type' has illegal value = " << type << endl;
+		cerr << "Programmer error: parseCoord: parameter 'type' has illegal value = " << type << endl;
 		exit(0);
 	}
 
@@ -120,15 +196,100 @@ double parseCoord(const char *str, char type)
 	return v;
 }
 
+// From http://oopweb.com/CPP/Documents/CPPHOWTO/Volume/C++Programming-HOWTO-7.html
+void split(const string& str, vector<string>& tokens, const string& delimiters = " ")
+{
+	// Skip delimiters at beginning.
+	string::size_type lastPos = str.find_first_not_of(delimiters, 0);
+	// Find first "non-delimiter".
+	string::size_type pos     = str.find_first_of(delimiters, lastPos);
+
+	while (string::npos != pos || string::npos != lastPos)
+	{
+		// Found a token, add it to the vector.
+		tokens.push_back(str.substr(lastPos, pos - lastPos));
+		// Skip delimiters.  Note the "not_of"
+		lastPos = str.find_first_not_of(delimiters, pos);
+		// Find next "non-delimiter"
+		pos = str.find_first_of(delimiters, lastPos);
+	}
+}
+
+
+int loadBasebandFilelist(const string &fileName, vector<VexBasebandFile> &basebandFiles)
+{
+	ifstream is;
+	int n=0;
+	char s[1024];
+	vector<string> tokens;
+
+	is.open(fileName.c_str());
+
+	if(is.fail())
+	{
+		cerr << "Error: cannot open " << fileName << endl;
+		exit(0);
+	}
+
+	for(int line=1; ; line++)
+	{
+		is.getline(s, 1024);
+		if(is.eof())
+		{
+			break;
+		}
+
+		for(int i = 0; s[i]; i++)
+		{
+			if(s[i] == '#')
+			{
+				s[i] = 0;
+			}
+		}
+
+		tokens.clear();
+
+		split(string(s), tokens);
+
+		int l = tokens.size();
+
+		if(l == 0)
+		{
+			continue;
+		}
+		else if(l == 1)
+		{
+			basebandFiles.push_back(VexBasebandFile(tokens[0]));
+			n++;
+		}
+		else if(l == 3)
+		{
+			basebandFiles.push_back(VexBasebandFile(tokens[0],
+				parseTime(tokens[1]),
+				parseTime(tokens[2]) ));
+			n++;
+		}
+		else
+		{
+			cerr << "Error: line " << line << " of file " << fileName << " is badly formatted" << endl;
+			exit(0);
+		}
+	}
+
+	return n;
+}
+
 CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 {
 	tInt = 2.0;
-	specAvg = 1;
-	nChan = 64;
+	specAvg = 8;
+	nChan = 128;
 	doPolar = true;
 	doAuto = true;
 	fringeRotOrder = 1;
 	strideLength = 16;
+	xmacLength = 128;
+	numBufferedFFTs = 1;
 	subintNS = 0;
 	guardNS = 1000;
 	maxNSBetweenUVShifts = 2000000000;
@@ -140,7 +301,13 @@ void CorrSetup::setkv(const string &key, const string &value)
 
 	ss << value;
 
-	if(key == "tInt")
+	if(key == "VEX_rev")
+	{
+		cerr << "Error: You are running vex2difx on a vex file." << endl;
+		cerr << "Please run on a vex2difx input file (.v2d) instead." << endl;
+		exit(0);
+	}
+	else if(key == "tInt")
 	{
 		ss >> tInt;
 	}
@@ -179,6 +346,14 @@ void CorrSetup::setkv(const string &key, const string &value)
 	else if(key == "strideLength")
 	{
 		ss >> strideLength;
+	}
+	else if(key == "xmacLength")
+	{
+		ss >> xmacLength;
+	}
+	else if(key == "numBufferedFFTs")
+	{
+		ss >> numBufferedFFTs;
 	}
 	else if(key == "binConfig")
 	{
@@ -411,6 +586,13 @@ void SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc
 
 AntennaSetup::AntennaSetup(const string &name) : vexName(name)
 {
+	polSwap = false;
+	X = 0.0;
+	Y = 0.0;
+	Z = 0.0;
+	clock.mjdStart = -1e9;
+	networkPort = 0;
+	windowSize = 0;
 }
 
 void AntennaSetup::setkv(const string &key, const string &value)
@@ -441,7 +623,7 @@ void AntennaSetup::setkv(const string &key, const string &value)
 	}
 	else if(key == "clockEpoch")
 	{
-		ss >> clock.offset_epoch;
+		clock.offset_epoch = parseTime(value);
 		clock.mjdStart = 1;
 	}
 	else if(key == "X")
@@ -455,6 +637,35 @@ void AntennaSetup::setkv(const string &key, const string &value)
 	else if(key == "Z")
 	{
 		ss >> Z;
+	}
+	else if(key == "format")
+	{
+		string s;
+		ss >> s;
+		Upper(s);
+
+		if(s == "MARK4")
+		{
+			s = "MKIV";
+		}
+
+		format = s;
+	}
+	else if(key == "file" || key == "files")
+	{
+		basebandFiles.push_back(VexBasebandFile(value));
+	}
+	else if(key == "filelist")
+	{
+		loadBasebandFilelist(value, basebandFiles);
+	}
+	else if(key == "networkPort")
+	{
+		ss >> networkPort;
+	}
+	else if(key == "windowSize")
+	{
+		ss >> windowSize;
 	}
 	else
 	{
@@ -500,6 +711,7 @@ void CorrParams::defaults()
 	padScans = true;
 	simFXCORR = false;
 	maxLength = 7200/86400.0;	// 2 hours
+	minLength = 2/86400.0;		// 2 seconds
 	maxSize = 2e9;			// 2 GB
 	mjdStart = 0.0;
 	mjdStop = 1.0e7;
@@ -509,6 +721,7 @@ void CorrParams::defaults()
 	sendLength = 0.1;		// (s)
 	invalidMask = ~0;		// write flags for all types of invalidity
 	visBufferLength = 32;
+	overSamp = 0;
 }
 
 void CorrParams::setkv(const string &key, const string &value)
@@ -570,6 +783,11 @@ void CorrParams::setkv(const string &key, const string &value)
 		ss >> maxLength;
 		maxLength /= 86400.0;	// convert to seconds from days
 	}
+	else if(key == "minLength")
+	{
+		ss >> minLength;
+		minLength /= 86400.0;	// convert to seconds from days
+	}
 	else if(key == "maxSize")
 	{
 		ss >> maxSize;
@@ -630,6 +848,10 @@ void CorrParams::setkv(const string &key, const string &value)
 		ss >> s;
 		Upper(s);
 		addBaseline(s);
+	}
+	else if(key == "overSamp")
+	{
+		ss >> overSamp;
 	}
 	else
 	{
@@ -800,7 +1022,9 @@ void CorrParams::load(const string& fileName)
 				exit(0);
 			}
 			i++;
-			antennaSetups.push_back(AntennaSetup(*i));
+			string antName(*i);
+			Upper(antName);
+			antennaSetups.push_back(AntennaSetup(antName));
 			antennaSetup = &antennaSetups.back();
 			i++;
 			if(*i != "{")
@@ -1245,6 +1469,7 @@ ostream& operator << (ostream& os, const CorrParams& x)
 	os.precision(6);
 	os << "maxGap=" << x.maxGap*86400.0 << " # seconds" << endl;
 	os << "maxLength=" << x.maxLength*86400.0 << " # seconds" << endl;
+	os << "minLength=" << x.minLength*86400.0 << " # seconds" << endl;
 	os << "maxSize=" << x.maxSize/1000000.0 << " # MB" << endl;
 	os.precision(13);
 
@@ -1256,6 +1481,7 @@ ostream& operator << (ostream& os, const CorrParams& x)
 	os << "dataBufferFactor=" << x.dataBufferFactor << endl;
 	os << "nDataSegments=" << x.nDataSegments << endl;
 	os << "sendLength=" << x.sendLength << " # seconds" << endl;
+	os << "overSamp=" << x.overSamp << endl;
 	
 	if(!x.antennaList.empty())
 	{

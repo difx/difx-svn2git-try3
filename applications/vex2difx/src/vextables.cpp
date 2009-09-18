@@ -28,10 +28,14 @@
  *==========================================================================*/
 
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include "vextables.h"
+
+const double RAD2ASEC=180.0*3600.0/M_PI;
 
 using namespace std;
 
@@ -45,6 +49,8 @@ const char VexEvent::eventName[][20] =
 	"Observe Stop",
 	"Record Stop",
 	"Clock Break",
+	"Leap Second",
+	"Manual Break",
 	"Record Start",
 	"Observe Start",
 	"Job Start",
@@ -82,6 +88,7 @@ double VexInterval::overlap(const VexInterval &v) const
 
 void VexInterval::logicalAnd(double start, double stop)
 {
+	cout << setprecision(15) << "And'ing " << start << "," << stop << " with existing " << mjdStart << "," << mjdStop << endl;
 	if(mjdStart < start)
 	{
 		mjdStart = start;
@@ -94,6 +101,7 @@ void VexInterval::logicalAnd(double start, double stop)
 
 void VexInterval::logicalAnd(const VexInterval &v)
 {
+	cout << setprecision(15) << "And'ing " << v.mjdStart << "," << v.mjdStop << " with existing " << mjdStart << "," << mjdStop << endl;
 	if(mjdStart < v.mjdStart)
 	{
 		mjdStart = v.mjdStart;
@@ -311,7 +319,10 @@ void VexJob::assignVSNs(const VexData& V)
 	for(i = antennas.begin(); i != antennas.end(); i++)
 	{
 		const string &vsn = V.getVSN(*i, *this);
-		vsns[*i] = vsn;
+		if(vsn != "None")
+		{
+			vsns[*i] = vsn;
+		}
 	}
 }
 
@@ -521,6 +532,7 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		antIds[a->first] = nAnt;
 	}
 
+	// Assume all flags from the start.  
 	vector<unsigned int> flagMask(nAnt, 
 		VexJobFlag::JOB_FLAG_RECORD | 
 		VexJobFlag::JOB_FLAG_POINT | 
@@ -528,6 +540,26 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		VexJobFlag::JOB_FLAG_SCAN);
 	vector<double> flagStart(nAnt, mjdStart);
 
+	// Except -- if not a Mark5 Module case, don't assume RECORD flag is on
+	for(a = vsns.begin(); a != vsns.end(); a++)
+	{
+		const VexAntenna *ant = V.getAntenna(a->first);
+
+		if(!ant)
+		{
+			cerr << "Developer error: generateFlagFile: antenna " <<
+				a->first << " not found in antenna table." << endl;
+			exit(0);
+		}
+
+		if(ant->basebandFiles.size() > 0)
+		{
+			// Aha -- not module based so unflag JOB_FLAG_RECORD
+			flagMask[antIds[a->first]] &= ~VexJobFlag::JOB_FLAG_RECORD;
+		}
+	}
+
+	// Then go through each event, adjusting current flag state.  
 	for(e = eventList.begin(); e != eventList.end(); e++)
 	{
 		if(e->eventType == VexEvent::RECORD_START)
@@ -590,7 +622,7 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 		}
 		else if(e->eventType == VexEvent::JOB_STOP)
 		{
-			if(fabs(e->mjd - mjdStart) < 0.5/86400.0)
+			if(fabs(e->mjd - mjdStop) < 0.5/86400.0)
 			{
 				for(int antId = 0; antId < nAnt; antId++)
 				{
@@ -676,7 +708,8 @@ void VexJobGroup::createJobs(vector<VexJob>& jobs, VexInterval& jobTimeRange, co
 				exit(0);
 			}
 			VexInterval scanTimeRange(s->mjd, e->mjd);
-			if(scanTimeRange.isWithin(jobTimeRange))
+			scanTimeRange.logicalAnd(jobTimeRange);
+			if(scanTimeRange.duration() > 0.0)
 			{
 				J->scans.push_back(e->name);
 				J->logicalOr(scanTimeRange);
@@ -754,6 +787,40 @@ void VexData::getScanList(list<string> &scanList) const
 	{
 		scanList.push_back(it->name);
 	}
+}
+
+int VexEOP::setkv(const string &key, const string &value)
+{
+	stringstream ss;
+	int nWarn = 0;
+
+	ss << value;
+
+	if(key == "tai_utc")
+	{
+		ss >> tai_utc;
+	}
+	else if(key == "ut1_utc")
+	{
+		ss >> ut1_utc;
+	}
+	else if(key == "xPole")
+	{
+		ss >> xPole;
+		xPole /= RAD2ASEC;
+	}
+	else if(key == "yPole")
+	{
+		ss >> yPole;
+		yPole /= RAD2ASEC;
+	}
+	else
+	{
+		cerr << "Warning: EOP: Unknown parameter '" << key << "'." << endl;
+		nWarn++;
+	}
+
+	return nWarn;
 }
 
 VexAntenna *VexData::newAntenna()
@@ -886,11 +953,19 @@ string VexData::getVSN(const string& antName, const VexInterval& timeRange) cons
 
 	for(v = A->vsns.begin(); v != A->vsns.end(); v++)
 	{
-		double overlap = timeRange.overlap(*v);
-		if(overlap > best)
+		double timeOverlap = timeRange.overlap(*v);
+		if(timeOverlap > best)
 		{
-			best = overlap;
+			best = timeOverlap;
 			bestVSN = v->name;
+		}
+	}
+
+	if(bestVSN == "None")
+	{
+		if(A->basebandFiles.size() > 0)
+		{
+			bestVSN = "File";
 		}
 	}
 
@@ -1067,11 +1142,18 @@ ostream& operator << (ostream& os, const VexMode& x)
 
 ostream& operator << (ostream& os, const VexEOP& x)
 {
-	os << "EOP(" << x.mjd << ", " << x.tai_utc << ", " << x.ut1_utc << ", " << x.xPole << ", " << x.yPole << ")";
+	os << "EOP(" << x.mjd << ", " << x.tai_utc << ", " << x.ut1_utc << ", " << (x.xPole*RAD2ASEC) << ", " << (x.yPole*RAD2ASEC) << ")";
 
 	return os;
 }
 
+
+ostream& operator << (ostream& os, const VexBasebandFile& x)
+{
+	os << "Baseband(" << x.filename << ", " << (const VexInterval&)x << ")";
+
+	return os;
+}
 
 ostream& operator << (ostream& os, const VexVSN& x)
 {
@@ -1086,7 +1168,7 @@ ostream& operator << (ostream& os, const VexJob& x)
 	map<string,string>::const_iterator v;
 	int p = os.precision();
 	os.precision(12);
-	os << "Job " << x.jobSeries << x.jobId << endl;
+	os << "Job " << x.jobSeries << "_" << x.jobId << endl;
 	os << "  " << (const VexInterval&)x << endl;
 	os << "  duty cycle = " << x.dutyCycle << endl;
 	os << "  scans =";
@@ -1122,7 +1204,7 @@ ostream& operator << (ostream& os, const VexEvent& x)
 {
 	int d, s;
 	d = static_cast<int>(x.mjd);
-	s = static_cast<int>((x.mjd - d)*86400.0);
+	s = static_cast<int>((x.mjd - d)*86400.0 + 0.5);
 
 	os << "mjd=" << d << " sec=" << s << " : " << VexEvent::eventName[x.eventType] << " " << x.name;
 
@@ -1135,7 +1217,7 @@ ostream& operator << (ostream& os, const VexJobFlag& x)
 
 	os.precision(12);
 
-	os << (const VexInterval&)x << " " << x.antId;
+	os << x.mjdStart << " " << x.mjdStop << " " << x.antId;
 
 	os.precision(p);
 
