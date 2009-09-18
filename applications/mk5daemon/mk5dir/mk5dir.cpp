@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id:$
- * $HeadURL:$
- * $LastChangedRevision:$
- * $Author:$
- * $LastChangedDate:$
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 
@@ -41,8 +41,8 @@
 
 const char program[] = "mk5dir";
 const char author[]  = "Walter Brisken";
-const char version[] = "0.4";
-const char verdate[] = "20090826";
+const char version[] = "0.5";
+const char verdate[] = "20090918";
 
 int verbose = 0;
 int die = 0;
