@@ -106,7 +106,7 @@ void * launchCommandMonitorThread(void * c) {
   //setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
   cinfo << startl << "Receive socket opened - socket is " << socket << endl;
   if (socket < 0) {
-    csevere << startl << "Could not open command monitoring socket! Aborting message receive thread." << endl;
+    cwarn << startl << "Could not open command monitoring socket! Aborting message receive thread." << endl;
     keepacting = false;
   }
   config->setCommandThreadInitialised();
