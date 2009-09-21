@@ -1536,15 +1536,16 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 		cerr << "This is usually due to all frequency Ids being unselected." << endl;
 	}
 
-	// clean up
-	deleteDifxInput(D);
-
 	if(D->nBaseline > 0)
 	{
+		// clean up and return that job was created
+		deleteDifxInput(D);
 		return 1;
 	}
 	else
 	{
+		// clean up and return that job was not created
+		deleteDifxInput(D);
 		return 0;
 	}
 }
