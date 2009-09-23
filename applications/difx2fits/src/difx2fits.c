@@ -1,3 +1,31 @@
+/***************************************************************************
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+//===========================================================================
+// SVN properties (DO NOT CHANGE)
+//
+// $Id$
+// $HeadURL: $
+// $LastChangedRevision$
+// $Author$
+// $LastChangedDate$
+//
+//============================================================================
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -9,8 +37,6 @@
 const char program[] = PACKAGE_NAME;
 const char author[]  = PACKAGE_BUGREPORT;
 const char version[] = VERSION;
-
-#define MAX_INPUT_FILES 4096
 
 
 static int usage(const char *pgm)
@@ -76,6 +102,9 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  --scale <scale>\n");
 	fprintf(stderr, "  -s      <scale>     Scale visibility data "
 		"by <scale>\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --deltat <deltat>\n");
+	fprintf(stderr, "  -t       <deltat>   Set interval (sec) in printing job matrix\n");
 	fprintf(stderr, " --phasecentre	<p>    Create a fits file for all the "
 		"<p>th phase centres (default 0)\n");
 	fprintf(stderr, "\n");
@@ -96,28 +125,6 @@ static int usage(const char *pgm)
 	return 0;
 }
 
-struct CommandLineOptions
-{
-	char *fitsFile;
-	char *baseFile[MAX_INPUT_FILES];
-	int nBaseFile;
-	int writemodel;
-	int pretend;
-	double scale;
-	int verbose;
-	/* some overrides */
-	int specAvg;
-	int doalldifx;
-	float nOutChan;
-	float startChan;
-	int keepOrder;
-	int dontCombine;
-	int overrideVersion;
-	double sniffTime;
-	int pulsarBin;
-	int phaseCentre;
-};
-
 struct CommandLineOptions *newCommandLineOptions()
 {
 	struct CommandLineOptions *opts;
@@ -127,6 +134,7 @@ struct CommandLineOptions *newCommandLineOptions()
 	
 	opts->writemodel = 1;
 	opts->sniffTime = 30.0;
+	opts->jobMatrixDeltaT = 20.0;
 	opts->phaseCentre = 0;
 
 	return opts;
@@ -225,6 +233,12 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					opts->scale = atof(argv[i]);
 					printf("Scaling data by %f\n", 
 						opts->scale);
+				}
+				else if(strcmp(argv[i], "--deltat") == 0 ||
+					strcmp(argv[i], "-t") == 0)
+				{
+					i++;
+					opts->jobMatrixDeltaT = atof(argv[i]);
 				}
 				else if(strcmp(argv[i], "--average") == 0 ||
 				        strcmp(argv[i], "-a") == 0)
@@ -405,7 +419,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 	keys->ref_freq = D->refFreq*1.0e6;
 	keys->ref_date = D->mjdStart;
 	keys->chan_bw = 1.0e6*D->freq[fqindex].bw*D->freq[fqindex].specAvg/D->freq[fqindex].nChan;
-        printf("Channel bandwidth is %f\n", keys->chan_bw);
+        //printf("Channel bandwidth is %f\n", keys->chan_bw);
 	keys->ref_pixel = 0.5 + 1.0/(2.0*D->specAvg);
 	if(D->nPolar > 1)
 	{
@@ -420,8 +434,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 }
 
 static const DifxInput *DifxInput2FitsTables(const DifxInput *D, 
-	struct fitsPrivate *out, int write_model, double scale, int verbose,
-	double sniffTime, int pulsarBin, int phasecentre)
+	struct fitsPrivate *out, struct CommandLineOptions *opts)
 {
 	struct fits_keywords keys;
 	long long last_bytes = 0;
@@ -460,14 +473,11 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
-	if(write_model)
-	{
-		printf("  ML -- model               ");
-		fflush(stdout);
-		D = DifxInput2FitsML(D, &keys, out, phasecentre);
-		printf("%lld bytes\n", out->bytes_written - last_bytes);
-		last_bytes = out->bytes_written;
-	}
+	printf("  ML -- model               ");
+	fflush(stdout);
+	D = DifxInput2FitsML(D, &keys, out, opts->phaseCentre);
+	printf("%lld bytes\n", out->bytes_written - last_bytes);
+	last_bytes = out->bytes_written;
 
 	printf("  CT -- correlator (eop)    ");
 	fflush(stdout);
@@ -477,7 +487,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  MC -- model components    ");
 	fflush(stdout);
-	D = DifxInput2FitsMC(D, &keys, out, phasecentre);
+	D = DifxInput2FitsMC(D, &keys, out, opts->phaseCentre);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
@@ -495,14 +505,13 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  GM -- pulsar gate model   ");
 	fflush(stdout);
-	D = DifxInput2FitsGM(D, &keys, out);
+	D = DifxInput2FitsGM(D, &keys, out, opts);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
 	printf("  UV -- visibility          \n");
 	fflush(stdout);
-	D = DifxInput2FitsUV(D, &keys, out, scale, verbose, sniffTime, pulsarBin, phasecentre);
-	printf("                            ");
+	D = DifxInput2FitsUV(D, &keys, out, opts);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
@@ -514,13 +523,13 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 
 	printf("  TS -- system temperature  ");
 	fflush(stdout);
-	D = DifxInput2FitsTS(D, &keys, out, phasecentre);
+	D = DifxInput2FitsTS(D, &keys, out, opts->phaseCentre);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
 	printf("  PH -- phase cal           ");
 	fflush(stdout);
-	D = DifxInput2FitsPH(D, &keys, out, phasecentre);
+	D = DifxInput2FitsPH(D, &keys, out, opts->phaseCentre);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
@@ -570,9 +579,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		{
 			printf("Loading %s\n", opts->baseFile[i]);
 		}
-		printf("About to load difxinput %s\n", opts->baseFile[i]);
 		D2 = loadDifxInput(opts->baseFile[i]);
-		printf("Loaded difxinput %s\n", opts->baseFile[i]);
 		if(!D2)
 		{
 			fprintf(stderr, "loadDifxInput failed on <%s>.\n",
@@ -616,6 +623,9 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			}
 
 			D = mergeDifxInputs(D1, D2, opts->verbose);
+
+			deleteDifxInput(D1);
+			deleteDifxInput(D2);
 
 			if(!D)
 			{
@@ -741,9 +751,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			return 0;
 		}
 
-		if(DifxInput2FitsTables(D, &outfile, opts->writemodel, 
-			opts->scale, opts->verbose, opts->sniffTime,
-			opts->pulsarBin, opts->phaseCentre) == D)
+		if(DifxInput2FitsTables(D, &outfile, opts) == D)
 		{
 			printf("\nConversion successful\n\n");
 		}

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2009 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -16,33 +16,34 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-//===========================================================================
-// SVN properties (DO NOT CHANGE)
-//
-// $Id$
-// $HeadURL: $
-// $LastChangedRevision$
-// $Author$
-// $LastChangedDate$
-//
-//============================================================================
-#ifndef __SNIFFER_H__
-#define __SNIFFER_H__
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id: jobmatrix.h 1442 2009-09-02 19:41:48Z WalterBrisken $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/branches/difx-1.5/src/jobmatrix.h $
+ * $LastChangedRevision: 1442 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2009-09-02 13:41:48 -0600 (Wed, 02 Sep 2009) $
+ *
+ *==========================================================================*/
 
-#include <stdio.h>
-#include <complex.h>
-#include <fftw3.h>
+#ifndef __JOBMATRIX_H__
+#define __JOBMATRIX_H__
+
+#include "difxio/difx_input.h"
 #include "fitsUV.h"
 
-struct _Sniffer;
+struct _JobMatrix;
 
-typedef struct _Sniffer Sniffer;
+typedef struct _JobMatrix JobMatrix;
 
-Sniffer *newSniffer(const DifxInput *D, int nComplex, 
-	const char *filebase, double solint);
+JobMatrix *newJobMatrix(const DifxInput *D, const char *filebase, 
+	double deltaT);
 
-void deleteSniffer(Sniffer *S);
+void writeJobMatrix(JobMatrix *jm);
 
-int feedSnifferFITS(Sniffer *S, const struct UVrow *data);
+void deleteJobMatrix(JobMatrix *jm);
+
+int feedJobMatrix(JobMatrix *jm, const struct UVrow *data, int jobId);
 
 #endif

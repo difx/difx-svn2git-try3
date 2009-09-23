@@ -1,3 +1,31 @@
+/***************************************************************************
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+//===========================================================================
+// SVN properties (DO NOT CHANGE)
+//
+// $Id$
+// $HeadURL: $
+// $LastChangedRevision$
+// $Author$
+// $LastChangedDate$
+//
+//============================================================================
 #include <stdlib.h>
 #include <sys/types.h>
 #include <strings.h>
@@ -94,7 +122,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	const DifxScan *scan;
 	const DifxJob *job;
 	const DifxConfig *config;
-		const DifxPolyModel *P;
+	const DifxPolyModel *P;
 	float dispDelay;
 	float dispDelayRate;
 	double start;
@@ -175,7 +203,6 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	for(s = 0; s < D->nScan; s++)
 	{
 	   scan = D->scan + s;
-	   printf("starting scan %d, D->scan is %d\n", s, D->scan);
 	   jobId = scan->jobId;
 	   job = D->job + jobId;
 	   configId = scan->configId;
@@ -191,27 +218,24 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 
 	   config = D->config + configId;
 	   freqId1 = config->freqId + 1;
-	   printf("Working on phase centre %d\n", phasecentre);
-	   printf("scan->phsCentreSrcs[phasecentre] is %d\n", scan->phsCentreSrcs[phasecentre]);
+	   //printf("Working on phase centre %d\n", phasecentre);
+	   //printf("scan->phsCentreSrcs[phasecentre] is %d\n", scan->phsCentreSrcs[phasecentre]);
 	   sourceId1 = D->source[scan->phsCentreSrcs[phasecentre]].fitsSourceId + 1;
-	   printf("Found the sourceId1 to be %d\n", sourceId1);
+	   //printf("Found the sourceId1 to be %d\n", sourceId1);
 	   start = D->scan[s].mjdStart - (int)(D->mjdStart);
 	   
 	   if(scan->im)
 	   {
-	        printf("About to read nPoly\n");
 	   	np = scan->nPoly;
-		printf("About to work out timeInt\n");
 		timeInt = job->polyInterval / 86400.0;
-		printf("Done\n");
 	   }
 	   else
 	   {
 		fprintf(stderr, "No IM info available - skipping generation of ML table\n");
 		continue;
 	   }
-	   printf("np is %d\n", np);
-	   printf("scan->nAntenna is %d\n", scan->nAntenna);
+	   //printf("np is %d\n", np);
+	   //printf("scan->nAntenna is %d\n", scan->nAntenna);
 
 	   for(p = 0; p < np; p++)
 	   {
@@ -227,6 +251,11 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		/* convert to D->antenna[] index ... */
 		antId = D->datastream[dsId].antennaId;
 
+		if(antId < 0 || antId >= scan->nAntenna)
+		{
+			continue;
+		}
+
 		/* ... and to FITS antennaId */
 		antId1 = antId + 1;
 
@@ -236,7 +265,8 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		  {
 		      if(skip[antId] == 0)
 		      {
-		        printf("\n    Warning : skipping antId %d", antId);
+		        printf("\n    Polynomial model error : skipping antId %d = %s",
+				antId, D->antenna[antId].name);
 		        skip[antId]++;
 		        printed++;
 		        skipped++;
