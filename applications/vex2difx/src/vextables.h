@@ -93,7 +93,7 @@ public:
 	void logicalAnd(const VexInterval &v);
 	void logicalOr(double start, double stop);
 	void logicalOr(const VexInterval &v);
-	bool isWithin(VexInterval &v) { return (mjdStart >= v.mjdStart) && (mjdStop <= v.mjdStop); }
+	bool contains(double mjd) { return (mjdStart <= mjd) && (mjd <= mjdStop); }
 	bool isCausal() { return (mjdStart <= mjdStop); }
 };
 
@@ -214,7 +214,7 @@ class VexAntenna
 public:
 	VexAntenna() : x(0.0), y(0.0), z(0.0), axisOffset(0.0) {}
 
-	void getClock(double mjd, double &offset, double &rate) const;
+	bool getClock(double mjd, double &offset, double &rate) const;
 
 	string name;
 	string nameInVex;	// Sometimes names get changed
@@ -312,11 +312,15 @@ private:
 	string directory;
 
 public:
+	int sanityCheck();
+
 	VexSource *newSource();
 	VexScan *newScan();
 	VexMode *newMode();
 	VexAntenna *newAntenna();
 	VexEOP *newEOP();
+	void findLeapSeconds();
+	void addBreaks(const vector<double> &breaks);
 
 	double obsStart() const
 	{

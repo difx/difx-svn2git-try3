@@ -27,6 +27,7 @@
  *
  *==========================================================================*/
 
+#define _XOPEN_SOURCE
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -295,9 +296,10 @@ CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 	maxNSBetweenUVShifts = 2000000000;
 }
 
-void CorrSetup::setkv(const string &key, const string &value)
+int CorrSetup::setkv(const string &key, const string &value)
 {
 	stringstream ss;
+	int nWarn = 0;
 
 	ss << value;
 
@@ -380,7 +382,10 @@ void CorrSetup::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: SETUP: Unknown parameter '" << key << "'." << endl; 
+		nWarn++;
 	}
+
+	return nWarn;
 }
 
 void CorrSetup::addFreqId(int freqId)
@@ -435,9 +440,10 @@ bool CorrRule::match(const string &scan, const string &source, const string &mod
 	return true;
 }
 
-void CorrRule::setkv(const string &key, const string &value)
+int CorrRule::setkv(const string &key, const string &value)
 {
 	stringstream ss;
+	int nWarn = 0;
 
 	ss << value;
 
@@ -478,7 +484,10 @@ void CorrRule::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: RULE: Unknown parameter '" << key << "'." << endl; 
+		nWarn++;
 	}
+
+	return nWarn;
 }
 
 PhaseCentre::PhaseCentre()
@@ -509,16 +518,17 @@ SourceSetup::SourceSetup(const string &name) : vexName(name)
 	doPointingCentre = true;
 }
 
-void SourceSetup::setkv(const string &key, const string &value)
+int SourceSetup::setkv(const string &key, const string &value)
 {
-	setkv(key, value, &pointingCentre);
+	return setkv(key, value, &pointingCentre);
 }
 
-void SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc)
+int SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc)
 {
 	string::size_type at, last, splitat;
 	string nestedkeyval;
 	stringstream ss;
+	int nWarn = 0;
 
 	ss << value;
 
@@ -581,7 +591,10 @@ void SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc
 	else
 	{
 		cerr << "Warning: SOURCE: Unknown parameter '" << key << "'." << endl; 
+		nWarn++;
 	}
+
+	return nWarn;
 }
 
 AntennaSetup::AntennaSetup(const string &name) : vexName(name)
@@ -595,9 +608,10 @@ AntennaSetup::AntennaSetup(const string &name) : vexName(name)
 	windowSize = 0;
 }
 
-void AntennaSetup::setkv(const string &key, const string &value)
+int AntennaSetup::setkv(const string &key, const string &value)
 {
 	stringstream ss;
+	int nWarn = 0;
 
 	ss << value;
 
@@ -670,7 +684,10 @@ void AntennaSetup::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << endl; 
+		nWarn++;
 	}
+
+	return nWarn;
 }
 
 CorrParams::CorrParams()
@@ -687,7 +704,7 @@ CorrParams::CorrParams(const string& fileName)
 	pos = fileName.find(".");
 	jobSeries = fileName.substr(0, pos);
 
-	load(fileName);
+	parseWarnings = load(fileName);
 
 #ifdef DONT_USE_EXPER_AS_PASS
 	pos = vexFile.find(".");
@@ -718,15 +735,19 @@ void CorrParams::defaults()
 	startSeries = 1;
 	dataBufferFactor = 32;
 	nDataSegments = 8;
-	sendLength = 0.1;		// (s)
+	tweakIntegrationTime = true;
+	sendLength = 0.0;		// (s) zero implies use sendSize to dictate sends
+	sendSize = 6000000;             // Bytes
 	invalidMask = ~0;		// write flags for all types of invalidity
 	visBufferLength = 32;
+	v2dMode = V2D_MODE_NORMAL;
 	overSamp = 0;
 }
 
-void CorrParams::setkv(const string &key, const string &value)
+int CorrParams::setkv(const string &key, const string &value)
 {
 	stringstream ss;
+	int nWarn = 0;
 
 	ss << value;
 	
@@ -746,13 +767,22 @@ void CorrParams::setkv(const string &key, const string &value)
 			vexFile = inFile;
 		}
 	}
-	else if(key == "mjdStart")
+	else if(key == "mjdStart" || key == "start")
 	{
-		ss >> mjdStart;
+		mjdStart = parseTime(value);
 	}
-	else if(key == "mjdStop")
+	else if(key == "mjdStop" || key == "stop")
 	{
-		ss >> mjdStop;
+		mjdStop = parseTime(value);
+	}
+	else if(key == "break" || key == "breaks")
+	{
+		double mjd = parseTime(value);
+
+		/* always break at integer second boundary */
+		mjd = roundSeconds(mjd);
+
+		manualBreaks.push_back(mjd);
 	}
 	else if(key == "minSubarray")
 	{
@@ -819,6 +849,10 @@ void CorrParams::setkv(const string &key, const string &value)
 	{
 		ss >> sendLength;
 	}
+	else if(key == "sendSize")
+	{
+		ss >> sendSize;
+	}
 	else if(key == "padScans")
 	{
 		padScans = isTrue(value);
@@ -835,6 +869,10 @@ void CorrParams::setkv(const string &key, const string &value)
 	{
 		simFXCORR = isTrue(value);
 	}
+	else if(key == "tweakIntTime")
+	{
+		tweakIntegrationTime = isTrue(value);
+	}
 	else if(key == "antennas")
 	{
 		string s;
@@ -849,6 +887,25 @@ void CorrParams::setkv(const string &key, const string &value)
 		Upper(s);
 		addBaseline(s);
 	}
+	else if(key == "mode")
+	{
+		string s;
+		ss >> s;
+		Upper(s);
+		if(s == "NORMAL")
+		{
+			v2dMode = V2D_MODE_NORMAL;
+		}
+		else if(s == "PROFILE")
+		{
+			v2dMode = V2D_MODE_PROFILE;
+		}
+		else
+		{
+			cerr << "Warning: Illegal value " << value << " for mode" << endl;
+			nWarn++;
+		}
+	}
 	else if(key == "overSamp")
 	{
 		ss >> overSamp;
@@ -856,7 +913,10 @@ void CorrParams::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: Unknown keyword " << key << " with value " << value << endl;
+		nWarn++;
 	}
+
+	return nWarn;
 }
 
 void CorrParams::addAntenna(const string& antName)
@@ -890,8 +950,18 @@ void CorrParams::addBaseline(const string& baselineName)
 		baselineName.substr(pos+1) ));
 }
 
-void CorrParams::load(const string& fileName)
+int CorrParams::load(const string& fileName)
 {
+	enum Parse_Mode
+	{
+		PARSE_MODE_GLOBAL,
+		PARSE_MODE_SETUP,
+		PARSE_MODE_RULE,
+		PARSE_MODE_SOURCE,
+		PARSE_MODE_ANTENNA,
+		PARSE_MODE_EOP
+	};
+	
 	ifstream is;
 	vector<string> tokens;
 	char s[1024];
@@ -899,7 +969,9 @@ void CorrParams::load(const string& fileName)
 	CorrRule    *rule=0;
 	SourceSetup *sourceSetup=0;
 	AntennaSetup *antennaSetup=0;
-	int mode = 0;	// an internal concept, not observing mode!
+	VexEOP       *eop=0;
+	Parse_Mode parseMode = PARSE_MODE_GLOBAL;
+	int nWarn = 0;
 
 	is.open(fileName.c_str());
 
@@ -959,7 +1031,7 @@ void CorrParams::load(const string& fileName)
 		keyWaitingTemp = false;
 		if(*i == "SETUP")
 		{
-			if(mode != 0)
+			if(parseMode != PARSE_MODE_GLOBAL)
 			{
 				cerr << "Error: SETUP out of place." << endl;
 				exit(0);
@@ -974,11 +1046,11 @@ void CorrParams::load(const string& fileName)
 				exit(0);
 			}
 			key = "";
-			mode = 1;
+			parseMode = PARSE_MODE_SETUP;
 		}
 		else if(*i == "RULE")
 		{
-			if(mode != 0)
+			if(parseMode != PARSE_MODE_GLOBAL)
 			{
 				cerr << "Error: RULE out of place." << endl;
 				exit(0);
@@ -993,11 +1065,11 @@ void CorrParams::load(const string& fileName)
 				exit(0);
 			}
 			key = "";
-			mode = 2;
+			parseMode = PARSE_MODE_RULE;
 		}
 		else if(*i == "SOURCE")
 		{
-			if(mode != 0)
+			if(parseMode != PARSE_MODE_GLOBAL)
 			{
 				cerr << "Error: SOURCE out of place." << endl;
 				exit(0);
@@ -1012,11 +1084,11 @@ void CorrParams::load(const string& fileName)
 				exit(0);
 			}
 			key = "";
-			mode = 3;
+			parseMode = PARSE_MODE_SOURCE;
 		}
 		else if(*i == "ANTENNA")
 		{
-			if(mode != 0)
+			if(parseMode != PARSE_MODE_GLOBAL)
 			{
 				cerr << "Error: ANTENNA out of place." << endl;
 				exit(0);
@@ -1033,11 +1105,32 @@ void CorrParams::load(const string& fileName)
 				exit(0);
 			}
 			key = "";
-			mode = 4;
+			parseMode = PARSE_MODE_ANTENNA;
 		}
-		else if(*i == "}" && mode != 0)
+		else if(*i == "EOP")
 		{
-			mode = 0;
+			if(parseMode != PARSE_MODE_GLOBAL)
+                        {
+                                cerr << "Error: ANTENNA out of place." << endl;
+                                exit(0);
+                        }
+                        i++;
+                        string eopDate(*i);
+                        eops.push_back(VexEOP());
+                        eop = &eops.back();
+                        eop->mjd = parseTime(eopDate);
+                        i++;
+                        if(*i != "{")
+                        {
+                                cerr << "Error: '{' expected." << endl;
+                                exit(0);
+                        }
+                        key = "";
+                        parseMode = PARSE_MODE_EOP;
+		}
+		else if(*i == "}" && parseMode != PARSE_MODE_GLOBAL)
+		{
+			parseMode = PARSE_MODE_GLOBAL;
 			key = "";
 		}
 		else if(*i == "=")
@@ -1047,6 +1140,7 @@ void CorrParams::load(const string& fileName)
 		else if(*i == "{" || *i == "}")
 		{
 			cerr << "Warning: unexpected character '" << *i << "'." << endl;
+			nWarn++;
 		}
 		else if(last == "=" || last == ",")
 		{
@@ -1056,26 +1150,27 @@ void CorrParams::load(const string& fileName)
 				exit(0);
 			}
 			value = *i;
-			if(mode == 0)
-			{
-				setkv(key, value);
-			}
-			else if(mode == 1)
-			{
-				corrSetup->setkv(key, value);
-			}
-			else if(mode == 2)
-			{
-				rule->setkv(key, value);
-			}
-			else if(mode == 3)
-			{
-				sourceSetup->setkv(key, value);
-			}
-			else if(mode == 4)
-			{
-				antennaSetup->setkv(key, value);
-			}
+			switch(parseMode)
+                        {
+                        case PARSE_MODE_GLOBAL:
+                                nWarn += setkv(key, value);
+                                break;
+                        case PARSE_MODE_SETUP:
+                                nWarn += corrSetup->setkv(key, value);
+                                break;
+                        case PARSE_MODE_RULE:
+                                nWarn += rule->setkv(key, value);
+                                break;
+                        case PARSE_MODE_SOURCE:
+                                nWarn += sourceSetup->setkv(key, value);
+                                break;
+                        case PARSE_MODE_ANTENNA:
+                                nWarn += antennaSetup->setkv(key, value);
+                                break;
+                        case PARSE_MODE_EOP:
+                                nWarn += eop->setkv(key, value);
+                                break;
+                        }
 		}
 		else
 		{
@@ -1111,6 +1206,17 @@ void CorrParams::load(const string& fileName)
 	{
 		addBaseline("*-*");
 	}
+
+	if(v2dMode == V2D_MODE_PROFILE)
+	{
+		int n = corrSetups.size();
+		for(int i = 0; i < n; i++)
+		{
+			corrSetups[i].doPolar = false;
+		}
+	}
+
+	return nWarn;
 }
 
 void CorrParams::defaultSetup()
@@ -1136,6 +1242,11 @@ void CorrParams::example()
 	rules.push_back(CorrRule("X"));
 	rules.back().scanName.push_back(string("No0006"));
 	rules.back().corrSetupName = string("bogus");
+}
+
+int CorrParams::sanityCheck()
+{
+	return 0;
 }
 
 bool antennaMatch(const string &a1, const string &a2)
@@ -1451,6 +1562,35 @@ ostream& operator << (ostream& os, const SourceSetup& x)
 	return os;
 }
 
+ostream& operator << (ostream& os, const AntennaSetup& x)
+{
+        os << "ANTENNA " << x.vexName << endl;
+        os << "{" << endl;
+        if(x.difxName.size() > 0)
+        {
+                os << "  name=" << x.difxName << endl;
+        }
+        if(fabs(x.X) > 0.1 || fabs(x.Y) > 0.1 || fabs(x.Z) > 0.1)
+        {
+                os << "  X=" << x.X <<" Y=" << x.Y << " Z=" << x.Z << endl;
+        }
+        if(x.clock.mjdStart > 0.0)
+        {
+                os << "  clockOffset=" << x.clock.offset*1.0e6 << endl;
+                os << "  clockRate=" << x.clock.rate*1.0e6 << endl;
+                os << "  clockEpoch=" << x.clock.offset_epoch << endl;
+        }
+        os << "  polSwap=" << x.polSwap << endl;
+        if(x.format.size() > 0)
+        {
+                os << "  format=" << x.format << endl;
+        }
+
+        os << "}" << endl;
+
+        return os;
+}
+
 ostream& operator << (ostream& os, const CorrParams& x)
 {
 	int p;
@@ -1461,8 +1601,22 @@ ostream& operator << (ostream& os, const CorrParams& x)
 	os << "# correlation parameters" << endl;
 
 	os << "vex=" << x.vexFile << endl;
+	switch(x.v2dMode)
+	{
+	case V2D_MODE_NORMAL:
+		os << "mode=normal" << endl;
+		break;
+	case V2D_MODE_PROFILE:
+		os << "mode=profile" << endl;
+		break;
+	}
 	os << "mjdStart=" << x.mjdStart << endl;
 	os << "mjdStop=" << x.mjdStop << endl;
+	int n = x.manualBreaks.size();
+	for(int i = 0; i < n; i++)
+	{
+		os << "break=" << x.manualBreaks[i] << endl;
+	}
 	os << "minSubarray=" << x.minSubarraySize << endl;
 	os << "visBufferLength=" << x.visBufferLength << endl;
 
@@ -1475,12 +1629,14 @@ ostream& operator << (ostream& os, const CorrParams& x)
 
 	os << "singleScan=" << x.singleScan << endl;
 	os << "singleSetup=" << x.singleSetup << endl;
+	os << "tweakIntTime=" << x.tweakIntegrationTime << endl;
 	os << "mediaSplit=" << x.mediaSplit << endl;
 	os << "jobSeries=" << x.jobSeries << endl;
 	os << "startSeries=" << x.startSeries << endl;
 	os << "dataBufferFactor=" << x.dataBufferFactor << endl;
 	os << "nDataSegments=" << x.nDataSegments << endl;
 	os << "sendLength=" << x.sendLength << " # seconds" << endl;
+	os << "sendSize=" << x.sendSize << " # Bytes" << endl;
 	os << "overSamp=" << x.overSamp << endl;
 	
 	if(!x.antennaList.empty())
@@ -1514,6 +1670,33 @@ ostream& operator << (ostream& os, const CorrParams& x)
 		}
 		os << endl;
 	}
+
+	if(!x.antennaSetups.empty())
+        {
+                vector<AntennaSetup>::const_iterator it;
+
+                for(it = x.antennaSetups.begin(); it != x.antennaSetups.end(); it++)
+                {
+                        os << endl;
+                        os << *it;
+                }
+        }
+
+        if(!x.eops.empty())
+        {
+                os << endl;
+
+                vector<VexEOP>::const_iterator it;
+
+                for(it = x.eops.begin(); it != x.eops.end(); it++)
+                {
+                        os << "EOP " << it->mjd << " { ";
+                        os << "tai_utc=" << it->tai_utc << " ";
+                        os << "ut1_utc=" << it->ut1_utc << " ";
+                        os << "xPole=" << it->xPole*RAD2ASEC << " ";
+                        os << "yPole=" << it->yPole*RAD2ASEC << " }" << endl;
+                }
+        }
 
 	if(!x.sourceSetups.empty())
 	{
@@ -1579,8 +1762,9 @@ bool areCorrSetupsCompatible(const CorrSetup *A, const CorrSetup *B, const CorrP
 	}
 }
 
-void CorrParams::loadShelves(const string& fileName)
+int CorrParams::loadShelves(const string& fileName)
 {
+	int nWarn = 0;
 	ifstream is;
 	bool doAntennas;
 	char s[1024], a[32], v[32], ms[32];
@@ -1591,7 +1775,7 @@ void CorrParams::loadShelves(const string& fileName)
 
 	if(is.fail())
 	{
-		return;
+		return 0;
 	}
 
 	doAntennas = (antennaList.size() == 0);
@@ -1659,9 +1843,12 @@ void CorrParams::loadShelves(const string& fileName)
 		for(vector<string>::const_iterator s = noShelf.begin(); s != noShelf.end(); s++)
 		{
 			cerr << " " << *s;
+			nWarn++;
 		}
 		cerr << endl;
 	}
+
+	return nWarn;
 }
 
 const char *CorrParams::getShelf(const string& vsn) const

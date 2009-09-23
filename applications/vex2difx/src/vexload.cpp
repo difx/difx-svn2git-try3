@@ -467,7 +467,7 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 		VexInterval timeRange = adjustTimeRange(antStart, antStop, params.minSubarraySize);
 
 		// If the min subarray condition never occurs, then skip the scan
-		if(!timeRange.isCausal())
+		if(timeRange.duration_seconds() < 0.5)
 		{
 			continue;
 		}
@@ -930,75 +930,84 @@ int getEOPs(VexData *V, Vex *v, const CorrParams& params)
 	int nEop;
 	double refEpoch, interval;
 	VexEOP *E;
+	int N = 0;
 
 	block = find_block(B_EOP, v);
 
-	if(!block)
+	if(block)
 	{
-		return -1;
+		for(defs=((struct block *)block->ptr)->items;
+	   	    defs;
+	    	    defs=defs->next)
+		{
+			statement = ((Lowl *)defs->ptr)->statement;
+			if(statement == T_COMMENT || statement == T_COMMENT_TRAILING)
+			{
+				continue;
+			}
+			if(statement != T_DEF)
+			{
+				break;
+			}
+
+			refs = ((Def *)((Lowl *)defs->ptr)->item)->refs;
+
+			lowls = find_lowl(refs, T_TAI_UTC);
+			r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
+			fvex_double(&r->value, &r->units, &tai_utc);
+
+			lowls = find_lowl(refs, T_EOP_REF_EPOCH);
+			p = (((Lowl *)lowls->ptr)->item);
+			refEpoch = vexDate((char *)p);
+
+			lowls = find_lowl(refs, T_NUM_EOP_POINTS);
+			r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
+			nEop = atoi(r->value);
+			N += nEop;
+
+			lowls = find_lowl(refs, T_EOP_INTERVAL);
+			r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
+			fvex_double(&r->value, &r->units, &interval);
+
+			for(int i = 0; i < nEop; i++)
+			{	
+				lowls = find_lowl(refs, T_UT1_UTC);
+				vex_field(T_UT1_UTC, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
+				fvex_double(&value, &units, &ut1_utc);
+
+				lowls = find_lowl(refs, T_X_WOBBLE);
+				vex_field(T_X_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
+				fvex_double(&value, &units, &x_wobble);
+
+				lowls = find_lowl(refs, T_Y_WOBBLE);
+				vex_field(T_Y_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
+				fvex_double(&value, &units, &y_wobble);
+
+				E = V->newEOP();
+				E->mjd = refEpoch + i*interval/86400.0;
+				E->tai_utc = tai_utc;
+				E->ut1_utc = ut1_utc;
+				E->xPole = x_wobble;
+				E->yPole = y_wobble;
+			}
+		}
 	}
 
-	for(defs=((struct block *)block->ptr)->items;
-	    defs;
-	    defs=defs->next)
+	if(params.eops.size() > 0)
 	{
-		statement = ((Lowl *)defs->ptr)->statement;
-		if(statement == T_COMMENT || statement == T_COMMENT_TRAILING)
+		if(N > 0)
 		{
-			continue;
+			cerr << "Warning: Mixing EOP values from vex and v2d files.  Your mileage may vary!" << endl;
 		}
-		if(statement != T_DEF)
+		for(vector<VexEOP>::const_iterator e = params.eops.begin(); e != params.eops.end(); e++)
 		{
-			break;
-		}
-
-		refs = ((Def *)((Lowl *)defs->ptr)->item)->refs;
-
-		lowls = find_lowl(refs, T_TAI_UTC);
-		r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
-		fvex_double(&r->value, &r->units, &tai_utc);
-
-		lowls = find_lowl(refs, T_EOP_REF_EPOCH);
-		p = (((Lowl *)lowls->ptr)->item);
-		refEpoch = vexDate((char *)p);
-
-		lowls = find_lowl(refs, T_NUM_EOP_POINTS);
-		r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
-		nEop = atoi(r->value);
-
-		if(nEop < 5)
-		{
-			cerr << "Warning: Fewer than 5 EOP values provided (" << nEop << "." << endl;
-			cerr << "vex2difx will continue, but expect problems downstream." << endl;
-		}
-
-		lowls = find_lowl(refs, T_EOP_INTERVAL);
-		r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
-		fvex_double(&r->value, &r->units, &interval);
-
-		for(int i = 0; i < nEop; i++)
-		{	
-			lowls = find_lowl(refs, T_UT1_UTC);
-			vex_field(T_UT1_UTC, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
-			fvex_double(&value, &units, &ut1_utc);
-
-			lowls = find_lowl(refs, T_X_WOBBLE);
-			vex_field(T_X_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
-			fvex_double(&value, &units, &x_wobble);
-
-			lowls = find_lowl(refs, T_Y_WOBBLE);
-			vex_field(T_Y_WOBBLE, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
-			fvex_double(&value, &units, &y_wobble);
-
 			E = V->newEOP();
-			E->mjd = refEpoch + i*interval/86400.0;
-			E->tai_utc = tai_utc;
-			E->ut1_utc = ut1_utc;
-			E->xPole = x_wobble;
-			E->yPole = y_wobble;
+			*E = *e;
+			N++;
 		}
 	}
-	return 0;
+
+	return N;
 }
 
 int getExper(VexData *V, Vex *v, const CorrParams& params)
@@ -1107,6 +1116,8 @@ VexData *loadVexFile(const CorrParams& P)
 	getExper(V, v, P);
 
 	calculateScanSizes(V, P);
+	V->findLeapSeconds();
+	V->addBreaks(P.manualBreaks);
 
 	return V;
 }

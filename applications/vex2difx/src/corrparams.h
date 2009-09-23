@@ -79,8 +79,8 @@ class SourceSetup
 {
 public:
 	SourceSetup(const string &name);
-	void setkv(const string &key, const string &value);
-	void setkv(const string &key, const string &value, PhaseCentre * pc);
+	int setkv(const string &key, const string &value);
+	int setkv(const string &key, const string &value, PhaseCentre * pc);
 
 	bool doPointingCentre;       	  // Whether or not to correlate the pointing centre
 	string vexName;		     	  // Source name as appears in vex file
@@ -92,7 +92,7 @@ class AntennaSetup
 {
 public:
 	AntennaSetup(const string &name);
-	void setkv(const string &key, const string &value);
+	int setkv(const string &key, const string &value);
 
 	string vexName;		// Antenna name as it appears in vex file
 	string difxName;	// Antenna name (if different) to appear in difx
@@ -102,8 +102,8 @@ public:
 	// media
 	bool polSwap;		// If true, swap polarizations
 	string format;		// Override format from .v2d file.  
-				// This is sometimes needed because for
-				// Possible values: S2 VLBA MkIV/Mark4 
+				// This is sometimes needed because format not known always at scheduling time
+				// Possible values: S2 VLBA MkIV/Mark4 Mark5B . Is converted to all caps on load
 	vector<VexBasebandFile> basebandFiles;	// files to correlate
 	int networkPort;	// For eVLBI : port for this antenna
 	int windowSize;		// For eVLBI : TCP window size
@@ -113,7 +113,7 @@ class CorrSetup
 {
 public:
 	CorrSetup(const string &name = "setup_default");
-	void setkv(const string &key, const string &value);
+	int setkv(const string &key, const string &value);
 	bool correlateFreqId(int freqId) const;
 	double bytesPerSecPerBLPerBand() const;
 
@@ -145,7 +145,7 @@ class CorrRule
 public:
 	CorrRule(const string &name = "rule_default");
 
-	void setkv(const string &key, const string &value);
+	int setkv(const string &key, const string &value);
 	bool match(const string &scan, const string &source, const string &mode, char cal, int qual) const;
 
 	string ruleName;
@@ -165,11 +165,11 @@ public:
 	CorrParams();
 	CorrParams(const string& fileName);
 
-	void loadShelves(const string& fileName);
+	int loadShelves(const string& fileName);
 	const char *getShelf(const string& vsn) const;
 
-	void setkv(const string &key, const string &value);
-	void load(const string& fileName);
+	int setkv(const string &key, const string &value);
+	int load(const string& fileName);
 	void defaults();
 	void defaultSetup();
 	void example();
@@ -198,6 +198,7 @@ public:
 	bool mediaSplit;	// split jobs on media change
 	bool padScans;
 	bool simFXCORR;		// set integration and start times to match VLBA HW correlator
+	bool tweakIntegrationTime;      // nadger the integration time to make values nice
 	double maxLength;	// [days]
 	double minLength;	// [days]
 	double maxSize;		// [bytes] -- break jobs for output filesize
@@ -206,6 +207,7 @@ public:
 	int dataBufferFactor;
 	int nDataSegments;
 	double sendLength;	// (s) amount of data to send from datastream to core at a time
+	int sendSize;           // (Bytes) amount of data to send from datastream to core at a time (overrides sendLength)
 	unsigned int invalidMask;
 	int visBufferLength;
 	int overSamp;		// A user supplied override to oversample factor
@@ -230,6 +232,8 @@ public:
 
 	/* rules to determine which setups to apply */
 	vector<CorrRule> rules;
+
+	enum V2D_Mode v2dMode;
 
 private:
 	void addAntenna(const string& antName);
