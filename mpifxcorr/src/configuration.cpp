@@ -21,14 +21,13 @@
 //============================================================================
 #include <mpi.h>
 #include <string.h>
-//#include "mk5.h"
+#include <climits>
 #include "mk5mode.h"
 #include "configuration.h"
 #include "mode.h"
-//#include "datastream.h"
-//#include "mk5.h"
-//#include "nativemk5.h"
 #include "alert.h"
+
+int Configuration::MONITOR_TCP_WINDOWBYTES;
 
 Configuration::Configuration(const char * configfile, int id)
   : mpiid(id), consistencyok(true)
@@ -65,7 +64,7 @@ Configuration::Configuration(const char * configfile, int id)
       case CONFIG:
         if(!commonread)
         {
-          cfatal << startl << "Error - input file out of order!  Attempted to read configuration details without knowledge of common settings - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read configuration details without knowledge of common settings - aborting!!!" << endl;
           consistencyok = false;
         }
         else
@@ -88,7 +87,7 @@ Configuration::Configuration(const char * configfile, int id)
       case DATASTREAM:
         if(!configread || ! freqread)
         {
-          cfatal << startl << "Error - input file out of order!  Attempted to read datastreams without knowledge of one or both of configs/freqs - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read datastreams without knowledge of one or both of configs/freqs - aborting!!!" << endl;
           consistencyok = false;
         }
         else
@@ -105,7 +104,7 @@ Configuration::Configuration(const char * configfile, int id)
       case DATA:
         if(!datastreamread)
         {
-          cfatal << startl << "Error - input file out of order!  Attempted to read datastream data files without knowledge of datastreams - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read datastream data files without knowledge of datastreams - aborting!!!" << endl;
           consistencyok = false;
         }
         else
@@ -114,7 +113,7 @@ Configuration::Configuration(const char * configfile, int id)
       case NETWORK:
         if(!datastreamread)
         {
-          cfatal << startl << "Error - input file out of order!  Attempted to read datastream network details without knowledge of datastreams - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read datastream network details without knowledge of datastreams - aborting!!!" << endl;
           consistencyok = false;
         }
         else
@@ -192,7 +191,14 @@ Configuration::Configuration(const char * configfile, int id)
   dumplta = false;
   stadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
   ltadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
-//  cinfo << startl << "Finished processing input file!!!" << endl;
+
+  char *monitor_tcpwin = getenv("DIFX_MONITOR_TCPWINDOW");
+  if (monitor_tcpwin!=0) {
+    Configuration::MONITOR_TCP_WINDOWBYTES = atoi(monitor_tcpwin)*1024;
+    cinfo << startl << "DIFX_MONITOR_TCPWINDOW set to" << Configuration::MONITOR_TCP_WINDOWBYTES/1024 << "kB" << endl;
+    } else {
+      Configuration::MONITOR_TCP_WINDOWBYTES = 262144;
+    }
 }
 
 
@@ -265,7 +271,7 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
       fanout = framebytes*8/(20000*nbits*nchan);
       if(fanout*20000*nbits*nchan != framebytes*8)
       {
-        cfatal << startl << "genMk5FormatName : MKIV format : framebytes = " << framebytes << " is not allowed\n";
+        cfatal << startl << "genMk5FormatName : MKIV format : framebytes = " << framebytes << " is not allowed" << endl;
         return -1;
       }
       if(decimationfactor > 1)	// Note, this conditional is to ensure compatibility with older mark5access versions
@@ -277,7 +283,7 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
       fanout = framebytes*8/(20160*nbits*nchan);
       if(fanout*20160*nbits*nchan != framebytes*8)
       {
-        cfatal << startl << "genMk5FormatName : VLBA format : framebytes = " << framebytes << " is not allowed\n";
+        cfatal << startl << "genMk5FormatName : VLBA format : framebytes = " << framebytes << " is not allowed" << endl;
         return -1;
       }
       if(decimationfactor > 1)
@@ -292,7 +298,7 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
         sprintf(formatname, "Mark5B-%d-%d-%d", mbps, nchan, nbits);
       break;
     default:
-      cfatal << startl << "genMk5FormatName : unsupported format encountered\n" << endl;
+      cfatal << startl << "genMk5FormatName : unsupported format encountered" << endl;
       return -1;
   }
 
@@ -479,12 +485,6 @@ int Configuration::getMaxProducts(int configindex)
   int maxproducts = 0;
   for(int i=0;i<numbaselines;i++)
   {
-    //check is done in consistencyCheck - no longer necessary
-    //if(configs[configindex].baselineindices[i] >= baselinetablelength || configs[configindex].baselineindices[i] < 0)
-    //{
-    //  cfatal << "Error - baselinetable index of " << configs[configindex].baselineindices[i] << " from config " << configindex << ", baseline " << i << " is outside of table range!!!" << endl;
-    //  MPI_Abort(MPI_COMM_WORLD, 1);
-    //}
     current = baselinetable[configs[configindex].baselineindices[i]];
     for(int j=0;j<current.numfreqs;j++)
     {
@@ -635,7 +635,7 @@ bool Configuration::processBaselineTable(ifstream * input)
   estimatedbytes += baselinetablelength*sizeof(baselinedata);
   if(baselinetablelength < numbaselines)
   {
-    cfatal << startl << "Error - not enough baselines are supplied in the baseline table (" << baselinetablelength << ") compared to the number of baselines (" << numbaselines << ")!!!" << endl;
+    cfatal << startl << "Not enough baselines are supplied in the baseline table (" << baselinetablelength << ") compared to the number of baselines (" << numbaselines << ")!!!" << endl;
     return false;
   }
 
@@ -698,7 +698,7 @@ bool Configuration::processBaselineTable(ifstream * input)
     }
     if(datastreamtable[baselinetable[i].datastream1index].telescopeindex > datastreamtable[baselinetable[i].datastream2index].telescopeindex)
     {
-      cerror << startl << "Error - first datastream for baseline " << i << " has a higher number than second datastream - reversing!!!" << endl;
+      cerror << startl << "First datastream for baseline " << i << " has a higher number than second datastream - reversing!!!" << endl;
       tempint = baselinetable[i].datastream1index;
       baselinetable[i].datastream1index = baselinetable[i].datastream2index;
       baselinetable[i].datastream2index = tempint;
@@ -1005,6 +1005,8 @@ bool Configuration::processDatastreamTable(ifstream * input)
       if(datastreamtable[i].zoombandlocalfreqindices[j] >= datastreamtable[i].numzoomfreqs)
         cerror << startl << "Error - attempting to refer to freq outside local table!!!" << endl;
     }
+    datastreamtable[i].tcpwindowsizekb = 0;
+    datastreamtable[i].portnumber = 0;
   }
 
   for(int i=0;i<numconfigs;i++)
@@ -1027,7 +1029,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
   numcoreconfs = 0;
   if(!coreinput.is_open() || coreinput.bad())
   {
-    cerror << startl << "Error - could not open " << coreconffilename << " - will set all numthreads to 1!!" << endl;
+    cerror << startl << "Could not open " << coreconffilename << " - will set all numthreads to 1!!" << endl;
   }
   else
   {
@@ -1039,7 +1041,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     {
       if(coreinput.eof())
       {
-        cerror << startl << "Warning - hit the end of the file! Setting the numthread for Core " << i << " to 1" << endl;
+        cerror << startl << "Hit the end of the file! Setting the numthread for Core " << i << " to 1" << endl;
         numprocessthreads[numcoreconfs++] = 1;
       }
       else
@@ -1597,7 +1599,7 @@ bool Configuration::consistencyCheck()
     {
       if(tindex != datastreamtable[configs[0].datastreamindices[i]].telescopeindex)
       {
-        cerror << startl << "Error - all configs must have the same telescopes!  Config " << j << " datastream " << i << " refers to different telescopes - aborting!!!" << endl;
+        cerror << startl << "All configs must have the same telescopes!  Config " << j << " datastream " << i << " refers to different telescopes - aborting!!!" << endl;
         return false;
       }
     }
@@ -1647,7 +1649,7 @@ bool Configuration::consistencyCheck()
     }
     if(count != numdatastreams)
     {
-      cerror << startl << "Error - not all datastreams accounted for in the datastream table for config " << i << endl;
+      cerror << startl << "Not all datastreams accounted for in the datastream table for config " << i << endl;
       return false;
     }
 
@@ -1836,7 +1838,7 @@ bool Configuration::consistencyCheck()
 
   if(databufferfactor % numdatasegments != 0)
   {
-    cerror << startl << "Error - there must be an integer number of sends per datasegment.  Presently databufferfactor is " << databufferfactor << ", and numdatasegments is " << numdatasegments << ".  ABORTING" << endl;
+    cerror << startl << "There must be an integer number of sends per datasegment.  Presently databufferfactor is " << databufferfactor << ", and numdatasegments is " << numdatasegments << ".  ABORTING" << endl;
     return false;
   }
 
@@ -1858,7 +1860,7 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
   ifstream pulsarinput(filename.c_str(), ios::in);
   if(!pulsarinput.is_open() || pulsarinput.bad())
   {
-    cfatal << startl << "Error - could not open pulsar config file " << line << " - aborting!!!" << endl;
+    cfatal << startl << "Could not open pulsar config file " << line << " - aborting!!!" << endl;
     return false;
   }
   getinputline(&pulsarinput, &line, "NUM POLYCO FILES");
@@ -1931,7 +1933,6 @@ bool Configuration::setPolycoFreqInfo(int configindex)
   double * bandwidths = new double[freqtablelength];
   int * numchannels = new int[freqtablelength];
   bool * used = new bool[freqtablelength];
-  //double bandwidth = freqtable[d.recordedfreqtableindices[0]].bandwidth;
   for(int i=0;i<freqtablelength;i++)
   {
     frequencies[i] = freqtable[i].bandedgefreq;
@@ -1988,7 +1989,7 @@ void Configuration::getinputkeyval(ifstream * input, std::string * key, std::str
 void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader)
 {
   if(input->eof())
-    cerror << startl << "Error - trying to read past the end of file!!!" << endl;
+    cerror << startl << "Trying to read past the end of file!!!" << endl;
   getline(*input,*line);
   while(line->length() > 0 && line->at(0) == COMMENT_CHAR) { // a comment
     cinfo << startl << "Skipping comment " << line << endl;

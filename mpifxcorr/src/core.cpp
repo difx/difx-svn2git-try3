@@ -20,7 +20,6 @@
 //
 //============================================================================
 #include <mpi.h>
-#include <iomanip>
 #include "core.h"
 #include "fxmanager.h"
 #include "alert.h"
@@ -107,7 +106,7 @@ Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
       procslots[i].databuffer[j] = vectorAlloc_u8(databytes);
       procslots[i].controlbuffer[j] = vectorAlloc_s32(controllength);
       estimatedbytes += databytes;
-      estimatedbytes += controllength;
+      estimatedbytes += controllength*4;
     }
   }
 
@@ -346,7 +345,6 @@ void Core::loopprocess(int threadid)
   {
     if(config->pulsarBinOn(i))
     {
-      //pulsarbin = true;
       somepulsarbin = true;
       somescrunch = somescrunch || config->scrunchOutputOn(i);
       numpolycos = config->getNumPolycos(i);
@@ -643,9 +641,9 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     //if necessary, work out the pulsar bins
     if(procslots[index].pulsarbin)
     {
-      for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);      fftsubloop++)
+      for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex); fftsubloop++)
       {
-        i = fftloop*config->getNumBufferedFFTs(procslots[index].configindex) + fftsubloop +          startblock;
+        i = fftloop*config->getNumBufferedFFTs(procslots[index].configindex) + fftsubloop + startblock;
         offsetmins = ((double)i)*((double)config->getSubintNS(procslots[index].configindex))/(60000000000.0);
         currentpolyco->getBins(offsetmins, scratchspace->bins[i]);
       }

@@ -101,6 +101,7 @@
 #define vectorAlloc_f32(length)  ippsMalloc_32f(length)
 #define vectorAlloc_cf32(length) ippsMalloc_32fc(length)
 #define vectorAlloc_f64(length)  ippsMalloc_64f(length)
+#define vectorAlloc_cf64(length) ippsMalloc_64fc(length)
 
 #define vectorFree(memptr)       ippsFree(memptr)
 
@@ -109,6 +110,7 @@
 #define vectorAdd_s16_I(src, srcdest, length)                               ippsAdd_16s_I(src, srcdest, length)
 #define vectorAdd_s32_I(src, srcdest, length)                               ippsAdd_32s_ISfs(src, srcdest, length, 0)
 #define vectorAdd_cf32_I(src, srcdest, length)                              ippsAdd_32fc_I(src, srcdest, length)
+#define vectorAdd_cf64_I(src, srcdest, length)                              ippsAdd_64fc_I(src, srcdest, length)
 #define vectorAddC_f64(src, val, dest, length)                              ippsAddC_64f(src, val, dest, length)
 #define vectorAddC_f32(src, val, dest, length)                              ippsAddC_32f(src, val, dest, length)
 #define vectorAddC_f32_I(val, srcdest, length)                              ippsAddC_32f_I(val, srcdest, length)
@@ -201,6 +203,7 @@
 #define vectorGenerateFIRLowpass_f64(freq, taps, length, window, normalise) ippsFIRGenLowpass_64f(freq, taps, length, window, normalise)
 
 #define vectorZero_cf32(dest, length)                                       ippsZero_32fc(dest, length)
+#define vectorZero_cf64(dest, length)                                       ippsZero_64fc(dest, length)
 #define vectorZero_f32(dest, length)                                        ippsZero_32f(dest, length)
 #define vectorZero_s16(dest, length)                                        ippsZero_16s(dest, length)
 #define vectorZero_s32(dest, length)                                        genericZero_32s(dest, length)

@@ -282,8 +282,6 @@ Mode::~Mode()
 {
   int status;
 
-  cdebug << startl << "Starting a mode destructor" << endl;
-
   vectorFree(validflags);
   for(int j=0;j<numrecordedbands+numzoombands;j++)
   {
@@ -381,8 +379,6 @@ Mode::~Mode()
   }
   delete [] weights;
   delete [] autocorrelations;
-
-  cdebug << startl << "Ending a mode destructor" << endl;
 }
 
 float Mode::unpack(int sampleoffset)
@@ -808,10 +804,17 @@ void Mode::averageFrequency()
 
 void Mode::zeroAutocorrelations()
 {
+  int status;
+
   for(int i=0;i<autocorrwidth;i++)
   {
     for(int j=0;j<numrecordedbands;j++)
-      vectorZero_cf32(autocorrelations[i][j], recordedbandchannels);
+    {
+      status = vectorZero_cf32(autocorrelations[i][j], recordedbandchannels);
+      if(status != vecNoErr)
+        cerror << startl << "Error trying to zero autocorrelations!" << endl;
+      weights[i][j] = 0.0;
+    }
   }
 }
 

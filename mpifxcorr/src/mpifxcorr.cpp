@@ -106,7 +106,7 @@ void * launchCommandMonitorThread(void * c) {
   //setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
   cinfo << startl << "Receive socket opened - socket is " << socket << endl;
   if (socket < 0) {
-    csevere << startl << "Could not open command monitoring socket! Aborting message receive thread." << endl;
+    cwarn << startl << "Could not open command monitoring socket! Aborting message receive thread." << endl;
     keepacting = false;
   }
   config->setCommandThreadInitialised();
@@ -126,7 +126,7 @@ void * launchCommandMonitorThread(void * c) {
   free(genericmessage);
   if(socket >= 0)
     difxMessageReceiveClose(socket);
-  cinfo << startl << "Command monitor thread shutting down" << endl;
+  //cinfo << startl << "Command monitor thread shutting down" << endl;
   return 0;
 }
 

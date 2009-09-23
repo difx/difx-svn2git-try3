@@ -33,7 +33,6 @@
 #include <math.h>
 #include "config.h"
 #include "alert.h"
-#include <iomanip>
 
 DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
   : databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
@@ -492,7 +491,7 @@ void DataStream::updateConfig(int segmentindex)
   bufferinfo[segmentindex].configindex = config->getScanConfigIndex(readscan);
   if(bufferinfo[segmentindex].configindex < 0)
   {
-    cerror << startl << "Warning - Datastream " << mpiid << " read a file containing data from a source for which we had no configuration - leaving parameters unchanged" << endl;
+    cerror << startl << "Datastream " << mpiid << " read a file containing data from a source for which we had no configuration - leaving parameters unchanged" << endl;
     return;
   }
 
@@ -568,11 +567,6 @@ void DataStream::loopfileread()
     diskToMemory(numread++);
 
   lastvalidsegment = (numread-1)%numdatasegments;
-  //cout << "Lastvalidsegment is " << lastvalidsegment << endl;
-  //cout << "configindex is " << bufferinfo[lastvalidsegment].configindex << endl;
-  //cout << "filesread is " << filesread[bufferinfo[lastvalidsegment].configindex] << endl;
-  //cout << "confignumfiles is " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << endl;
-  //cout << "keepreading is " << keepreading << endl;
   while(keepreading && (bufferinfo[lastvalidsegment].configindex < 0 || filesread[bufferinfo[lastvalidsegment].configindex] <= confignumfiles[bufferinfo[lastvalidsegment].configindex]))
   {
     while(dataremaining && keepreading)

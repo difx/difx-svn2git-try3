@@ -59,6 +59,7 @@ private:
 
 	int executeseconds;
 	int invalidtime;
+	int filltime;
 	long long invalidstart;
 	unsigned long lastval;
 	struct mark5_stream *mark5stream;

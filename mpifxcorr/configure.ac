@@ -1,4 +1,4 @@
-AC_INIT([mpifxcorr], [1.5], [Adam Deller <adeller@astro.swin.edu.au>])
+AC_INIT([mpifxcorr], [2.0], [Adam Deller <adeller@astro.swin.edu.au>])
 PACKAGE_VERSION=AC_PACKAGE_VERSION
 AC_SUBST([PACKAGE_VERSION])
 AC_SUBST([LIBRARY_VERSION])
@@ -7,32 +7,41 @@ AM_CONFIG_HEADER(config.h)
 AC_LANG_CPLUSPLUS
 AC_PROG_CXX
 AC_PROG_RANLIB
+AC_C_BIGENDIAN
 
-AC_ARG_ENABLE(quiet, ["disable some verbiage"], [CFLAG_QUIET="-DQUIET"], [CFLAG_QUIET=" "])
+
+AC_ARG_ENABLE(quiet, [AS_HELP_STRING([--enable-quiet],[disable some verbiage])], [CFLAG_QUIET="-DQUIET"], [CFLAG_QUIET=" "])
 
 dnl **********************************************************
 dnl **** Set path for Intel Performance Primitive library ****
 dnl **********************************************************
-AC_ARG_WITH(ipp-root, [  --with-ipp-root=ROOT
-                          ipp root is ROOT (optional).  Use env variable
-                          IPPROOT otherwise.],
+if test "$OSTYPE" == "darwin"; then
+        ipp_libname="Libraries"
+else
+        ipp_libname="sharedlib"
+fi
+
+AC_ARG_WITH(ipp-root, [AS_HELP_STRING([--with-ipp-root=ROOT],[ipp root is ROOT (optional).  Use env variable IPPROOT otherwise.])],
 ipp_root="$withval", ipp_root="")
 if test x"$ipp_root" != "x"; then
         IPP_CFLAGS="-I$ipp_root/include"
-        IPP_LIBS="-L$ipp_root/sharedlib"
+        IPP_LIBS="-L$ipp_root/$ipp_libname"
 else
         IPP_CFLAGS="-I$IPPROOT/include"
-        IPP_LIBS="-L$IPPROOT/sharedlib"
+        IPP_LIBS="-L$IPPROOT/$ipp_libname"
 fi
 
-
-if test "$DIFXBITS" == "32"; then
-        IPP_LIBS=$IPP_LIBS" -lipps -lguide -lippvm -lippcore"
-elif test "$DIFXBITS" == "64"; then
-        IPP_LIBS=$IPP_LIBS" -lippsem64t -lguide -lippvmem64t -lippcoreem64t"
+if test x"$IPPLINKLIBS" != x; then
+        IPP_LIBS=$IPP_LIBS" $IPPLINKLIBS"
 else
-        IPP_LIBS=$IPP_LIBS" -lipps -lguide -lippvm"
-        echo "32/64 bit unspecified - assuming 32 bit for IPP"
+        if test "$DIFXBITS" == "32"; then
+                IPP_LIBS=$IPP_LIBS" -lipps -lguide -lippvm -lippcore"
+        elif test "$DIFXBITS" == "64"; then
+                IPP_LIBS=$IPP_LIBS" -lippsem64t -lguide -lippvmem64t -lippcoreem64t"
+        else
+                IPP_LIBS=$IPP_LIBS" -lipps -lguide -lippvm"
+                echo "32/64 bit unspecified - assuming 32 bit for IPP"
+        fi
 fi
 dnl **********************************************************
 
@@ -41,7 +50,11 @@ dnl **********************************************************
 dnl **** Find difxmessage library                         ****
 dnl **********************************************************
 dm_enabled=true
-PKG_CHECK_MODULES(DIFXMESSAGE, difxmessage)
+PKG_CHECK_MODULES(DIFXMESSAGE,
+        difxmessage >= 0.7,
+        [AC_DEFINE([HAVE_DIFXMESSAGE], 1, [1=has DIFXMESSAGE])],
+        dm_enabled=false)
+AM_CONDITIONAL(WITH_DIFXMESSAGE, $dm_enabled)
 
 dnl **********************************************************
 dnl **** Look for StreamStor libraries                    ****
@@ -63,7 +76,7 @@ dnl **********************************************************
 dnl **********************************************************
 dnl **** Find mark5access library                         ****
 dnl **********************************************************
-PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.3.1)
+PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.3.2)
 dnl **********************************************************
 
 

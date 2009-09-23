@@ -54,18 +54,7 @@ Alert cdebug(DIFX_ALERT_LEVEL_DEBUG);		// alert level 6
 Alert& Alert::sendAlert()
 {
 	// Send alert to appropriate place
-	// If difxmessage is compiled in, let it decide what to do
 	difxMessageSendDifxAlert(alertString.str().c_str(), alertLevel);
-
-	// Otherwise send it to cout or cerr depending on the alert Level
-	if(alertLevel < DIFX_ALERT_LEVEL_WARNING)	// Fatal, severe, error
-	{
-		cerr << alertString.str() << endl;
-	}
-	else
-	{
-		cout << alertString.str() << endl;
-	}
 
 	// Reset alert stream
 	alertString.str("");
