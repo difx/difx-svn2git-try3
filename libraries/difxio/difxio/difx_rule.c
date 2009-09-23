@@ -75,32 +75,48 @@ void printDifxRule(const DifxRule *dr)
 
 int writeDifxRuleArray(FILE *out, const DifxInput *D)
 {
+	int n; //number of lines written
 	int i;
 	DifxRule * dr;
 
 	writeDifxLineInt(out, "NUM RULES", D->nRule);
+	n = 1;
 	for(i=0;i<D->nRule;i++)
 	{
 		dr = D->rule + i;
-		if(strcmp(dr->sourcename, "") != 0)
+		if(strcmp(dr->sourcename, "") != 0) {
 			writeDifxLine1(out, "RULE %d SOURCE", i, dr->sourcename);
-		if(strcmp(dr->scanId, "") != 0)
+			n = n+1;
+		}
+		if(strcmp(dr->scanId, "") != 0) {
 			writeDifxLine1(out, "RULE %d SCAN ID", i, dr->scanId);
-		if(strcmp(dr->calCode, "") != 0)
+			n = n+1;
+		}
+		if(strcmp(dr->calCode, "") != 0) {
 			writeDifxLine1(out, "RULE %d CALCODE", i, dr->calCode);
-		if(dr->qual >= 0)
+			n = n+1;
+		}
+		if(dr->qual >= 0) {
 			writeDifxLineInt1(out, "RULE %d QUAL", i, dr->qual);
-		if(dr->mjdStart > 0.0)
+			n = n+1;
+		}
+		if(dr->mjdStart > 0.0) {
 			writeDifxLineDouble1(out, "RULE %d MJD START", 
 					     i, "%15.8f", dr->mjdStart);
-		if(dr->mjdStop > 0.0)
+			n = n+1;
+		}
+		if(dr->mjdStop > 0.0) {
 			writeDifxLineDouble1(out, "RULE %d MJD STOP",
 					     i, "%15.8f", dr->mjdStop);
+			n = n+1;
+		}
 		writeDifxLine1(out, "RULE %d CONFIG NAME", i, dr->configName);
+		n = n+1;
 	}
+	return n;
 }
 
-int ruleApplies(const DifxRule * dr, const DifxScan * ds, const DifxSource * src)
+int ruleAppliesToScanSource(const DifxRule * dr, const DifxScan * ds, const DifxSource * src)
 {
 	if((strcmp(dr->sourcename, "") != 0 && strcmp(src->name, dr->sourcename) != 0) ||
 	   (strcmp(dr->scanId, "") != 0  && strcmp(ds->identifier, dr->scanId) != 0) ||

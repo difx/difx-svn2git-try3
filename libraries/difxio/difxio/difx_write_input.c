@@ -49,8 +49,8 @@ static int writeCommonSettings(FILE *out, const DifxInput *D,
 	writeDifxLineInt(out, "START MJD", (int)(D->mjdStart));
 	if(D->fracSecondStartTime > 0)
 	{
-		dsecs = (D->mjdStart - (int)(D->mjdStart))*86400.0 + 0.5;
-		writeDifxLineDouble(out, "START SECONDS", "%12.6f", dsecs);
+		dsecs = (D->mjdStart - (int)(D->mjdStart))*86400.0;
+		writeDifxLineDouble(out, "START SECONDS", "%8.6f", dsecs);
 	}
 	else
 	{
@@ -129,6 +129,40 @@ static int writeBaselineTable(FILE *out, const DifxInput *D)
 	fprintf(out, "\n");
 
 	return 0;
+}
+
+static int writeNetworkTable(FILE *out, const DifxInput *D)
+{
+        const DifxAntenna *da;
+        int a;
+
+        /* first determine if we need such a table */
+        for(a = 0; a < D->nAntenna; a++)
+        {
+                da = D->antenna + a;
+                if(da->windowSize != 0)
+                {
+                        break;
+                }
+        }
+        if(a == D->nAntenna)
+        {
+                /* no network table needed */
+                return 0;
+        }
+
+        fprintf(out, "# NETWORK TABLE ####!\n");
+
+        for(a = 0; a < D->nAntenna; a++)
+        {
+                da = D->antenna + a;
+                writeDifxLineInt1(out, "PORT NUM %d", a, da->networkPort);
+                writeDifxLineInt1(out, "TCP WINDOW (KB) %d", a, da->windowSize);
+        }
+
+        fprintf(out, "\n");
+
+        return 0;
 }
 
 static int writeDataTable(FILE *out, const DifxInput *D)
@@ -240,19 +274,16 @@ int writeDifxInput(const DifxInput *D, const char *filename)
 		return -1;
 	}
 
-	printf("About to start writing input file\n");
+	//printf("About to start writing input file\n");
 	writeCommonSettings(out, D, filebase);
 	writeConfigurations(out, D);
-	printf("About to write rule table\n");
 	writeRuleTable(out, D);
-	printf("About to write freq table\n");
 	writeFreqTable(out, D);
 	writeTelescopeTable(out, D);
-	printf("About to write datastream table\n");
 	writeDatastreamTable(out, D);
-	printf("About to write baseline table\n");
 	writeBaselineTable(out, D);
 	writeDataTable(out, D);
+	writeNetworkTable(out, D);
 
 	fclose(out);
 

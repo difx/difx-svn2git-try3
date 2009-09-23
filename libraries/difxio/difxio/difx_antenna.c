@@ -71,7 +71,6 @@ void allocateDifxAntennaFiles(DifxAntenna *da, int nFile)
 	da->file = (char **)calloc(nFile, sizeof(char *));
 }
 
-
 void deleteDifxAntennaArray(DifxAntenna *da, int nAntenna)
 {
 	int a, i;
@@ -172,6 +171,8 @@ void copyDifxAntenna(DifxAntenna *dest, const DifxAntenna *src)
 	dest->dX = src->dX;
 	dest->dY = src->dY;
 	dest->dZ = src->dZ;
+	dest->networkPort = src->networkPort;
+	dest->windowSize  = src->windowSize;
 	strcpy(dest->vsn, src->vsn);
 	if(src->nFile > 0)
 	{

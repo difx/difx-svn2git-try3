@@ -148,6 +148,18 @@ int writeDifxLine3(FILE *out, const char *key, int i1, int i2, int i3,
 	return writeDifxLine(out, k, value);
 }
 
+int writeDifxLineBoolean(FILE *out, const char *key, int value)
+{
+	if(value)
+	{
+		return writeDifxLine(out, key, "TRUE");
+	}
+	else
+	{
+		return writeDifxLine(out, key, "FALSE");
+	}
+}
+
 int writeDifxLineInt(FILE *out, const char *key, int value)
 {
 	char v[32];
@@ -277,7 +289,7 @@ int writeDifxLineArray2(FILE *out, const char *key, int i1, int i2,
 
 int writeDifxDateLines(FILE *out, double mjd)
 {
-	printf("Writing out mjd %15.8f\n", mjd);
+	//printf("Writing out mjd %15.8f\n", mjd);
 	int yr=0, mo=0, da=0, hr, mi, se;
 	int mjdint;
 	double mjdfrac;
@@ -292,7 +304,7 @@ int writeDifxDateLines(FILE *out, double mjd)
 	mi = mjdfrac;
 	mjdfrac -= mi;
 	mjdfrac *= 60.0;
-	se = mjdfrac + 0.5;
+	se = mjdfrac;
 
 	writeDifxLineInt(out, "START YEAR", yr);
 	writeDifxLineInt(out, "START MONTH", mo);

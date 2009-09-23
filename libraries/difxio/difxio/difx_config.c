@@ -44,6 +44,8 @@ DifxConfig *newDifxConfigArray(int nConfig)
 		dc[c].doPolar = -1;
 		dc[c].pulsarId = -1;
 		dc[c].strideLength = 16;
+		dc[c].xmacLength = 32;
+		dc[c].numBufferedFFTs = 1;
 		dc[c].fringeRotOrder = 1;
 	}
 	
@@ -136,6 +138,7 @@ void fprintDifxConfig(FILE *fp, const DifxConfig *dc)
 {
 	int i;
 	int nAnt;
+	char p0, p1;
 
 	fprintf(fp, "  Difx Config [%s] : %p\n", dc->name, dc);
 	fprintf(fp, "    tInt  = %f sec\n", dc->tInt);
@@ -143,9 +146,12 @@ void fprintDifxConfig(FILE *fp, const DifxConfig *dc)
 	fprintf(fp, "    Guard nanoseconds = %d\n", dc->guardNS);
 	fprintf(fp, "    fringeRotOrder = %d\n", dc->fringeRotOrder);
 	fprintf(fp, "    strideLength = %d\n", dc->strideLength);
+	fprintf(fp, "    xmacLength = %d\n", dc->xmacLength);
+	fprintf(fp, "    numBufferedFFTs = %d\n", dc->numBufferedFFTs);
 	fprintf(fp, "    pulsarId = %d\n", dc->pulsarId);
-	fprintf(fp, "    polarization [%d] = %c%c\n", 
-		dc->nPol, dc->pol[0], dc->pol[1]);
+	p0 = dc->pol[0] ? dc->pol[0] : ' ';
+	p1 = dc->pol[1] ? dc->pol[1] : ' ';
+	fprintf(fp, "    polarization [%d] = %c%c\n", dc->nPol, p0, p1);
 	fprintf(fp, "    doPolar = %d\n", dc->doPolar);
 	fprintf(fp, "    quantization bits = %d\n", dc->quantBits);
 	fprintf(fp, "    datastream ids [%d] =", dc->nDatastream);
@@ -237,6 +243,8 @@ int isSameDifxConfig(const DifxConfig *dc1, const DifxConfig *dc2)
 	   dc1->guardNS != dc2->guardNS ||
 	   dc1->fringeRotOrder != dc2->fringeRotOrder ||
 	   dc1->strideLength != dc2->strideLength ||
+	   dc1->xmacLength != dc2->xmacLength ||
+	   dc1->numBufferedFFTs != dc2->numBufferedFFTs ||
 	   dc1->pulsarId != dc2->pulsarId ||
 	   dc1->nPol != dc2->nPol ||
 	   dc1->doPolar != dc2->doPolar ||
@@ -427,6 +435,8 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	strcpy(dest->name, src->name);
 	dest->fringeRotOrder = src->fringeRotOrder;
 	dest->strideLength = src->strideLength;
+	dest->xmacLength = src->xmacLength;
+	dest->numBufferedFFTs = src->numBufferedFFTs;
 	if(pulsarIdRemap && src->pulsarId >= 0)
 	{
 		dest->pulsarId = pulsarIdRemap[src->pulsarId];
@@ -617,6 +627,8 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		writeDifxLineInt(out, "GUARD NANOSECONDS", config->guardNS);
 		writeDifxLineInt(out, "FRINGE ROTN ORDER", config->fringeRotOrder);
 		writeDifxLineInt(out, "ARRAY STRIDE LENGTH", config->strideLength);
+		writeDifxLineInt(out, "XMAC STRIDE LENGTH", config->xmacLength);
+		writeDifxLineInt(out, "NUM BUFFERED FFTS", config->numBufferedFFTs);
 		if(config->doAutoCorr)
 			writeDifxLine(out, "WRITE AUTOCORRS", "TRUE");
 		else
