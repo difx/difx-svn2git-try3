@@ -16,8 +16,8 @@
 
 const char program[] = "calcif2";
 const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
-const char version[] = "1.0";
-const char verdate[] = "20090503";
+const char version[] = "1.1";
+const char verdate[] = "20090918";
 
 typedef struct
 {
@@ -400,7 +400,6 @@ int runfile(const char *prefix, const CommandLineOptions *opts,
 		writeDifxIM(D,    imfile);
 		printf("Wrote IM file\n");
 		deleteDifxInput(D);
-		printf("Deleted difxinput\n");
 
 		return 0;
 	}
