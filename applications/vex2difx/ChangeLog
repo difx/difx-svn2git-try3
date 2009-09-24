@@ -1,3 +1,14 @@
+Version 2.0
+~~~~~~~~~~~
+* Jumped because in the mean-time difx-1.5 branch had gone to 1.1
+* Includes the following corrections merged in from the 1.5 branch
+  - Zero length scans are ignored
+  - Warn if no clock values are applied on a job/antenna basis
+  - os2v2d: correct use of POLARIZATION
+* Also bugfixes related to variable initialisation
+* Adds support for multiple phase centres
+* Requires difxio 3.0
+
 Version 0.3
 ~~~~~~~~~~~
 * Post DiFX-1.5
