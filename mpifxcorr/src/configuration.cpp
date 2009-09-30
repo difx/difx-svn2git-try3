@@ -1104,7 +1104,7 @@ bool Configuration::consistencyCheck()
     //check that number of channels * sample time yields a whole number of nanoseconds for every datastream
     for(int j=0;j<numdatastreams;j++)
     {
-      sampletimens = 1000.0/freqtable[datastreamtable[configs[i].datastreamindices[j]].freqtableindices[0]].bandwidth;
+      sampletimens = 1000.0/(2.0*freqtable[datastreamtable[configs[i].datastreamindices[j]].freqtableindices[0]].bandwidth);
       ffttime = sampletimens*configs[i].numchannels*2;
       nsincrement = ffttime*configs[i].blockspersend*(databufferfactor/numdatasegments);
       if(ffttime - (int)(ffttime+0.5) > 0.00000001 || ffttime - (int)(ffttime+0.5) < -0.000000001)
