@@ -43,7 +43,7 @@
 
 const string program("vex2difx");
 const string version("1.0.1");
-const string verdate("20090917");
+const string verdate("20090930");
 const string author("Walter Brisken");
 
 
@@ -1154,7 +1154,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	}
 	else
 	{
-		double dataRate, chbw;
+		double dataRate, chbw, sendTime;
 		int sendSize;
 
 		dataRate = mode->subbands.size()*mode->getBits()*mode->sampRate/1000000.0; // data rate (Mbps)
@@ -1162,7 +1162,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 
 		if(P->sendLength > 0.0)
 		{
-			sendSize = static_cast<int>(P->sendLength*mode->subbands.size()*mode->getBits()*mode->sampRate/8);
+			sendSize = static_cast<int>(P->sendLength*mode->subbands.size()*mode->getBits()*mode->sampRate/(8.0*P->dataBufferFactor/P->nDataSegments));
 		}
 		else if(P->sendSize > 0)
 		{
@@ -1171,6 +1171,13 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		else
 		{
 			sendSize = 6000000;	/* 6 MB is not a bad amount */
+		}
+
+		sendTime = sendSize/(mode->subbands.size()*mode->getBits()*mode->sampRate/(8.0*P->dataBufferFactor/P->nDataSegments));
+		if(sendTime > 1.0)
+		{
+			sendTime = 1.0;
+			sendSize = static_cast<int>(sendTime*mode->subbands.size()*mode->getBits()*mode->sampRate/(8.0*P->dataBufferFactor/P->nDataSegments));
 		}
 
 		config->blocksPerSend = calcBlocksPerSend(chbw, &(config->tInt), dataRate, sendSize, P->tweakIntegrationTime);
