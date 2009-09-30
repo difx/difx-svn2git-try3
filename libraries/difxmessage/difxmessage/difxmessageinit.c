@@ -27,6 +27,7 @@ char difxBinarySTAGroup[16] = "";
 int difxBinarySTAPort = -1;
 char difxBinaryLTAGroup[16] = "";
 int difxBinaryLTAPort = -1;
+int difxMessageInUse = 0;
 
 const char *getDifxMessageIdentifier()
 {
@@ -38,6 +39,7 @@ int difxMessageInit(int mpiId, const char *identifier)
 	const char *envstr;
 
 	difxMessageSequenceNumber = 0;
+	difxMessageInUse = 1;
 	
 	strncpy(difxMessageIdentifier, identifier, DIFX_MESSAGE_IDENTIFER_LENGTH);
 	difxMessageIdentifier[DIFX_MESSAGE_IDENTIFER_LENGTH-1] = 0;
@@ -53,11 +55,20 @@ int difxMessageInit(int mpiId, const char *identifier)
 		strncpy(difxMessageGroup, envstr, 16);
 		difxMessageGroup[15] = 0;
 	}
+	else
+	{
+		difxMessageInUse = 0;
+	}
+
 
 	envstr = getenv("DIFX_MESSAGE_PORT");
 	if(envstr != 0)
 	{
 		difxMessagePort = atoi(envstr);
+	}
+	else
+	{
+		difxMessageInUse = 0;
 	}
 
 	sprintf(difxMessageXMLFormat, 
