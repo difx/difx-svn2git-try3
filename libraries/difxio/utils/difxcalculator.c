@@ -75,6 +75,7 @@ int main(int argc, char **argv)
 	double basebandReadSize, coreInputRatio, coreOutputRatio, coreInputRate;
 	double coreOutputRate, manInputRate, diskDataRate, datasetSize;
 	double databufferDur, managerSlack, tSubint, corebufferDur, subintsPerInt;
+	double datastreamReadDur;
 	int visSize;
 	int decimation;
 	double dsBufferSize;	
@@ -231,13 +232,15 @@ int main(int argc, char **argv)
 		printf("Manager mem usage (MB)    %5.3f\n", manSize);
 
 		databufferDur = dsBufferSize*8/recDataRate;
+		datastreamReadDur = databufferDur/nDataSeg;
 		managerSlack = visLength*tInt/2.0;
 		tSubint = 1000.0/(recDataRate/(8.0*basebandMessageSize*1.024*1.024));
-		corebufferDur = nCore*4.0*tSubint/1000.0;
+		corebufferDur = nNode*4.0*tSubint/1000.0;
 		subintsPerInt = tInt/(tSubint/1000.0);
 
 		printf("\n");
 		printf("TIMES                     VALUE        NOTE\n");
+		printf("DS read dur. (sec)        %5.3f\n", datastreamReadDur);
 		printf("DS buffer dur. (sec)      %5.3f\n", databufferDur);
 		printf("Manager slack (sec)       %5.3f\n", managerSlack);
 		printf("Subint time (ms)          %5.3f\n", tSubint);
