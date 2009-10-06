@@ -5,6 +5,7 @@ Version 1.0.1
 * Zero length scans are ignored
 * Warn if no clock values are applied on a job/antenna basis
 * Don't let send duration exceed 2 seconds
+* oms2v2d respects TWEAK_INT_TIME parameter
 
 Version 1.0
 ~~~~~~~~~~~
