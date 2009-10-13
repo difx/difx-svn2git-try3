@@ -39,6 +39,10 @@ const char verdate[] = "20090831";
 const int nNode = 10;
 const int nCore = 7;
 
+/* Note to the unfortunate person looking a this code -- It is simple, but
+ * ugly.  Don't look too closely!
+ */
+
 int usage()
 {
 	fprintf(stderr, "\n%s ver. %s  %s  %s\n\n", program, version,
@@ -170,26 +174,26 @@ int main(int argc, char **argv)
 		quantBits /= config->nDatastream;
 		bandwidth /= nc;
 
-		printf("PARAMETER                 VALUE        NOTE\n");
-		printf("Number of telescopes      %d\n", nAnt);
-		printf("Number of baselines       %d\n", nBL);
-		printf("Number of IFs             %3.1f\n", nFreq);
-		printf("Bandwidth (MHz)           %6.4f\n", bandwidth);
-		printf("Decimation factor         %d\n", decimation);
-		printf("Number of polarizations   %d\n", nPol);
-		printf("Pol. products / band      %3.1f\n", nPpB);
-		printf("Bits / sample             %3.1f\n", quantBits);
-		printf("Blocks per send           %d\n", BPS);
-		printf("Spectral points / band    %d\n", nChan);
-		printf("Data buffer factor        %d\n", dataBufferFactor);
-		printf("Num. data segments        %d\n", nDataSeg);
+		printf("PARAMETER                 \tVALUE\tNOTE\n");
+		printf("Number of telescopes      \t%d\n", nAnt);
+		printf("Number of baselines       \t%d\n", nBL);
+		printf("Number of IFs             \t%3.1f\n", nFreq);
+		printf("Bandwidth (MHz)           \t%6.4f\n", bandwidth);
+		printf("Decimation factor         \t%d\n", decimation);
+		printf("Number of polarizations   \t%d\n", nPol);
+		printf("Pol. products / band      \t%3.1f\n", nPpB);
+		printf("Bits / sample             \t%3.1f\n", quantBits);
+		printf("Blocks per send           \t%d\tNumber of FFTs per send from DS to Core\n", BPS);
+		printf("Spectral points / band    \t%d\n", nChan);
+		printf("Data buffer factor        \t%d\tThis many sends worth of data in the data buffer\n", dataBufferFactor);
+		printf("Num. data segments        \t%d\n", nDataSeg);
 		printf("\n");
-		printf("Playback speedup ratio    %4.2f\n", speedUp);
-		printf("Num. core nodes           %d\n", nNode);
-		printf("Num threads / core        %d\n", nCore);
-		printf("Visbuffer length          %d\n", visLength);
-		printf("Integration time (sec)    %4.2f\n", tInt);
-		printf("Obs. duration (hours)     %4.2f\n", tObs);
+		printf("Playback speedup ratio    \t%4.2f\n", speedUp);
+		printf("Num. core nodes           \t%d\n", nNode);
+		printf("Num threads / core        \t%d\tShould be <= number of CPU cores per node\n", nCore);
+		printf("Visbuffer length          \t%d\tNumber of slots in visBuffer\n", visLength);
+		printf("Integration time (sec)    \t%4.2f\n", tInt);
+		printf("Obs. duration (hours)     \t%4.2f\n", tObs);
 
 		visSize = (nAnt+nBL)*(8*nChan*nFreq*nPol*nPpB);
 
@@ -205,17 +209,17 @@ int main(int argc, char **argv)
 		datasetSize = diskDataRate*tObs*3600/1024;
 
 		printf("\n");
-		printf("NETWORK / DISK USAGE      VALUE        NOTE\n");
-		printf("Record data rate (Mbps)   %5.3f\n", recDataRate);
-		printf("Baseband msg size (MB)    %5.3f\n", basebandMessageSize);
-		printf("Baseband read size (MB)   %5.3f\n", basebandReadSize);
-		printf("Core input data ratio     %5.3f\n", coreInputRatio);
-		printf("Core input rate (Mbps)    %5.3f\n", coreInputRate);
-		printf("Core output data ratio    %5.3f\n", coreOutputRatio);
-		printf("Core output rate (Mbps)   %5.3f\n", coreOutputRate);
-		printf("Manager input rate (Mbps) %5.3f\n", manInputRate);
-		printf("Disk output rate (MB/s)   %5.3f\n", diskDataRate);
-		printf("Dataset size (GB)         %5.3f\n", datasetSize);
+		printf("NETWORK / DISK USAGE      \tVALUE\tNOTE\n");
+		printf("Record data rate (Mbps)   \t%5.3f\n", recDataRate);
+		printf("Baseband msg size (MB)    \t%5.3f\tDS to Core send; want a few MB\n", basebandMessageSize);
+		printf("Baseband read size (MB)   \t%5.3f\tTypically want ~10 to 50 MB\n", basebandReadSize);
+		printf("Core input data ratio     \t%5.3f\tReally should be << 1.0\n", coreInputRatio);
+		printf("Core input rate (Mbps)    \t%5.3f\n", coreInputRate);
+		printf("Core output data ratio    \t%5.3f\n", coreOutputRatio);
+		printf("Core output rate (Mbps)   \t%5.3f\n", coreOutputRate);
+		printf("Manager input rate (Mbps) \t%5.3f\n", manInputRate);
+		printf("Disk output rate (MB/s)   \t%5.3f\n", diskDataRate);
+		printf("Dataset size (GB)         \t%5.3f\n", datasetSize);
 
 		dsBufferSize = basebandMessageSize*dataBufferFactor;
 		modeSize = basebandMessageSize/decimation +((nFreq*nPol*nChan*4)*(2+2+2+1)+nChan*4.0*(2+2+2+2+2+2+2+3+5))/(1024*1024);
@@ -224,12 +228,12 @@ int main(int argc, char **argv)
 
 
 		printf("\n");
-		printf("MEMORY USAGE              VALUE        NOTE\n");
-		printf("Size of DS buffer (MB)    %5.3f\n", dsBufferSize);
-		printf("Size of vis. dump (bytes) %d\n", visSize);
-		printf("Size of a Mode (MB)       %5.3f\n", modeSize);
-		printf("Core memory usage (MB)    %5.3f\n", coreSize);
-		printf("Manager mem usage (MB)    %5.3f\n", manSize);
+		printf("MEMORY USAGE              \tVALUE\tNOTE\n");
+		printf("Size of DS buffer (MB)    \t%5.3f\tShould not exceed \"a large fraction\" of available RAM\n", dsBufferSize);
+		printf("Size of vis. dump (bytes) \t%d\n", visSize);
+		printf("Size of a Mode (MB)       \t%5.3f\n", modeSize);
+		printf("Core memory usage (MB)    \t%5.3f\n", coreSize);
+		printf("Manager mem usage (MB)    \t%5.3f\n", manSize);
 
 		databufferDur = dsBufferSize*8/recDataRate;
 		datastreamReadDur = databufferDur/nDataSeg;
@@ -239,13 +243,13 @@ int main(int argc, char **argv)
 		subintsPerInt = tInt/(tSubint/1000.0);
 
 		printf("\n");
-		printf("TIMES                     VALUE        NOTE\n");
-		printf("DS read dur. (sec)        %5.3f\n", datastreamReadDur);
-		printf("DS buffer dur. (sec)      %5.3f\n", databufferDur);
-		printf("Manager slack (sec)       %5.3f\n", managerSlack);
-		printf("Subint time (ms)          %5.3f\n", tSubint);
-		printf("Core buffer dur. (sec)    %5.3f\n", corebufferDur);
-		printf("Subints. per int.         %5.3f\n", subintsPerInt);
+		printf("TIMES                     \tVALUE\tNOTE\n");
+		printf("DS buffer dur. (sec)      \t%5.3f\n", databufferDur);
+		printf("DS read dur. (sec)        \t%5.3f\tMust not exceed 2^31ns (~2 sec)\n", datastreamReadDur);
+		printf("Manager slack (sec)       \t%5.3f\n", managerSlack);
+		printf("Subint time (ms)          \t%5.3f\n", tSubint);
+		printf("Core buffer dur. (sec)    \t%5.3f\n", corebufferDur);
+		printf("Subints. per int.         \t%5.3f\tIf not an integer, expect variable weights\n", subintsPerInt);
 		printf("\n");
 	}
 
