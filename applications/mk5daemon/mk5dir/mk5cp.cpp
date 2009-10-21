@@ -426,6 +426,18 @@ int main(int argc, char **argv)
 	{
 		mk5status.activeBank = 'B';
 	}
+	else if(strcasecmp(vsn, "A") == 0)
+	{
+		mk5status.activeBank = 'A';
+		strncpy(vsn, mk5status.vsnA, 8);
+		vsn[8] = 0;
+	}
+	else if(strcasecmp(vsn, "B") == 0)
+	{
+		mk5status.activeBank = 'B';
+		strncpy(vsn, mk5status.vsnB, 8);
+		vsn[8] = 0;
+	}
 
 	mk5dirpath = getenv("MARK5_DIR_PATH");
 	if(mk5dirpath == 0)
