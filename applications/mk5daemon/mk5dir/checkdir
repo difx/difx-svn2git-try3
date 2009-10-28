@@ -23,19 +23,19 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id:$
-# $HeadURL:$
-# $LastChangedRevision:$
-# $Author:$
-# $LastChangedDate:$
+# $Id$
+# $HeadURL$
+# $LastChangedRevision$
+# $Author$
+# $LastChangedDate$
 #
 #============================================================================
 
 
 program = 'checkdir'
-version = '0.1'
+version = '0.2'
 author  = 'Walter Brisken'
-verdate = '20090818'
+verdate = '20091028'
 
 from sys import exit, argv
 from os.path import isfile, isdir
@@ -131,6 +131,11 @@ class Scan:
 			except ValueError:
 				self.error = 'Conversion error'
 	
+	def checkLength(self):
+		if self.bytes == 0:
+			return "Zero length scan"
+		return None
+
 	def checkTime(self):
 		if self.startDay < 51000 or self.startDay > 100000:
 			return "MJD out of range"
@@ -251,6 +256,8 @@ def checkFile(module, verbose=1):
 	for t in text[1:]:
 		scan = Scan(t)
 		scans.append(scan)
+		if scan.error == None:
+			scan.error = scan.checkLength()
 		if scan.error == None:
 			scan.error = scan.checkTime()
 		if scan.error == None:
