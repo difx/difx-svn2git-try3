@@ -60,7 +60,8 @@ enum Mark5Format
 	MK5_FORMAT_MARK5B  =  2,
 	MK5_FORMAT_MARK5CB =  3,
 	MK5_FORMAT_MARK5C  =  4,		/* Not Yet Implemented */
-	MK5_FORMAT_K5      =  5			/* Not Yet Implemented */
+	MK5_FORMAT_K5      =  5,		/* Not Yet Implemented */
+	MK5_FORMAT_VLBN    =  6			/* VLBA with no modulation */
 };
 
 #define MAXBLANKZONES	32
@@ -224,6 +225,9 @@ int mark5_unpack_with_offset(struct mark5_stream *ms, void *packed,
 /*   VLBA format */
 
 struct mark5_format_generic *new_mark5_format_vlba(int Mbps, int nchan,
+	int nbit, int fanout, int decimation);
+
+struct mark5_format_generic *new_mark5_format_vlba_nomod(int Mbps, int nchan,
 	int nbit, int fanout, int decimation);
 
 /*   Mark4 format */
