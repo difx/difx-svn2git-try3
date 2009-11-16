@@ -133,10 +133,10 @@ void VexInterval::logicalOr(const VexInterval &v)
 	}
 }
 
-int VexMode::addSubband(double freq, double bandwidth, char sideband, char pol, string name)
+int VexMode::addSubband(double freq, double bandwidth, char sideband, char pol)
 {
 	int i, n;
-	VexSubband S(freq, bandwidth, sideband, pol, name);
+	VexSubband S(freq, bandwidth, sideband, pol);
 
 	n = subbands.size();
 
@@ -322,23 +322,6 @@ const VexSource *VexData::getSource(int num) const
 	}
 
 	return &sources[num];
-}
-
-int VexData::getSourceId(const string name) const
-{
-	vector<VexSource>::const_iterator it;
-	int i = 0;
-
-	for(it = sources.begin(); it != sources.end(); it++)
-	{
-		if(it->name == name)
-		{
-			return i;
-		}
-		i++;
-	}
-
-	return -1;
 }
 
 VexScan *VexData::newScan()
@@ -1222,7 +1205,7 @@ ostream& operator << (ostream& os, const VexAntenna& x)
 
 ostream& operator << (ostream& os, const VexSubband& x)
 {
-	os << "(" << x.freq << " Hz, " << x.bandwidth << " Hz, sb=" << x.sideBand << ", pol=" << x.pol << " IF=" << x.ifname << ")";
+	os << "(" << x.freq << " Hz, " << x.bandwidth << " Hz, sb=" << x.sideBand << ", pol=" << x.pol << ")";
 	
 	return os;
 }

@@ -111,8 +111,6 @@ static int getRecordChannel(const string chanName, const map<string,Tracks>& ch2
 		delta = T.sign.size() + T.mag.size();
 		track = T.sign[0];
 
-		cout << "XX " << delta << " " << track  << endl;
-
 		return (track-2)/delta;
 	}
 	else if(F.format == "S2" || F.format == "LBASTD" || F.format == "LBAVSOP")
@@ -464,7 +462,6 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 		// If the min subarray condition never occurs, then skip the scan
 		if(timeRange.duration_seconds() < 0.5)
 		{
-			cout << "XX " << timeRange.duration_seconds()  << endl;
 			continue;
 		}
 
@@ -475,6 +472,7 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 		const VexSource *src = V->getSource(sourceName);
 		if(src == 0)
 		{
+			cerr << "Developer error! src == 0" << endl;
 			exit(0);
 		}
 
@@ -514,7 +512,6 @@ int getScans(VexData *V, Vex *v, const CorrParams& params)
 		S->modeName = modeName;
 		S->sourceName = sourceName;
 		S->corrSetupName = corrSetupName;
-		S->mjdVex = mjd;
 
 		// Add to event list
 		V->addEvent(S->mjdStart, VexEvent::SCAN_START, scanId, scanId);
@@ -554,11 +551,8 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 	int dasNum;
 	int subbandId, recChanId;
 	bool sign;
-	string in;
 	map<string,char> if2pol;
-	map<string,string> ifname;
 	map<string,char> bbc2pol;
-	map<string,string> bbc2ifname;
 	map<string,Tracks> ch2tracks;
 
 	for(modeId = get_mode_def(v);
@@ -584,9 +578,7 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 			Upper(antName2);
 			bool swapPol = params.swapPol(antName2);
 			if2pol.clear();
-			ifname.clear();
 			bbc2pol.clear();
-			bbc2ifname.clear();
 			ch2tracks.clear();
 			nTrack = 0;
 			nBit = 1;
@@ -619,8 +611,6 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 			    p;
 			    p = get_all_lowl_next())
 			{
-				vex_field(T_IF_DEF, p, 2, &link, &name, &value, &units);
-				in = string(value);
 				vex_field(T_IF_DEF, p, 3, &link, &name, &value, &units);
 				polarization = value[0];
 				if(swapPol)
@@ -630,7 +620,6 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 				}
 				vex_field(T_IF_DEF, p, 1, &link, &name, &value, &units);
 				if2pol[value] = polarization;
-				ifname[value] = in;
 			}
 
 			// Get BBC to pol map for this antenna
@@ -640,10 +629,8 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 			{
 				vex_field(T_BBC_ASSIGN, p, 3, &link, &name, &value, &units);
 				polarization = if2pol[value];
-				in = ifname[value];
 				vex_field(T_BBC_ASSIGN, p, 1, &link, &name, &value, &units);
 				bbc2pol[value] = polarization;
-				bbc2ifname[value] = in;
 			}
 
 			// Get datastream assignments and formats
@@ -771,7 +758,7 @@ int getModes(VexData *V, Vex *v, const CorrParams& params)
 				fvex_double(&value, &units, &bandwidth);
 
 				vex_field(T_CHAN_DEF, p, 6, &link, &name, &value, &units);
-				subbandId = M->addSubband(freq, bandwidth, sideBand, bbc2pol[value], bbc2ifname[value]);
+				subbandId = M->addSubband(freq, bandwidth, sideBand, bbc2pol[value]);
 
 				vex_field(T_CHAN_DEF, p, 5, &link, &name, &value, &units);
 				recChanId = getRecordChannel(value, ch2tracks, F, i);

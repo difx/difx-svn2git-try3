@@ -116,7 +116,6 @@ public:
 	map<string,VexInterval> stations;
 	string corrSetupName;	// points to CorrSetup entry
 	double size;		// [bytes] approx. correlated size
-	double mjdVex;		// The start time listed in the vex file
 };
 
 class VexSource
@@ -136,14 +135,13 @@ public:
 class VexSubband	// Mode-specific frequency details
 {
 public:
-	VexSubband(double f=0.0, double b=0.0, char s=' ', char p=' ', string name="") : 
-		freq(f), bandwidth(b), sideBand(s), pol(p), ifname(name) {}
+	VexSubband(double f=0.0, double b=0.0, char s=' ', char p=' ') : 
+		freq(f), bandwidth(b), sideBand(s), pol(p) {}
 
 	double freq;		// (Hz)
 	double bandwidth;	// (Hz)
 	char sideBand;		// U or L
 	char pol;		// R or L
-	string ifname;		// A, B, C, D, 1N, 2N, ...
 };
 
 class VexIF		// Antenna-specific baseband channel details
@@ -174,7 +172,7 @@ class VexMode
 public:
 	VexMode() : sampRate(0.0) {}
 
-	int addSubband(double freq, double bandwidth, char sideband, char pol, string ifname);
+	int addSubband(double freq, double bandwidth, char sideband, char pol);
 	int getPols(char *pols) const;
 	int getBits() const;
 	const VexFormat &getFormat(const string antName) const;
@@ -341,7 +339,6 @@ public:
 	int nSource() const { return sources.size(); }
 	const VexSource *getSource(const string name) const;
 	const VexSource *getSource(int num) const;
-	int getSourceId(const string name) const;
 
 	int nScan() const { return scans.size(); }
 	const VexScan *getScan(const string name) const;
