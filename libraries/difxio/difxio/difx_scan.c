@@ -347,12 +347,19 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 	return ds;
 }
 
-/* dt in seconds */
+/* dt in seconds -- note that this function is now depricated */
 int getDifxScanIMIndex(const DifxScan *ds, double mjd, double *dt)
 {
+	static int first=1;
 	int i;
 	double m1, m2;
 	const DifxPolyModel *dp, *im=0;
+
+	if(first)
+	{
+		first = 0;
+		fprintf(stderr, "Warning: function getDifxScanIMIndex is being called.  Please\nupgrade your software so that getDifxScanIMIndex2 is called instead.\n");
+	}
 
 	if(!ds)
 	{
@@ -397,6 +404,56 @@ int getDifxScanIMIndex(const DifxScan *ds, double mjd, double *dt)
 	return -1;
 }
 
+
+/* dt in seconds; mjd and iat both in days */
+int getDifxScanIMIndex2(const DifxScan *ds, double mjd, double iat, double *dt)
+{
+	int i;
+	double m1, m2;
+	const DifxPolyModel *dp, *im=0;
+
+	if(!ds)
+	{
+		return -1;
+	}
+	if(!ds->im || ds->nPoly < 1)
+	{
+		return -1;
+	}
+
+	/* be sure to find an antenna with model data */
+	for(i = 0; i < ds->nAntenna; i++)
+	{
+		im = ds->im[i];
+		if(im)
+		{
+			break;
+		}
+	}
+
+	if(!im)
+	{
+		return -1;
+	}
+
+	for(i = 0; i < ds->nPoly; i++)
+	{
+		dp = im + i;
+		m1 = (dp->mjd - mjd) + dp->sec/86400.0;
+		m2 = m1 + dp->validDuration/86400.0;
+		if(m1 <= iat && iat <= m2)
+		{
+			if(dt)
+			{
+				*dt = (iat - m1)*86400.0;
+			}
+			return i;
+		}
+	}
+
+	/* outside range */
+	return -1;
+}
 /* dc must point to the base of a configuration array */
 int writeDifxScan(FILE *out, const DifxScan *ds, int scanId, 
 	const DifxConfig *dc, int doRealName, int doCoords, int doExtra)
