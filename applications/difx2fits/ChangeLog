@@ -2,6 +2,8 @@ Version 2.6.1
 * Post DiFX-1.5.1
 * Copy jobmatrix file
 * rename "makefilts.tmp" to "makefits.tmp"
+* Improve timestamp precision
+* Require difxio 2.12.1
 
 Version 2.6
 * Apply flags properly, even in cases with crazy subarraying

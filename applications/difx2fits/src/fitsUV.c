@@ -719,7 +719,7 @@ static int RecordIsInvalid(const DifxVis *dv)
 		{
 
 			printf("Warning -- record with !finite value: ");
-			printf("a1=%d a1=%d mjd=%13.7f\n",
+			printf("a1=%d a2=%d mjd=%13.7f\n",
 				(dv->record->baseline/256) - 1,
 				(dv->record->baseline%256) - 1,
 				dv->mjd + dv->iat);
@@ -731,7 +731,7 @@ static int RecordIsInvalid(const DifxVis *dv)
 		if(d[i] > 1.0e10 || d[i] < -1.0e10)
 		{
 			printf("Warning -- record with extreme value: ");
-			printf("a1=%d a1=%d mjd=%13.7f value=%e\n",
+			printf("a1=%d a2=%d mjd=%13.7f value=%e\n",
 				(dv->record->baseline/256) - 1,
 				(dv->record->baseline%256) - 1,
 				dv->mjd + dv->iat,
