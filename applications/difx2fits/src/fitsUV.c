@@ -381,7 +381,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	int i, i1, v, N, index;
 	int a1, a2;
 	int bl, scanId;
-	double mjd, dt, dt2;
+	double mjd, iat, dt, dt2;
 	int changed = 0;
 	int nFloat, readSize;
 	char line[100];
@@ -434,8 +434,8 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	}
 
 	bl           = atoi(DifxParametersvalue(dv->dp, rows[0]));
-	mjd          = atoi(DifxParametersvalue(dv->dp, rows[1])) +
-	               atof(DifxParametersvalue(dv->dp, rows[2]))/86400.0;
+	mjd          = atoi(DifxParametersvalue(dv->dp, rows[1]));
+	iat	     = atof(DifxParametersvalue(dv->dp, rows[2]))/86400.0;
 	freqNum      = atoi(DifxParametersvalue(dv->dp, rows[5]));
 	bin          = atoi(DifxParametersvalue(dv->dp, rows[7]));
 
@@ -464,7 +464,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	/* FIXME -- look at configId in the record as a check */
 
 	/* scanId at middle of integration */
-	scanId = DifxInputGetScanIdByJobId(dv->D, mjd, dv->jobId);
+	scanId = DifxInputGetScanIdByJobId(dv->D, mjd+iat, dv->jobId);
 	if(scanId < 0)
 	{
 		return SKIPPED_RECORD;
@@ -487,7 +487,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 
 	/* see if it is still the same scan at the edges of integration */
 	dt2 = config->tInt/(86400.0*2.001);  
-	if(scan->mjdStart > mjd-dt2 || scan->mjdEnd < mjd+dt2)
+	if(scan->mjdStart > mjd+iat-dt2 || scan->mjdEnd < mjd+iat+dt2)
 	{
 		/* Nope! */
 		dv->flagTransition = 1;
@@ -525,7 +525,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	if(verbose >= 1 && scanId != dv->scanId)
 	{
 		printf("        MJD=%11.5f jobId=%d scanId=%d Source=%s  FITS SourceId=%d\n", 
-			mjd, dv->jobId, scanId, scan->name, dv->D->source[scan->sourceId].fitsSourceId+1);
+			mjd+iat, dv->jobId, scanId, scan->name, dv->D->source[scan->sourceId].fitsSourceId+1);
 	}
 
 	dv->scanId = scanId;
@@ -544,11 +544,12 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 		dv->recweight = 1.0;
 	}
 
-	if(bl != dv->baseline || fabs(mjd - dv->mjd) > 1.0/86400000.0)
+	if(bl != dv->baseline || fabs((mjd-dv->mjd) + (iat-dv->iat))  > 1.0/86400000.0)
 	{
 		changed = 1;
 		dv->baseline = bl;
 		dv->mjd = mjd;
+		dv->iat= iat;
 
 		index = dv->freqId + dv->nFreq*dv->polId;
 
@@ -563,7 +564,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			double u,v,w;
 			int n;
 
-			n = getDifxScanIMIndex(scan, mjd, &dt);
+			n = getDifxScanIMIndex2(scan, mjd, iat, &dt);
 
 			u = dv->U;
 			v = dv->V;
@@ -584,7 +585,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 				if(n < 0)
 				{
 					fprintf(stderr, "Error: interferometer model index out of range: scanId=%d mjd=%12.6f\n",
-					scanId, mjd);
+					scanId, mjd+iat);
 				}
 				else
 				{
@@ -611,7 +612,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			    !dv->flagTransition) 
 			{
 				printf("Warning: UVW diff: %d %d %d-%d %f %f  %f %f  %f %f  %f %f\n", 
-					scanId, n, aa1, aa2, mjd, dt, u, dv->U, v, dv->V, w, dv->W);
+					scanId, n, aa1, aa2, mjd+iat, dt, u, dv->U, v, dv->V, w, dv->W);
 			}
 		}
 	}
@@ -691,8 +692,8 @@ int DifxVisCollectRandomParams(const DifxVis *dv)
 	dv->record->V		= dv->V/cLight;
 	dv->record->W		= dv->W/cLight;
 
-	dv->record->jd		= 2400000.5 + (int)dv->mjd;
-	dv->record->iat		= dv->mjd - (int)dv->mjd;
+	dv->record->jd		= 2400000.5 + dv->mjd;
+	dv->record->iat		= dv->iat;
 
 	/* reminder: antennaIds, sourceId, freqId are 1-based in FITS */
 	dv->record->baseline	= dv->baseline;
@@ -721,7 +722,7 @@ static int RecordIsInvalid(const DifxVis *dv)
 			printf("a1=%d a1=%d mjd=%13.7f\n",
 				(dv->record->baseline/256) - 1,
 				(dv->record->baseline%256) - 1,
-				dv->mjd);
+				dv->mjd + dv->iat);
 			return 1;
 		}
 	}
@@ -733,7 +734,7 @@ static int RecordIsInvalid(const DifxVis *dv)
 			printf("a1=%d a1=%d mjd=%13.7f value=%e\n",
 				(dv->record->baseline/256) - 1,
 				(dv->record->baseline%256) - 1,
-				dv->mjd,
+				dv->mjd + dv->iat,
 				d[i]);
 			return 1;
 		}
