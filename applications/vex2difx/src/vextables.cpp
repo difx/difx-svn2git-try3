@@ -292,7 +292,7 @@ bool VexAntenna::getClock(double mjd, double &offset, double &rate) const
 
 	for(it = clocks.begin(); it != clocks.end(); it++)
 	{
-		if(it->mjdStart <= mjd)
+		if(it->mjdStart-0.1/86400.0 <= mjd)
 		{
 			hasValue = true;
 			offset = it->offset + (mjd - it->offset_epoch)*it->rate*86400.0;
