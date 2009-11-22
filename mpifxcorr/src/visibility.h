@@ -100,7 +100,7 @@ public:
   */
   void multicastweights();
 
-  int copyVisData(char **buf, int *bufsize, int *nbuf);
+  void copyVisData(char **buf, int *bufsize, int *nbuf);
 
 private:
  /**
