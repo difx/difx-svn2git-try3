@@ -59,7 +59,7 @@ const string FxManager::LL_CIRCULAR_POL_NAMES[4] = {"LL", "RR", "LR", "RL"};
 const string FxManager::LINEAR_POL_NAMES[4] = {"XX", "YY", "XY", "YX"};
 
 FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, int id, MPI_Comm rcomm, bool mon, char * hname, int port, int monitor_skip)
-  : config(conf), return_comm(rcomm), numcores(ncores), mpiid(id), visibilityconfigok(true), monitor(mon), hostname(hname), monitorport(port)
+  : config(conf), return_comm(rcomm), numcores(ncores), mpiid(id), visibilityconfigok(true), monitor(mon), hostname(hname), monitorport(port), monitor_skip(monitor_skip)
 {
   int perr;
   const string * polnames;
@@ -329,19 +329,22 @@ void FxManager::execute()
   //if(perr != 0)
   //  csevere << startl << "FxManager error trying to signal writethread to wake up!!!" << endl;
 
-  // Signal Monitor Thread to quit
-  pthread_mutex_lock(&moncondlock);
-  pthread_cond_signal(&writecond);
-  pthread_mutex_unlock(&moncondlock);
+  if (monitor) {
+    // Signal Monitor Thread to quit
+    pthread_mutex_lock(&moncondlock);
+    pthread_cond_signal(&writecond);
+    pthread_mutex_unlock(&moncondlock);
+  }
 
   perr = pthread_join(writethread, NULL);
   if(perr != 0)
     csevere << startl << "Error in closing writethread!!!" << endl;
 
-
-  perr = pthread_join(monthread, NULL);
-  if(perr != 0)
-    csevere << startl << "Error in closing monitorthread!!!" << endl;
+  if (monitor) {
+    perr = pthread_join(monthread, NULL);
+    if(perr != 0)
+      csevere << startl << "Error in closing monitorthread!!!" << endl;
+  }
 
   cinfo << startl << "FxManager is finished" << endl;
 }
@@ -571,7 +574,7 @@ void FxManager::loopwrite()
     }
     visbuffer[atsegment]->writedata();
     visbuffer[atsegment]->multicastweights();
-    sendMonitorData(atsegment);
+    if (monitor) sendMonitorData(atsegment);
     visbuffer[atsegment]->increment();
     
     if(!visbuffer[atsegment]->configuredOK()) { //problem with finding a polyco, probably
@@ -588,7 +591,7 @@ void FxManager::loopwrite()
   {
     visbuffer[(atsegment+i)%config->getVisBufferLength()]->writedata();
     visbuffer[(atsegment+i)%config->getVisBufferLength()]->multicastweights();
-    sendMonitorData(atsegment);
+    if (monitor) sendMonitorData(atsegment);
   }
 }
 
@@ -792,8 +795,6 @@ void * FxManager::launchMonitorThread(void * thismanager)
 {
   FxManager * me = (FxManager *)thismanager;
 
-  cout << "****** Launching Monitor Thread *****" << endl;
-
   me->MonitorThread();
 
   return 0;
@@ -806,7 +807,6 @@ void FxManager::MonitorThread()
 
 
   openMonitorSocket();
-
 
   while(keepwriting) {
     cout << "Monitor: Waiting on valid data" << endl;
@@ -824,22 +824,19 @@ void FxManager::MonitorThread()
     // Lock mutex until we have finished sending monitor data
     perr = pthread_mutex_lock(&monitorwritelock);
 
-    // Only send every monitor_skip times????
-
-
-    //send monitoring data, if we don't have to skip this one
-    //if (visID % monitor_skip == 0) {
-    // if (sendMonitorData(true) != 0){ 
-    //	close(*mon_socket);
-    //	*mon_socket = -1;
-    //	monsockStatus = CLOSED;
-    // }
-    //}
+    if (nbuf==0) { // Spurious wakeup
+      pthread_mutex_unlock(&monitorwritelock);
+      continue;
+    }
 
     if (checkSocketStatus()) {
-      // TODO - implement tofollow==false case
-
-      nwrote = send(mon_socket, buf, nbuf, 0);
+      if (nbuf==-1) { // Indicate nothing to send
+	int32_t atsec = -1;
+	nbuf = sizeof(int32_t);
+	nwrote = send(mon_socket, &atsec, nbuf, 0);
+      } else {
+	nwrote = send(mon_socket, buf, nbuf, 0);
+      }
       if (nwrote==-1)
       {
 	if (errno==EPIPE) {
@@ -859,12 +856,11 @@ void FxManager::MonitorThread()
 	close(mon_socket);
 	monsockStatus = CLOSED;
       }
+      //cout << "Wrote " << nwrote << "/" << nbuf << " to network" << endl;
     }
-
-    cout << "Wrote " << nwrote << "/" << nbuf << " to network" << endl;
-    cout << "unlock monitorwritelock" << endl;
-
+    nbuf = 0;
     perr = pthread_mutex_unlock(&monitorwritelock);
+    cout << "Monthread unlock" << endl;
   }
 
   if (monsockStatus!=CLOSED) {
@@ -877,8 +873,7 @@ void FxManager::MonitorThread()
 void FxManager::sendMonitorData(int visID) {
   int perr;
 
-
-  cout << "FxManager::sendMonitorData" << endl;
+  if (visID % monitor_skip !=0) return;  // Only send every monitor_skip visibilities
 
   perr = pthread_mutex_trylock(&monitorwritelock);
   if (perr==EBUSY) {
@@ -894,12 +889,13 @@ void FxManager::sendMonitorData(int visID) {
     cout << "Signal MonitorThread" << endl;
     // Tell monitor write thread to go
     pthread_mutex_lock(&moncondlock);
-    cout << " got lock" << endl;
+    cout << " got lock  ";
+    flush(cout);
     pthread_cond_signal(&writecond);
-    cout << " sent signal" << endl;
+    cout << " sent signal  ";
+    flush(cout);
     pthread_mutex_unlock(&moncondlock);
-    cout << " unlock" << endl;
-    
+    cout << "  unlock" << endl;
   }
 }
 
@@ -985,8 +981,6 @@ int FxManager::openMonitorSocket() {
   struct hostent     *hostptr;
   struct sockaddr_in server;    /* Socket address */
   int saveflags;
-
-  cout << "FxManager::openMonitorSocket" << endl;
 
   hostptr = gethostbyname(hostname);
   if (hostptr==NULL) {
