@@ -175,7 +175,7 @@ private:
   int lastsource;
 
   // Variables needed for monitoring
-  //int32_t atsec;
+  int monitor_skip;
   int mon_socket;
   int monitorport;
   pthread_cond_t monitorcond;
