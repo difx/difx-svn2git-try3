@@ -204,13 +204,18 @@ void Visibility::updateTime()
 }
 
 
-int Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
+void Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
   char *ptr;
   int ntowrite, nwrot, i;
   int32_t atsec, datasize, numchans;
 
 
-  atsec = currentstartseconds;
+  if (currentsubints==0) { // Nothing to send
+    *nbuf = -1;
+    return;
+  }
+
+  atsec = currentstartseconds+experseconds;
   datasize = resultlength;
   numchans = config->getNumChannels(currentconfigindex);
 
@@ -224,6 +229,8 @@ int Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
 
   ptr = *buf;
 
+  cout << "Visibility " << atsec << endl;
+  
   memcpy(ptr, &atsec, 4);
   ptr +=4;
 
@@ -236,7 +243,7 @@ int Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
   memcpy(ptr, results, resultlength*sizeof(cf32));
   *nbuf = ntowrite;
 
-  return(0);
+  return;
 }
 
 void Visibility::writedata()
@@ -494,6 +501,8 @@ void Visibility::writedata()
     writeascii();
 
   cdebug << startl << "Vis. " << visID << " has finished writing data" << endl;
+
+  return;
 }
 
 void Visibility::writeascii()
