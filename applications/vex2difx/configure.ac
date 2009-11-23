@@ -17,7 +17,7 @@ AM_SANITY_CHECK
 
 AC_CHECK_LIB(m, erf,,[AC_MSG_ERROR("need libm")])
 
-PKG_CHECK_MODULES(DIFXIO, difxio >= 2.12)
+PKG_CHECK_MODULES(DIFXIO, difxio >= 2.12.1)
 
 AC_ARG_WITH(spice-root, [  --with-spice-root=ROOT
                             spice root is ROOT (optional).],

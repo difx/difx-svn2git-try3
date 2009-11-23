@@ -1403,24 +1403,42 @@ ostream& operator << (ostream& os, const CorrRule& x)
 	os << "{" << endl;
 	if(!x.scanName.empty())
 	{
+		bool first=true;
 		list<string>::const_iterator it;
 
 		os << "  scan=";
 		for(it = x.scanName.begin(); it != x.scanName.end(); it++)
 		{
-			os << " " << *it;
+			if(first)
+			{
+				first = false;
+			}
+			else
+			{
+				os << ",";
+			}
+			os << *it;
 		}
 		os << endl;
 		space = true;
 	}
 	if(!x.sourceName.empty())
 	{
+		bool first=true;
 		list<string>::const_iterator it;
 
 		os << "  source=";
 		for(it = x.sourceName.begin(); it != x.sourceName.end(); it++)
 		{
-			os << " " << *it;
+			if(first)
+			{
+				first = false;
+			}
+			else
+			{
+				os << ",";
+			}
+			os << *it;
 		}
 		os << endl;
 		space = true;
@@ -1428,10 +1446,19 @@ ostream& operator << (ostream& os, const CorrRule& x)
 	if(!x.modeName.empty())
 	{
 		list<string>::const_iterator it;
+		bool first=true;
 
 		os << "  mode=";
 		for(it = x.modeName.begin(); it != x.modeName.end(); it++)
 		{
+			if(first)
+			{
+				first = false;
+			}
+			else
+			{
+				os << ",";
+			}
 			os << " " << *it;
 		}
 		os << endl;
@@ -1442,7 +1469,7 @@ ostream& operator << (ostream& os, const CorrRule& x)
 	{
 		os << endl;
 	}
-	os << "  correlator setup=" << x.corrSetupName << endl;
+	os << "  setup=" << x.corrSetupName << endl;
 	
 	os << "}" << endl;
 
