@@ -1,9 +1,12 @@
+Version 1.3.3
+* Fix blank range checking for a small subset of modes
+	(Thanks to Sergei Pogrebenko and Jan Wagner for the bug report)
+* Version for DiFX-1.5.2
+
 Version 1.3.2
 * Fix sample granularity calculation for Mark5B
 * Version for DiFX-1.5.1
 * Add VLBN format == VLBA without data modulation
-* Fix blank range checking for a small subset of modes
-	(Thanks to Sergei Pogrebenko and Jan Wagner for the bug report)
 
 Version 1.3.1
 * Version for DiFX-1.5
