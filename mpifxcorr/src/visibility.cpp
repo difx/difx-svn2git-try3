@@ -229,7 +229,7 @@ void Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
 
   ptr = *buf;
 
-  cout << "Visibility " << atsec << endl;
+  //cjp// cout << "Visibility " << atsec << endl;
   
   memcpy(ptr, &atsec, 4);
   ptr +=4;

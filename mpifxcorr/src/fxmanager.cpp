@@ -809,7 +809,7 @@ void FxManager::MonitorThread()
   openMonitorSocket();
 
   while(keepwriting) {
-    cout << "Monitor: Waiting on valid data" << endl;
+    //cjp// cout << "Monitor: Waiting on valid data" << endl;
 
     pthread_mutex_lock(&moncondlock);
     perr = pthread_cond_wait(&writecond, &moncondlock);
@@ -819,7 +819,7 @@ void FxManager::MonitorThread()
     pthread_mutex_unlock(&moncondlock);
     if (!keepwriting) break;
 
-    cout << "Got it = lock monitorwritelock" << endl;
+    //cjp// cout << "Got it = lock monitorwritelock" << endl;
 
     // Lock mutex until we have finished sending monitor data
     perr = pthread_mutex_lock(&monitorwritelock);
@@ -860,7 +860,7 @@ void FxManager::MonitorThread()
     }
     nbuf = 0;
     perr = pthread_mutex_unlock(&monitorwritelock);
-    cout << "Monthread unlock" << endl;
+    //cjp// cout << "Monthread unlock" << endl;
   }
 
   if (monsockStatus!=CLOSED) {
@@ -878,7 +878,7 @@ void FxManager::sendMonitorData(int visID) {
   perr = pthread_mutex_trylock(&monitorwritelock);
   if (perr==EBUSY) {
     cdebug << startl << "Monitor still sending, skipping this visibility" << endl;
-    cout << "Monitor still sending, skipping this visibility" << endl;
+    //cjp// cout << "Monitor still sending, skipping this visibility" << endl;
   } else if (perr) {
     csevere << startl << "Error aquiring mutex lock for monitoring" << endl;
   } else { // Clear to go
@@ -886,16 +886,16 @@ void FxManager::sendMonitorData(int visID) {
     visbuffer[visID]->copyVisData(&buf, &bufsize, &nbuf);
     pthread_mutex_unlock(&monitorwritelock);
 
-    cout << "Signal MonitorThread" << endl;
+    //cjp// cout << "Signal MonitorThread" << endl;
     // Tell monitor write thread to go
     pthread_mutex_lock(&moncondlock);
-    cout << " got lock  ";
-    flush(cout);
+    //cjp// cout << " got lock  ";
+    //flush(cout);
     pthread_cond_signal(&writecond);
-    cout << " sent signal  ";
-    flush(cout);
+    //cjp// cout << " sent signal  ";
+    //flush(cout);
     pthread_mutex_unlock(&moncondlock);
-    cout << "  unlock" << endl;
+    //cjp// cout << "  unlock" << endl;
   }
 }
 
@@ -906,7 +906,7 @@ bool FxManager::checkSocketStatus()
   {
     if (monsockStatus==PENDING)
     {
-      cout << "monsockStatus==PENDING" << endl;
+      //cjp// cout << "monsockStatus==PENDING" << endl;
       
       int status;
       struct pollfd fds[1];
@@ -954,7 +954,7 @@ bool FxManager::checkSocketStatus()
         {
           // Connected!
           cinfo << startl << "Connection to monitor server succeeded" << endl;
-          cout << "Connection to monitor server succeeded" << endl;
+          //cjp// cout << "Connection to monitor server succeeded" << endl;
           monsockStatus=OPENED;
           return true;
         }
@@ -969,7 +969,7 @@ bool FxManager::checkSocketStatus()
       return false;
     }
   }
-  cout << "monsockStatus==OPEN" << endl;
+  //cjp// cout << "monsockStatus==OPEN" << endl;
   return true;
 }
 
@@ -1057,7 +1057,7 @@ int FxManager::openMonitorSocket() {
       return 1;
     } else {
       monsockStatus = PENDING;
-      cout << "Monsocket in pending state" << endl;
+      //cjp// cout << "Monsocket in pending state" << endl;
       return 1;
     }
   }
