@@ -39,7 +39,7 @@ verdate = '20091028'
 
 from sys import exit, argv
 from os.path import isfile, isdir
-from os import getenv
+from os import getenv, system
 from string import split, strip, upper
 from glob import glob
 import datetime
@@ -66,6 +66,9 @@ Options can include:
 
   --all
   -a         Run on all directory files
+
+  --show
+  -s         Show the directory file
 
 If the "-a" or "--all" switch is not supplied, only those modules listed on
 the command line will be checked.  You cannot use this switch together with a 
@@ -306,8 +309,9 @@ if not isdir(dirPath):
 	exit(0)
 
 modules = []
-verbose = 1
+verbose = 2
 doAll = False
+show = False
 
 if len(argv) == 1:
 	print 'Use -h option for help'
@@ -321,7 +325,9 @@ for a in argv[1:]:
 			verbose -= 1
 		elif a in ['-a', '--all']:
 			doAll = True
-			verbose -= 1
+			verbose -= 2
+		elif a in ['-s', '--show']:
+			show = True
 		elif a in ['-h', '--help']:
 			usage(argv[0])
 		else:
@@ -330,6 +336,15 @@ for a in argv[1:]:
 	else:
 		modules.append(upper(a[:8]))
 
+if show:
+	if len(modules) != 1:
+		print 'Exactly 1 module must be specified!'
+	else:
+		fn = '%s/%s.dir' % (dirPath, modules[0])
+		print 'Displaying file: %s\n\n' % fn
+
+		system('cat %s' % fn)
+	exit(0)
 
 if doAll:
 	if len(modules) > 0:

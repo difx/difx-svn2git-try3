@@ -1,32 +1,26 @@
-Version 0.1
+Version 1.2
 ~~~~~~~~~~~
-* Initial version.  consists of a merge of LogM5 and mk5agent
+* mk5dir -- add suffix to distinguish otherwise identically named scans
+* Version for DiFX-1.5.2
 
-Version 0.3
+Version 1.1
 ~~~~~~~~~~~
-* bug fixes.  quite usable now.
-* more logging
+* XLRClose / XLROpen after XLRSelectBank to prevent read errors
+* add checkdir
+* Version for DiFX-1.5.1
 
-Version 0.4
+Version 1.0
 ~~~~~~~~~~~
-* more and improved logging
-* usage
+* Version for DiFX-1.5
 
-Version 0.5
+Version 0.9
 ~~~~~~~~~~~
-* add mk5dir
-
-Version 0.6
-~~~~~~~~~~~
-* fix stopmark5a hang -- mutex not unlocked
-* fix die on quit -- unused %s
-
-Version 0.7
-~~~~~~~~~~~
-* separate out proc.[ch]
-* function to look for windrvr use
-* periodically report VSNs
-* This version is for NRAO-DiFX 1.1
+* go back to using ssh to start new processes -- ensures up-to-date enviromnent
+* ignore child signal to prevent defunct processes
+* use password file to get proper user ids
+* spawn difxlog when starting a job
+* fix dual-link network performance tracking
+* option to start condition_watch upon startup
 
 Version 0.8
 ~~~~~~~~~~~
@@ -45,26 +39,32 @@ Version 0.8
 * mk5dir and mk5cp now report on replaced data
 * track StreamStor versions
 
-Version 0.9
+Version 0.7
 ~~~~~~~~~~~
-* go back to using ssh to start new processes -- ensures up-to-date enviromnent
-* ignore child signal to prevent defunct processes
-* use password file to get proper user ids
-* spawn difxlog when starting a job
-* fix dual-link network performance tracking
-* option to start condition_watch upon startup
+* separate out proc.[ch]
+* function to look for windrvr use
+* periodically report VSNs
+* This version is for NRAO-DiFX 1.1
 
-Version 1.0
+Version 0.6
 ~~~~~~~~~~~
-* Version for DiFX-1.5
+* fix stopmark5a hang -- mutex not unlocked
+* fix die on quit -- unused %s
 
-Version 1.1
+Version 0.5
 ~~~~~~~~~~~
-* XLRClose / XLROpen after XLRSelectBank to prevent read errors
-* add checkdir
-* Version for DiFX-1.5.1
+* add mk5dir
 
-Version 1.2
+Version 0.4
 ~~~~~~~~~~~
-* Post DiFX-1.5.1
-* mk5dir -- add suffix to distinguish otherwise identically named scans
+* more and improved logging
+* usage
+
+Version 0.3
+~~~~~~~~~~~
+* bug fixes.  quite usable now.
+* more logging
+
+Version 0.1
+~~~~~~~~~~~
+* Initial version.  consists of a merge of LogM5 and mk5agent
