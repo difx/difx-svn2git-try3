@@ -175,9 +175,9 @@ private:
   int lastsource;
 
   // Variables needed for monitoring
-  int monitor_skip;
-  int mon_socket;
   int monitorport;
+  int mon_socket;
+  int monitor_skip;
   pthread_cond_t monitorcond;
   pthread_mutex_t moncondlock, monitorwritelock;
   pthread_t monthread;

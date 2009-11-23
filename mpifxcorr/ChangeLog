@@ -1,3 +1,15 @@
+Version 1.5.2, 2009 Nov 23
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Warn when difxmessage is in use so the user knows why no messages appear on the screen
+* Improved real-time correlation monitoring
+* Primitive support for single-thread VDIF
+* Support for unmodulated VLBA format (called VLBN internally)
+
+Version 1.5.1, 2009 Sep 8
+~~~~~~~~~~~~~~~~~~~~~~~~~
+* Mark5 bank switching more reliable
+* Zero-weight data is not written
+
 Version 1.5 Perth, 2008 March 7
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
