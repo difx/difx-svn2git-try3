@@ -1,9 +1,9 @@
 Version 2.6.1
-* Post DiFX-1.5.1
-* Copy jobmatrix file
-* rename "makefilts.tmp" to "makefits.tmp"
-* Improve timestamp precision
+* makefits: copy jobmatrix file
+* makefits: fix naming: "makefilts.tmp" -> "makefits.tmp"
+* difx2fits: Improve timestamp precision
 * Require difxio 2.12.1
+* Version for DiFX-1.5.2
 
 Version 2.6
 * Apply flags properly, even in cases with crazy subarraying
