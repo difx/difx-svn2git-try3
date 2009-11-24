@@ -107,13 +107,13 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
   }
 
   // bufferindex was previously computed assuming no framing overhead
-  framesin = vlbaoffset/payloadbytes;
+  framesin = vlbaoffset/config->getFramePayloadBytes(bufferinfo[atsegment].configindex, streamnum);
 
   // Note here a time is needed, so we only count payloadbytes
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = bufferinfo[atsegment].seconds + double(bufferinfo[atsegment].nanoseconds)*1.0e-9 + (double)framesin/framespersecond;
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = bufferinfo[atsegment].seconds + double(bufferinfo[atsegment].nanoseconds)*1.0e-9 + ((double)framesin)/config->getFramesPerSecond(bufferinfo[atsegment].configindex, streamnum);
 
   //go back to nearest frame -- here the total number of bytes matters
-  bufferindex = atsegment*readbytes + framesin*framebytes;
+  bufferindex = atsegment*readbytes + framesin*config->getFrameBytes(bufferinfo[atsegment].configindex, streamnum);
   if(bufferindex >= bufferbytes)
   {
     cwarn << startl << "Mk5DataStream::calculateControlParams : bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << endl;
@@ -130,13 +130,8 @@ void Mk5DataStream::updateConfig(int segmentindex)
   if(bufferinfo[segmentindex].configindex < 0) //If the config < 0 we can skip this scan
     return;
 
-  framebytes = config->getFrameBytes(bufferinfo[segmentindex].configindex, streamnum);
-  payloadbytes = config->getFramePayloadBytes(bufferinfo[segmentindex].configindex, streamnum);
-
-  framespersecond = config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum);
-
   //correct the nsinc - should be number of frames*frame time
-  bufferinfo[segmentindex].nsinc = int(((bufferbytes/numdatasegments)/framebytes)*(1000000000.0/double(framespersecond)) + 0.5);
+  bufferinfo[segmentindex].nsinc = int(((bufferbytes/numdatasegments)/config->getFrameBytes(bufferinfo[segmentindex].configindex, streamnum))*(1000000000.0/double(config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum))) + 0.5);
 
   //take care of the case where an integral number of frames is not an integral number of blockspersend - ensure sendbytes is long enough
 
@@ -149,17 +144,16 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   int offset;
   char formatname[64];
   struct mark5_stream *mark5stream;
-  int nbits, ninputbands, framebytes, fanout;
+  int nbits, ninputbands, fanout;
   Configuration::dataformat format;
   double bw;
 
   format = config->getDataFormat(configindex, streamnum);
   nbits = config->getDNumBits(configindex, streamnum);
   ninputbands = config->getDNumInputBands(configindex, streamnum);
-  framebytes = config->getFrameBytes(configindex, streamnum);
   bw = config->getConfigBandwidth(configindex);
 
-  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, framebytes, config->getDecimationFactor(configindex), formatname);
+  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, config->getFrameBytes(configindex, streamnum), config->getDecimationFactor(configindex), formatname);
   if (fanout < 0)
     MPI_Abort(MPI_COMM_WORLD, 1);
 
@@ -477,10 +471,9 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
   format = config->getDataFormat(configindex, streamnum);
   nbits = config->getDNumBits(configindex, streamnum);
   ninputbands = config->getDNumInputBands(configindex, streamnum);
-  framebytes = config->getFrameBytes(configindex, streamnum);
   bw = config->getConfigBandwidth(configindex);
 
-  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, framebytes, config->getDecimationFactor(configindex), formatname);
+  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, config->getFrameBytes(configindex, streamnum), config->getDecimationFactor(configindex), formatname);
   if (fanout < 0)
     MPI_Abort(MPI_COMM_WORLD, 1);
 
