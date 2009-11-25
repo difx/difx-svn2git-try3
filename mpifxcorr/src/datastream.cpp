@@ -128,6 +128,7 @@ void DataStream::initialise()
     for(int j=0;j<maxsendspersegment;j++)
       bufferinfo[i].controlbuffer[j] = vectorAlloc_f64(config->getMaxSendBlocks() + 1);
   }
+  pthread_mutex_init(&outstandingsendlock, NULL);
 
   filesread = new int[config->getNumConfigs()];
   confignumfiles = new int[config->getNumConfigs()];
@@ -596,6 +597,11 @@ void DataStream::loopfileread()
   int perr;
   int numread = 0;
 
+  //lock the outstanding send lock
+  perr = pthread_mutex_lock(&outstandingsendlock);
+  if(perr != 0)
+    csevere << startl << "Error in initial telescope readthread lock of outstandingsendlock!!!" << endl;
+
   //lock the first section to start reading
   openfile(bufferinfo[0].configindex, 0);
   filesread[bufferinfo[0].configindex]++;
@@ -671,12 +677,22 @@ void DataStream::loopfileread()
       csevere << startl << "Error in telescope readthread unlock of buffer section!!!" << lastvalidsegment << endl;
   }
 
+  //unlock the outstanding send lock
+  perr = pthread_mutex_unlock(&outstandingsendlock);
+  if(perr != 0)
+    csevere << startl << "Error in telescope readthread unlock of outstandingsendlock!!!" << endl;
+
   cverbose << startl << "DATASTREAM " << mpiid << "'s readthread is exiting!!! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
 }
 
 void DataStream::loopnetworkread()
 {
   int perr, framebytesremaining, lastvalidsegment;
+
+  //lock the outstanding send lock
+  perr = pthread_mutex_lock(&outstandingsendlock);
+  if(perr != 0)
+    csevere << startl << "Error in initial telescope readthread lock of outstandingsendlock!!!" << endl;
 
   //open the socket
   openstream(portnumber, tcpwindowsizebytes);
@@ -729,6 +745,11 @@ void DataStream::loopnetworkread()
   perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
   if(perr != 0)
     csevere << startl << "Error in telescope readthread unlock of buffer section!!!" << lastvalidsegment << endl;
+
+  //unlock the outstanding send lock
+  perr = pthread_mutex_unlock(&outstandingsendlock);
+  if(perr != 0)
+    csevere << startl << "Error in telescope readthread unlock of outstandingsendlock!!!" << endl;
 
   cinfo << startl << "DATASTREAM " << mpiid << "'s networkreadthread is exiting!!! Keepreading was " << keepreading << ", framebytesremaining was " << framebytesremaining << endl;
 }
@@ -1057,7 +1078,7 @@ void DataStream::waitForBuffer(int buffersegment)
   //ensure all the sends from this index have actually been made
   while(bufferinfo[buffersegment].numsent > 0)
   {
-    perr = pthread_cond_wait(&readcond, &(bufferlock[buffersegment]));
+    perr = pthread_cond_wait(&readcond, &outstandingsendlock);
     if (perr != 0)
       csevere << startl << "Error waiting on ok to read condition!!!!" << endl;
     usleep(20);
@@ -1066,7 +1087,7 @@ void DataStream::waitForBuffer(int buffersegment)
 
 void DataStream::waitForSendComplete()
 {
-  int perr, finished;
+  int perr, dfinished, cfinished;
   bool testonly = (atsegment != (waitsegment - 2 + numdatasegments)%numdatasegments);
   
   if(bufferinfo[waitsegment].numsent > 0)
@@ -1076,8 +1097,8 @@ void DataStream::waitForSendComplete()
   
     if(testonly) // we only need to test, we're close enough that we can afford to go one segment further ahead
     {
-      MPI_Testall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].datarequests, &finished, datastatuses);
-      MPI_Testall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].controlrequests, &finished, controlstatuses);
+      MPI_Testall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].datarequests, &dfinished, datastatuses);
+      MPI_Testall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].controlrequests, &cfinished, controlstatuses);
     }
     else
     {
@@ -1085,7 +1106,7 @@ void DataStream::waitForSendComplete()
       MPI_Waitall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].datarequests, datastatuses);
       MPI_Waitall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].controlrequests, controlstatuses);
     }
-    if(!testonly || finished) // all the sends from this segment are finished
+    if(!testonly || (dfinished && cfinished)) // all the sends from this segment are finished
     {
       bufferinfo[waitsegment].numsent = 0;
       waitsegment = (waitsegment + 1)%numdatasegments;

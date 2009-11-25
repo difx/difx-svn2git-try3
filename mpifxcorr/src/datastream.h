@@ -260,6 +260,7 @@ protected:
   pthread_mutex_t * bufferlock;
   MPI_Status * datastatuses;
   MPI_Status * controlstatuses;
+  pthread_mutex_t outstandingsendlock;
 };
 
 #endif
