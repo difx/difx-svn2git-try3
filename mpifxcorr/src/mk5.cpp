@@ -93,7 +93,7 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
   
   bufferindex = DataStream::calculateControlParams(offsetsec, offsetns);
 
-  if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] < 0.0)
+  if(!(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] > MAX_NEGATIVE_DELAY))
     return 0;
 
   //do the necessary correction to start from a frame boundary - work out the offset from the start of this segment
@@ -102,7 +102,7 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
   if(vlbaoffset < 0)
   {
     cwarn << startl << "Mk5DataStream::calculateControlParams : vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = -1.0;
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
     return 0;
   }
 
@@ -117,7 +117,7 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
   if(bufferindex >= bufferbytes)
   {
     cwarn << startl << "Mk5DataStream::calculateControlParams : bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = -1.0;
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
     return 0;
   }
   return bufferindex;

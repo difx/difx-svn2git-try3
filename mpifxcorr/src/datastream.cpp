@@ -1081,20 +1081,22 @@ void DataStream::waitForBuffer(int buffersegment)
     perr = pthread_cond_wait(&readcond, &outstandingsendlock);
     if (perr != 0)
       csevere << startl << "Error waiting on ok to read condition!!!!" << endl;
-    usleep(20);
+    usleep(10);
   }
 }
 
 void DataStream::waitForSendComplete()
 {
   int perr, dfinished, cfinished;
-  bool testonly = (atsegment != (waitsegment - 2 + numdatasegments)%numdatasegments);
+  bool testonly = true;
+  if((atsegment - waitsegment + numdatasegments)%numdatasegments >= numdatasegments-2) //actually have to wait
+    testonly = false;
+
+  if((atsegment - waitsegment + numdatasegments)%numdatasegments <= 2) //we are very close so don't bother
+    return;
   
   if(bufferinfo[waitsegment].numsent > 0)
   {
-    if((atsegment - waitsegment + numdatasegments)%numdatasegments <= 2) //we are very close so don't bother
-      return;
-  
     if(testonly) // we only need to test, we're close enough that we can afford to go one segment further ahead
     {
       MPI_Testall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].datarequests, &dfinished, datastatuses);
@@ -1106,7 +1108,7 @@ void DataStream::waitForSendComplete()
       MPI_Waitall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].datarequests, datastatuses);
       MPI_Waitall(bufferinfo[waitsegment].numsent, bufferinfo[waitsegment].controlrequests, controlstatuses);
     }
-    if(!testonly || (dfinished && cfinished)) // all the sends from this segment are finished
+    if(!testonly || ((dfinished!=0) && (cfinished!=0))) // all the sends from this segment are finished
     {
       bufferinfo[waitsegment].numsent = 0;
       waitsegment = (waitsegment + 1)%numdatasegments;

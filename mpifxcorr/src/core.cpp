@@ -199,6 +199,15 @@ void Core::execute()
     receivedata(numreceived++, &terminate);
   //cverbose << startl << "Core has filled up receive ring buffer" << endl;
 
+  //also lock the second last slot, to keep any cheeky thread from getting round the entire
+  //RECEIVE_RING before we wake back up
+  for(int i=0;i<numprocessthreads;i++)
+  {
+    perr = pthread_mutex_lock(&(procslots[RECEIVE_RING_LENGTH-2].slotlocks[i]));
+    if(perr != 0)
+      csevere << startl << "Error in main thread attempting to lock mutex " << RECEIVE_RING_LENGTH-2 << " of thread " << i << " during startup" << endl;
+  }
+
   //now we have the lock on the last slot in the ring.  Launch processthreads
   for(int i=0;i<numprocessthreads;i++)
   {
@@ -207,14 +216,27 @@ void Core::execute()
     perr = pthread_create(&processthreads[i], NULL, Core::launchNewProcessThread, (void *)(&threadinfos[i]));
     if(perr != 0)
       csevere << startl << "Error in launching Core " << mpiid << " processthread " << i << "!!!" << endl;
+  }
+
+  //wait til they are all initialised (and hence have a lock of their own)
+  for(int i=0;i<numprocessthreads;i++)
+  {
     while(!processthreadinitialised[i])
     {
       perr = pthread_cond_wait(&processconds[i], &(procslots[numreceived].slotlocks[i]));
       if (perr != 0)
-        csevere << startl << "Error waiting on receivethreadinitialised condition!!!!" << endl;
+        csevere << startl << "Error waiting on processthreadinitialised condition!!!!" << endl;
     }
   }
-  delete [] threadinfos;
+
+  //now we definitely have our lock back on the last slot in the buffer,
+  //release that supplementary lock (2nd last in buffer)
+  for(int i=0;i<numprocessthreads;i++)
+  {
+    perr = pthread_mutex_unlock(&(procslots[RECEIVE_RING_LENGTH-2].slotlocks[i]));
+    if(perr != 0)
+      csevere << startl << "Error in main thread attempting to unlock mutex " << RECEIVE_RING_LENGTH-2 << " of thread " << i << " during startup" << endl;
+  }
 
   while(!terminate) //the data is valid, so keep processing
   {
@@ -268,7 +290,7 @@ void Core::execute()
     if(perr != 0)
       csevere << startl << "Error in Core " << mpiid << " attempt to join processthread " << i << endl;
   }
-
+  delete [] threadinfos;
 //  cinfo << startl << "CORE " << mpiid << " terminating" << endl;
 }
 
@@ -501,8 +523,10 @@ void Core::receivedata(int index, bool * terminate)
   {
     perr = pthread_mutex_lock(&(procslots[(index+1)%RECEIVE_RING_LENGTH].slotlocks[i]));
     if(perr != 0)
-      csevere << startl << "CORE " << mpiid << " error trying lock mutex " << (index+1)%RECEIVE_RING_LENGTH << endl;;
-
+      csevere << startl << "CORE " << mpiid << " error trying lock mutex " << (index+1)%RECEIVE_RING_LENGTH << endl;
+  }
+  for(int i=0;i<numprocessthreads;i++)
+  {
     perr = pthread_mutex_unlock(&(procslots[index].slotlocks[i]));
     if(perr != 0)
       csevere << startl << "CORE " << mpiid << " error trying unlock mutex " << index << endl;
