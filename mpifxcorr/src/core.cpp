@@ -208,7 +208,7 @@ void Core::execute()
       csevere << startl << "Error in main thread attempting to lock mutex " << RECEIVE_RING_LENGTH-2 << " of thread " << i << " during startup" << endl;
   }
 
-  //now we have the lock on the last slot in the ring.  Launch processthreads
+  //now we have the lock on the last two slots in the ring.  Launch processthreads
   for(int i=0;i<numprocessthreads;i++)
   {
     threadinfos[i].thiscore = this;
