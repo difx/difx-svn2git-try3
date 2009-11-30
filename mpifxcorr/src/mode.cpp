@@ -269,7 +269,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
   f32* currentchannelfreqptr;
   int indices[10];
   
-  if(datalengthbytes == 0 || !(delays[index] > MAX_NEGATIVE_DELAY) || !(delays[index+1] > MAX_NEGATIVE_DELAY))
+  if(datalengthbytes <= 1 || !(delays[index] > MAX_NEGATIVE_DELAY) || !(delays[index+1] > MAX_NEGATIVE_DELAY))
   {
     for(int i=0;i<numinputbands;i++)
     {
