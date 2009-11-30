@@ -716,7 +716,7 @@ int FxManager::locateVisIndex(int coreid)
 
   if((newestlockedvis-oldestlockedvis+config->getVisBufferLength())%config->getVisBufferLength() >= config->getVisBufferLength()/2)
   {
-    cerror << startl << "Error - data was received which is too recent (" << coretimes[(numsent[coreid])% Core::RECEIVE_RING_LENGTH][coreid][0] << "sec + " << coretimes[(numsent[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1] << "ns)!  Will force write-out of oldest Visibility" << endl;
+    cwarn << startl << "Data was received which is too recent (" << coretimes[(numsent[coreid])% Core::RECEIVE_RING_LENGTH][coreid][0] << "sec + " << coretimes[(numsent[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1] << "ns)!  Will force write-out of oldest Visibility" << endl;
     //abandon the oldest vis, even though it hasn't been filled yet
     perr = pthread_mutex_unlock(&(bufferlock[oldestlockedvis]));
     if(perr != 0)
@@ -759,7 +759,7 @@ int FxManager::locateVisIndex(int coreid)
         return newestlockedvis;
     }
     //d'oh - its newer than we can handle - have to drop old data until we catch up
-    cerror << startl << "Error - data was received which is too recent (" << coretimes[(numsent[coreid])% Core::RECEIVE_RING_LENGTH][coreid][0] << "sec + " << coretimes[(numsent[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1] << "ns)!  Will force existing data to be dropped until we have caught up coreid="<< coreid << endl;
+    cwarn << startl << "Data was received which is too recent (" << coretimes[(numsent[coreid])% Core::RECEIVE_RING_LENGTH][coreid][0] << "sec + " << coretimes[(numsent[coreid])%Core::RECEIVE_RING_LENGTH][coreid][1] << "ns)!  Will force existing data to be dropped until we have caught up coreid="<< coreid << endl;
     while(difference > inttime)
     {
       count = 0;
