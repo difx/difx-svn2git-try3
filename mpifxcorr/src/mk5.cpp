@@ -89,7 +89,7 @@ void Mk5DataStream::initialise()
 
 int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
 {
-  int bufferindex, framesin, vlbaoffset;
+  int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
   
   bufferindex = DataStream::calculateControlParams(offsetsec, offsetns);
 
@@ -106,14 +106,28 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
     return 0;
   }
 
+  looksegment = atsegment;
+  if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
+    looksegment = (atsegment+1)%numdatasegments;
+  if(bufferinfo[looksegment].configindex < 0) //huh? both are garbage? Why was the controlbuffer not flagged?
+  {
+    cwarn << startl << "Developer error: unflagged data from segments with no config! Flagging this subint" << endl;
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+    return bufferindex;
+  }
+
+  payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
+  framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
+  framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
+
   // bufferindex was previously computed assuming no framing overhead
-  framesin = vlbaoffset/config->getFramePayloadBytes(bufferinfo[atsegment].configindex, streamnum);
+  framesin = vlbaoffset/payloadbytes;
 
   // Note here a time is needed, so we only count payloadbytes
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = bufferinfo[atsegment].seconds + double(bufferinfo[atsegment].nanoseconds)*1.0e-9 + ((double)framesin)/config->getFramesPerSecond(bufferinfo[atsegment].configindex, streamnum);
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = bufferinfo[atsegment].seconds + double(bufferinfo[atsegment].nanoseconds)*1.0e-9 + ((double)framesin)/framespersecond;
 
   //go back to nearest frame -- here the total number of bytes matters
-  bufferindex = atsegment*readbytes + framesin*config->getFrameBytes(bufferinfo[atsegment].configindex, streamnum);
+  bufferindex = atsegment*readbytes + framesin*framebytes;
   if(bufferindex >= bufferbytes)
   {
     cwarn << startl << "Mk5DataStream::calculateControlParams : bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << endl;
