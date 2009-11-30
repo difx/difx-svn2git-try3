@@ -108,14 +108,38 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
 
   looksegment = atsegment;
   if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
-    looksegment = (atsegment+1)%numdatasegments;
-  if(bufferinfo[looksegment].configindex < 0) //huh? both are garbage? Why was the controlbuffer not flagged?
   {
-    cwarn << startl << "Developer error: unflagged data from segments with no config! Flagging this subint" << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
-    return bufferindex;
+    //look at the following segment - normally has sensible info
+    looksegment = (atsegment+1)%numdatasegments;
+    if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+    {
+      cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+      return bufferindex;
+    }
+  }
+  if(bufferinfo[looksegment].configindex < 0)
+  {
+    //Sometimes the next segment is still showing invalid due to the geometric delay.
+    //try the following segment - if thats no good, get out
+    //this is not entirely safe since the read thread may not have set the configindex yet, but at worst
+    //one subint will be affected
+    looksegment = (looksegment+1)%numdatasegments;
+    if(bufferinfo[looksegment].configindex < 0)
+    {
+      cwarn << startl << "Cannot find a valid configindex to set Mk5-related info.  Flagging this subint" << endl;
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+      return bufferindex;
+    }
+    if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+    {
+      cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+      return bufferindex;
+    }
   }
 
+  //if we got here, we found a configindex we are happy with. Find out the mk5 details
   payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
   framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
   framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
