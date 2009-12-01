@@ -244,7 +244,7 @@ Sniffer *newSniffer(const DifxInput *D, int nComplex,
 		deleteSniffer(S);
 		return 0;
 	}
-	fprintf(S->apd, "%s\n", D->job->obsCode);
+	fprintf(S->apd, "obscode:  %s\n", D->job->obsCode);
 
 	sprintf(filename, "%s.apc", filebase);
 	S->apc = fopen(filename, "w");
@@ -254,7 +254,7 @@ Sniffer *newSniffer(const DifxInput *D, int nComplex,
 		deleteSniffer(S);
 		return 0;
 	}
-	fprintf(S->apc, "%s\n", D->job->obsCode);
+	fprintf(S->apc, "obscode:  %s\n", D->job->obsCode);
 
 	/* Open weights file */
 	sprintf(filename, "%s.wts", filebase);
