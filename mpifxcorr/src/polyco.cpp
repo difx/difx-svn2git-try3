@@ -247,7 +247,7 @@ bool Polyco::setFrequencyValues(int nfreqs, double * freqs, double bw)
 
     if(minbinwidth < 0.0)
     {
-        cfatal << startl << "Error!! Bin phase breakpoints are not in linear ascending order!!!" << endl;
+        cfatal << startl << "Bin phase breakpoints are not in linear ascending order!!!" << endl;
         ok = false;
     }
 

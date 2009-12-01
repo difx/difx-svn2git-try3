@@ -49,7 +49,7 @@ Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int nchan, in
   
     if(mark5stream == 0)
     {
-      cfatal << startl << "Mk5Mode::Mk5Mode : mark5stream is null " << endl;
+      cfatal << startl << "Developer error: in Mk5Mode::Mk5Mode, mark5stream is null" << endl;
       initok = false;
     }
     else
@@ -57,7 +57,7 @@ Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int nchan, in
       sprintf(mark5stream->streamname, "DS%d", dsindex);
       if(framesamples != mark5stream->framesamples)
       {
-        cfatal << startl << "Mk5Mode::Mk5Mode : framesamples inconsistent (" << framesamples << "/" << mark5stream->framesamples << ")" << endl;
+        cfatal << startl << "Developer error: in Mk5Mode::Mk5Mode, framesamples is inconsistent (" << framesamples << "/" << mark5stream->framesamples << ")" << endl;
         initok = false;
       }
       else

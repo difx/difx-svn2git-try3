@@ -52,12 +52,12 @@ void Mk5DataStream::initialise()
   udp_offset = 0;
   if (!readfromfile && !tcp) {
     if (sizeof(long long)!=8) {
-      cfatal << startl << "DataStream assumes long long is 8 bytes, it is " << sizeof(long long) << " bytes" << endl;
+      cfatal << startl << "DataStream assumes long long is 8 bytes, it is " << sizeof(long long) << " bytes - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
     udpsize = abs(tcpwindowsizebytes/1024)-20-2*4-sizeof(long long); // IP header is 20 bytes, UDP is 4x2 bytes
     if (udpsize<=0) {
-      cfatal << startl << "Datastream " << mpiid << ":" << " Warning implied UDP packet size is negative!! " << endl;
+      cfatal << startl << "Datastream " << mpiid << ": implied UDP packet size is negative - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
     udpsize &= ~ 0x7;  // Ensures udpsize multiple of 64 bits
@@ -67,7 +67,7 @@ void Mk5DataStream::initialise()
     packets_arrived.resize(readbytes/udpsize+2);
 
     if (sizeof(int)!=4) {
-      cfatal << startl << "DataStream assumes int is 4 bytes, it is " << sizeof(int) << " bytes" << endl;
+      cfatal << startl << "DataStream assumes int is 4 bytes, it is " << sizeof(int) << " bytes - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
@@ -285,7 +285,7 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
     //cinfo << startl << "****** readnetwork will read packets " << packet_segmentstart << " to " << packet_segmentend << "(" << segmentsize << ")" << endl;
     
     if (segmentsize>packets_arrived.size()) {
-      cfatal << startl << "Mk5DataStream::readnetwork bytestoread too large (" << bytestoread << "/" << segmentsize << ")" << endl;
+      cfatal << startl << "Mk5DataStream::readnetwork bytestoread too large (" << bytestoread << "/" << segmentsize << ") - aborting!!!" << endl;
       cinfo << startl << "packet_segmentstart = " << packet_segmentstart << endl;
       cinfo << startl << "packet_segmentend = " << packet_segmentend << endl;
       cinfo << startl << "segmentsize = " << segmentsize << endl;
@@ -368,15 +368,15 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
 	if (errno == EINTR) continue;
 	return(nr);
       } else if (nr==0) {  // Socket closed remotely
-	cinfo << startl << "Datastream " << mpiid << ": Remote socket closed" << endl;
+	cinfo << startl << "Datastream " << mpiid << ": remote socket closed" << endl;
 	return(nr);
       } else if (nr!=expectedsize) {
-	cfatal << startl << "DataStream " << mpiid << ": Expected " << expectedsize << " bytes, got " << nr << "bytes. Quiting" << endl;
+	cfatal << startl << "DataStream " << mpiid << ": expected " << expectedsize << " bytes, got " << nr << " bytes - aborting!!!" << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
       } else {
 	if (packet_head==0 && sequence!=0) { // First packet!
 	  packet_head = sequence;
-	  cinfo << startl <<  "DataStream " << mpiid << ": First packet has sequence " << sequence << endl;
+	  cinfo << startl <<  "DataStream " << mpiid << ": first packet has sequence " << sequence << endl;
 
 	  packet_segmentstart = sequence;
 	  packet_segmentend = packet_segmentstart+(bytestoread-1)/udpsize;
@@ -398,12 +398,10 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
 	    bytes = (bytestoread-udp_offset-1)%udpsize+1;
 	  // Consistence check
 	  if (bytes<0) {
-	    cfatal << startl << "Datastream: Error read too many UDP packets!!" << endl;
-	    cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
+	    cfatal << startl << "Datastream " << mpiid << ": read too many UDP packets: bytestoread=" << bytestoread << " udp_offset=" << udp_offset << " bytes=" << bytes << " - aborting!!!" << endl;
 	    MPI_Abort(MPI_COMM_WORLD, 1);
 	  } else if (bytes > udpsize) {
-	    cfatal << startl << "Datastream: Error have not read enough UDP packets!!" << endl;
-	    cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
+	    cfatal << startl << "Datastream " << mpiid << ": read too few UDP packets: bytestoread=" << bytestoread << " udp_offset=" << udp_offset << " bytes=" << bytes << " - aborting!!!" << endl;
 	    MPI_Abort(MPI_COMM_WORLD, 1);
 	  }
 	  memcpy(ptr+udp_offset+(packet_index-1)*udpsize,udp_buf,bytes);
@@ -525,7 +523,7 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
     new_mark5_format_generic_from_string(formatname) );
 
   if (mark5stream==0) {
-    cwarn << startl << "DataStream " << mpiid << ": Warning - Could not identify Mark5 segment time (" << formatname << ")" << endl;
+    cwarn << startl << "DataStream " << mpiid << ": could not identify Mark5 segment time (" << formatname << ")" << endl;
     // We don't need to actually set the time - it ill just be deadreckoned from that last segment. As there is no good data this does not matter
   } else {
 
@@ -550,23 +548,23 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
       ptr = (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
 
       if (offset>bufferinfo[buffersegment].validbytes) {
-	cerror << startl << "Datastream " << mpiid << ": ERROR Mark5 offset (" << offset << ") > segment size (" << bufferinfo[buffersegment].validbytes << "!!!" << endl;
+	cerror << startl << "Datastream " << mpiid << ": Mark5 offset (" << offset << ") > segment size (" << bufferinfo[buffersegment].validbytes << "!!!" << endl;
 	keepreading=false;
       } else {
 	int nread, status;
-	cinfo << startl << "************Datastream " << mpiid << ": Seeking " << offset << " bytes into stream. " << endl;
+	cinfo << startl << "************Datastream " << mpiid << ": seeking " << offset << " bytes into stream. " << endl;
 	memmove(ptr, ptr+offset, bufferinfo[buffersegment].validbytes-offset);
 	status = readnetwork(socketnumber, ptr+bufferinfo[buffersegment].validbytes-offset, offset, &nread);
 	
 	// We *should not* update framebytes remaining (or validbyes). 
 
 	if (status==-1) { // Error reading socket
-	  cerror << startl << "Datastream " << mpiid << ": Error reading socket" << endl;
+	  cerror << startl << "Datastream " << mpiid << ": cannot read from socket" << endl;
 	  keepreading=false;
 	} else if (status==0) {  // Socket closed remotely
 	  keepreading=false;
 	} else if (nread!=offset) {
-	  cerror << startl << "Datastream " << mpiid << ": Did not read enough bytes" << endl;
+	  cerror << startl << "Datastream " << mpiid << ": did not read enough bytes" << endl;
 	  keepreading=false;
 	}
       }

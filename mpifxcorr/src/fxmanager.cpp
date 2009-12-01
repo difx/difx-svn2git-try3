@@ -95,7 +95,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
   if(skipseconds != 0 && config->getStartNS() != 0) {
-    cwarn << startl << "WARNING!!! Fractional start time of " << startseconds << " seconds plus " << startns << " ns was specified, but the start time corresponded to a configuration not specified in the input file and hence we are skipping " << skipseconds << " seconds ahead! The ns offset will be set to 0!!!" << endl;
+    cwarn << startl << "Fractional start time of " << startseconds << " seconds plus " << startns << " ns was specified, but the start time corresponded to a configuration not specified in the input file and hence we are skipping " << skipseconds << " seconds ahead! The ns offset will be set to 0!!!" << endl;
     startns = 0;
   }
   halfsampleseconds = 1.0/(config->getDBandwidth(currentconfigindex, 0, 0)*4000000.0);
@@ -446,7 +446,7 @@ void FxManager::receiveData(bool resend)
       extrareceived[sourceid]++;
     }
     if (visindex < 0)
-      cerror << startl << "Error - stale data was received from core " << sourceid << " regarding time " << time << " seconds - it will be ignored!!!" << endl;
+      cerror << startl << "Stale data was received from core " << sourceid << " regarding time " << time << " seconds - it will be ignored!!!" << endl;
     else
     {
       //now store the data appropriately - if we have reached sufficient sub-accumulations, release this Visibility so the writing thread can write it out
@@ -511,11 +511,11 @@ void FxManager::initialiseOutput()
     rpfitsout_(&flag, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     if(flag < 0)
     {
-      cfatal << startl << "Error - could not open output file " << config->getOutputFilename() << " - aborting!!!" << endl;
+      cfatal << startl << "Cannot open output file " << config->getOutputFilename() << " - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
 #else
-    cfatal << startl << "RPFITS not compiled in.  quitting" << endl;
+    cfatal << startl << "RPFITS not compiled in - aborting" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
 #endif
   }
@@ -524,7 +524,7 @@ void FxManager::initialiseOutput()
     //create the directory - if that doesn't work, abort as we can't guarantee no overwriting data
     flag = mkdir(config->getOutputFilename().c_str(), 0775);
     if(flag < 0) {
-      cfatal << startl << "Error trying to create directory " << config->getOutputFilename() << ": " << flag << ", ABORTING!" << endl;
+      cfatal << startl << "Cannot create output directory " << config->getOutputFilename() << ": " << flag << " - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
   }
@@ -638,15 +638,14 @@ void FxManager::writeheader()
     }
     if(uindex < 0)
     {
-      cerror << startl << "Error - could not find station " << config->getTelescopeName(i) << " in the uvw file when making rpfits header!!!" << endl;
       if(config->stationUsed(i))
       {
-        cfatal << startl << "This station is used in the correlation so I will abort!!!" << endl;
+        cfatal << startl << "Could not find station " << config->getTelescopeName(i) << " in the uvw file when making rpfits header!!!  This station is used in the correlation so I will abort!!!" << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
       }
       else
       {
-        cerror << startl << "Station is not used in this correlation so its parameters will be initialised to 0!!!" << endl;
+        cwarn << startl << "Could not find station " << config->getTelescopeName(i) << " in the uvw file when making rpfits header!!!  This station is not used in this correlation so its parameters will be initialised to 0!!!" << endl;
         anten_.ant_mount[i] = 1;
         doubles_.x[i] = 0.0;
         doubles_.y[i] = 0.0;
@@ -964,7 +963,7 @@ bool FxManager::checkSocketStatus()
     {
       if (monsockStatus != PENDING)
       {
-        cerror << startl << "WARNING: Monitor socket could not be opened - monitoring not proceeding! Will try again after " << config->getVisBufferLength() << " integrations..." << endl;
+        cerror << startl << "Monitor socket could not be opened - monitoring not proceeding! Will try again after " << config->getVisBufferLength() << " integrations..." << endl;
       }
       return false;
     }

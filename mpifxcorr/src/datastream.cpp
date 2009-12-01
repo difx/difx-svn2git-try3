@@ -79,10 +79,10 @@ void DataStream::initialise()
     if(currentoverflowbytes > overflowbytes)
       overflowbytes = currentoverflowbytes;
   }
-  cinfo << startl << "DATASTREAM " << mpiid << " about to allocate " << bufferbytes << " + " << overflowbytes << " bytes in databuffer" << endl;
+  cinfo << startl << "Datastream " << mpiid << ": about to allocate " << bufferbytes << " + " << overflowbytes << " bytes in databuffer" << endl;
   databuffer = vectorAlloc_u8(bufferbytes + overflowbytes + 4); // a couple extra for mark5 case
   if(databuffer == NULL) {
-    cfatal << startl << "Error - datastream " << mpiid << " could not allocate databuffer (length " << bufferbytes + overflowbytes << ")! Aborting correlation" << endl;
+    cfatal << startl << "Datastream " << mpiid << ": could not allocate databuffer (length " << bufferbytes + overflowbytes << ") - aborting!!!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
   int mindatabytes = config->getDataBytes(0, streamnum);
@@ -892,7 +892,7 @@ int DataStream::openframe()
 
   if (framesize>INT_MAX) {
     keepreading=false;
-    cerror << startl << "Network stream trying to send too large frame. Aborting!" << endl;
+    cerror << startl << "Network stream trying to send too large frame - aborting!" << endl;
     return(0);
   }
 
@@ -1080,7 +1080,7 @@ void DataStream::waitForBuffer(int buffersegment)
   {
     perr = pthread_cond_wait(&readcond, &outstandingsendlock);
     if (perr != 0)
-      csevere << startl << "Error waiting on ok to read condition!!!!" << endl;
+      csevere << startl << "Failure waiting on OK to read condition!!!!" << endl;
     usleep(10);
   }
 }
@@ -1114,7 +1114,7 @@ void DataStream::waitForSendComplete()
       waitsegment = (waitsegment + 1)%numdatasegments;
       perr = pthread_cond_signal(&readcond);
       if(perr != 0)
-        csevere << startl << "DATASTREAM mainthread " << mpiid << " error trying to signal read thread to wake up!!!" << endl;
+        csevere << startl << "Datastream " << mpiid << " mainthread: cannot signal read thread to wake up!!!" << endl;
     }
   }
   else //already done!  can advance for next time
@@ -1152,7 +1152,7 @@ void DataStream::processDelayFile(string delayfilename)
   //read in the delays and store in the Telescope objects
   ifstream delayinput(delayfilename.c_str(),ios::in);
   if(!delayinput.is_open() || delayinput.bad()) {
-    cfatal << startl << "Error opening delay file " << delayfilename << " - aborting!!!" << endl;
+    cfatal << startl << "Cannot open delay file " << delayfilename << " - aborting!!!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
@@ -1185,7 +1185,7 @@ void DataStream::processDelayFile(string delayfilename)
   }
   if(columnoffset < 0)
   {
-    cfatal << startl << "Error!!! " << mpiid << " could not locate " << stationname << " in delay file " << delayfilename << " - ABORTING!!!" << endl;
+    cfatal << startl << "Cannot locate " << stationname << " in delay file " << delayfilename << " - aborting!!!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
@@ -1219,7 +1219,7 @@ void DataStream::processDelayFile(string delayfilename)
       }
       delays[i][j] = linedelays[columnoffset];
       if(delays[i][j] <= MAX_NEGATIVE_DELAY) {
-        cfatal << startl << "Error - cannot handle delays more negative than " << MAX_NEGATIVE_DELAY << "!!! Need to unimplement the datastream check for negative delays to indicate bad data.  Aborting now - contact the developer!" << endl;
+        cfatal << startl << "Developer error: Cannot handle delays more negative than " << MAX_NEGATIVE_DELAY << ". Need to unimplement the datastream check for negative delays to indicate bad data - aborting!!!" << endl;
 	MPI_Abort(MPI_COMM_WORLD, 1);
       }
       if(j<scanlengths[i])

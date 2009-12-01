@@ -389,7 +389,7 @@ void Core::loopprocess(int threadid)
       currentpolyco = Polyco::getCurrentPolyco(procslots[numprocessed%RECEIVE_RING_LENGTH].configindex, startmjd, double(startseconds + procslots[numprocessed%RECEIVE_RING_LENGTH].offsets[0])/86400.0, polycos, numpolycos, false);
       if(currentpolyco == NULL)
       {
-        cfatal << startl << "Could not locate a polyco to cover time " << startmjd+double(startseconds + procslots[numprocessed%RECEIVE_RING_LENGTH].offsets[0])/86400.0 << " - aborting!!!" << endl;
+        cfatal << startl << "Could not locate a polyco to cover the timerange " << startmjd+double(startseconds + procslots[numprocessed%RECEIVE_RING_LENGTH].offsets[0])/86400.0 << " - aborting!!!" << endl;
         currentpolyco = Polyco::getCurrentPolyco(procslots[numprocessed%RECEIVE_RING_LENGTH].configindex, startmjd, double(startseconds + procslots[numprocessed%RECEIVE_RING_LENGTH].offsets[0])/86400.0, polycos, numpolycos, true);
 	MPI_Abort(MPI_COMM_WORLD, 1);
       }

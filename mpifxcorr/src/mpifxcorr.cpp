@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
   {
     if(!(argv[2][0]=='-' && argv[2][1]=='M'))
     {
-      cfatal << startl << "Error - invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
+      cfatal << startl << "Please invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
       MPI_Barrier(world);
       MPI_Finalize();
       return EXIT_FAILURE;
@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
   }
   else if(argc != 2)
   {
-    cfatal << startl << "Error - invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
+    cfatal << startl << "Please invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
     MPI_Barrier(world);
     MPI_Finalize();
     return EXIT_FAILURE;
@@ -297,17 +297,17 @@ int main(int argc, char *argv[])
   {
     if(isDifxMessageInUse())
     {
-      cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!!" << endl;
+      cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!" << endl;
     }
   }
 
-  cverbose << startl << "About to process the input file.." << endl;
+  cverbose << startl << "About to process the input file." << endl;
   //process the input file to get all the info we need
   config = new Configuration(argv[1], myID);
   if(!config->consistencyOK())
   {
     //There was a problem with the input file, so shut down gracefully
-    cfatal << startl << "Config encountered inconsistent setup in config file - aborting correlation" << endl;
+    cfatal << startl << "Config encountered inconsistent setup in config file - aborting!!!" << endl;
     MPI_Barrier(world);
     MPI_Finalize();
     return EXIT_FAILURE;
@@ -316,7 +316,7 @@ int main(int argc, char *argv[])
   //handle difxmessage setup for sending and receiving
   perr = pthread_create(&commandthread, NULL, launchCommandMonitorThread, (void *)(config));
   if (perr != 0)
-    csevere << startl << "Error creating command monitoring thread!" << endl;
+    csevere << startl << "Cannot create the command monitoring thread!" << endl;
   else {
     //wait for commandmonthread to be initialised
     while(!config->commandThreadInitialised())
@@ -326,7 +326,7 @@ int main(int argc, char *argv[])
   numcores = numprocs - (fxcorr::FIRSTTELESCOPEID + numdatastreams);
   if(numcores < 1)
   {
-    cfatal << startl << "Error - must be invoked with at least " << fxcorr::FIRSTTELESCOPEID + numdatastreams + 1 << " processors (was invoked with " << numprocs << " processors) - aborting!!!" << endl;
+    cfatal << startl << "mpifxcorr must be invoked with at least " << fxcorr::FIRSTTELESCOPEID + numdatastreams + 1 << " processors (was invoked with " << numprocs << " processors) - aborting!!!" << endl;
     MPI_Barrier(world);
     MPI_Finalize();
     return EXIT_FAILURE;
@@ -379,7 +379,7 @@ int main(int argc, char *argv[])
   }
   catch (MPI::Exception e)
   {
-    cerror << startl << "Caught an exception!!! " << e.Get_error_string() << endl;
+    cerror << startl << "Caught an MPI exception!!! " << e.Get_error_string() << endl;
     return EXIT_FAILURE;
   }
   MPI_Finalize();
@@ -390,7 +390,7 @@ int main(int argc, char *argv[])
   if(myID == 0) difxMessageSendDifxParameter("keepacting", "false", DIFX_MESSAGE_ALLMPIFXCORR);
   //if(myID == 0) difxMessageSendDifxAlert("Not expecting this one!?", 3);
   perr = pthread_join(commandthread, NULL);
-  if(perr != 0) csevere << startl << "Error in closing commandthread!!!" << endl;
+  if(perr != 0) csevere << startl << "Cannot join commandthread!!!" << endl;
   if(manager) delete manager;
   if(stream) delete stream;
   if(core) delete core;

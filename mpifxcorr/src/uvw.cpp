@@ -33,7 +33,7 @@ Uvw::Uvw(Configuration * config, string uvwfilename, bool nameonly)
 
   ifstream input(uvwfilename.c_str());
   if(!input.is_open() || input.bad()) {
-    cfatal << startl << "Error opening uvw file " << uvwfilename << " - aborting!!!" << endl;
+    cfatal << startl << "Cannot open uvw file " << uvwfilename << " - aborting!!!" << endl;
     opensuccess = false;
   }
 

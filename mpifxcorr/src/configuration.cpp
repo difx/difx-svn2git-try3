@@ -531,7 +531,7 @@ int Configuration::getConfigIndex(int offsetseconds)
 
   if(!uvw)
   {
-    cfatal << startl << "UVW HAS NOT BEEN CREATED!!!" << endl;
+    cfatal << startl << "Developer error: UVW has not been created!!!" << endl;
     return -1; //nasty, but this should never happen except in a programmer error.  Caller will probably crash.
   }
 
@@ -556,12 +556,12 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
   {
     case LBASTD:
       if(stream.numbits != 2)
-        cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
+        cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
       return new LBAMode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::stdunpackvalues);
       break;
     case LBAVSOP:
       if(stream.numbits != 2)
-        cerror << startl << "ERROR! All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
+        cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
       return new LBAMode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::vsopunpackvalues);
       break;
     case MKIV:
@@ -765,7 +765,7 @@ bool Configuration::processConfig(ifstream * input)
     configs[i].quadraticdelayinterp = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
     if(configs[i].postffringerot && configs[i].quadraticdelayinterp)
     {
-      cfatal << startl << "ERROR - cannot quad interpolate delays with post-f fringe rotation - aborting!!!" << endl;
+      cfatal << startl << "Cannot quad interpolate delays with post-f fringe rotation - aborting!!!" << endl;
       return false;
     }
     getinputline(input, &line, "WRITE AUTOCORRS");
@@ -806,7 +806,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
   datastreamtable = new datastreamdata[datastreamtablelength];
   if(datastreamtablelength < numdatastreams)
   {
-    cfatal << startl << "Not enough datastreams are supplied in the datastream table (" << datastreamtablelength << ") compared to the number of datastreams (" << numdatastreams << "!!!" << endl;
+    cfatal << startl << "Not enough datastreams are supplied in the datastream table (" << datastreamtablelength << ") compared to the number of datastreams (" << numdatastreams << ")!!!" << endl;
     return false;
   }
   //create the ordereddatastream array
@@ -887,7 +887,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].source = EVLBI;
     else
     {
-      cfatal << startl << "Unnkown data source " << line << " (case sensitive choices are FILE, MK5MODULE and EVLBI)" << endl;
+      cfatal << startl << "Unnkown data source " << line << " (case sensitive choices are FILE, MODULE and EVLBI)" << endl;
       return false;
     }
 
@@ -1220,7 +1220,7 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
   ifstream pulsarinput(filename.c_str(), ios::in);
   if(!pulsarinput.is_open() || pulsarinput.bad())
   {
-    cfatal << startl << "Could not open pulsar config file " << line << " - aborting!!!" << endl;
+    cfatal << startl << "Cannot open pulsar config file " << line << " - aborting!!!" << endl;
     return false;
   }
   getinputline(&pulsarinput, &line, "NUM POLYCO FILES");
