@@ -97,7 +97,7 @@ float Mk5Mode::unpack(int sampleoffset)
     
   if(goodsamples < 0)
   {
-    cerror << startl << "Error trying to unpack Mark5 format data at sampleoffset " << sampleoffset << " from buffer seconds " << bufferseconds << " plus " << buffermicroseconds << " microseconds!!!" << endl;
+    cerror << startl << "Cannot unpack Mark5 format data at sampleoffset " << sampleoffset << " from buffer seconds " << bufferseconds << " plus " << buffermicroseconds << " microseconds!!!" << endl;
     goodsamples = 0;
   }
 

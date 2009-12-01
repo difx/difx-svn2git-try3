@@ -25,9 +25,6 @@
 #include "mk5mode.h"
 #include "configuration.h"
 #include "mode.h"
-//#include "datastream.h"
-//#include "mk5.h"
-//#include "nativemk5.h"
 #include "alert.h"
 
 int Configuration::MONITOR_TCP_WINDOWBYTES;
@@ -574,7 +571,7 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
       return new Mk5Mode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, stream.numbits, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     default:
-      cerror << startl << "Unknown format or mode!!!" << endl;
+      cerror << startl << "Unsupported format or mode requested!!!" << endl;
       return NULL;
   }
 }
@@ -702,8 +699,8 @@ void Configuration::processCommon(ifstream * input)
   }
   else
   {
-    cerror << startl << "Unknown output format " << line << " (case sensitive choices are RPFITS, SWIN and ASCII), assuming RPFITS" << endl;
-    outformat = RPFITS;
+    cerror << startl << "Unknown output format " << line << " (case sensitive choices are RPFITS, SWIN and ASCII)" << endl;
+    consistencyok = false;
   }
   getinputline(input, &outputfilename, "OUTPUT FILENAME");
 
@@ -954,7 +951,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
   numcoreconfs = 0;
   if(!coreinput.is_open() || coreinput.bad())
   {
-    cerror << startl << "Could not open " << coreconffilename << " - will set all numthreads to 1!!" << endl;
+    cerror << startl << "Could not open " << coreconffilename << " - will set all numthreads to 1!!!" << endl;
   }
   else
   {
@@ -1057,7 +1054,7 @@ bool Configuration::consistencyCheck()
     //check the telescope index is acceptable
     if(datastreamtable[i].telescopeindex < 0 || datastreamtable[i].telescopeindex >= telescopetablelength)
     {
-      cerror << startl << "Datastream table entry " << i << " has a telescope index that refers outside the telescope table range (" << datastreamtable[i].telescopeindex << ")- aborting!!!" << endl;
+      cerror << startl << "Datastream table entry " << i << " has a telescope index that refers outside the telescope table range (" << datastreamtable[i].telescopeindex << ")" << endl;
       return false;
     }
 
@@ -1066,7 +1063,7 @@ bool Configuration::consistencyCheck()
     {
       if(datastreamtable[i].inputbandlocalfreqindices[j] < 0 || datastreamtable[i].inputbandlocalfreqindices[j] >= datastreamtable[i].numfreqs)
       {
-        cerror << startl << "Datastream table entry " << i << " has an input band local frequency index (band " << j << ") that refers outside the local frequency table range (" << datastreamtable[i].inputbandlocalfreqindices[j] << ")- aborting!!!" << endl;
+        cerror << startl << "Datastream table entry " << i << " has an input band local frequency index (band " << j << ") that refers outside the local frequency table range (" << datastreamtable[i].inputbandlocalfreqindices[j] << ")" << endl;
         return false;
       }
     }
@@ -1077,12 +1074,12 @@ bool Configuration::consistencyCheck()
     {
       if(datastreamtable[i].freqtableindices[j] < 0 || datastreamtable[i].freqtableindices[j] >= freqtablelength)
       {
-        cerror << startl << "Datastream table entry " << i << " has a frequency index (freq " << j << ") that refers outside the frequency table range (" << datastreamtable[i].freqtableindices[j] << ")- aborting!!!" << endl;
+        cerror << startl << "Datastream table entry " << i << " has a frequency index (freq " << j << ") that refers outside the frequency table range (" << datastreamtable[i].freqtableindices[j] << ")" << endl;
         return false;
       }
       if(bandwidth != freqtable[datastreamtable[i].freqtableindices[j]].bandwidth)
       {
-        cerror << startl << "All bandwidths for a given datastream must be equal - Aborting!!!!" << endl;
+        cerror << startl << "All bandwidths for a given datastream must be equal" << endl;
         return false;
       }
     }
@@ -1096,7 +1093,7 @@ bool Configuration::consistencyCheck()
     {
       if(tindex != datastreamtable[configs[0].datastreamindices[i]].telescopeindex)
       {
-        cerror << startl << "All configs must have the same telescopes!  Config " << j << " datastream " << i << " refers to different telescopes - aborting!!!" << endl;
+        cerror << startl << "All configs must have the same telescopes!  Config " << j << " datastream " << i << " refers to different telescopes" << endl;
         return false;
       }
     }
@@ -1125,7 +1122,7 @@ bool Configuration::consistencyCheck()
     //check that oversamplefactor >= decimationfactor
     if(configs[i].oversamplefactor < configs[i].decimationfactor)
     {
-      cerror << startl << "Oversamplefactor (" << configs[i].oversamplefactor << ") is less than decimation factor (" << configs[i].decimationfactor << ") - aborting!!!" << endl;
+      cerror << startl << "Oversamplefactor (" << configs[i].oversamplefactor << ") is less than decimation factor (" << configs[i].decimationfactor << ")" << endl;
       return false;
     }
 
@@ -1137,12 +1134,12 @@ bool Configuration::consistencyCheck()
       nsincrement = ffttime*configs[i].blockspersend*(databufferfactor/numdatasegments);
       if(ffttime - (int)(ffttime+0.5) > 0.00000001 || ffttime - (int)(ffttime+0.5) < -0.000000001)
       {
-        cerror << startl << "FFT chunk time for config " << i << ", datastream " << j << " is not a whole number of nanoseconds (" << ffttime << ") - aborting!!!" << endl;
+        cerror << startl << "FFT chunk time for config " << i << ", datastream " << j << " is not a whole number of nanoseconds (" << ffttime << ")" << endl;
         return false;
       }
       if(nsincrement > INT_MAX)
       {
-        cerror << startl << "Increment per read in nanoseconds is " << nsincrement << " - too large to fit in an int.  ABORTING" << endl;
+        cerror << startl << "Increment per read in nanoseconds is " << nsincrement << " - too large to fit in an int" << endl;
         return false;
       }
     }
@@ -1154,12 +1151,12 @@ bool Configuration::consistencyCheck()
       b = configs[i].baselineindices[j];
       if(b < 0 || b >= baselinetablelength) //bad index
       {
-        cerror << startl << "Config " << i << " baseline index " << j << " refers to baseline " << b << " which is outside the range of the baseline table - aborting!!!" << endl;
+        cerror << startl << "Config " << i << " baseline index " << j << " refers to baseline " << b << " which is outside the range of the baseline table" << endl;
         return false;
       }
       if(datastreamtable[baselinetable[b].datastream2index].telescopeindex < lastt2 && datastreamtable[baselinetable[b].datastream1index].telescopeindex <= lastt1)
       {
-        cerror << startl << "Config " << i << " baseline index " << j << " refers to baseline " << datastreamtable[baselinetable[b].datastream2index].telescopeindex << "-" << datastreamtable[baselinetable[b].datastream1index].telescopeindex << " which is out of order with the previous baseline " << lastt1 << "-" << lastt2 << " - aborting!!!" << endl;
+        cerror << startl << "Config " << i << " baseline index " << j << " refers to baseline " << datastreamtable[baselinetable[b].datastream2index].telescopeindex << "-" << datastreamtable[baselinetable[b].datastream1index].telescopeindex << " which is out of order with the previous baseline " << lastt1 << "-" << lastt2 << endl;
         return false;
       }
       lastt1 = datastreamtable[baselinetable[b].datastream1index].telescopeindex;
@@ -1173,7 +1170,7 @@ bool Configuration::consistencyCheck()
     //check the datastream indices
     if(baselinetable[i].datastream1index < 0 || baselinetable[i].datastream2index < 0 || baselinetable[i].datastream1index >= datastreamtablelength || baselinetable[i].datastream2index >= datastreamtablelength)
     {
-      cerror << startl << "Baseline table entry " << i << " has a datastream index outside the datastream table range! Its two indices are " << baselinetable[i].datastream1index << ", " << baselinetable[i].datastream2index << ".  ABORTING" << endl;
+      cerror << startl << "Baseline table entry " << i << " has a datastream index outside the datastream table range! Its two indices are " << baselinetable[i].datastream1index << ", " << baselinetable[i].datastream2index << endl;
       return false;
     }
 
@@ -1184,12 +1181,12 @@ bool Configuration::consistencyCheck()
       {
         if(baselinetable[i].datastream1bandindex[j][k] < 0 || baselinetable[i].datastream1bandindex[j][k] >= datastreamtable[baselinetable[i].datastream1index].numinputbands)
         {
-          cerror << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 1 refers to a band outside datastream 1's range (" << baselinetable[i].datastream1bandindex[j][k] << ") - aborting!!!" << endl;
+          cerror << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 1 refers to a band outside datastream 1's range (" << baselinetable[i].datastream1bandindex[j][k] << ")" << endl;
           return false;
         }
         if(baselinetable[i].datastream2bandindex[j][k] < 0 || baselinetable[i].datastream2bandindex[j][k] >= datastreamtable[baselinetable[i].datastream2index].numinputbands)
         {
-          cerror << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 refers to a band outside datastream 2's range (" << baselinetable[i].datastream2bandindex[j][k] << ") - aborting!!!" << endl;
+          cerror << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 refers to a band outside datastream 2's range (" << baselinetable[i].datastream2bandindex[j][k] << ")" << endl;
           return false;
         }
       }
@@ -1198,7 +1195,7 @@ bool Configuration::consistencyCheck()
 
   if(databufferfactor % numdatasegments != 0)
   {
-    cerror << startl << "There must be an integer number of sends per datasegment.  Presently databufferfactor is " << databufferfactor << ", and numdatasegments is " << numdatasegments << ".  ABORTING" << endl;
+    cerror << startl << "There must be an integer number of sends per datasegment.  Presently databufferfactor is " << databufferfactor << ", and numdatasegments is " << numdatasegments << endl;
     return false;
   }
 
@@ -1334,7 +1331,7 @@ void Configuration::getinputline(ifstream * input, std::string * line, std::stri
   if(keylength < DEFAULT_KEY_LENGTH)
     keylength = DEFAULT_KEY_LENGTH;
   if(startofheader.compare((*line).substr(0, startofheader.length())) != 0) //not what we expected
-    cerror << startl << "Error - we thought we were reading something starting with '" << startofheader << "', when we actually got '" << (*line).substr(0, keylength) << "'" << endl;
+    cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << (*line).substr(0, keylength) << "'" << endl;
   *line = line->substr(keylength);
 }
 

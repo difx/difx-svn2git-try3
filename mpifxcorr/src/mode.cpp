@@ -98,7 +98,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int nchan, int bper
   
     if(postffringerot) //initialise the specific structures
     {
-      cwarn << startl << "Warning - post-f fringe rotation not yet tested!!!" << endl;
+      cwarn << startl << "Post-f fringe rotation not yet tested - use at your own risk!!!" << endl;
       status = vectorInitFFTR_f32(&pFFTSpecR, order, flag, hint);
       if(status != vecNoErr)
         csevere << startl << "Error in FFT initialisation!!!" << status << endl;

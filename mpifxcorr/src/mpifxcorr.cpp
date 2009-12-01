@@ -75,7 +75,7 @@ bool actOnCommand(Configuration * config, DifxMessageGeneric * difxmessage) {
         config->setLTADumpChannels(atoi(pmessage->paramValue));
       //else if (pmessage->paramname == "clock stuff")
       else {
-        cwarn << startl << config->getMPIId() << ": warning - received a parameter instruction regarding " <<  pmessage->paramName << " which cannot be honored and will be ignored!" << endl;
+        cwarn << startl << "MPI Id " << config->getMPIId() << ": warning - received a parameter instruction regarding " <<  pmessage->paramName << " which cannot be honored and will be ignored!" << endl;
       }
     }
   }
@@ -379,7 +379,7 @@ int main(int argc, char *argv[])
   }
   catch (MPI::Exception e)
   {
-    cerror << startl << "Caught an MPI exception!!! " << e.Get_error_string() << endl;
+    cfatal << startl << "Caught an MPI exception!!! " << e.Get_error_string() << endl;
     return EXIT_FAILURE;
   }
   MPI_Finalize();

@@ -101,7 +101,7 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
 
   if(vlbaoffset < 0)
   {
-    cwarn << startl << "Mk5DataStream::calculateControlParams : vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << endl;
+    cerror << startl << "Mk5DataStream::calculateControlParams : vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
     return 0;
   }
@@ -200,7 +200,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
     new_mark5_format_generic_from_string(formatname) );
   if(mark5stream->nchan != config->getDNumInputBands(configindex, streamnum))
   {
-    cerror << startl << "Error - number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with MkV file " << datafilenames[configindex][fileindex] << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
+    cerror << startl << "Number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with Mark5 file " << datafilenames[configindex][fileindex] << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
   }
 
   // resolve any day ambiguities
@@ -529,7 +529,7 @@ void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
 
     if(mark5stream->nchan != config->getDNumInputBands(configindex, streamnum))
     {
-      cerror << startl << "Number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with MkV data " << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
+      cerror << startl << "Number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with Mark5 data " << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
     }
 
     // resolve any day ambiguities

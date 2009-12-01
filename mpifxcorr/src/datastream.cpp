@@ -274,7 +274,7 @@ void DataStream::openfile(int configindex, int fileindex)
   cverbose << startl << "input.bad() is " << input.bad() << ", input.fail() is " << input.fail() << endl;
   if(!input.is_open() || input.bad())
   {
-    cerror << startl << "Error trying to open file " << datafilenames[configindex][fileindex] << endl;
+    cerror << startl << "Cannot open data file " << datafilenames[configindex][fileindex] << endl;
     dataremaining = false;
     return;
   }
@@ -523,12 +523,12 @@ void DataStream::calculateQuadraticParameters(int intdelayseconds, int offsetns)
   snindex = static_cast<int>((delayoffsetseconds*1000)/delayincms);
   if(snindex < 0)
   {
-    cerror << startl << "Error - attempting to get a delay from offset time " << intdelayseconds << "." << offsetns << ", will take first source" << endl;
+    cerror << startl << "Attempting to get a delay from offset time " << intdelayseconds << "." << offsetns << ", will take first source" << endl;
     snindex = 0;
   }
   else if (snindex >= totaldelays)
   {
-    cerror << startl << "Error - attempting to get a delay from offset time " << intdelayseconds << "." << offsetns << ", will take last source" << endl;
+    cerror << startl << "Attempting to get a delay from offset time " << intdelayseconds << "." << offsetns << ", will take last source" << endl;
     snindex = totaldelays-1;
   }
   lastscan = scannumbers[snindex];
@@ -968,7 +968,7 @@ int DataStream::initialiseFrame(char * frameheader)
     {
       endline = index(at, '\n');
       if (endline==NULL || endline-frameheader>=LBA_HEADER_LENGTH-1) {
-        cerror << startl << "Could not parse file header" << endl;
+        cerror << startl << "Could not parse LBA file header" << endl;
         keepreading=false;
         return -1;
       }
@@ -1019,7 +1019,7 @@ void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
   status = readnetwork(socketnumber, ptr, bytestoread, &nread);
 
   if (status==-1) { // Error reading socket
-    cerror << startl << "Datastream " << mpiid << ": Error reading socket" << endl;
+    cerror << startl << "Datastream " << mpiid << ": cannot read from socket" << endl;
     keepreading=false;
   } else if (status==0) {  // Socket closed remotely
     keepreading=false;

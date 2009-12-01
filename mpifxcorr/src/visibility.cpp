@@ -646,7 +646,7 @@ void Visibility::writerpfits()
           //zero the rpfitsarray
           status = vectorZero_cf32(rpfitsarray, maxproducts*(numchannels+1));
           if(status != vecNoErr)
-            csevere << startl << "Error trying to zero the rpfitsarray!!!" << endl;
+            csevere << startl << "Cannot zero the rpfitsarray!!!" << endl;
           freqnumber = config->getDFreqIndex(currentconfigindex, i, datastreampolbandoffsets[i][j][firstpolindex]%config->getDNumOutputBands(currentconfigindex, i)) + config->getIndependentChannelIndex(currentconfigindex)*config->getFreqTableLength() + 1;
 
           for(int k=0;k<maxproducts; k++)
@@ -663,13 +663,13 @@ void Visibility::writerpfits()
           rpfitsout_(&status/*should be 0 = writing data*/, visibilities, 0/*not using weights*/, &baselinenumber, &offsetstartdaysec, &buvw[0], &buvw[1], &buvw[2], &flag/*not flagged*/, &bin, &freqnumber, &sourcenumber);
         }
         else
-          cerror << startl << "WARNING - did not find any bands for frequency " << j << " of datastream " << i << endl;
+          cerror << startl << "Could not find any bands for frequency " << j << " of datastream " << i << endl;
       }
       count += autocorrincrement*(numchannels+1)*config->getDNumOutputBands(currentconfigindex, i);
     }
   }
   if(status != 0)
-    cerror << startl << "Error trying to write visibilities for " << currentstartseconds << " seconds plus " << currentstartsamples << " samples" << endl;
+    cerror << startl << "Cannot write visibilities for " << currentstartseconds << " seconds plus " << currentstartsamples << " samples" << endl;
 
 #endif
 }
@@ -784,7 +784,7 @@ void Visibility::writedifx()
           }
         }
         else
-          cerror << startl << "WARNING - did not find any bands for frequency " << j << " of datastream " << i << endl;
+          cerror << startl << "Could not find any bands for frequency " << j << " of datastream " << i << endl;
       }
       count += autocorrincrement*config->getDNumOutputBands(currentconfigindex, i);
     }
