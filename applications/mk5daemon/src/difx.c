@@ -153,6 +153,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		addUse(uses, S->datastreamNode[i]);
 	}
 
+
 	/* write machines file */
 	sprintf(filename, "%s.machines", filebase);
 	out = fopen(filename, "w");
@@ -180,8 +181,12 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	}
 
 	fclose(out);
-	sprintf(command, "chown %s %s.machines", difxUser, filebase);
+	/* change ownership and permissions to match the input file */
+	sprintf(command, "chown --reference=%s %s", S->inputFilename, filename);
 	system(command);
+	sprintf(command, "chmod --reference=%s %s", S->inputFilename, filename);
+	system(command);
+
 
 	/* write threads file */
 	sprintf(filename, "%s.threads", filebase);
@@ -210,8 +215,12 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	}
 
 	fclose(out);
-	sprintf(command, "chown %s %s.threads", difxUser, filebase);
+	/* change ownership and permissions to match the input file */
+	sprintf(command, "chown --reference=%s %s", S->inputFilename, filename);
 	system(command);
+	sprintf(command, "chmod --reference=%s %s", S->inputFilename, filename);
+	system(command);
+
 
 	/* Don't need usage info anymore */
 	free(uses);
@@ -250,7 +259,6 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	/* here is where the spawning of mpifxcorr happens... */
 	if(childPid == 0)
 	{
-		const struct passwd *pw;
 		const char *user;
 
 		user = getenv("DIFX_USER_ID");
@@ -258,19 +266,6 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		{
 			user = difxUser;
 		}
-
-		pw = getpwnam(user);
-		if(!pw)
-		{
-			fprintf(stderr, "No user named %s\n", user);
-			exit(0);
-		}
-
-		sprintf(message, "Setting uid/gid to %d/%d", pw->pw_uid, pw->pw_gid);
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_VERBOSE);
-
-		setgid(pw->pw_gid);
-		setuid(pw->pw_uid);
 
 		if(S->force && outputExists)
 		{
@@ -284,13 +279,15 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 		difxMessageSendDifxAlert("mpifxcorr spawning process", DIFX_ALERT_LEVEL_INFO);
 
-		sprintf(command, "ssh -x %s \"mpirun -np %d --bynode --hostfile %s.machines %s %s %s.input\"", 
+		sprintf(command, "ssh -x %s@%s \"%s -np %d --bynode --hostfile %s.machines %s %s %s\"", 
+			user,
 			S->headNode,
+			mpiWrapper,
 			1 + S->nDatastream + S->nProcess,
 			filebase,
 			mpiOptions,
 			difxProgram,
-			filebase);
+			S->inputFilename);
 		
 		sprintf(message, "Executing: %s", command);
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
@@ -301,18 +298,35 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		sprintf(message, "Spawning %d processes", 1 + S->nDatastream + S->nProcess);
 		difxMessageSendDifxStatus2(jobName, DIFX_STATE_SPAWNING, message);
 		returnValue = system(command);
-		if(returnValue == 0)
-		{
+
+		/* FIXME -- figure out why this doesn't work! */
+	//	if(returnValue == 0)
+	//	{
 			difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
 			difxMessageSendDifxAlert("mpifxcorr process done", DIFX_ALERT_LEVEL_INFO);
-		}
-		else
-		{
-			sprintf(message, "Error code = %d");
-			difxMessageSendDifxStatus2(jobName, DIFX_STATE_CRASHED, message);
-			sprintf(message, "Job %s crashed.  Error code = %d\n", jobName, returnValue);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_FATAL);
-		}
+	//	}
+	//	else
+	//	{
+	//		sprintf(message, "Error code = %d", returnValue);
+	//		difxMessageSendDifxStatus2(jobName, DIFX_STATE_CRASHED, message);
+	//		sprintf(message, "Job %s crashed.  Error code = %d\n", jobName, returnValue);
+	//		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_FATAL);
+	//	}
+
+		/* change ownership to match input file */
+		sprintf(command, "chown --recursive --reference=%s %s.difx", S->inputFilename, filebase);
+		system(command);
+		sprintf(message, "Executing: %s\n", command);
+		Logger_logData(D->log, message);
+		sprintf(command, "chmod g+w %s.difx", filebase);
+		system(command);
+		sprintf(message, "Executing: %s\n", command);
+		Logger_logData(D->log, message);
+		sprintf(command, "chmod --reference=%s %s.difx/*", S->inputFilename, filebase);
+		system(command);
+		sprintf(message, "Executing: %s\n", command);
+		Logger_logData(D->log, message);
+
 
 		exit(0);
 	}
@@ -321,7 +335,6 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	/* now spawn the difxlog process. */
 	if(fork() == 0)
 	{
-		const struct passwd *pw;
 		const char *user;
 
 		user = getenv("DIFX_USER_ID");
@@ -330,19 +343,15 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 			user = difxUser;
 		}
 
-		pw = getpwnam(user);
-		if(!pw)
-		{
-			fprintf(stderr, "No user named %s\n", user);
-			exit(0);
-		}
+		sprintf(command, "ssh -x %s@%s \"difxlog %s %s.difxlog 4 %d\"",
+			user, S->headNode, jobName, filebase, childPid);
 
-		setgid(pw->pw_gid);
-		setuid(pw->pw_uid);
+		system(command);
 
-		sprintf(command, "ssh -x %s \"difxlog %s %s.difxlog 4 %d\"",
-			S->headNode, jobName, filebase, childPid);
-
+		/* change ownership to match input file */
+		sprintf(command, "chown --reference=%s %s.difxlog", S->inputFilename, filebase);
+		system(command);
+		sprintf(command, "chmod --reference=%s %s.difxlog", S->inputFilename, filebase);
 		system(command);
 
 		exit(0);

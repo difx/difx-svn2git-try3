@@ -13,7 +13,6 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 	S_DEVINFO devInfo;
 	S_DBINFO dbInfo;
 	SSHANDLE xlrDevice;
-	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
 	unsigned int xlrError;
 	char message[120+(XLR_ERROR_LENGTH)];
