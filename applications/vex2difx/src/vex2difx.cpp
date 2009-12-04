@@ -661,7 +661,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, const VexMode 
 
 	for(vector<VexIF>::const_iterator i = format.ifs.begin(); i != format.ifs.end(); i++)
 	{
-		if(i->subbandId < 0 || i->subbandId >= mode->subbands.size())
+		if(i->subbandId < 0 || i->subbandId >= static_cast<int>(mode->subbands.size()))
 		{
 			cerr << "Error: setFormat: index to subband=" << i->subbandId << " is out of range" << endl;
 			exit(0);
@@ -1609,8 +1609,11 @@ int usage(int argc, char **argv)
 	cout << "     -d" << endl;
 	cout << "     --delete-old  delete all jobs in this series before running." << endl;
 	cout << endl;
+	cout << "     -f" << endl;
+	cout << "     --force       proceed despite warnings." << endl;
+	cout << endl;
 	cout << "     -s" << endl;
-	cout << "     --strict      treat some warnings as errors and quit." << endl;
+	cout << "     --strict      treat some warnings as errors and quit [default]." << endl;
 	cout << endl;
 	cout << "  the v2d file is the vex2difx configuration file to process." << endl;
 	cout << endl;
@@ -1631,7 +1634,7 @@ int main(int argc, char **argv)
 	string v2dFile;
 	bool writeParams = 0;
 	bool deleteOld = 0;
-	bool strict = 0;
+	bool strict = 1;
 	int nWarn = 0;
 	int nDigit;
 	int nJob = 0;
@@ -1675,6 +1678,12 @@ int main(int argc, char **argv)
 			        strcmp(argv[a], "--strict") == 0)
 			{
 				strict = 1;
+			}
+			else if(strcmp(argv[a], "-f") == 0 ||
+			        strcmp(argv[a], "--force") == 0)
+			{
+				cerr << "Warning -- using 'force' mode, so warnings will be ignored." << endl;
+				strict = 0;
 			}
 			else
 			{

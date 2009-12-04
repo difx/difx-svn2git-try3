@@ -767,7 +767,7 @@ int CorrParams::setkv(const string &key, const string &value)
 	}
 	else if(key == "jobSeries" || key == "pass")
 	{
-		for(int i = 0; i < value.size(); i++)
+		for(unsigned int i = 0; i < value.size(); i++)
 		if(!isalnum(value[i]))
 		{
 			cerr << "Error: jobSeries must be purely alphanumeric" << endl;

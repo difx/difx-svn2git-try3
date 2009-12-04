@@ -739,7 +739,7 @@ int VexJob::generateFlagFile(const VexData& V, const string &fileName, unsigned 
 	// write data to file
 	of.open(fileName.c_str());
 	of << flags.size() << endl;
-	for(int f = 0; f < flags.size(); f++)
+	for(unsigned int f = 0; f < flags.size(); f++)
 	{
 		of << "  " << flags[f] << endl;
 	}

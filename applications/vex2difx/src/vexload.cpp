@@ -335,7 +335,7 @@ static VexInterval adjustTimeRange(map<string, double> &antStart, map<string, do
 		exit(0);
 	}
 
-	if(antStart.size() < minSubarraySize)
+	if(static_cast<int>(antStart.size()) < minSubarraySize)
 	{
 		// Return an acausal interval
 		return VexInterval(1, 0);
