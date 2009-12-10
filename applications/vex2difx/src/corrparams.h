@@ -92,7 +92,9 @@ public:
 	string vexName;		// Antenna name as it appears in vex file
 	string difxName;	// Antenna name (if different) to appear in difx
 	double X, Y, Z;		// Station coordinates to override vex
-	VexClock clock;
+	VexClock clock;	
+	double deltaClock;	// sec
+	double deltaClockRate;	// sec/sec
 	// flag
 	// media
 	bool polSwap;		// If true, swap polarizations

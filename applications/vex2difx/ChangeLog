@@ -1,9 +1,14 @@
+Version 1.0.3
+~~~~~~~~~~~~~
+* Post DiFX-1.5.2
+
 Version 1.0.2
 ~~~~~~~~~~~~~
 * Add support for VLBN "format" -- that is VLBA with no data modulation
 * Improved printing in corrparams, added tolerance for clock date detection
 * Treat warnings as errors; use --force to override
 * Fix some compiler warnings
+* Add deltaClock and deltaClockRate
 * This is the version for DiFX-1.5.2
 
 Version 1.0.1

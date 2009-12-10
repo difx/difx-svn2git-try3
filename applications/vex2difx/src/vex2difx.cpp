@@ -42,8 +42,8 @@
 #include "vexload.h"
 
 const string program("vex2difx");
-const string version("1.0.1");
-const string verdate("20090930");
+const string version("1.0.3");
+const string verdate("20091210");
 const string author("Walter Brisken");
 
 
@@ -431,8 +431,8 @@ DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const CorrParam
 			cerr << "WARNING:  Job " << J.jobSeries << " " << J.jobId << ": no clock offsets being applied to antenna " << a->first << endl;
 			cerr << "          Unless this is intentional, your results will suffer!" << endl;
 		}
-		A[i].delay = offset*1.0e6;	// convert to us from sec
-		A[i].rate  = rate*1.0e6;	// convert to us/sec from sec/sec
+		A[i].delay = offset*1.0e6;	// convert to sec from us
+		A[i].rate  = rate*1.0e6;	// convert to sec/sec from us/sec
 		A[i].offset[0] = ant->axisOffset;
 		A[i].offset[1] = 0.0;
 		A[i].offset[2] = 0.0;
@@ -459,6 +459,8 @@ DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const CorrParam
 			}
 			A[i].networkPort = antSetup->networkPort;
 			A[i].windowSize  = antSetup->windowSize;
+			A[i].delay += antSetup->deltaClock*1.0e6;	// convert to sec from us
+			A[i].rate  += antSetup->deltaClockRate*1.0e6;	// convert to sec/sec from us/sec
 		}
 
 		antList.push_back(a->first);

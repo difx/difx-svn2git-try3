@@ -540,6 +540,8 @@ AntennaSetup::AntennaSetup(const string &name) : vexName(name)
 	X = 0.0;
 	Y = 0.0;
 	Z = 0.0;
+	deltaClock = 0.0;
+	deltaClockRate = 0.0;
 	clock.mjdStart = -1e9;
 	networkPort = 0;
 	windowSize = 0;
@@ -563,13 +565,13 @@ int AntennaSetup::setkv(const string &key, const string &value)
 	else if(key == "clockOffset")
 	{
 		ss >> clock.offset;
-		clock.offset /= 1.0e6;
+		clock.offset /= 1.0e6;	// convert from us to sec
 		clock.mjdStart = 1;
 	}
 	else if(key == "clockRate")
 	{
 		ss >> clock.rate;
-		clock.rate /= 1.0e6;
+		clock.rate /= 1.0e6;	// convert from us/sec to sec/sec
 		clock.mjdStart = 1;
 	}
 	else if(key == "clockEpoch")
@@ -577,15 +579,25 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		clock.offset_epoch = parseTime(value);
 		clock.mjdStart = 1;
 	}
-	else if(key == "X")
+	else if(key == "deltaClock")
+	{
+		ss >> deltaClock;
+		deltaClock /= 1.0e6;	// convert from us to sec
+	}
+	else if(key == "deltaClockRate")
+	{
+		ss >> deltaClockRate;
+		deltaClockRate /= 1.0e6;	// convert from us/sec to sec/sec
+	}
+	else if(key == "X" || key == "x")
 	{
 		ss >> X;
 	}
-	else if(key == "Y")
+	else if(key == "Y" || key == "y")
 	{
 		ss >> Y;
 	}
-	else if(key == "Z")
+	else if(key == "Z" || key == "z")
 	{
 		ss >> Z;
 	}
