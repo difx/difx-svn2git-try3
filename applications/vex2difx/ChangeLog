@@ -10,6 +10,7 @@ Version 1.0.2
 * Fix some compiler warnings
 * Add deltaClock and deltaClockRate
 * Further fix to generated flags when an antenna is not in a job
+* More user warnings
 * This is the version for DiFX-1.5.2
 
 Version 1.0.1

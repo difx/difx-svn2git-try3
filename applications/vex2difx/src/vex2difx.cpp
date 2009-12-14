@@ -43,7 +43,7 @@
 
 const string program("vex2difx");
 const string version("1.0.3");
-const string verdate("20091210");
+const string verdate("20091214");
 const string author("Walter Brisken");
 
 

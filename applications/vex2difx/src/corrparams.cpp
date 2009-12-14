@@ -495,10 +495,20 @@ int SourceSetup::setkv(const string &key, const string &value)
 
 	if(key == "ra" || key == "RA")
 	{
+		if(ra > -990)
+		{
+			cerr << "Warning: Source " << vexName << " has multiple RA assignments" << endl;
+			nWarn++;
+		}
 		ra = parseCoord(value.c_str(), 'R');
 	}
 	else if(key == "dec" || key == "Dec")
 	{
+		if(dec > -990)
+		{
+			cerr << "Warning: Source " << vexName << " has multiple Dec assignments" << endl;
+			nWarn++;
+		}
 		dec = parseCoord(value.c_str(), 'D');
 	}
 	else if(key == "calCode")
@@ -564,41 +574,81 @@ int AntennaSetup::setkv(const string &key, const string &value)
 	}
 	else if(key == "clockOffset")
 	{
+		if(clock.offset != 0.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple clockOffset definitions" << endl;
+			nWarn++;
+		}
 		ss >> clock.offset;
 		clock.offset /= 1.0e6;	// convert from us to sec
 		clock.mjdStart = 1;
 	}
 	else if(key == "clockRate")
 	{
+		if(clock.rate != 0.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple clockRate definitions" << endl;
+			nWarn++;
+		}
 		ss >> clock.rate;
 		clock.rate /= 1.0e6;	// convert from us/sec to sec/sec
 		clock.mjdStart = 1;
 	}
 	else if(key == "clockEpoch")
 	{
+		if(clock.offset_epoch > 50001.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple clockEpoch definitions" << endl;
+			nWarn++;
+		}
 		clock.offset_epoch = parseTime(value);
 		clock.mjdStart = 1;
 	}
 	else if(key == "deltaClock")
 	{
+		if(deltaClock != 0.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple deltaClock definitions" << endl;
+			nWarn++;
+		}
 		ss >> deltaClock;
 		deltaClock /= 1.0e6;	// convert from us to sec
 	}
 	else if(key == "deltaClockRate")
 	{
+		if(deltaClockRate != 0.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple deltaClockRate definitions" << endl;
+			nWarn++;
+		}
 		ss >> deltaClockRate;
 		deltaClockRate /= 1.0e6;	// convert from us/sec to sec/sec
 	}
 	else if(key == "X" || key == "x")
 	{
+		if(X != 0.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple X definitions" << endl;
+			nWarn++;
+		}
 		ss >> X;
 	}
 	else if(key == "Y" || key == "y")
 	{
+		if(Y != 0.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple Y definitions" << endl;
+			nWarn++;
+		}
 		ss >> Y;
 	}
 	else if(key == "Z" || key == "z")
 	{
+		if(Z != 0.0)
+		{
+			cerr << "Warning: antenna " << vexName << " has multiple Z definitions" << endl;
+			nWarn++;
+		}
 		ss >> Z;
 	}
 	else if(key == "format")
@@ -1794,7 +1844,6 @@ int CorrParams::loadShelves(const string& fileName)
 		for(vector<string>::const_iterator s = noShelf.begin(); s != noShelf.end(); s++)
 		{
 			cerr << " " << *s;
-			nWarn++;
 		}
 		cerr << endl;
 	}
