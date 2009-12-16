@@ -1146,7 +1146,14 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	}
 	config->guardBlocks = 1;
 	config->postFFringe = corrSetup->postFFringe;
-	config->quadDelayInterp = 1;
+	if(config->postFFringe)
+	{
+		config->quadDelayInterp = 0;
+	}
+	else
+	{
+		config->quadDelayInterp = 1;
+	}
 	config->pulsarId = -1;		// FIXME -- from setup
 	config->doPolar = corrSetup->doPolar;
 	config->nAntenna = D->nAntenna;
@@ -1422,7 +1429,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 			deltat = sourceSetup->ephemDeltaT/86400.0;	// convert from seconds to days
 			n0 = static_cast<int>(fracday0/deltat - 2);	// start ephmemeris at least 2 points early
 			mjd0 = mjdint + (n0-5)*deltat;			// always start an integer number of increments into day
-			nPoint = static_cast<int>(J.duration()/deltat) + 11; // make sure to extend beyond the end of the job
+			nPoint = static_cast<int>(J.duration()/deltat) + 20; // make sure to extend beyond the end of the job
 			if(verbose > 0)
 			{
 				cout << "Computing ephemeris:" << endl;
