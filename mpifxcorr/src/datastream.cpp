@@ -1033,7 +1033,8 @@ void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
     dataremaining = false;
   }
 
-  readnanoseconds += bufferinfo[buffersegment].nsinc;
+  readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
+  readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
   readseconds += readnanoseconds/1000000000;
   readnanoseconds %= 1000000000;
 
@@ -1130,7 +1131,8 @@ void DataStream::diskToMemory(int buffersegment)
   input.read((char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)], readbytes);
   bufferinfo[buffersegment].validbytes = input.gcount();
   bufferinfo[buffersegment].readto = true;
-  readnanoseconds += bufferinfo[buffersegment].nsinc;
+  readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
+  readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
   readseconds += readnanoseconds/1000000000;
   readnanoseconds %= 1000000000;
 

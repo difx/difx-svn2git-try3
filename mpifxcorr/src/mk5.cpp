@@ -195,6 +195,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   if (fanout < 0)
     MPI_Abort(MPI_COMM_WORLD, 1);
 
+  cinfo << startl << "initialiseFile format=" << formatname << " file=" << datafilenames[configindex][fileindex].c_str() << endl;
   mark5stream = new_mark5_stream(
     new_mark5_stream_file(datafilenames[configindex][fileindex].c_str(), 0),
     new_mark5_format_generic_from_string(formatname) );
@@ -236,7 +237,8 @@ void Mk5DataStream::networkToMemory(int buffersegment, int & framebytesremaining
   // resync occasionally, so..
   initialiseNetwork(0, buffersegment);
 
-  readnanoseconds += bufferinfo[buffersegment].nsinc;
+  readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
+  readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
   readseconds += readnanoseconds/1000000000;
   readnanoseconds %= 1000000000;
 }

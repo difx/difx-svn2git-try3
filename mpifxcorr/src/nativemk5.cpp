@@ -265,6 +265,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
         if(fanout < 0)
           MPI_Abort(MPI_COMM_WORLD, 1);
 
+	cinfo << startl << "initialiseFile format=" << formatname << endl;
 	if(mark5stream)
 	{
 		delete_mark5_stream(mark5stream);
@@ -718,7 +719,8 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	}
 
 	// Update various counters
-	readnanoseconds += bufferinfo[buffersegment].nsinc;
+	readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
+	readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
 	if(bytes < readbytes)
