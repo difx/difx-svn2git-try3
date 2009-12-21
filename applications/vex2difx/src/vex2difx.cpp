@@ -957,15 +957,15 @@ static double tweakTime(double tInt, int bwIndex, int *n2, int *n5, int *p)
 		{5,5}, 
 		{5,5}, 
 		{5,5}, 
-		{4,6}, 
-		{5,6}, 
-		{6,6}, 
-		{7,6}, 
-		{8,5}, 
-		{9,5}, 
-		{10,5}, 
-		{11,4}, 
-		{12,4}
+		{4,5}, 
+		{5,5}, 
+		{6,5}, 
+		{7,5}, 
+		{8,4}, 
+		{9,3}, 
+		{10,3}, 
+		{11,2}, 
+		{12,1}
 	};
 
 	/* first check for exact FXCORR integration time */
@@ -1023,7 +1023,7 @@ static int calcBlocksPerSend(double bw, double *tInt, double dataRate, int sendS
 		sendSize = 6000000;
 	}
 
-	n = -static_cast<int>(log(bw)/log(2) + 0.5);
+	n = static_cast<int>(-log(bw)/log(2) + 0.5);
 	if(n < 0)
 	{
 		return -1;
