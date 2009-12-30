@@ -76,6 +76,7 @@ private:
 	int nrate;
 	int nError;
 	bool nomoredata;
+	int nfill, ninvalid, ngood;
 };
 
 #endif
