@@ -2,6 +2,7 @@ Version 1.2
 ~~~~~~~~~~~
 * mk5dir -- add suffix to distinguish otherwise identically named scans
 * Clean up permissions and ownership issues when spawning jobs
+* Improve bankswitching
 * Version for DiFX-1.5.2
 
 Version 1.1

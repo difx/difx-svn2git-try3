@@ -324,12 +324,14 @@ int main(int argc, char **argv)
 	char message[1000];
 	struct Mark5Module module;
 	SSHANDLE xlrDevice;
+	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
 	DifxMessageMk5Status mk5status;
 	char vsn[16] = "";
 	int v;
 	int a, b, i, s, l, nGood, nBad;
 	int scanIndex;
+	int bank = -1;
 	float replacedFrac;
 
 	if(argc < 2)
@@ -409,6 +411,17 @@ int main(int argc, char **argv)
 		
 		return -1;
 	}
+
+	xlrRC = XLRSetFillData(xlrDevice, 0x11223344UL);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		sprintf(message, "Cannot set XLR fill pattern");
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		fprintf(stderr, "Error: %s\n", message);
+
+		return -1;
+	}
+
 
 	v = getBankInfo(xlrDevice, &mk5status, ' ');
 	if(v < 0)
@@ -491,24 +504,43 @@ int main(int argc, char **argv)
 
 	if(mk5status.activeBank == 'A')
 	{
-		xlrRC = XLRSelectBank(xlrDevice, BANK_A);
+		bank = BANK_A;
 	}
 	else if(mk5status.activeBank == 'B')
 	{
-		xlrRC = XLRSelectBank(xlrDevice, BANK_B);
+		bank = BANK_B;
 	}
 
-	/* Close and Open the XLR device after a bank change -- a workaround to 
-	 * a streamstor bug */
-	XLRClose(xlrDevice);
-	xlrRC = XLROpen(1, &xlrDevice);
-	if(xlrRC != XLR_SUCCESS)
+	if(bank < 0)
 	{
-		sprintf(message, "Cannot reopen XLR");
+		sprintf(message, "Cannot figure out which bank to use: '%c' requested.", mk5status.activeBank);
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 		fprintf(stderr, "Error: %s\n", message);
 		
 		return -1;
+	}
+
+	xlrRC = XLRGetBankStatus(xlrDevice, bank, &bank_stat);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		sprintf(message, "Cannot get bank status");
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		fprintf(stderr, "Error: %s\n", message);
+		
+		return -1;
+	}
+	if(!bank_stat.Selected)
+	{
+		xlrRC = XLRSelectBank(xlrDevice, bank);
+		if(xlrRC != XLR_SUCCESS)
+		{
+			sprintf(message, "Cannot set bank");
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			fprintf(stderr, "Error: %s\n", message);
+			
+			return -1;
+		}
+		sleep(5);
 	}
 
 	mk5status.state = MARK5_STATE_COPY;

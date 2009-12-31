@@ -219,6 +219,16 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	xlrRC = XLRSetFillData(xlrDevice, 0x11223344UL);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		sprintf(message, "Cannot set XLR fill pattern");
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		fprintf(stderr, "Error: %s\n", message);
+
+		return 0;
+	}
+
 	xlrRC = XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR);
 	if(xlrRC != XLR_SUCCESS)
 	{
