@@ -1,3 +1,7 @@
+Version 7.1
+~~~~~~~~~~~
+Do better job expanding "entities" in XML formation
+
 Version 0.7 20090904
 ~~~~~~~~~~~
 Add XML type for condition reports
