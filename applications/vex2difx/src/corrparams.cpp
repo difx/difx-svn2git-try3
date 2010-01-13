@@ -795,6 +795,7 @@ int CorrParams::setkv(const string &key, const string &value)
 	else if(key == "maxGap")
 	{
 		ss >> maxGap;
+		maxGap /= 86400.0;	// convert to seconds from days
 	}
 	else if(key == "singleScan")
 	{
