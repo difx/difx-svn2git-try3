@@ -1,3 +1,8 @@
+Version 1.3
+~~~~~~~~~~~
+* mount and dismount commands (not using DBUS yet)
+* make destination directory before copy
+
 Version 1.2
 ~~~~~~~~~~~
 * mk5dir -- add suffix to distinguish otherwise identically named scans
