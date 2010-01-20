@@ -99,7 +99,10 @@ void *watchdogFunction(void *data)
 			}
 			else if(deltat != lastdeltat)
 			{
-				fprintf(stderr, "Waiting %d seconds executing: %s\n", deltat, watchdogStatement);
+				if(deltat > 10)
+				{
+					fprintf(stderr, "Waiting %d seconds executing: %s\n", deltat, watchdogStatement);
+				}
 				lastdeltat = deltat;
 			}
 		}
@@ -116,7 +119,7 @@ void siginthand(int j)
 {
 	if(verbose)
 	{
-		printf("Being killed\n");
+		fprintf(stderr, "<Being killed>");
 	}
 	die = 1;
 	signal(SIGHUP, oldsiginthand);
@@ -161,22 +164,134 @@ int trim(char *out, const char *in)
 	return 0;
 }
 
-int testModule(int bank, const char *newLabel, int readOnly)
+void setbuffer(int num, char *buffer, int size)
+{
+	int i;
+
+	for(i = 0; i < size; i++) buffer[i] = (num+i) & 0xFF;
+}
+
+int comparebuffers(const char *buf1, const char *buf2, int size)
+{
+	int n = 0;
+	int i;
+
+	for(i = 0; i < size; i++)
+	{
+		if(buf1[i] != buf2[i])
+		{
+			n++;
+		}
+	}
+
+	return n;
+}
+
+int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep)
+{
+	XLR_RETURN_CODE xlrRC;
+	int r;
+
+	if(num == 0)
+	{
+		WATCHDOG( xlrRC = XLRRecord(xlrDevice, 0, 1) );
+		if(xlrRC != XLR_SUCCESS)
+		{
+			fprintf(stderr, "XLRRecord error\n");
+			return -1;
+		}
+	}
+	else
+	{
+		WATCHDOG( xlrRC = XLRAppend(xlrDevice) );
+		if(xlrRC != XLR_SUCCESS)
+		{
+			fprintf(stderr, "XLRAppend error\n");
+			return -1;
+		}
+	}
+
+	printf("Writing ");
+	for(r = 0; r < nRep; r++)
+	{
+		WATCHDOG( xlrRC = XLRWriteData(xlrDevice, buffer, size) );
+		if(xlrRC != XLR_SUCCESS)
+		{
+			fprintf(stderr, "XLRWriteData error\n");
+			return -1;
+		}
+		printf("."); fflush(stdout);
+		if(die)
+		{
+			break;
+		}
+	}
+	printf("\n");
+
+	WATCHDOG( xlrRC = XLRStop(xlrDevice) );
+	if(xlrRC != XLR_SUCCESS)
+	{
+		fprintf(stderr, "XLRRecord error\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, int size, int nRep)
+{
+	XLR_RETURN_CODE xlrRC;
+	int r, v;
+	long long pos, L = 0;
+	unsigned long a, b;
+	
+	printf("Reading ");
+	for(r = 0; r < nRep; r++)
+	{
+		pos = (long long)size*(num*nRep + r);
+		a = pos>>32;
+		b = pos & 0xFFFFFFFF;
+		WATCHDOG( xlrRC = XLRReadData(xlrDevice, (PULONG)buffer2, a, b, size) );
+		if(xlrRC != XLR_SUCCESS)
+		{
+			fprintf(stderr, "XLRReadData error pos=%Ld a=%d b=%d size=%d\n", pos, a, b, size);
+			return -1;
+		}
+		v = comparebuffers(buffer1, buffer2, size);
+		L += v;
+		printf("."); fflush(stdout);
+		if(die)
+		{
+			break;
+		}
+	}
+	printf("\n");
+
+	return L;
+}
+
+int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int bufferSize, int nRep)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
+	S_DRIVESTATS dstats[XLR_MAXBINS];
+	S_DRIVEINFO dinfo;
+	S_BANKSTATUS bankStat;
 	char label[XLR_LABEL_LENGTH];
 	int labelLength = 0, rs = 0;
 	int badLabel = 0;
 	int dirLen;
 	int size, capacity;
 	int ndisk, rate;
-	int d, v;
-	S_DRIVEINFO dinfo;
-	S_BANKSTATUS bankStat;
+	int n, d, v;
+	long long L, totalError=0, totalBytes=0;
 	char drivename[XLR_MAX_DRIVENAME+1];
 	char driveserial[XLR_MAX_DRIVESERIAL+1];
 	char driverev[XLR_MAX_DRIVEREV+1];
+	char *buffer1, *buffer2;
+
+	buffer1 = (char *)malloc(bufferSize);
+	buffer2 = (char *)malloc(bufferSize);
 
 	WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
 	if(xlrRC != XLR_SUCCESS)
@@ -189,6 +304,13 @@ int testModule(int bank, const char *newLabel, int readOnly)
 	if(xlrRC != XLR_SUCCESS)
 	{
 		fprintf(stderr, "XLRSetBankMode Failed\n");
+		return -1;
+	}
+
+	WATCHDOG( xlrRC = XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
+	if(xlrRC != XLR_SUCCESS)
+	{
+		fprintf(stderr, "XLRSetOption SS_OPT_DRVSTATS Failed\n");
 		return -1;
 	}
 
@@ -207,6 +329,7 @@ int testModule(int bank, const char *newLabel, int readOnly)
 	}
 	if(!bankStat.Selected)
 	{
+		printf("Hold on a few seconds while switching banks...\n");
 		WATCHDOG( xlrRC = XLRSelectBank(xlrDevice, bank) );
 		if(xlrRC != XLR_SUCCESS)
 		{
@@ -231,7 +354,7 @@ int testModule(int bank, const char *newLabel, int readOnly)
 		if(xlrRC != XLR_SUCCESS)
 		{
 			fprintf(stderr, "XLRGetDriveInfo failed for disk %d\n", d);
-			return -1;
+			continue;
 		}
 		trim(drivename, dinfo.Model);
 		trim(driveserial, dinfo.Serial);
@@ -312,7 +435,7 @@ int testModule(int bank, const char *newLabel, int readOnly)
 			return -1;
 		}
 
-		if(newLabel)
+		if(newLabel[0])
 		{
 			rate = ndisk*128;
 			sprintf(label, "%8s/%d/%d%cErased", newLabel, capacity, rate, 30);	/* ASCII "RS" == 30 */
@@ -335,10 +458,7 @@ int testModule(int bank, const char *newLabel, int readOnly)
 				badLabel = 1;
 			}
 
-			if(verbose)
-			{
-				printf("Original module label = '%s'\n", label);
-			}
+			printf("Original module label = '%s'\n", label);
 
 			if(!badLabel)
 			{
@@ -370,18 +490,54 @@ int testModule(int bank, const char *newLabel, int readOnly)
 			printf("New module label = '%s'\n", label);
 			WATCHDOG( xlrRC = XLRSetLabel(xlrDevice, label, strlen(label)) );
 		}
-/*
-		v = writeblock(xlrDevice, 0);
-		if(v < 0)
+
+		for(n = 0; n < nWrite; n++)
 		{
-			return -1;
+			printf("Test %d/%d\n", n+1, nWrite);
+			setbuffer(n, buffer1, bufferSize);
+
+			v = writeblock(xlrDevice, n, buffer1, bufferSize, nRep);
+			if(v < 0)
+			{
+				return -1;
+			}
+			L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep);
+			if(L < 0)
+			{
+				return -1;
+			}
+
+			printf("%Ld/%Ld differ\n", L, (long long)bufferSize*nRep);
+
+			totalError += L;
+			totalBytes += (long long)bufferSize*nRep;
+			if(die)
+			{
+				break;
+			}
 		}
-		v = readblock(xlrDevice, 0);
-		if(v < 0)
+
+		for(d = 0; d < 8; d++)
 		{
-			return -1;
+			WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, dstats) );
+			if(xlrRC != XLR_SUCCESS)
+			{
+				fprintf(stderr, "XLRGetDriveStats failed for drive %d\n", d);
+				continue;
+			}
+			printf("Stats[%d] = %d %d %d %d %d %d %d %d\n", d,
+				dstats[0].count, dstats[1].count,
+				dstats[2].count, dstats[3].count,
+				dstats[4].count, dstats[5].count,
+				dstats[6].count, dstats[7].count);
 		}
-*/
+
+		if(die)
+		{
+			printf("User interrupt: Stopping test early!\n");
+		}
+		printf("Total: %Ld/%Ld bytes differ\n", totalError, totalBytes);
+
 		WATCHDOG( xlrRC = XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
 		if(xlrRC != XLR_SUCCESS)
 		{
@@ -396,6 +552,9 @@ int testModule(int bank, const char *newLabel, int readOnly)
 
 	WATCHDOG( XLRClose(xlrDevice) );
 
+	free(buffer1);
+	free(buffer2);
+
 	return 0;
 }
 
@@ -403,8 +562,10 @@ int main(int argc, char **argv)
 {
 	pthread_t watchdogThread;
 	int perr, i;
-	char newLabel[100];
+	char newLabel[100] = "";
 	int bank;
+
+	oldsiginthand = signal(SIGINT, siginthand);
 
 	perr = pthread_create(&watchdogThread, NULL, watchdogFunction, 0);
 
@@ -445,7 +606,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	testModule(bank, newLabel, 0);
+	testModule(bank, newLabel, 0, 5, 10000000, 10);
 
 	/* *********** */
 
