@@ -3,7 +3,8 @@ CCLD = g++
 
 bin_PROGRAMS = \
 	mk5cp \
-	mk5dir
+	mk5dir \
+	testmod
 
 dist_bin_SCRIPTS = \
 	checkdir
@@ -24,3 +25,6 @@ mk5dir_SOURCES = \
 	mark5dir.cpp \
 	replaced.c \
 	mk5dir.cpp
+
+testmod_SOURCES = \
+	testmod.cpp
