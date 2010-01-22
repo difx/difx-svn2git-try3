@@ -66,6 +66,8 @@ int usage(const char *pgm)
 	printf("Where <options> can include:\n\n");
 	printf("  --verbose\n");
 	printf("  -v         Increase the verbosity\n\n");
+	printf("  --help\n");
+	printf("  -h         Print help info and quit\n\n");
 	printf("  --readonly\n");
 	printf("  -r         Perform read-only test\n\n");
 	printf("  --readwrite\n");
@@ -466,7 +468,7 @@ int main(int argc, char **argv)
 	/* 20 seconds should be enough to complete any XLR command */
 	setWatchdogTimeout(20);
 
-	for(a = 0; a < argc; a++)
+	for(a = 1; a < argc; a++)
 	{
 		if(argv[a][0] == 'A' || argv[a][0] == 'a')
 		{
@@ -482,6 +484,11 @@ int main(int argc, char **argv)
 			   strcmp(argv[a], "--verbose") == 0)
 			{
 				verbose++;
+			}
+			else if(strcmp(argv[a], "-h") == 0 ||
+			   strcmp(argv[a], "--help") == 0)
+			{
+				return usage(argv[0]);
 			}
 			else if(strcmp(argv[a], "-r") == 0 ||
 			        strcmp(argv[a], "--readonly") == 0)
@@ -511,7 +518,8 @@ int main(int argc, char **argv)
 					if(strlen(argv[a+1]) != 8)
 					{
 						fprintf(stderr, "VSN length must be 8 characters\n");
-						return 0;
+						fprintf(stderr, "Run with -h for help info\n");
+						return -1;
 					}
 					strcpy(newVSN, argv[a+1]);
 					newVSN[8] = 0;
@@ -538,10 +546,17 @@ int main(int argc, char **argv)
 				else
 				{
 					fprintf(stderr, "Unknown option %s\n", argv[a]);
-					return usage(argv[0]);
+					fprintf(stderr, "Run with -h for help info\n");
+					return -1;
 				}
 				a++;
 			}
+		}
+		else
+		{
+			fprintf(stderr, "Unexpected parameter: %s\n", argv[a]);
+			fprintf(stderr, "Run with -h for help info\n");
+			return -1;
 		}
 	}
 
@@ -550,7 +565,8 @@ int main(int argc, char **argv)
 	if(bank < 0)
 	{
 		fprintf(stderr, "No bank specified\n");
-		return usage(argv[0]);
+		fprintf(stderr, "Run with -h for help info\n");
+		return -1;
 	}
 
 	/* *********** */

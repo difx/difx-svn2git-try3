@@ -53,6 +53,8 @@ int usage(const char *pgm)
 	printf("A program to test Mark5 modules\n\n");
 	printf("Usage: %s <options> <bank> <vsn>\n\n", pgm);
 	printf("<options> can include:\n\n");
+	printf("  --help\n");
+	printf("  -h         Print help info and quit\n\n");
 	printf("  --verbose\n");
 	printf("  -v         Be more verbose in execution\n\n");
 	printf("<bank> should be either A or B\n\n");
@@ -102,7 +104,7 @@ int setvsn(int bank, const char *newVSN)
 	char label[XLR_LABEL_LENGTH+1];
 	int size, capacity;
 	int ndisk, rate;
-	int n, d, v;
+	int d;
 	char drivename[XLR_MAX_DRIVENAME+1];
 	char driveserial[XLR_MAX_DRIVESERIAL+1];
 	char driverev[XLR_MAX_DRIVEREV+1];
@@ -187,7 +189,7 @@ int setvsn(int bank, const char *newVSN)
 
 int main(int argc, char **argv)
 {
-	int a;
+	int a, v, i;
 	char newVSN[10] = "";
 	int bank = -1;
 	int verbose = 0;
@@ -201,7 +203,7 @@ int main(int argc, char **argv)
 	/* 20 seconds should be enough to complete any XLR command */
 	setWatchdogTimeout(20);
 
-	for(a = 0; a < argc; a++)
+	for(a = 1; a < argc; a++)
 	{
 		if(argv[a][0] == '-')
 		{
@@ -210,15 +212,27 @@ int main(int argc, char **argv)
 			{
 				verbose++;
 			}
+			else if(strcmp(argv[a], "-h") == 0 ||
+			   strcmp(argv[a], "--help") == 0)
+			{
+				return usage(argv[0]);
+			}
 			else
 			{
 				fprintf(stderr, "Unknown option: %s\n", argv[a]);
-				return usage(argv[0]);
+				fprintf(stderr, "Run with -h for help info\n");
+				return -1;
 			}
 		}
 		else if(bank < 0)
 		{
-			if(argv[a][0] == 'A' || argv[a][0] == 'a')
+			if(strlen(argv[a]) != 1)
+			{
+				fprintf(stderr, "Error: expecting bank name, got %s\n", argv[a]);
+				fprintf(stderr, "Run with -h for help info\n");
+				return -1;
+			}
+			else if(argv[a][0] == 'A' || argv[a][0] == 'a')
 			{
 				bank = BANK_A;
 			}
@@ -229,7 +243,8 @@ int main(int argc, char **argv)
 			else
 			{
 				fprintf(stderr, "Error: expecting bank name, got %s\n", argv[a]);
-				return usage(argv[0]);
+				fprintf(stderr, "Run with -h for help info\n");
+				return -1;
 			}
 		}
 		else
@@ -237,6 +252,7 @@ int main(int argc, char **argv)
 			if(strlen(argv[a]) != 8)
 			{
 				fprintf(stderr, "Error: VSN length must be 8 characters\n");
+				fprintf(stderr, "Run with -h for help info\n");
 				return 0;
 			}
 			strcpy(newVSN, argv[a]);
@@ -253,13 +269,15 @@ int main(int argc, char **argv)
 	if(bank < 0)
 	{
 		fprintf(stderr, "Error: no bank specified\n");
-		return usage(argv[0]);
+		fprintf(stderr, "Run with -h for help info\n");
+		return -1;
 	}
 
 	if(newVSN[0] == 0)
 	{
 		fprintf(stderr, "Error: VSN not specified\n");
-		return usage(argv[0]);
+		fprintf(stderr, "Run with -h for help info\n");
+		return -1;
 	}
 
 	/* *********** */
