@@ -4,7 +4,8 @@ CCLD = g++
 bin_PROGRAMS = \
 	mk5cp \
 	mk5dir \
-	testmod
+	testmod \
+	setvsn
 
 dist_bin_SCRIPTS = \
 	checkdir
@@ -30,3 +31,9 @@ testmod_SOURCES = \
 	watchdog.cpp \
 	watchdog.h \
 	testmod.cpp
+
+setvsn_SOURCES = \
+	watchdog.cpp \
+	watchdog.h \
+	setvsn.cpp
+	

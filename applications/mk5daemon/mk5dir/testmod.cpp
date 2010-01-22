@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mk5cp.cpp 1888 2009-12-31 21:56:22Z WalterBrisken $
-// $HeadURL: https://svn.atnf.csiro.au/difx/applications/mk5daemon/branches/difx-1.5/mk5dir/mk5cp.cpp $
-// $LastChangedRevision: 1888 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2009-12-31 14:56:22 -0700 (Thu, 31 Dec 2009) $
+// $Id$
+// $HeadURL$
+// $LastChangedRevision$
+// $Author$
+// $LastChangedDate$
 //
 //============================================================================
 
@@ -70,6 +70,10 @@ int usage(const char *pgm)
 	printf("  -r         Perform read-only test\n\n");
 	printf("  --readwrite\n");
 	printf("  -w         Perform destructive read/write test\n\n");
+	printf("  --realtime\n");
+	printf("  -R         Enable real-time playback mode (for partial packs)\n\n");
+	printf("  --skipdircheck\n");
+	printf("  -d         Disable directory checking (sometimes needed for bad packs)\n\n");
 	printf("  --nrep <n>\n");
 	printf("  -n <n>     Perform the test <n> times\n\n");
 	printf("  --blocksize <s>\n");
@@ -200,7 +204,7 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 	return L;
 }
 
-int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int bufferSize, int nRep)
+int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int bufferSize, int nRep, int options)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
@@ -225,7 +229,7 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
+	WATCHDOGTEST( XLRSetOption(xlrDevice, options) );
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, bank, &bankStat) );
 	if(bankStat.State != STATE_READY)
 	{
@@ -374,7 +378,7 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 		else
 		{
 			printf("New module label = '%s'\n", label);
-			WATCHDOG( xlrRC = XLRSetLabel(xlrDevice, label, strlen(label)) );
+			WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
 		}
 
 		for(n = 0; n < nWrite; n++)
@@ -449,6 +453,7 @@ int main(int argc, char **argv)
 	int nBlock=10;
 	int readOnly = 1;
 	int verbose = 0;
+	int options = SS_OPT_DRVSTATS;
 
 	oldsiginthand = signal(SIGINT, siginthand);
 
@@ -487,6 +492,16 @@ int main(int argc, char **argv)
 			        strcmp(argv[a], "--readwrite") == 0)
 			{
 				readOnly = 0;
+			}
+			else if(strcmp(argv[a], "-R") == 0 ||
+			        strcmp(argv[a], "--realtime") == 0)
+			{
+				options |= SS_OPT_REALTIMEPLAYBACK;
+			}
+			else if(strcmp(argv[a], "-d") == 0 ||
+			        strcmp(argv[a], "--skipdircheck") == 0)
+			{
+				options |= SS_OPT_SKIPCHECKDIR;
 			}
 			else if(a+1 < argc)
 			{
@@ -540,7 +555,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	testModule(bank, newVSN, readOnly, nRep, blockSize, nBlock);
+	testModule(bank, newVSN, readOnly, nRep, blockSize, nBlock, options);
 
 	/* *********** */
 
