@@ -53,10 +53,7 @@ sighandler_t oldsiginthand;
 
 void siginthand(int j)
 {
-	if(verbose > 0)
-	{
-		fprintf(stderr, "<Being killed>");
-	}
+	fprintf(stderr, "<Being killed>");
 	die = 1;
 	signal(SIGHUP, oldsiginthand);
 }
@@ -65,7 +62,7 @@ int usage(const char *pgm)
 {
 	printf("\n%s ver. %s   %s %s\n\n", program, version, author, verdate);
 	printf("A program to test Mark5 modules\n\n");
-	printf("Usage: %s <options> <bank>\n\n");
+	printf("Usage: %s <options> <bank>\n\n", pgm);
 	printf("Where <options> can include:\n\n");
 	printf("  --verbose\n");
 	printf("  -v         Increase the verbosity\n\n");

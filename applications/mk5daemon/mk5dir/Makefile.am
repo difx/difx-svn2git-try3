@@ -27,4 +27,6 @@ mk5dir_SOURCES = \
 	mk5dir.cpp
 
 testmod_SOURCES = \
+	watchdog.cpp \
+	watchdog.h \
 	testmod.cpp

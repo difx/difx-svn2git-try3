@@ -78,7 +78,7 @@ extern pthread_mutex_t watchdogLock;
 
 void setWatchdogVerbosity(int v);
 
-void setWatchdotTimeout(int timeout);
+void setWatchdogTimeout(int timeout);
 
 int initWatchdog();
 

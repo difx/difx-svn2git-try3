@@ -28,6 +28,9 @@
 //============================================================================
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 #include "watchdog.h"
 
 time_t watchdogTime;
@@ -40,6 +43,11 @@ pthread_t watchdogThread;
 void setWatchdogVerbosity(int v)
 {
 	watchdogVerbose = v;
+}
+
+void setWatchdogTimeout(int t)
+{
+	watchdogTimeout = t;
 }
 
 void *watchdogFunction(void *data)
