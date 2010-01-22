@@ -1,0 +1,110 @@
+/***************************************************************************
+ *   Copyright (C) 2010 by Walter Brisken                                  *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+//===========================================================================
+// SVN properties (DO NOT CHANGE)
+//
+// $Id: mk5cp.cpp 1888 2009-12-31 21:56:22Z WalterBrisken $
+// $HeadURL: https://svn.atnf.csiro.au/difx/applications/mk5daemon/branches/difx-1.5/mk5dir/mk5cp.cpp $
+// $LastChangedRevision: 1888 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2009-12-31 14:56:22 -0700 (Thu, 31 Dec 2009) $
+//
+//============================================================================
+
+#include <stdio.h>
+#include "watchdog.h"
+
+time_t watchdogTime;
+int watchdogVerbose;
+char watchdogStatement[256];
+pthread_mutex_t watchdogLock;
+int watchdogTimeout;
+pthread_t watchdogThread;
+
+void setWatchdogVerbosity(int v)
+{
+	watchdogVerbose = v;
+}
+
+void *watchdogFunction(void *data)
+{
+	int deltat;
+	int lastdeltat = 0;
+
+	for(;;)
+	{
+		usleep(100000);
+		pthread_mutex_lock(&watchdogLock);
+
+		if(strcmp(watchdogStatement, "DIE") == 0)
+		{
+			pthread_mutex_unlock(&watchdogLock);
+			return 0;
+		}
+		else if(watchdogTime != 0)
+		{
+			deltat = time(0) - watchdogTime;
+			if(deltat > watchdogTimeout)
+			{
+				fprintf(stderr, "Watchdog caught a hang-up executing: %s\n", watchdogStatement);
+				exit(0);
+			}
+			else if(deltat != lastdeltat)
+			{
+				if(deltat > (watchdogTimeout/2) && deltat%2 == 0)
+				{
+					fprintf(stderr, "Waiting %d seconds executing: %s\n", deltat, watchdogStatement);
+				}
+				lastdeltat = deltat;
+			}
+		}
+		else
+		{
+			lastdeltat = 0;
+		}
+
+		pthread_mutex_unlock(&watchdogLock);
+	}
+}
+
+int initWatchdog()
+{
+	int perr;
+
+	watchdogTime = 0;
+	watchdogVerbose = 0;
+	watchdogTimeout = 20;
+	perr = pthread_create(&watchdogThread, NULL, watchdogFunction, 0);
+
+	if(perr != 0)
+	{
+		fprintf(stderr, "Error -- could not launch watchdog thread!\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+void stopWatchdog()
+{
+	pthread_mutex_lock(&watchdogLock);
+	strcpy(watchdogStatement, "DIE");
+	pthread_mutex_unlock(&watchdogLock);
+	pthread_join(watchdogThread, NULL);
+}

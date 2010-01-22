@@ -29,7 +29,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <ctype.h>
 #include <string.h>
 #include <difxmessage.h>
@@ -37,87 +36,24 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/time.h>
-#include <pthread.h>
 #include "config.h"
 #include "mark5dir.h"
 #include "replaced.h"
+#include "watchdog.h"
 #include "../config.h"
-
-int verbose = 0;
-int die = 0;
-time_t watchdogTime = 0;
-char watchdogStatement[256];
-pthread_mutex_t watchdogLock;
-
-#define WATCHDOG(statement) \
-{ \
-	pthread_mutex_lock(&watchdogLock); \
-	watchdogTime = time(0); \
-	strcpy(watchdogStatement, #statement); \
-	if(verbose) printf("Executing (at time %d): %s\n", (int)(watchdogTime), watchdogStatement); \
-	pthread_mutex_unlock(&watchdogLock); \
-	statement; \
-	pthread_mutex_lock(&watchdogLock); \
-	if(verbose) printf("Executed (in %d seconds): %s\n", (int)(time(0)-watchdogTime), watchdogStatement); \
-	watchdogTime = 0; \
-	watchdogStatement[0] = 0; \
-	pthread_mutex_unlock(&watchdogLock); \
-}
 
 const char program[] = "testmod";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100115";
+const char verdate[] = "20100121";
 
-
+int die = 0;
 typedef void (*sighandler_t)(int);
-
 sighandler_t oldsiginthand;
-
-void *watchdogFunction(void *data)
-{
-	int deltat;
-	int lastdeltat = 0;
-
-	for(;;)
-	{
-		usleep(100000);
-		pthread_mutex_lock(&watchdogLock);
-
-		if(strcmp(watchdogStatement, "DIE") == 0)
-		{
-			pthread_mutex_unlock(&watchdogLock);
-			return 0;
-		}
-		else if(watchdogTime != 0)
-		{
-			deltat = time(0) - watchdogTime;
-			if(deltat > 20)  // Nothing should take 20 seconds to complete!
-			{
-				fprintf(stderr, "Watchdog caught a hang-up executing: %s\n", watchdogStatement);
-				exit(0);
-			}
-			else if(deltat != lastdeltat)
-			{
-				if(deltat > 10)
-				{
-					fprintf(stderr, "Waiting %d seconds executing: %s\n", deltat, watchdogStatement);
-				}
-				lastdeltat = deltat;
-			}
-		}
-		else
-		{
-			lastdeltat = 0;
-		}
-
-		pthread_mutex_unlock(&watchdogLock);
-	}
-}
 
 void siginthand(int j)
 {
-	if(verbose)
+	if(verbose > 0)
 	{
 		fprintf(stderr, "<Being killed>");
 	}
@@ -128,6 +64,24 @@ void siginthand(int j)
 int usage(const char *pgm)
 {
 	printf("\n%s ver. %s   %s %s\n\n", program, version, author, verdate);
+	printf("A program to test Mark5 modules\n\n");
+	printf("Usage: %s <options> <bank>\n\n");
+	printf("Where <options> can include:\n\n");
+	printf("  --verbose\n");
+	printf("  -v         Increase the verbosity\n\n");
+	printf("  --readonly\n");
+	printf("  -r         Perform read-only test\n\n");
+	printf("  --readwrite\n");
+	printf("  -w         Perform destructive read/write test\n\n");
+	printf("  --nrep <n>\n");
+	printf("  -n <n>     Perform the test <n> times\n\n");
+	printf("  --blocksize <s>\n");
+	printf("  -s <s>     Use a read/write block of <s> MB\n\n");
+	printf("  --nblock <b>\n");
+	printf("  -b <b>     Read/write <b> blocks per test\n\n");
+	printf("  --VSN <v>\n");
+	printf("  -V <v>     Change the module VSN to <v>\n\n");
+	printf("and <bank> should be either A or B\n\n");
 
 	return 0;
 }
@@ -189,37 +143,21 @@ int comparebuffers(const char *buf1, const char *buf2, int size)
 
 int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep)
 {
-	XLR_RETURN_CODE xlrRC;
 	int r;
 
 	if(num == 0)
 	{
-		WATCHDOG( xlrRC = XLRRecord(xlrDevice, 0, 1) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRRecord error\n");
-			return -1;
-		}
+		WATCHDOGTEST( XLRRecord(xlrDevice, 0, 1) );
 	}
 	else
 	{
-		WATCHDOG( xlrRC = XLRAppend(xlrDevice) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRAppend error\n");
-			return -1;
-		}
+		WATCHDOGTEST( XLRAppend(xlrDevice) );
 	}
 
 	printf("Writing ");
 	for(r = 0; r < nRep; r++)
 	{
-		WATCHDOG( xlrRC = XLRWriteData(xlrDevice, buffer, size) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRWriteData error\n");
-			return -1;
-		}
+		WATCHDOGTEST( XLRWriteData(xlrDevice, buffer, size) );
 		printf("."); fflush(stdout);
 		if(die)
 		{
@@ -228,12 +166,7 @@ int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep)
 	}
 	printf("\n");
 
-	WATCHDOG( xlrRC = XLRStop(xlrDevice) );
-	if(xlrRC != XLR_SUCCESS)
-	{
-		fprintf(stderr, "XLRRecord error\n");
-		return -1;
-	}
+	WATCHDOGTEST( XLRStop(xlrDevice) );
 
 	return 0;
 }
@@ -293,34 +226,10 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 	buffer1 = (char *)malloc(bufferSize);
 	buffer2 = (char *)malloc(bufferSize);
 
-	WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
-	if(xlrRC != XLR_SUCCESS)
-	{
-		fprintf(stderr, "XLROpen Failed\n");
-		return -1;
-	}
-
-	WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-	if(xlrRC != XLR_SUCCESS)
-	{
-		fprintf(stderr, "XLRSetBankMode Failed\n");
-		return -1;
-	}
-
-	WATCHDOG( xlrRC = XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
-	if(xlrRC != XLR_SUCCESS)
-	{
-		fprintf(stderr, "XLRSetOption SS_OPT_DRVSTATS Failed\n");
-		return -1;
-	}
-
-	WATCHDOG( xlrRC = XLRGetBankStatus(xlrDevice, bank, &bankStat) );
-	if(xlrRC != XLR_SUCCESS)
-	{
-		fprintf(stderr, "XLRGetBankStatus Failed\n");
-		return -1;
-	}
-
+	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
+	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
+	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
+	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, bank, &bankStat) );
 	if(bankStat.State != STATE_READY)
 	{
 		fprintf(stderr, "Bank %d not ready\n", bank);
@@ -330,21 +239,11 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 	if(!bankStat.Selected)
 	{
 		printf("Hold on a few seconds while switching banks...\n");
-		WATCHDOG( xlrRC = XLRSelectBank(xlrDevice, bank) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRSelectBank Failed\n");
-			return -1;
-		}
+		WATCHDOGTEST( xlrRC = XLRSelectBank(xlrDevice, bank) );
 		sleep(5);
 	}
 
-	WATCHDOG( xlrRC = XLRGetLabel(xlrDevice, label) );
-	if(xlrRC != XLR_SUCCESS)
-	{
-		fprintf(stderr, "XLRGetLabel Failed\n");
-		return -1;
-	}
+	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 
 	capacity = 0;
 	ndisk = 0;
@@ -381,12 +280,7 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 
 	if(!readOnly)
 	{
-		WATCHDOG( xlrRC = XLRClearWriteProtect(xlrDevice) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRClearWriteProtect Failed\n");
-			return -1;
-		}
+		WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
 
 		WATCHDOG( xlrRC = XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
 		if(xlrRC != XLR_SUCCESS)
@@ -428,12 +322,7 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 			free(buffer);
 		}
 
-		WATCHDOG( xlrRC = XLRGetLabel(xlrDevice, label) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRGetLabel Failed\n");
-			return -1;
-		}
+		WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 
 		if(newLabel[0])
 		{
@@ -538,12 +427,7 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 		}
 		printf("Total: %Ld/%Ld bytes differ\n", totalError, totalBytes);
 
-		WATCHDOG( xlrRC = XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRErase Failed\n");
-			return -1;
-		}
+		WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
 	}
 	else
 	{
@@ -560,60 +444,110 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 
 int main(int argc, char **argv)
 {
-	pthread_t watchdogThread;
-	int perr, i;
-	char newLabel[100] = "";
-	int bank;
+	int a, v, i;
+	char newVSN[10] = "";
+	int bank = -1;
+	int nRep=1;
+	int blockSize=10000000;
+	int nBlock=10;
+	int readOnly = 1;
+	int verbose = 0;
 
 	oldsiginthand = signal(SIGINT, siginthand);
 
-	perr = pthread_create(&watchdogThread, NULL, watchdogFunction, 0);
-
-	if(perr != 0)
+	v = initWatchdog();
+	if(v < 0)
 	{
-		fprintf(stderr, "Error -- could not launch watchdog thread!\n");
-		exit(0);
+		return 0;
 	}
 
-	verbose = 0;
+	/* 20 seconds should be enough to complete any XLR command */
+	setWatchdogTimeout(20);
 
-	if(argc < 2)
+	for(a = 0; a < argc; a++)
 	{
-		return usage(argv[0]);
-	}
-	if(argc > 2)
-	{
-		strcpy(newLabel, argv[2]);
-		for(i = 0; newLabel[i]; i++)
+		if(argv[a][0] == 'A' || argv[a][0] == 'a')
 		{
-			newLabel[i] = toupper(newLabel[i]);
+			bank = BANK_A;
+		}
+		else if(argv[a][0] == 'B' || argv[a][0] == 'b')
+		{
+			bank = BANK_B;
+		}
+		else if(argv[a][0] == '-')
+		{
+			if(strcmp(argv[a], "-v") == 0 ||
+			   strcmp(argv[a], "--verbose") == 0)
+			{
+				verbose++;
+			}
+			else if(strcmp(argv[a], "-r") == 0 ||
+			        strcmp(argv[a], "--readonly") == 0)
+			{
+				readOnly = 1;
+			}
+			else if(strcmp(argv[a], "-w") == 0 ||
+			        strcmp(argv[a], "--readwrite") == 0)
+			{
+				readOnly = 0;
+			}
+			else if(a+1 < argc)
+			{
+				if(strcmp(argv[a], "-V") == 0 ||
+				   strcmp(argv[a], "--VSN") == 0)
+				{
+					if(strlen(argv[a+1]) != 8)
+					{
+						fprintf(stderr, "VSN length must be 8 characters\n");
+						return 0;
+					}
+					strcpy(newVSN, argv[a+1]);
+					newVSN[8] = 0;
+					for(i = 0; 8; i++)
+					{
+						newVSN[i] = toupper(newVSN[i]);
+					}
+				}
+				else if(strcmp(argv[a], "-n") == 0 ||
+				        strcmp(argv[a], "--nrep") == 0)
+				{
+					nRep = atoi(argv[a+1]);
+				}
+				else if(strcmp(argv[a], "-b") == 0 ||
+				        strcmp(argv[a], "--nblock") == 0)
+				{
+					nBlock = atoi(argv[a+1]);
+				}
+				else if(strcmp(argv[a], "-s") == 0 ||
+				        strcmp(argv[a], "--blocksize") == 0)
+				{
+					blockSize = 1000000*atoi(argv[a+1]);
+				}
+				else
+				{
+					fprintf(stderr, "Unknown option %s\n", argv[a]);
+					return usage(argv[0]);
+				}
+				a++;
+			}
 		}
 	}
 
-	switch(argv[1][0])
+	setWatchdogVerbosity(verbose);
+
+	if(bank < 0)
 	{
-	case 'a':
-	case 'A':
-		bank = BANK_A;
-		break;
-	case 'b':
-	case 'B':
-		bank = BANK_B;
-		break;
-	default:
+		fprintf(stderr, "No bank specified\n");
 		return usage(argv[0]);
 	}
 
 	/* *********** */
 
-	testModule(bank, newLabel, 0, 5, 10000000, 10);
+	testModule(bank, newVSN, readOnly, nRep, blockSize, nBlock);
 
 	/* *********** */
 
-	pthread_mutex_lock(&watchdogLock);
-	strcpy(watchdogStatement, "DIE");
-	pthread_mutex_unlock(&watchdogLock);
-	pthread_join(watchdogThread, NULL);
+	stopWatchdog();
 
 	return 0;
 }
