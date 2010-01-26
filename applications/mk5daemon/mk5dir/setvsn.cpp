@@ -194,15 +194,6 @@ int main(int argc, char **argv)
 	int bank = -1;
 	int verbose = 0;
 
-	v = initWatchdog();
-	if(v < 0)
-	{
-		return 0;
-	}
-
-	/* 20 seconds should be enough to complete any XLR command */
-	setWatchdogTimeout(20);
-
 	for(a = 1; a < argc; a++)
 	{
 		if(argv[a][0] == '-')
@@ -257,14 +248,12 @@ int main(int argc, char **argv)
 			}
 			strcpy(newVSN, argv[a]);
 			newVSN[8] = 0;
-			for(i = 0; 8; i++)
+			for(i = 0; i < 8; i++)
 			{
 				newVSN[i] = toupper(newVSN[i]);
 			}
 		}
 	}
-
-	setWatchdogVerbosity(verbose);
 
 	if(bank < 0)
 	{
@@ -279,6 +268,17 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Run with -h for help info\n");
 		return -1;
 	}
+
+	v = initWatchdog();
+	if(v < 0)
+	{
+		return 0;
+	}
+
+	/* 20 seconds should be enough to complete any XLR command */
+	setWatchdogTimeout(20);
+
+	setWatchdogVerbosity(verbose);
 
 	/* *********** */
 

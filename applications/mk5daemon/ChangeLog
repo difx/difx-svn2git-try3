@@ -2,6 +2,7 @@ Version 1.3
 ~~~~~~~~~~~
 * mount and dismount commands (not using DBUS yet)
 * make destination directory before copy
+* Mark5 maint programs testmod and setvsn added (still beta)
 
 Version 1.2
 ~~~~~~~~~~~

@@ -179,7 +179,7 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 	XLR_RETURN_CODE xlrRC;
 	int r, v;
 	long long pos, L = 0;
-	unsigned long a, b;
+	unsigned int a, b;
 	
 	printf("Reading ");
 	for(r = 0; r < nRep; r++)
@@ -190,7 +190,7 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 		WATCHDOG( xlrRC = XLRReadData(xlrDevice, (PULONG)buffer2, a, b, size) );
 		if(xlrRC != XLR_SUCCESS)
 		{
-			fprintf(stderr, "XLRReadData error pos=%Ld a=%d b=%d size=%d\n", pos, a, b, size);
+			fprintf(stderr, "XLRReadData error pos=%Ld a=%u b=%u size=%d\n", pos, a, b, size);
 			return -1;
 		}
 		v = comparebuffers(buffer1, buffer2, size);
@@ -204,6 +204,30 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 	printf("\n");
 
 	return L;
+}
+
+int getLabels(SSHANDLE xlrDevice, DifxMessageMk5Status *mk5status)
+{
+	S_BANKSTATUS bankStat;
+
+	mk5status->activeBank = ' ';
+
+	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, BANK_A, &bankStat) );
+	strncpy(mk5status->vsnA, bankStat.Label, 8);
+	mk5status->vsnA[8] = 0;
+	if(bankStat.Selected)
+	{
+		mk5status->activeBank = 'A';
+	}
+	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, BANK_B, &bankStat) );
+	strncpy(mk5status->vsnB, bankStat.Label, 8);
+	mk5status->vsnB[8] = 0;
+	if(bankStat.Selected)
+	{
+		mk5status->activeBank = 'B';
+	}
+
+	return 0;
 }
 
 int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int bufferSize, int nRep, int options)
@@ -225,9 +249,12 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 	char driveserial[XLR_MAX_DRIVESERIAL+1];
 	char driverev[XLR_MAX_DRIVEREV+1];
 	char *buffer1, *buffer2;
+	DifxMessageMk5Status mk5status;
+	char label8[10], message[1000];
 
 	buffer1 = (char *)malloc(bufferSize);
 	buffer2 = (char *)malloc(bufferSize);
+	memset(&mk5status, 0, sizeof(mk5status));
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
@@ -385,6 +412,18 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 
 		for(n = 0; n < nWrite; n++)
 		{
+			mk5status.position = (long long)bufferSize*nRep*n;
+			mk5status.scanNumber = n+1;
+
+			if(getLabels(xlrDevice, &mk5status) < 0)
+			{
+				fprintf(stderr, "Error getting bank status\n");
+				return -1;
+			}
+
+			mk5status.state = MARK5_STATE_TESTWRITE;
+			difxMessageSendMark5Status(&mk5status);
+
 			printf("Test %d/%d\n", n+1, nWrite);
 			setbuffer(n, buffer1, bufferSize);
 
@@ -393,6 +432,10 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 			{
 				return -1;
 			}
+			
+			mk5status.state = MARK5_STATE_TESTREAD;
+			difxMessageSendMark5Status(&mk5status);
+
 			L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep);
 			if(L < 0)
 			{
@@ -417,11 +460,15 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 				fprintf(stderr, "XLRGetDriveStats failed for drive %d\n", d);
 				continue;
 			}
-			printf("Stats[%d] = %d %d %d %d %d %d %d %d\n", d,
-				dstats[0].count, dstats[1].count,
-				dstats[2].count, dstats[3].count,
-				dstats[4].count, dstats[5].count,
-				dstats[6].count, dstats[7].count);
+			printf("Stats[%d] = %u %u %u %u %u %u %u %u\n", d,
+				(unsigned int)(dstats[0].count), 
+				(unsigned int)(dstats[1].count),
+				(unsigned int)(dstats[2].count), 
+				(unsigned int)(dstats[3].count),
+				(unsigned int)(dstats[4].count), 
+				(unsigned int)(dstats[5].count),
+				(unsigned int)(dstats[6].count), 
+				(unsigned int)(dstats[7].count));
 		}
 
 		if(die)
@@ -430,9 +477,20 @@ int testModule(int bank, const char *newLabel, int readOnly, int nWrite, int buf
 		}
 		printf("Total: %Ld/%Ld bytes differ\n", totalError, totalBytes);
 
+		strncpy(label8, label, 8);
+		label8[8] = 0;
+		sprintf(message, "%8s test complete: %Ld/%Ld bytes read incorrectly", label8, totalError, totalBytes);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
+
 		WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
+
+		mk5status.state = MARK5_STATE_CLOSE;
+		mk5status.activeBank = ' ';
+		mk5status.position = 0;
+		mk5status.scanNumber = 0;
+		difxMessageSendMark5Status(&mk5status);
 	}
-	else
+	else /* Read-only test here */
 	{
 		printf("Label is %s\n", label);
 	}
@@ -456,17 +514,6 @@ int main(int argc, char **argv)
 	int readOnly = 1;
 	int verbose = 0;
 	int options = SS_OPT_DRVSTATS;
-
-	oldsiginthand = signal(SIGINT, siginthand);
-
-	v = initWatchdog();
-	if(v < 0)
-	{
-		return 0;
-	}
-
-	/* 20 seconds should be enough to complete any XLR command */
-	setWatchdogTimeout(20);
 
 	for(a = 1; a < argc; a++)
 	{
@@ -523,7 +570,7 @@ int main(int argc, char **argv)
 					}
 					strcpy(newVSN, argv[a+1]);
 					newVSN[8] = 0;
-					for(i = 0; 8; i++)
+					for(i = 0; i < 8; i++)
 					{
 						newVSN[i] = toupper(newVSN[i]);
 					}
@@ -560,14 +607,27 @@ int main(int argc, char **argv)
 		}
 	}
 
-	setWatchdogVerbosity(verbose);
-
 	if(bank < 0)
 	{
 		fprintf(stderr, "No bank specified\n");
 		fprintf(stderr, "Run with -h for help info\n");
 		return -1;
 	}
+
+	oldsiginthand = signal(SIGINT, siginthand);
+
+	setWatchdogVerbosity(verbose);
+
+	v = initWatchdog();
+	if(v < 0)
+	{
+		return 0;
+	}
+
+	/* 20 seconds should be enough to complete any XLR command */
+	setWatchdogTimeout(20);
+
+	difxMessageInit(-1, program);
 
 	/* *********** */
 

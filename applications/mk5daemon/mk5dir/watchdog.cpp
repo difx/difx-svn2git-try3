@@ -34,10 +34,10 @@
 #include "watchdog.h"
 
 time_t watchdogTime;
-int watchdogVerbose;
+int watchdogVerbose = 0;
 char watchdogStatement[256];
 pthread_mutex_t watchdogLock;
-int watchdogTimeout;
+int watchdogTimeout = 20;
 pthread_t watchdogThread;
 
 void setWatchdogVerbosity(int v)
@@ -96,8 +96,6 @@ int initWatchdog()
 	int perr;
 
 	watchdogTime = 0;
-	watchdogVerbose = 0;
-	watchdogTimeout = 20;
 	perr = pthread_create(&watchdogThread, NULL, watchdogFunction, 0);
 
 	if(perr != 0)
