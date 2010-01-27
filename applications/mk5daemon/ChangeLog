@@ -3,6 +3,8 @@ Version 1.3
 * mount and dismount commands (not using DBUS yet)
 * make destination directory before copy
 * Mark5 maint programs testmod and setvsn added (still beta)
+* checkdir -- ultraverbose mode (-v -v -v -v) to print nicely formatted list of scans
+* remove auto-starting of the Mark5A program
 
 Version 1.2
 ~~~~~~~~~~~
