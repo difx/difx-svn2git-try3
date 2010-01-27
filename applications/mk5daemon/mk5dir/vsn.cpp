@@ -36,29 +36,31 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/time.h>
+#include <xlrapi.h>
 #include "config.h"
-#include "mark5dir.h"
-#include "replaced.h"
 #include "watchdog.h"
 #include "../config.h"
 
-const char program[] = "setvsn";
+const char program[] = "vsn";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100122";
+const char verdate[] = "20100127";
 
 int usage(const char *pgm)
 {
 	printf("\n%s ver. %s   %s %s\n\n", program, version, author, verdate);
-	printf("A program to test Mark5 modules\n\n");
-	printf("Usage: %s <options> <bank> <vsn>\n\n", pgm);
+	printf("A program to set/get a Mark5 module Volume Serial Number (VSN)\n\n");
+	printf("Usage: %s <options> <bank> [<vsn>]\n\n", pgm);
 	printf("<options> can include:\n\n");
 	printf("  --help\n");
 	printf("  -h         Print help info and quit\n\n");
 	printf("  --verbose\n");
 	printf("  -v         Be more verbose in execution\n\n");
-	printf("<bank> should be either A or B\n\n");
-	printf("<vsn> is the new module VSN (must be 8 characters long)\n\n");
+	printf("  --force\n");
+	printf("  -f         Don't ask before continuing\n\n");
+	printf("<bank> should be either A or B.\n\n");
+	printf("<vsn> is the new module VSN (must be 8 characters long).\n");
+	printf("  If not provided, the existing VSN will be returned.\n\n");
 
 	return 0;
 }
@@ -95,19 +97,33 @@ int trim(char *out, const char *in)
 	return 0;
 }
 
-int setvsn(int bank, const char *newVSN)
+int roundsize(int s)
+{
+	long long a;
+
+	a = (long long)s*512LL;
+	a /= 1000000000;
+	a = (a+2)/5;
+
+	return a*5;
+}
+
+int setvsn(int bank, const char *newVSN, int force)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
 	S_DRIVEINFO dinfo;
 	S_BANKSTATUS bankStat;
 	char label[XLR_LABEL_LENGTH+1];
+	char oldLabel[XLR_LABEL_LENGTH+1];
 	int size, capacity;
 	int ndisk, rate;
-	int d;
+	int i, d;
+	int nSlash=0, nDash=0, nSep=0;
 	char drivename[XLR_MAX_DRIVENAME+1];
 	char driveserial[XLR_MAX_DRIVESERIAL+1];
 	char driverev[XLR_MAX_DRIVEREV+1];
+	char oldVSN[10], resp[12];
 	const char *newState;
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
@@ -116,7 +132,7 @@ int setvsn(int bank, const char *newVSN)
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, bank, &bankStat) );
 	if(bankStat.State != STATE_READY)
 	{
-		fprintf(stderr, "Bank %d not ready\n", bank);
+		fprintf(stderr, "Bank %c not ready\n", 'A'+bank);
 		WATCHDOG( XLRClose(xlrDevice) );
 		return -1;
 	}
@@ -142,6 +158,43 @@ int setvsn(int bank, const char *newVSN)
 		newState = "Played";
 	}
 
+	strcpy(oldLabel, label);
+	for(i = 0; oldLabel[i]; i++)
+	{
+		if(oldLabel[i] == '/')
+		{
+			nSlash++;
+		}
+		if(oldLabel[i] == '+' || oldLabel[i] == '-')
+		{
+			nDash++;
+		}
+		if(oldLabel[i] == 30)
+		{
+			nSep++;
+		}
+		if(oldLabel[i] < ' ')
+		{
+		
+			oldLabel[i] = 0;
+			break;
+		}
+	}
+	if(nSlash == 2 && nDash == 1)
+	{
+		printf("\nCurrent extended VSN is %s\n", oldLabel);
+		if(nSep == 1)
+		{
+			printf("Current disk module state is %s\n", oldLabel+1+i);
+		}
+	}
+	else
+	{
+		printf("\nNo VSN currently set on module\n");
+	}
+
+	printf("\n");
+
 	capacity = 0;
 	ndisk = 0;
 	for(d = 0; d < 8; d++)
@@ -160,9 +213,9 @@ int setvsn(int bank, const char *newVSN)
 			printf(" %d  MISSING\n", d);
 			continue;
 		}
-		size = (dinfo.Capacity/1000000)*512/1000;
-		printf(" %d  %s %s %s  %d %d %d", d, drivename, driveserial, driverev, (dinfo.Capacity/1000000)*512/1000,
-			dinfo.SMARTCapable, dinfo.SMARTState);
+		size = roundsize(dinfo.Capacity);
+		printf(" %d  %s %s %s  %d %d %d", d, drivename, driveserial, driverev, 
+			size, dinfo.SMARTCapable, dinfo.SMARTState);
 		if(dinfo.SMARTCapable && !dinfo.SMARTState)
 		{
 			printf("  FAILED\n");
@@ -175,12 +228,43 @@ int setvsn(int bank, const char *newVSN)
 		ndisk++;
 	}
 
-	WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
+	if(newVSN[0])
+	{
+		if(nSlash == 2 && nDash == 1)
+		{
+			strncpy(oldVSN, oldLabel, 8);
+			oldVSN[8] = 0;
+			printf("\nAbout to change the module VSN from %s to %s\n", oldVSN, newVSN);
+		}
+		else
+		{
+			printf("\nAbout to set the module VSN to %s\n", newVSN);
+		}
+		if(force == 0)
+		{
+			printf("Is this OK? [y|n]\n");
+			fgets(resp, 10, stdin);
+		}
+		if(force || resp[0] == 'Y' || resp[0] == 'y')
+		{
+			WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
 
-	rate = ndisk*128;
-	sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, newState);	/* ASCII "RS" == 30 */
+			rate = ndisk*128;
+			sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, newState);	/* ASCII "RS" == 30 */
 
-	WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
+			WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
+
+			printf("Done.\n");
+		}
+		else
+		{
+			printf("\nNot changing VSN.\n");
+		}
+	}
+	else
+	{
+		printf("\nNot changing VSN.\n");
+	}
 
 	WATCHDOG( XLRClose(xlrDevice) );
 
@@ -193,6 +277,7 @@ int main(int argc, char **argv)
 	char newVSN[10] = "";
 	int bank = -1;
 	int verbose = 0;
+	int force = 0;
 
 	for(a = 1; a < argc; a++)
 	{
@@ -202,6 +287,11 @@ int main(int argc, char **argv)
 			   strcmp(argv[a], "--verbose") == 0)
 			{
 				verbose++;
+			}
+			else if(strcmp(argv[a], "-f") == 0 ||
+			   strcmp(argv[a], "--force") == 0)
+			{
+				force++;
 			}
 			else if(strcmp(argv[a], "-h") == 0 ||
 			   strcmp(argv[a], "--help") == 0)
@@ -262,13 +352,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	if(newVSN[0] == 0)
-	{
-		fprintf(stderr, "Error: VSN not specified\n");
-		fprintf(stderr, "Run with -h for help info\n");
-		return -1;
-	}
-
 	v = initWatchdog();
 	if(v < 0)
 	{
@@ -282,7 +365,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	setvsn(bank, newVSN);
+	setvsn(bank, newVSN, force);
 
 	/* *********** */
 

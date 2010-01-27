@@ -32,11 +32,13 @@
 
 #include <pthread.h>
 #include <time.h>
+#include <xlrapi.h>
 
 extern time_t watchdogTime;
 extern int watchdogVerbose;
 extern char watchdogStatement[256];
 extern pthread_mutex_t watchdogLock;
+extern char watchdogXLRError[XLR_ERROR_LENGTH+1];
 
 /* Macro to run "statement" but set a thread to watch to make sure it doesn't take too long */
 #define WATCHDOG(statement) \
@@ -71,7 +73,8 @@ extern pthread_mutex_t watchdogLock;
 	pthread_mutex_unlock(&watchdogLock); \
 	if(watchdogRC != XLR_SUCCESS) \
 	{ \
-		fprintf(stderr, "%s failed!\n", #statement); \
+		XLRGetErrorMessage(watchdogXLRError, XLRGetLastError( )); \
+		fprintf(stderr, "%s failed.\nError: %s\n", #statement, watchdogXLRError); \
 		return -1; \
 	} \
 }

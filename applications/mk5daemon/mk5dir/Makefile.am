@@ -5,7 +5,7 @@ bin_PROGRAMS = \
 	mk5cp \
 	mk5dir \
 	testmod \
-	setvsn
+	vsn
 
 dist_bin_SCRIPTS = \
 	checkdir
@@ -32,8 +32,8 @@ testmod_SOURCES = \
 	watchdog.h \
 	testmod.cpp
 
-setvsn_SOURCES = \
+vsn_SOURCES = \
 	watchdog.cpp \
 	watchdog.h \
-	setvsn.cpp
+	vsn.cpp
 	
