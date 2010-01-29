@@ -141,22 +141,24 @@ void deleteMk5Daemon(Mk5Daemon *D)
 /* FIXME -- move to a /proc query */
 int running(const char *name)
 {
+	const int MaxLineLength = 512;
 	FILE *in;
 	int n;
-	char cmd[256];
-	char line[512];
+	char command[MAX_COMMAND_SIZE];
+	char line[MaxLineLength];
 
-	sprintf(cmd, "ps -e | grep %s", name);
+	snprintf(command, MAX_COMMAND_SIZE,  "ps -e | grep %s", name);
+	command[MAX_COMMAND_SIZE-1] = 0;
 
-	in = popen(cmd, "r");
+	in = popen(command, "r");
 	if(!in)
 	{
 		printf("ERROR Cannot run ps\n");
 		return 1;
 	}
 
-	n = fread(line, 1, 512, in);
-	line[511] = 0;
+	n = fread(line, 1, MaxLineLength, in);
+	line[MaxLineLength-1] = 0;
 	fclose(in);
 
 	if(n > 0)
@@ -172,7 +174,7 @@ int running(const char *name)
 int checkStreamstor(Mk5Daemon *D, time_t t)
 {
 	int v, busy;
-	char logMessage[128];
+	char message[MAX_MESSAGE_SIZE];
 
 	if(!D->isMk5)
 	{
@@ -246,10 +248,12 @@ int checkStreamstor(Mk5Daemon *D, time_t t)
 		pthread_mutex_lock(&D->processLock);
 		if(!running("mpifxcorr"))
 		{
-			sprintf(logMessage, 
+			snprintf(message, MAX_MESSAGE_SIZE,
 				"Detected premature end of mpifxcorr at %s\n",
 				ctime(&t));
-			Logger_logData(D->log, logMessage);
+			message[MAX_MESSAGE_SIZE-1] = 0;
+			Logger_logData(D->log, message);
+
 			D->process = PROCESS_NONE;
 		}
 		else
@@ -303,7 +307,8 @@ int main(int argc, char **argv)
 {
 	Mk5Daemon *D;
 	time_t t, lastTime, firstTime;
-	char logMessage[128], str[16];
+	char message[MAX_MESSAGE_SIZE];
+	char str[16];
 	int isHeadNode = 0;
 	int i, ok=0;
 	int justStarted = 1;
@@ -396,8 +401,10 @@ int main(int argc, char **argv)
 	D = newMk5Daemon(logPath);
 	D->isHeadNode = isHeadNode;
 
-	sprintf(logMessage, "Starting %s ver. %s\n", program, version);
-	Logger_logData(D->log, logMessage);
+	snprintf(message, MAX_MESSAGE_SIZE, "Starting %s ver. %s\n", 
+		program, version);
+	message[MAX_MESSAGE_SIZE-1] = 0;
+	Logger_logData(D->log, message);
 
 	if(startCW && isHeadNode)
 	{
@@ -447,8 +454,10 @@ int main(int argc, char **argv)
 		usleep(200000);
 	}
 
-	sprintf(logMessage, "Stopping %s ver. %s\n", program, version);
-	Logger_logData(D->log, logMessage);
+	snprintf(message, MAX_MESSAGE_SIZE, "Stopping %s ver. %s\n", 
+		program, version);
+	message[MAX_MESSAGE_SIZE-1] = 0;
+	Logger_logData(D->log, message);
 
 	deleteMk5Daemon(D);
 

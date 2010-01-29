@@ -90,18 +90,34 @@ static void handleMk5Status(Mk5Daemon *D, const DifxMessageGeneric *G)
 static void mountdisk(Mk5Daemon *D, const char *diskdev)
 {
 	char dev[64];
-	char cmd[256];
-	char message[1024];
+	char command[MAX_COMMAND_SIZE];
+	char message[MAX_MESSAGE_SIZE];
 	char rv[256] = "hidden message";
 	char *c;
 	int l;
 	FILE *p;
+
+	if(strlen(diskdev) > 10)
+	{
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"Mount: device name is bogus: /dev/sd%s", diskdev);
+		message[MAX_MESSAGE_SIZE-1] = 0;
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+	
+		return;
+	}
 	
 	sprintf(dev, "/dev/sd%s", diskdev);
-	sprintf(cmd, "/bin/mount -t auto %s /mnt/usb 2>&1", dev);
-	sprintf(message, "Executing: %s\n", cmd);
+	
+	snprintf(command, MAX_COMMAND_SIZE,
+		"/bin/mount -t auto %s /mnt/usb 2>&1", dev);
+	command[MAX_COMMAND_SIZE-1] = 0;
+
+	snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
+	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
-	p = popen(cmd, "r");
+
+	p = popen(command, "r");
 	c = fgets(rv, 255, p);
 	fclose(p);
 
@@ -111,29 +127,36 @@ static void mountdisk(Mk5Daemon *D, const char *diskdev)
 		l = strlen(rv);
 		rv[l-1] = 0;
 
-		sprintf(message, "Mount %s attempt : %s", dev, rv);
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"Mount %s attempt : %s", dev, rv);
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 	}
 	else
 	{
-		sprintf(message, "Mount %s attempt : Success", dev);
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"Mount %s attempt : Success", dev);
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 	}
 }
 
 static void umountdisk(Mk5Daemon *D)
 {
-	char cmd[256];
-	char message[1024];
+	const char *command;
+	char message[MAX_MESSAGE_SIZE];
 	char rv[256] = "I like chinchillas";
 	char *c;
 	int l;
 	FILE *p;
 
-	sprintf(cmd, "/bin/umount /mnt/usb 2>&1");
-	sprintf(message, "Executing: %s\n", cmd);
+	command = "/bin/umount /mnt/usb 2>&1";
+	
+	snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
+	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
-	p = popen(cmd, "r");
+
+	p = popen(command, "r");
 	c = fgets(rv, 255, p);
 	fclose(p);
 
@@ -143,12 +166,16 @@ static void umountdisk(Mk5Daemon *D)
 		l = strlen(rv);
 		rv[l-1] = 0;
 
-		sprintf(message, "Unmount /mnt/usb attempt : %s", rv);
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"Unmount /mnt/usb attempt : %s", rv);
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 	}
 	else
 	{
-		sprintf(message, "Unmount /mnt/usb attempt : Success");
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"Unmount /mnt/usb attempt : Success");
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 	}
 }
@@ -156,7 +183,7 @@ static void umountdisk(Mk5Daemon *D)
 static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 {
 	const char *cmd;
-	char logMessage[1024];
+	char message[MAX_MESSAGE_SIZE];
 	if(!messageForMe(D, G))
 	{
 		return;
@@ -164,9 +191,11 @@ static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 	cmd = G->body.command.command;
 
-	sprintf(logMessage, "Command: from=%s identifier=%s command=%s\n", 
+	snprintf(message, MAX_MESSAGE_SIZE,
+		"Command: from=%s identifier=%s command=%s\n", 
 		G->from, G->identifier, cmd);
-	Logger_logData(D->log, logMessage);
+	message[MAX_MESSAGE_SIZE-1] = 0;
+	Logger_logData(D->log, message);
 
 	if(strcasecmp(cmd, "GetVSN") == 0)
 	{
@@ -329,14 +358,16 @@ static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 	}
 	else
 	{
-		sprintf(logMessage, "Command=%s not recognized!\n", cmd);
-		Logger_logData(D->log, logMessage);
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"Command=%s not recognized!\n", cmd);
+		message[MAX_MESSAGE_SIZE-1] = 0;
+		Logger_logData(D->log, message);
 	}
 }
 
 static void handleCondition(Mk5Daemon *D, const DifxMessageGeneric *G)
 {
-	char logMessage[1024];
+	char message[MAX_MESSAGE_SIZE];
 	const DifxMessageCondition *c;
 
 	if(!messageForMe(D, G))
@@ -346,9 +377,12 @@ static void handleCondition(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 	c = &G->body.condition;
 
-	sprintf(logMessage, "Condition report: from=%s identifier=%s disk=%s[%d]=%s\n", 
-		G->from, G->identifier, c->moduleVSN, c->moduleSlot, c->serialNumber);
-	Logger_logData(D->log, logMessage);
+	snprintf(message, MAX_MESSAGE_SIZE, 
+		"Condition report: from=%s identifier=%s disk=%s[%d]=%s\n", 
+		G->from, G->identifier, c->moduleVSN, c->moduleSlot, 
+		c->serialNumber);
+	message[MAX_MESSAGE_SIZE-1] = 0;
+	Logger_logData(D->log, message);
 }
 
 static void *monitorMultiListen(void *ptr)

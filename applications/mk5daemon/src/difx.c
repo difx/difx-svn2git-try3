@@ -187,7 +187,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 
-		sprintf(message, MAX_MESSAGE_SIZE,
+		snprintf(message, MAX_MESSAGE_SIZE,
 			"Mk5Daemon_startMpifxcorr: cannot open %s for write\n", 
 			filename);
 		message[MAX_MESSAGE_SIZE-1] = 0;
@@ -353,19 +353,10 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 		returnValue = Mk5Daemon_system(D, command, 1);
 
-		/* FIXME -- figure out why this doesn't work! */
-	//	if(returnValue == 0)
-	//	{
-			difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
-			difxMessageSendDifxAlert("mpifxcorr process done", DIFX_ALERT_LEVEL_INFO);
-	//	}
-	//	else
-	//	{
-	//		sprintf(message, "Error code = %d", returnValue);
-	//		difxMessageSendDifxStatus2(jobName, DIFX_STATE_CRASHED, message);
-	//		sprintf(message, "Job %s crashed.  Error code = %d\n", jobName, returnValue);
-	//		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_FATAL);
-	//	}
+		/* FIXME -- make use of returnValue  */
+		difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
+		difxMessageSendDifxAlert("mpifxcorr process done", 
+			DIFX_ALERT_LEVEL_INFO);
 
 		/* change ownership to match input file */
 		snprintf(command, MAX_COMMAND_SIZE, 
