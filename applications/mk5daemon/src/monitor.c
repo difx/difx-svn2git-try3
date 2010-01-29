@@ -101,7 +101,6 @@ static void mountdisk(Mk5Daemon *D, const char *diskdev)
 	{
 		snprintf(message, MAX_MESSAGE_SIZE,
 			"Mount: device name is bogus: /dev/sd%s", diskdev);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 	
 		return;
@@ -111,10 +110,8 @@ static void mountdisk(Mk5Daemon *D, const char *diskdev)
 	
 	snprintf(command, MAX_COMMAND_SIZE,
 		"/bin/mount -t auto %s /mnt/usb 2>&1", dev);
-	command[MAX_COMMAND_SIZE-1] = 0;
 
 	snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	p = popen(command, "r");
@@ -129,14 +126,12 @@ static void mountdisk(Mk5Daemon *D, const char *diskdev)
 
 		snprintf(message, MAX_MESSAGE_SIZE,
 			"Mount %s attempt : %s", dev, rv);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 	}
 	else
 	{
 		snprintf(message, MAX_MESSAGE_SIZE,
 			"Mount %s attempt : Success", dev);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 	}
 }
@@ -153,7 +148,6 @@ static void umountdisk(Mk5Daemon *D)
 	command = "/bin/umount /mnt/usb 2>&1";
 	
 	snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	p = popen(command, "r");
@@ -168,14 +162,12 @@ static void umountdisk(Mk5Daemon *D)
 
 		snprintf(message, MAX_MESSAGE_SIZE, 
 			"Unmount /mnt/usb attempt : %s", rv);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 	}
 	else
 	{
 		snprintf(message, MAX_MESSAGE_SIZE,
 			"Unmount /mnt/usb attempt : Success");
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 	}
 }
@@ -194,7 +186,6 @@ static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 	snprintf(message, MAX_MESSAGE_SIZE,
 		"Command: from=%s identifier=%s command=%s\n", 
 		G->from, G->identifier, cmd);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	if(strcasecmp(cmd, "GetVSN") == 0)
@@ -360,7 +351,6 @@ static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 	{
 		snprintf(message, MAX_MESSAGE_SIZE,
 			"Command=%s not recognized!\n", cmd);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 	}
 }
@@ -381,7 +371,6 @@ static void handleCondition(Mk5Daemon *D, const DifxMessageGeneric *G)
 		"Condition report: from=%s identifier=%s disk=%s[%d]=%s\n", 
 		G->from, G->identifier, c->moduleVSN, c->moduleSlot, 
 		c->serialNumber);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 }
 

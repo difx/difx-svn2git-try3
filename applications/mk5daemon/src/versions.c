@@ -31,7 +31,6 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 			D->nXLROpen,
 			xlrError,
 			xlrErrorStr);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
 		return 1;
@@ -48,7 +47,6 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 			"Error=%u (%s)\n",
 			xlrError,
 			xlrErrorStr);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
 		return 2;
@@ -75,7 +73,6 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 			"Error=%u (%s)\n",
 			xlrError,
 			xlrErrorStr);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
 		return 2;
@@ -97,7 +94,6 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 				"Error=%u (%s)\n",
 				xlrError,
 				xlrErrorStr);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			Logger_logData(D->log, message);
 			XLRClose(xlrDevice);
 			return 2;
@@ -134,14 +130,12 @@ int logStreamstorVersions(Mk5Daemon *D)
 		D->mk5ver.AtaVersion,
 		D->mk5ver.UAtaVersion,
 		D->mk5ver.DriverVersion);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	snprintf(message, MAX_MESSAGE_SIZE,
 		"Streamstor: BoardType=%s SerialNum=%d\n", 
 		D->mk5ver.BoardType,
 		D->mk5ver.SerialNum);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 	
 	snprintf(message, MAX_MESSAGE_SIZE,
@@ -152,7 +146,6 @@ int logStreamstorVersions(Mk5Daemon *D)
 		D->mk5ver.DB_PCBVersion,
 		D->mk5ver.DB_FPGAConfig,
 		D->mk5ver.DB_FPGAConfigVersion);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	return 0;

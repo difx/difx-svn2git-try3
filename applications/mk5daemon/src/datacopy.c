@@ -21,7 +21,6 @@ static void *mk5cpRun(void *ptr)
 
 	snprintf(command, MAX_COMMAND_SIZE, "su -l difx -c 'mk5cp %s'", 
 		params->options);
-	command[MAX_COMMAND_SIZE-1] = 0;
 	Mk5Daemon_system(params->D, command, 1);
 
 	Logger_logData(params->D->log, "mk5cp done\n");
@@ -61,7 +60,6 @@ static void makedir(Mk5Daemon *D, const char *options)
 	dir[l] = 0;
 
 	snprintf(command, MAX_COMMAND_SIZE, "mkdir -m 777 -p %s", dir);
-	command[MAX_COMMAND_SIZE-1] = 0;
 
 	Mk5Daemon_system(D, command, 1);
 }

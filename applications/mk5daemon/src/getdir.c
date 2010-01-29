@@ -21,7 +21,6 @@ static void *mk5dirRun(void *ptr)
 
 	snprintf(command, MAX_COMMAND_SIZE, "su -l difx -c 'mk5dir %s'", 
 		params->bank);
-	command[MAX_COMMAND_SIZE-1] = 0;
 	Mk5Daemon_system(params->D, command, 1);
 
 	Logger_logData(params->D->log, "mk5dir done\n");

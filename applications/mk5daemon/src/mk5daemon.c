@@ -96,7 +96,6 @@ int Mk5Daemon_system(const Mk5Daemon *D, const char *command, int verbose)
 	if(verbose)
 	{
 		snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 	
 		Logger_logData(D->log, message);
 	}
@@ -106,7 +105,6 @@ int Mk5Daemon_system(const Mk5Daemon *D, const char *command, int verbose)
 	{
 		snprintf(message, MAX_MESSAGE_SIZE, 
 			"system() failed running: %s", command);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 
 		Logger_logData(D->log, message);
 	}
@@ -148,7 +146,6 @@ int running(const char *name)
 	char line[MaxLineLength];
 
 	snprintf(command, MAX_COMMAND_SIZE,  "ps -e | grep %s", name);
-	command[MAX_COMMAND_SIZE-1] = 0;
 
 	in = popen(command, "r");
 	if(!in)
@@ -251,7 +248,6 @@ int checkStreamstor(Mk5Daemon *D, time_t t)
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Detected premature end of mpifxcorr at %s\n",
 				ctime(&t));
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			Logger_logData(D->log, message);
 
 			D->process = PROCESS_NONE;
@@ -403,7 +399,6 @@ int main(int argc, char **argv)
 
 	snprintf(message, MAX_MESSAGE_SIZE, "Starting %s ver. %s\n", 
 		program, version);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	if(startCW && isHeadNode)
@@ -456,7 +451,6 @@ int main(int argc, char **argv)
 
 	snprintf(message, MAX_MESSAGE_SIZE, "Stopping %s ver. %s\n", 
 		program, version);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	deleteMk5Daemon(D);

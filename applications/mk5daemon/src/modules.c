@@ -73,7 +73,6 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 			D->nXLROpen,
 			xlrError,
 			xlrErrorStr);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 
 		return 1;
@@ -90,7 +89,6 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"XLR VSNs: <%s> <%s> N=%d\n",
 				vsna, vsnb, D->nXLROpen);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 		}
 		else
 		{
@@ -102,7 +100,6 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 				D->nXLROpen,
 				xlrError,
 				xlrErrorStr);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 		}
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
@@ -123,7 +120,6 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 			D->nXLROpen,
 			xlrError,
 			xlrErrorStr);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 	}
 	else if(bank_stat.Label[8] == '/')
@@ -150,7 +146,6 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 			D->nXLROpen,
 			xlrError,
 			xlrErrorStr);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 	}
 	else if(bank_stat.Label[8] == '/')
@@ -167,7 +162,6 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 
 	snprintf(message, MAX_MESSAGE_SIZE, "XLR VSNs: <%s> <%s> N=%d\n",
 		vsna, vsnb, D->nXLROpen);
-	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	return 0;
@@ -300,7 +294,6 @@ void Mk5Daemon_getModules(Mk5Daemon *D)
 		{
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Module %s removed from bank A", D->vsnA);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			difxMessageSendDifxAlert(message, 
 				DIFX_ALERT_LEVEL_VERBOSE);
 		}
@@ -312,7 +305,6 @@ void Mk5Daemon_getModules(Mk5Daemon *D)
 		{
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Module %s inserted into bank A", vsnA);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			difxMessageSendDifxAlert(message, 
 				DIFX_ALERT_LEVEL_VERBOSE);
 			strncpy(D->vsnA, vsnA, 8);
@@ -321,7 +313,6 @@ void Mk5Daemon_getModules(Mk5Daemon *D)
 		{
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Module with illegal VSN inserted into bank A");
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			difxMessageSendDifxAlert(message, 
 				DIFX_ALERT_LEVEL_ERROR);
 			strcpy(D->vsnA, "illegalA");
@@ -333,7 +324,6 @@ void Mk5Daemon_getModules(Mk5Daemon *D)
 		{
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Module %s removed from bank B", D->vsnB);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			difxMessageSendDifxAlert(message, 
 				DIFX_ALERT_LEVEL_VERBOSE);
 		}
@@ -345,7 +335,6 @@ void Mk5Daemon_getModules(Mk5Daemon *D)
 		{
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Module %s inserted into bank B", vsnB);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			difxMessageSendDifxAlert(message, 
 				DIFX_ALERT_LEVEL_VERBOSE);
 			strncpy(D->vsnB, vsnB, 8);
@@ -354,7 +343,6 @@ void Mk5Daemon_getModules(Mk5Daemon *D)
 		{
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Module with illegal VSN inserted into bank B");
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			difxMessageSendDifxAlert(message, 
 				DIFX_ALERT_LEVEL_ERROR);
 			strcpy(D->vsnB, "illegalB");
@@ -391,7 +379,6 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 			D->nXLROpen,
 			xlrError,
 			xlrErrorStr);
-		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 		return 1;
 	}
@@ -411,7 +398,6 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 			snprintf(message, MAX_MESSAGE_SIZE, 
 				"XLR_disc_power: illegal args: "
 				"bank=%c, on=%d\n", banks[i], on);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			Logger_logData(D->log, message);
 			continue;
 		}
@@ -431,7 +417,6 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 				"XLR_disc_power: error for "
 				"bank=%c on=%d Error=%u (%s)\n",
 				banks[i], on, xlrError, xlrErrorStr);
-			message[MAX_MESSAGE_SIZE-1] = 0;
 			Logger_logData(D->log, message);
 		}
 	}
