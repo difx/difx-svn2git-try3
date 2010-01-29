@@ -13,14 +13,16 @@ struct mk5cpParams
 static void *mk5cpRun(void *ptr)
 {
 	struct mk5cpParams *params;
-	char cmd[640];
+	char command[MAX_COMMAND_SIZE];
 
 	params = (struct mk5cpParams *)ptr;
 
 	Logger_logData(params->D->log, "mk5cp starting\n");
 
-	sprintf(cmd, "su -l difx -c 'mk5cp %s'", params->options);
-	system(cmd);
+	snprintf(command, MAX_COMMAND_SIZE, "su -l difx -c 'mk5cp %s'", 
+		params->options);
+	command[MAX_COMMAND_SIZE-1] = 0;
+	Mk5Daemon_system(params->D, command, 1);
 
 	Logger_logData(params->D->log, "mk5cp done\n");
 
@@ -38,7 +40,7 @@ static void makedir(Mk5Daemon *D, const char *options)
 	char dir[256];
 	int a=-1;
 	int i, l;
-	char cmd[768], message[1024];
+	char command[MAX_COMMAND_SIZE];
 
 	/* look for a / character and assume that is the output directory */
 	for(i = 0; options[i]; i++)
@@ -58,10 +60,10 @@ static void makedir(Mk5Daemon *D, const char *options)
 	strncpy(dir, options+a, l);
 	dir[l] = 0;
 
-	sprintf(cmd, "mkdir -m 777 -p %s", dir);
-	sprintf(message, "Executing: %s\n", cmd);
-	Logger_logData(D->log, message);
-	system(cmd);
+	snprintf(command, MAX_COMMAND_SIZE, "mkdir -m 777 -p %s", dir);
+	command[MAX_COMMAND_SIZE-1] = 0;
+
+	Mk5Daemon_system(D, command, 1);
 }
 
 void Mk5Daemon_startMk5Copy(Mk5Daemon *D, const char *options)
@@ -95,5 +97,5 @@ void Mk5Daemon_startMk5Copy(Mk5Daemon *D, const char *options)
 
 void Mk5Daemon_stopMk5Copy(Mk5Daemon *D)
 {
-	system("killall -HUP mk5cp");
+	Mk5Daemon_system(D, "killall -HUP mk5cp", 1);
 }

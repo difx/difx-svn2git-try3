@@ -84,7 +84,7 @@ int Logger_logData(Logger *log, const char *message)
 			curTime.tm_hour, curTime.tm_min, curTime.tm_sec,
 			mjd);
 	}
-	fprintf(log->out, message);
+	fputs(message, log->out);
 	fflush(log->out);
 
 	pthread_mutex_unlock(&log->lock);

@@ -218,7 +218,7 @@ static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 	}
 	else if(strcasecmp(cmd, "killmpifxcorr") == 0)
 	{
-		system("killall -9 mpifxcorr");
+		Mk5Daemon_system(D, "killall -9 mpifxcorr", 1);
 	}
 	else if(strcasecmp(cmd, "getdirA") == 0)
 	{

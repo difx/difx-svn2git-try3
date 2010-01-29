@@ -7,6 +7,9 @@
 
 extern const char difxUser[];
 
+#define MAX_COMMAND_SIZE	768
+#define MAX_MESSAGE_SIZE	1024
+
 enum ProcessType
 {
 	PROCESS_NONE = 0,
@@ -55,6 +58,7 @@ void Mk5Daemon_startMark5A(Mk5Daemon *D);
 void Mk5Daemon_stopMark5A(Mk5Daemon *D);
 void Mk5Daemon_resetMark5A(Mk5Daemon *D);
 int mark5command(const char *outstr, char *instr, int maxlen);
+int Mk5Daemon_system(const Mk5Daemon *D, const char *command, int verbose);
 void Mk5Daemon_reboot(Mk5Daemon *D);
 void Mk5Daemon_poweroff(Mk5Daemon *D);
 void Mk5Daemon_startMk5Dir(Mk5Daemon *D, const char *bank);

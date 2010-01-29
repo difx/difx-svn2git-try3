@@ -18,7 +18,7 @@ static void *mark5Arun(void *ptr)
 	const char command[] = "/usr/bin/Mark5A -m 0 2>&1";
 	Mk5Daemon *D;
 	FILE *pin;
-	char str[1000];
+	char str[1000], *c;
 	int started = 0;
 
 	D = (Mk5Daemon *)ptr;
@@ -29,9 +29,9 @@ static void *mark5Arun(void *ptr)
 
 	for(;;)
 	{
-		fgets(str, 999, pin);
+		c = fgets(str, 999, pin);
 		str[999] = 0;
-		if(feof(pin))
+		if(!c)
 		{
 			break;
 		}
@@ -84,19 +84,11 @@ void Mk5Daemon_stopMark5A(Mk5Daemon *D)
 {
 	const char command[] = "killall -s INT Mark5A";
 
-	/* if Mark5A got usage in last 3 seconds, don't allow */
-#if 0
-	if(time(0) - D->lastMark5AUpdate < 3)
-	{
-		Logger_logData(D->log, "Killing of Mark5A denied\n");
-		return;
-	}
-#endif
 	pthread_mutex_lock(&D->processLock);
 
 	if(D->process == PROCESS_MARK5A)
 	{
-		system(command);
+		Mk5Daemon_system(D, command, 1);
 	}
 
 	pthread_mutex_unlock(&D->processLock);
@@ -143,7 +135,7 @@ void Mk5Daemon_reboot(Mk5Daemon *D)
 	difxMessageSendMark5Status(&dm);
 
 	D->dieNow = 1;
-	system(command);
+	Mk5Daemon_system(D, command, 1);
 }
 
 void Mk5Daemon_poweroff(Mk5Daemon *D)
@@ -159,7 +151,7 @@ void Mk5Daemon_poweroff(Mk5Daemon *D)
 	difxMessageSendMark5Status(&dm);
 
 	D->dieNow = 1;
-	system(command);
+	Mk5Daemon_system(D, command, 1);
 }
 
 int mark5command(const char *outstr, char *instr, int maxlen)

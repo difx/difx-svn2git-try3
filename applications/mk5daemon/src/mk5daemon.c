@@ -71,7 +71,6 @@ int usage(const char *pgm)
 Mk5Daemon *newMk5Daemon(const char *logPath)
 {
 	Mk5Daemon *D;
-	char message[80];
 
 	D = (Mk5Daemon *)calloc(1, sizeof(Mk5Daemon));
 	
@@ -84,18 +83,40 @@ Mk5Daemon *newMk5Daemon(const char *logPath)
 	signalDie = &D->dieNow;
 	Mk5Daemon_startMonitor(D);
 	pthread_mutex_init(&D->processLock, 0);
-	sprintf(message, "mk5daemon starting");
-	difxMessageSendDifxInfo(message);
+	difxMessageSendDifxInfo("mk5daemon starting");
 
 	return D;
 }
 
+int Mk5Daemon_system(const Mk5Daemon *D, const char *command, int verbose)
+{
+	int v;
+	char message[MAX_MESSAGE_SIZE];
+
+	if(verbose)
+	{
+		snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
+		message[MAX_MESSAGE_SIZE-1] = 0;
+	
+		Logger_logData(D->log, message);
+	}
+
+	v = system(command);
+	if(v == -1)
+	{
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"system() failed running: %s", command);
+		message[MAX_MESSAGE_SIZE-1] = 0;
+
+		Logger_logData(D->log, message);
+	}
+
+	return v;
+}
+
 void deleteMk5Daemon(Mk5Daemon *D)
 {
-	char message[80];
-
-	sprintf(message, "mk5daemon stopping");
-	difxMessageSendDifxInfo(message);
+	difxMessageSendDifxInfo("mk5daemon stopping");
 	signalDie = 0;
 	if(D)
 	{
@@ -206,7 +227,7 @@ int checkStreamstor(Mk5Daemon *D, time_t t)
 		D->idleCount++;
 	}
 
-	if(D->idleCount > maxIdle && D->process != PROCESS_NONE & !D->processDone)
+	if(D->idleCount > maxIdle && D->process != PROCESS_NONE && !D->processDone)
 	{
 		pthread_mutex_lock(&D->processLock);
 		Logger_logData(D->log, 
@@ -254,7 +275,7 @@ void sigintHandler(int j)
 void startConditionWatch(const Mk5Daemon *D)
 {
 	const char *user;
-	char command[1024];
+	char command[512];
 
 	Logger_logData(D->log, "Starting condition_watch");
 
@@ -269,9 +290,11 @@ void startConditionWatch(const Mk5Daemon *D)
 		user = difxUser;
 	}
 
-	sprintf(command, "ssh -f %s@%s condition_watch", user, D->hostName);
+	snprintf(command, 511, "ssh -f %s@%s condition_watch", 
+		user, D->hostName);
+	command[511] = 0;
 
-	system(command);
+	Mk5Daemon_system(D, command, 1);
 
 	exit(0);
 }
@@ -293,7 +316,7 @@ int main(int argc, char **argv)
 	p = getenv("DIFX_LOG_PATH");
 	if(p)
 	{
-		sprintf(logPath, p);
+		strcpy(logPath, p);
 	}
 	else
 	{

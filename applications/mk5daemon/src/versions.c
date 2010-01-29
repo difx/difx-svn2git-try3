@@ -15,7 +15,7 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
 	unsigned int xlrError;
-	char message[120+(XLR_ERROR_LENGTH)];
+	char message[MAX_MESSAGE_SIZE];
 	char xlrErrorStr[XLR_ERROR_LENGTH];
 	
 	xlrRC = XLROpen(1, &xlrDevice);
@@ -24,12 +24,14 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 	{
 		xlrError = XLRGetLastError();
 		XLRGetErrorMessage(xlrErrorStr, xlrError);
-		sprintf(message, "ERROR: Mk5Daemon_getStreamstorVersions: "
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"ERROR: Mk5Daemon_getStreamstorVersions: "
 			"Cannot open streamstor card.  N=%d "
 			"Error=%u (%s)\n",
 			D->nXLROpen,
 			xlrError,
 			xlrErrorStr);
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
 		return 1;
@@ -40,11 +42,13 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 	{
 		xlrError = XLRGetLastError();
 		XLRGetErrorMessage(xlrErrorStr, xlrError);
-		sprintf(message, "ERROR: Mk5Daemon_getStreamstorVersions: "
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"ERROR: Mk5Daemon_getStreamstorVersions: "
 			"Cannot get StreamStor versions. "
 			"Error=%u (%s)\n",
 			xlrError,
 			xlrErrorStr);
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
 		return 2;
@@ -65,11 +69,13 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 	{
 		xlrError = XLRGetLastError();
 		XLRGetErrorMessage(xlrErrorStr, xlrError);
-		sprintf(message, "ERROR: Mk5Daemon_getStreamstorVersions: "
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"ERROR: Mk5Daemon_getStreamstorVersions: "
 			"Cannot get Device information. "
 			"Error=%u (%s)\n",
 			xlrError,
 			xlrErrorStr);
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
 		return 2;
@@ -85,11 +91,13 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 		{
 			xlrError = XLRGetLastError();
 			XLRGetErrorMessage(xlrErrorStr, xlrError);
-			sprintf(message, "ERROR: Mk5Daemon_getStreamstorVersions: "
+			snprintf(message, MAX_MESSAGE_SIZE,
+				"ERROR: Mk5Daemon_getStreamstorVersions: "
 				"Cannot get Daughter Board information. "
 				"Error=%u (%s)\n",
 				xlrError,
 				xlrErrorStr);
+			message[MAX_MESSAGE_SIZE-1] = 0;
 			Logger_logData(D->log, message);
 			XLRClose(xlrDevice);
 			return 2;
@@ -113,9 +121,10 @@ int Mk5Daemon_sendStreamstorVersions(Mk5Daemon *D)
 
 int logStreamstorVersions(Mk5Daemon *D)
 {
-	char message[200];
-	sprintf(message, "XLR Versions: Api=%s(%s) Firmware=%s(%s) "
-			 "Monitor=%s Xbar=%s Ata=%s UAta=%s Driver=%s\n",
+	char message[MAX_MESSAGE_SIZE];
+	snprintf(message, MAX_MESSAGE_SIZE,
+		"XLR Versions: Api=%s(%s) Firmware=%s(%s) "
+		"Monitor=%s Xbar=%s Ata=%s UAta=%s Driver=%s\n",
 		D->mk5ver.ApiVersion,
 		D->mk5ver.ApiDateCode,
 		D->mk5ver.FirmwareVersion,
@@ -125,18 +134,25 @@ int logStreamstorVersions(Mk5Daemon *D)
 		D->mk5ver.AtaVersion,
 		D->mk5ver.UAtaVersion,
 		D->mk5ver.DriverVersion);
+	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
-	sprintf(message, "Streamstor: BoardType=%s SerialNum=%d\n", 
+
+	snprintf(message, MAX_MESSAGE_SIZE,
+		"Streamstor: BoardType=%s SerialNum=%d\n", 
 		D->mk5ver.BoardType,
 		D->mk5ver.SerialNum);
+	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
-	sprintf(message, "DaughterBoard: PCBType=%s PCBSubType=%s PCBVersion=%s "
-			 "FPGAConfig=%s FPGAConfigVersion=%s\n",
+	
+	snprintf(message, MAX_MESSAGE_SIZE,
+		"DaughterBoard: PCBType=%s PCBSubType=%s PCBVersion=%s "
+		"FPGAConfig=%s FPGAConfigVersion=%s\n",
 		D->mk5ver.DB_PCBType,
 		D->mk5ver.DB_PCBSubType,
 		D->mk5ver.DB_PCBVersion,
 		D->mk5ver.DB_FPGAConfig,
 		D->mk5ver.DB_FPGAConfigVersion);
+	message[MAX_MESSAGE_SIZE-1] = 0;
 	Logger_logData(D->log, message);
 
 	return 0;

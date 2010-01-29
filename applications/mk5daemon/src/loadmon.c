@@ -10,7 +10,7 @@ int Mk5Daemon_loadMon(Mk5Daemon *D, double mjd)
 	long long d;
 	float l1, l5, l15;
 	int memused, memtot;
-	char logMessage[256];
+	char message[MAX_MESSAGE_SIZE];
 	int v;
 
 	/* LOAD */
@@ -56,11 +56,13 @@ int Mk5Daemon_loadMon(Mk5Daemon *D, double mjd)
 	D->load.totalMemory = memtot;
 	D->load.usedMemory = memused;
 
-	sprintf(logMessage, "LOAD: %13.7f %4.2f %d %d %5.3f %5.3f  %d  %d\n", mjd,
+	snprintf(message, MAX_MESSAGE_SIZE,
+		"LOAD: %13.7f %4.2f %d %d %5.3f %5.3f  %d  %d\n", mjd,
 		D->load.cpuLoad, D->load.usedMemory, D->load.totalMemory,
 		D->load.netRXRate*8.0e-6, D->load.netTXRate*8.0e-6, D->process, D->processDone);
-	
-	Logger_logData(D->log, logMessage);
+	message[MAX_MESSAGE_SIZE-1] = 0;
+
+	Logger_logData(D->log, message);
 	
 	return difxMessageSendLoad(&D->load);
 }

@@ -13,14 +13,16 @@ struct mk5dirParams
 static void *mk5dirRun(void *ptr)
 {
 	struct mk5dirParams *params;
-	char cmd[128];
+	char command[MAX_COMMAND_SIZE];
 
 	params = (struct mk5dirParams *)ptr;
 
 	Logger_logData(params->D->log, "mk5dir starting\n");
 
-	sprintf(cmd, "su -l difx -c 'mk5dir %s'", params->bank);
-	system(cmd);
+	snprintf(command, MAX_COMMAND_SIZE, "su -l difx -c 'mk5dir %s'", 
+		params->bank);
+	command[MAX_COMMAND_SIZE-1] = 0;
+	Mk5Daemon_system(params->D, command, 1);
 
 	Logger_logData(params->D->log, "mk5dir done\n");
 
@@ -62,5 +64,5 @@ void Mk5Daemon_startMk5Dir(Mk5Daemon *D, const char *bank)
 
 void Mk5Daemon_stopMk5Dir(Mk5Daemon *D)
 {
-	system("killall -HUP mk5dir");
+	Mk5Daemon_system(D, "killall -HUP mk5dir", 1);
 }

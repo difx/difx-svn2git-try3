@@ -9,6 +9,7 @@ int procGetMem(int *memused, int *memtot)
 	FILE *in;
 	char line[100];
 	char key[100];
+	char *c;
 	int val;
 
 	*memused = 0;
@@ -22,8 +23,8 @@ int procGetMem(int *memused, int *memtot)
 	
 	for(;;)
 	{
-		fgets(line, 99, in);
-		if(feof(in))
+		c = fgets(line, 99, in);
+		if(!c)
 		{
 			break;
 		}
@@ -52,6 +53,7 @@ int procGetNet(long long *rx, long long *tx)
 	static long long lasttx[10] = {0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL};
 	FILE *in;
 	char line[100];
+	char *c;
 	long long a, b;
 	int v;
 	int i;
@@ -67,8 +69,8 @@ int procGetNet(long long *rx, long long *tx)
 
 	for(i = 0; i < 10; i++)
 	{
-		fgets(line, 99, in);
-		if(feof(in))
+		c = fgets(line, 99, in);
+		if(!c)
 		{
 			break;
 		}
@@ -114,6 +116,7 @@ int procGetCPU(float *l1, float *l5, float *l15)
 {
 	FILE *in;
 	char line[100];
+	char *c;
 
 	in = fopen("/proc/loadavg", "r");
 	if(!in)
@@ -121,8 +124,15 @@ int procGetCPU(float *l1, float *l5, float *l15)
 		return -1;
 	}
 
-	fgets(line, 99, in);
-	sscanf(line, "%f%f%f", l1, l5, l15);
+	c = fgets(line, 99, in);
+	if(c)
+	{
+		sscanf(line, "%f%f%f", l1, l5, l15);
+	}
+	else
+	{
+		*l1 = *l5 = *l15 = 0;
+	}
 
 	fclose(in);
 
@@ -133,6 +143,7 @@ int procGetStreamstor(int *busy)
 {
 	FILE *in;
 	char line[100];
+	char *c;
 
 	*busy = 0;
 
@@ -144,8 +155,8 @@ int procGetStreamstor(int *busy)
 
 	for(;;)
 	{
-		fgets(line, 99, in);
-		if(feof(in))
+		c = fgets(line, 99, in);
+		if(!c)
 		{
 			break;
 		}
