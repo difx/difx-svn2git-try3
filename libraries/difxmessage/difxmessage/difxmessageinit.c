@@ -16,12 +16,14 @@
 #include "../difxmessage.h"
 #include "difxmessageinternal.h"
 
+#define DIFX_MESSAGE_FORMAT_LENGTH	256
+
 char difxMessageGroup[16] = "";
 int difxMessagePort = -1; 
 char difxMessageIdentifier[DIFX_MESSAGE_IDENTIFER_LENGTH] = "";
 char difxMessageHostname[DIFX_MESSAGE_PARAM_LENGTH] = "";
 int difxMessageMpiProcessId = -1;
-char difxMessageXMLFormat[256] = "";
+char difxMessageXMLFormat[DIFX_MESSAGE_FORMAT_LENGTH] = "";
 int difxMessageSequenceNumber = 0;
 char difxBinarySTAGroup[16] = "";
 int difxBinarySTAPort = -1;
@@ -37,6 +39,7 @@ const char *getDifxMessageIdentifier()
 int difxMessageInit(int mpiId, const char *identifier)
 {
 	const char *envstr;
+	int v;
 
 	difxMessageSequenceNumber = 0;
 	difxMessageInUse = 1;
@@ -71,7 +74,7 @@ int difxMessageInit(int mpiId, const char *identifier)
 		difxMessageInUse = 0;
 	}
 
-	sprintf(difxMessageXMLFormat, 
+	v = snprintf(difxMessageXMLFormat, DIFX_MESSAGE_FORMAT_LENGTH,
 		
 		"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
 		"<difxMessage>"
@@ -90,6 +93,12 @@ int difxMessageInit(int mpiId, const char *identifier)
 		difxMessageHostname, 
 		difxMessageMpiProcessId,
 		difxMessageIdentifier);
+
+	if(v >= DIFX_MESSAGE_FORMAT_LENGTH)
+	{
+		fprintf(stderr, "Error: difxMessageInit: format string overflow\n");
+		return -1;
+	}
 
 	return 0;
 }
