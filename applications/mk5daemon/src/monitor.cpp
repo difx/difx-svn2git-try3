@@ -374,11 +374,19 @@ static void handleCondition(Mk5Daemon *D, const DifxMessageGeneric *G)
 	Logger_logData(D->log, message);
 }
 
+static void handleTransient(Mk5Daemon *D, const DifxMessageGeneric *G)
+{
+	const DifxMessageTransient *transient;
+	transient = &G->body.transient;
+
+
+}
+
 static void *monitorMultiListen(void *ptr)
 {
 	Mk5Daemon *D;
 	int sock, n, v;
-	char message[2000], from[20];
+	char message[MAX_MESSAGE_SIZE], from[20];
 	DifxMessageGeneric G;
 
 	D = (Mk5Daemon *)ptr;
@@ -392,7 +400,7 @@ static void *monitorMultiListen(void *ptr)
 
 	while(!D->dieNow)
 	{
-		n = difxMessageReceive(sock, message, 1999, from);
+		n = difxMessageReceive(sock, message, MAX_MESSAGE_SIZE-1, from);
 
 		if(n > 0)
 		{
@@ -412,6 +420,8 @@ static void *monitorMultiListen(void *ptr)
 			case DIFX_MESSAGE_CONDITION:
 				handleCondition(D, &G);
 				break;
+			case DIFX_MESSAGE_TRANSIENT:
+				handleTransient(D, &G);
 			default:
 				break;
 			}

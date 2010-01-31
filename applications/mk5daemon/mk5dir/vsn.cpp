@@ -123,7 +123,9 @@ int setvsn(int bank, const char *newVSN, int force)
 	char drivename[XLR_MAX_DRIVENAME+1];
 	char driveserial[XLR_MAX_DRIVESERIAL+1];
 	char driverev[XLR_MAX_DRIVEREV+1];
-	char oldVSN[10], resp[12];
+	char oldVSN[10];
+	char resp[12]="";
+	char *v;
 	const char *newState;
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
@@ -243,7 +245,7 @@ int setvsn(int bank, const char *newVSN, int force)
 		if(force == 0)
 		{
 			printf("Is this OK? [y|n]\n");
-			fgets(resp, 10, stdin);
+			v = fgets(resp, 10, stdin);
 		}
 		if(force || resp[0] == 'Y' || resp[0] == 'y')
 		{

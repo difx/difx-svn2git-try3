@@ -1,6 +1,3 @@
-CC = g++
-CCLD = g++
-
 bin_PROGRAMS = \
 	mk5cp \
 	mk5dir \
@@ -19,12 +16,12 @@ mk5dir_LDADD = \
 
 mk5cp_SOURCES = \
 	mark5dir.cpp \
-	replaced.c \
+	replaced.cpp \
 	mk5cp.cpp
 
 mk5dir_SOURCES = \
 	mark5dir.cpp \
-	replaced.c \
+	replaced.cpp \
 	mk5dir.cpp
 
 testmod_SOURCES = \

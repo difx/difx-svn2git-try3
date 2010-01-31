@@ -80,6 +80,8 @@ int usage(const char *pgm)
 	printf("  -s <s>     Use a read/write block of <s> MB\n\n");
 	printf("  --nblock <b>\n");
 	printf("  -b <b>     Read/write <b> blocks per test\n\n");
+	printf("  --dirfile <f>\n");
+	printf("  -o <f>     Write the entire module directory to file <f>\n\n");
 	printf("and <bank> should be either A or B\n\n");
 
 	return 0;
@@ -280,7 +282,7 @@ int getLabels(SSHANDLE xlrDevice, DifxMessageMk5Status *mk5status)
 	return 0;
 }
 
-int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int options, int force)
+int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int options, int force, const char *dirFile)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
@@ -302,7 +304,11 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	char driverev[XLR_MAX_DRIVEREV+1];
 	char *buffer1, *buffer2;
 	DifxMessageMk5Status mk5status;
-	char label8[10], message[1000], resp[12];
+	char label8[10], message[1000];
+	char resp[12] = "";
+	char *rv;
+	char *buffer;
+	FILE *out;
 
 	buffer1 = (char *)malloc(bufferSize);
 	buffer2 = (char *)malloc(bufferSize);
@@ -418,7 +424,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			printf("\nAbout to perform destructive write/read test.\n");
 			printf("This will erase all data on this module!\n");
 			printf("Do you wish to continue? [y|n]\n");
-			fgets(resp, 10, stdin);
+			rv = fgets(resp, 10, stdin);
 		}
 		if(force || resp[0] == 'Y' || resp[0] == 'y')
 		{
@@ -434,10 +440,6 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			WATCHDOG( dirLen = XLRGetUserDirLength(xlrDevice) );
 			if(dirLen > 8)
 			{
-				char *buffer;
-				int i;
-				FILE *out;
-				
 				buffer = (char *)malloc(dirLen);
 				WATCHDOG( xlrRC = XLRGetUserDir(xlrDevice, dirLen, 0, buffer) );
 				if(xlrRC != XLR_SUCCESS)
@@ -447,9 +449,20 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 					return -1;
 				}
 
-				out = fopen("dir", "w");
-				fwrite(buffer, dirLen, 1, out);
-				fclose(out);
+				if(dirFile)
+				{
+					n = 0;
+					out = fopen(dirFile, "w");
+					if(out)
+					{
+						n = fwrite(buffer, dirLen, 1, out);
+						fclose(out);
+					}
+					if(n != 1)
+					{
+						fprintf(stderr, "Cannot write module directory to file %s\n", dirFile);
+					}
+				}
 
 				for(i = 0; i < 4; i++) buffer[i] = 0;
 
@@ -604,6 +617,7 @@ int main(int argc, char **argv)
 	int verbose = 0;
 	int force = 0;
 	int options = SS_OPT_DRVSTATS;
+	char *dirFile = 0;
 
 	for(a = 1; a < argc; a++)
 	{
@@ -664,6 +678,11 @@ int main(int argc, char **argv)
 				{
 					blockSize = 1000000*atoi(argv[a+1]);
 				}
+				else if(strcmp(argv[a], "-o") == 0 ||
+					strcmp(argv[a], "--dirfile") == 0)
+				{
+					dirFile = argv[a+1];
+				}
 				else
 				{
 					fprintf(stderr, "Unknown option %s\n", argv[a]);
@@ -705,7 +724,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	testModule(bank, readOnly, nRep, blockSize, nBlock, options, force);
+	testModule(bank, readOnly, nRep, blockSize, nBlock, options, force, dirFile);
 
 	/* *********** */
 

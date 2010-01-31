@@ -275,7 +275,7 @@ void sigintHandler(int j)
 void startConditionWatch(const Mk5Daemon *D)
 {
 	const char *user;
-	char command[512];
+	char command[MAX_COMMAND_SIZE];
 
 	Logger_logData(D->log, "Starting condition_watch");
 
@@ -290,9 +290,8 @@ void startConditionWatch(const Mk5Daemon *D)
 		user = difxUser;
 	}
 
-	snprintf(command, 511, "ssh -f %s@%s condition_watch", 
+	snprintf(command, MAX_COMMAND_SIZE, "ssh -f %s@%s condition_watch", 
 		user, D->hostName);
-	command[511] = 0;
 
 	Mk5Daemon_system(D, command, 1);
 
