@@ -32,7 +32,6 @@
 
 int main(int argc, char **argv)
 {
-	char message[1500];
 	DifxMessageCondition cond;
 	int i;
 	int N = 1000000;

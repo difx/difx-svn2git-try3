@@ -32,17 +32,18 @@
 
 int main(int argc, char **argv)
 {
-	char message[1500];
+	char message[DIFX_MESSAGE_LENGTH];
 	int r;
+	char *v;
 	
 	difxMessageInit(-1, argv[0]);
 	difxMessagePrint();
 
 	for(;;)
 	{
-		fgets(message, 1499, stdin);
-		if(feof(stdin)) break;
-		message[1499] = 0;
+		v = fgets(message, DIFX_MESSAGE_LENGTH-1, stdin);
+		if(!v) break;
+		message[DIFX_MESSAGE_LENGTH-1] = 0;
 		r = difxMessageSend(message);
 		if(r < 0)
 		{

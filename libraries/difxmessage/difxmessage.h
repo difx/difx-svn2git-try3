@@ -15,9 +15,10 @@
 extern "C" {
 #endif
 
-#define DIFX_MESSAGE_IDENTIFER_LENGTH	128
+#define DIFX_MESSAGE_IDENTIFIER_LENGTH	32
 #define DIFX_MESSAGE_PARAM_LENGTH	32
 #define DIFX_MESSAGE_FILENAME_LENGTH	128
+#define DIFX_MESSAGE_COMMENT_LENGTH	512
 #define DIFX_MESSAGE_MAX_TARGETS	128
 #define DIFX_MESSAGE_LENGTH		1500
 #define DIFX_MESSAGE_MAX_INDEX		8
@@ -137,6 +138,7 @@ enum DifxMessageType
 	DIFX_MESSAGE_STOP,
 	DIFX_MESSAGE_MARK5VERSION,
 	DIFX_MESSAGE_CONDITION,
+	DIFX_MESSAGE_TRANSIENT,
 	NUM_DIFX_MESSAGE_TYPES	/* this needs to be the last line of enum */
 };
 
@@ -259,13 +261,25 @@ typedef struct
 	int bin[DIFX_MESSAGE_N_CONDITION_BINS];
 } DifxMessageCondition;
 
+/* This is used to tell Mk5daemon to copy some data at the end of the
+ * correlation to a disk file */
+typedef struct
+{
+	char jobId[DIFX_MESSAGE_IDENTIFIER_LENGTH];
+	double startMJD;
+	double stopMJD;
+	double priority;
+	char destDir[DIFX_MESSAGE_FILENAME_LENGTH];
+	char comment[DIFX_MESSAGE_COMMENT_LENGTH];
+} DifxMessageTransient;
+
 typedef struct
 {
 	enum DifxMessageType type;
 	char from[DIFX_MESSAGE_PARAM_LENGTH];
 	char to[DIFX_MESSAGE_MAX_TARGETS][DIFX_MESSAGE_PARAM_LENGTH];
 	int nTo;
-	char identifier[DIFX_MESSAGE_PARAM_LENGTH];
+	char identifier[DIFX_MESSAGE_IDENTIFIER_LENGTH];
 	int mpiId;
 	int seqNumber;
 	/* FIXME -- add time of receipt ?? */
@@ -283,6 +297,7 @@ typedef struct
 		DifxMessageStart	start;
 		DifxMessageStop		stop;
 		DifxMessageCondition	condition;
+		DifxMessageTransient	transient;
 	} body;
 	int _xml_level;			/* internal use only here and below */
 	char _xml_element[5][32];
@@ -346,6 +361,7 @@ int difxMessageSendDifxParameter2(const char *name, int index1, int index2,
 	const char *value, int mpiDestination);
 int difxMessageSendDifxParameterGeneral(const char *name, int nIndex, const int *index,
 	const char *value, int mpiDestination);
+int difxMessageSendDifxTransient(const DifxMessageTransient *transient);
 int difxMessageSendBinary(const char *data, int destination, int size);
 
 int difxMessageReceiveOpen();

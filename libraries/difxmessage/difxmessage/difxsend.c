@@ -854,3 +854,49 @@ int difxMessageSendDifxParameterGeneral(const char *name, int nIndex, const int 
 
 	return difxMessageSend(message);
 }
+
+int difxMessageSendDifxTransient(const DifxMessageTransient *transient)
+{
+	char message[DIFX_MESSAGE_LENGTH];
+	char body[DIFX_MESSAGE_LENGTH];
+	int v;
+
+	v = snprintf(body, DIFX_MESSAGE_LENGTH,
+
+		"<difxTransient>"
+		  "<jobId>%s</jobId>"
+		  "<startMJD>%14.8f</startMJD>"
+		  "<stopMJD>%14.8f</stopMJD>"
+		  "<priority>%f</priority>"
+		  "<destDir>%s</destDir>"
+		  "<comment>%s</comment>"
+		"</difxTransient>",
+
+		transient->jobId,
+		transient->startMJD,
+		transient->stopMJD,
+		transient->priority,
+		transient->destDir,
+		transient->comment);
+
+	if(v >= DIFX_MESSAGE_LENGTH)
+	{
+		fprintf(stderr, "difxMessageSendDifxTransient: message body overflow (%d >= %d)\n",
+			v, DIFX_MESSAGE_LENGTH);
+		return -1;
+	}
+
+	v = snprintf(message, DIFX_MESSAGE_LENGTH,
+		difxMessageXMLFormat,
+		DifxMessageTypeStrings[DIFX_MESSAGE_PARAMETER],
+		difxMessageSequenceNumber++, body);
+	
+	if(v >= DIFX_MESSAGE_LENGTH)
+	{
+		fprintf(stderr, "difxMessageSendDifxTransient: message overflow (%d >= %d)\n",
+			v, DIFX_MESSAGE_LENGTH);
+		return -1;
+	}
+
+	return difxMessageSend(message);
+}

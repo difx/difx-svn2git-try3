@@ -269,7 +269,7 @@ static void XMLCALL endElement(void *userData, const char *name)
 					}
 					else if(strcmp(elem, "statusWord") == 0)
 					{
-						sscanf(s, "%x", 
+						sscanf(s, "%x",
 							&G->body.mk5status.status);
 					}
 					else if(strcmp(elem, "activeBank") == 0)
@@ -535,6 +535,31 @@ static void XMLCALL endElement(void *userData, const char *name)
 					break;
 				case DIFX_MESSAGE_STOP:
 					break;
+				case DIFX_MESSAGE_TRANSIENT:
+					if(strcmp(elem, "jobId") == 0)
+					{
+						strncpy(G->body.transient.jobId, s, DIFX_MESSAGE_IDENTIFIER_LENGTH-1);
+					}
+					else if(strcmp(elem, "startMJD") == 0)
+					{
+						G->body.transient.startMJD = atof(s);
+					}
+					else if(strcmp(elem, "stopMJD") == 0)
+					{
+						G->body.transient.stopMJD = atof(s);
+					}
+					else if(strcmp(elem, "priority") == 0)
+					{
+						G->body.transient.priority = atof(s);
+					}
+					else if(strcmp(elem, "destDir") == 0)
+					{
+						strncpy(G->body.transient.destDir, s, DIFX_MESSAGE_FILENAME_LENGTH-1);
+					}
+					else if(strcmp(elem, "comment") == 0)
+					{
+						strncpy(G->body.transient.comment, s, DIFX_MESSAGE_COMMENT_LENGTH-1);
+					}
 				default:
 					break;
 				}
@@ -724,6 +749,14 @@ void difxMessageGenericPrint(const DifxMessageGeneric *G)
 		}
 		break;
 	case DIFX_MESSAGE_STOP:
+		break;
+	case DIFX_MESSAGE_TRANSIENT:
+		printf("    jobId = %s\n", G->body.transient.jobId);
+		printf("    startMJD = %14.8f\n", G->body.transient.startMJD);
+		printf("    stopMJD = %14.8f\n", G->body.transient.stopMJD);
+		printf("    priority = %f\n", G->body.transient.priority);
+		printf("    destDir = %s\n", G->body.transient.destDir);
+		printf("    comment = %s\n", G->body.transient.comment);
 		break;
 	default:
 		break;
