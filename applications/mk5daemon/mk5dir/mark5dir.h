@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id:$
- * $HeadURL:$
- * $LastChangedRevision:$
- * $Author:$
- * $LastChangedDate:$
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 
@@ -34,6 +34,10 @@
 
 #define MAXSCANS  1024 /* Maximum number of scans in SDir */
 #define MAXLENGTH   64 /* Maximum length of a scan's extended name +1 */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* as implemented in Mark5 */
 struct Mark5Directory
@@ -100,11 +104,21 @@ int loadMark5Module(struct Mark5Module *module, const char *filename);
 
 int saveMark5Module(struct Mark5Module *module, const char *filename);
 
+int sanityCheckModule(const struct Mark5Module *module);
+
 int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
 	int (*callback)(int, int, int, void *), void *data,
 	float *replacedFrac);
 
+void countReplaced(const unsigned long *data, int len,
+	long long *wGood, long long *wBad);
+
+int getByteRange(const struct Mark5Scan *scan, long long *byteStart, long long *byteStop, double mjdStart, double mjdStop);
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #endif

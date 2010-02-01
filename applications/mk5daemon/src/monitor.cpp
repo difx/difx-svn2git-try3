@@ -376,10 +376,36 @@ static void handleCondition(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 static void handleTransient(Mk5Daemon *D, const DifxMessageGeneric *G)
 {
+	char message[MAX_MESSAGE_SIZE];
 	const DifxMessageTransient *transient;
 	transient = &G->body.transient;
+	bool v;
 
-
+	v = D->eventManager.addEvent(transient);
+	if(!v)
+	{
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"Transient event NOT queued: jobId=%s priority=%f startMJD=%14.8f stopMJD=%14.8f destDir=\"%s\" comment=\"%s\"\n",
+			transient->jobId,
+			transient->priority,
+			transient->startMJD,
+			transient->stopMJD,
+			transient->destDir,
+			transient->comment);
+		Logger_logData(D->log, message);
+	}
+	else
+	{
+		snprintf(message, MAX_MESSAGE_SIZE,
+			"Transient event queued: jobId=%s priority=%f startMJD=%14.8f stopMJD=%14.8f destDir=\"%s\" comment=\"%s\"\n",
+			transient->jobId,
+			transient->priority,
+			transient->startMJD,
+			transient->stopMJD,
+			transient->destDir,
+			transient->comment);
+		Logger_logData(D->log, message);
+	}
 }
 
 static void *monitorMultiListen(void *ptr)

@@ -36,7 +36,16 @@
 #include <stdlib.h>
 #include <mark5access.h>
 #include "mark5dir.h"
-#include "replaced.h"
+#include "../config.h"
+
+#ifdef WORDS_BIGENDIAN
+#define MARK5_FILL_WORD32 0x44332211UL
+#define MARK5_FILL_WORD64 0x4433221144332211ULL
+#else
+#define MARK5_FILL_WORD32 0x11223344UL
+#define MARK5_FILL_WORD64 0x1122334411223344ULL
+#endif
+
 
 using namespace std;
 
@@ -48,6 +57,24 @@ char Mark5DirDescription[][20] =
 	"Decoded",
 	"Decoded WR"
 };
+
+void countReplaced(const unsigned long *data, int len, 
+	long long *wGood, long long *wBad)
+{
+	int i;
+	int nBad=0;
+
+	for(i = 0; i < len; i++)
+	{
+		if(data[i] == MARK5_FILL_WORD32)
+		{
+			nBad++;
+		}
+	}
+
+	*wGood += (len-nBad);
+	*wBad += nBad;
+}
 
 /* returns active bank, or -1 if none */
 int Mark5BankGet(SSHANDLE *xlrDevice)
@@ -234,7 +261,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	int bufferlen;
 	unsigned int x, signature;
 	int die = 0;
-	long long wGood, wBad;
+	long long wGood=0, wBad=0;
 	long long wGoodSum=0, wBadSum=0;
 
 	/* allocate a bit more than the minimum needed */
@@ -327,16 +354,17 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 
 		xlrRC = XLRReadData(*xlrDevice, buffer, a, b, bufferlen);
 
-		countReplaced(buffer, bufferlen/4, &wGood, &wBad);
-
 		if(xlrRC == XLR_FAIL)
 		{
 			if(callback)
 			{
 				die = callback(i, module->nscans, MARK5_DIR_READ_ERROR, data);
 			}
+			scan->format = -2;
 			continue;
 		}
+
+		countReplaced(buffer, bufferlen/4, &wGood, &wBad);
 
 		if(die)
 		{
@@ -351,6 +379,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 			{
 				die = callback(i, module->nscans, MARK5_DIR_DECODE_ERROR, data);
 			}
+			scan->format = -1;
 			continue;
 		}
 		
@@ -612,4 +641,70 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 	}
 
 	return v;
+}
+int sanityCheckModule(const struct Mark5Module *module)
+{
+	int i;
+
+	for(i = 0; i < module->nscans; i++)
+	{
+		if(module->scans[i].format < 0)
+		{
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int getByteRange(const struct Mark5Scan *scan, long long *byteStart, long long *byteStop, double mjdStart, double mjdStop)
+{
+	double scanStart, scanStop, R;
+	long long delta;
+
+	if(scan->length <= 0)
+	{
+		return 0;
+	}
+
+	scanStart = scan->mjd + (scan->sec + (float)(scan->framenuminsecond)/(float)(scan->framespersecond))/86400.0;
+	scanStop = scanStart + scan->duration/86400.0;
+
+	if(scanStart >= mjdStop || scanStop <= mjdStart)
+	{
+		return 0;
+	}
+
+	R = scan->length*86400.0/scan->duration;
+
+	if(mjdStart <= scanStart)
+	{
+		*byteStart = scan->start;
+	}
+	else
+	{
+		*byteStart = (int)(scan->start + R*(mjdStart - scanStart));
+	}
+
+	if(mjdStop >= scanStop)
+	{
+		*byteStop = scan->start + scan->length;
+	}
+	else
+	{
+		*byteStop = (int)(scan->start + R*(mjdStop - scanStart));
+	}
+
+	/* make sure read is aligned with data frames */
+	delta = (*byteStart - scan->frameoffset) % scan->framebytes;
+	*byteStart -= delta;
+	if(*byteStart < scan->start)
+	{
+		*byteStart += scan->framebytes;
+	}
+
+	delta = (*byteStop - scan->frameoffset) % scan->framebytes;
+	*byteStop  -= delta;
+
+	return 1;
 }

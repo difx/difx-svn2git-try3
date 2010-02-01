@@ -4,6 +4,7 @@
 #include <time.h>
 #include <difxmessage.h>
 #include "logger.h"
+#include "transient.h"
 
 extern const char difxUser[];
 
@@ -45,6 +46,7 @@ typedef struct
 	long long lastRX, lastTX;
 	int idleCount;
 	int nXLROpen;
+	EventManager eventManager;	/* for tracking transient events */
 } Mk5Daemon;
 
 int Mk5Daemon_loadMon(Mk5Daemon *D, double mjd);

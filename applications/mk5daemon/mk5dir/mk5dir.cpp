@@ -42,7 +42,7 @@
 const char program[] = "mk5dir";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.5";
-const char verdate[] = "20090918";
+const char verdate[] = "20100131";
 
 int verbose = 0;
 int die = 0;
@@ -86,14 +86,14 @@ static int getBankInfo(SSHANDLE xlrDevice, DifxMessageMk5Status * mk5status, cha
 {
 	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
-	char message[1000];
+	char message[DIFX_MESSAGE_LENGTH];
 
 	if(bank == 'A' || bank == 'a' || bank == ' ')
 	{
 		xlrRC = XLRGetBankStatus(xlrDevice, BANK_A, &bank_stat);
 		if(xlrRC != XLR_SUCCESS)
 		{
-			sprintf(message, "Cannot get bank A status");
+			snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot get bank A status");
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 			fprintf(stderr, "Error: %s\n", message);
 			
@@ -114,7 +114,7 @@ static int getBankInfo(SSHANDLE xlrDevice, DifxMessageMk5Status * mk5status, cha
 		xlrRC = XLRGetBankStatus(xlrDevice, BANK_B, &bank_stat);
 		if(xlrRC != XLR_SUCCESS)
 		{
-			sprintf(message, "Cannot get bank B status");
+			snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot get bank B status");
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 			fprintf(stderr, "Error: %s\n", message);
 			
@@ -143,7 +143,7 @@ int dirCallback(int scan, int nscan, int status, void *data)
 	mk5status = (DifxMessageMk5Status *)data;
 	mk5status->scanNumber = scan;
 	mk5status->position = nscan;
-	sprintf(mk5status->scanName, "%s", Mark5DirDescription[status]);
+	snprintf(mk5status->scanName, DIFX_MESSAGE_MAX_SCANNAME_LEN, "%s", Mark5DirDescription[status]);
 	difxMessageSendMark5Status(mk5status);
 
 	if(verbose)
@@ -172,7 +172,7 @@ int main(int argc, char **argv)
 	struct Mark5Module module;
 	XLR_RETURN_CODE xlrRC;
 	DifxMessageMk5Status mk5status;
-	char message[1000];
+	char message[DIFX_MESSAGE_LENGTH];
 	char modules[100] = "";
 	char vsn[16] = "";
 	int a, v;
@@ -212,7 +212,7 @@ int main(int argc, char **argv)
 	xlrRC = XLROpen(1, &xlrDevice);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		sprintf(message, "Cannot open XLR");
+		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot open XLR");
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 		fprintf(stderr, "Error: %s\n", message);
 
@@ -222,7 +222,7 @@ int main(int argc, char **argv)
 	xlrRC = XLRSetFillData(xlrDevice, 0x11223344UL);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		sprintf(message, "Cannot set XLR fill pattern");
+		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot set XLR fill pattern");
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 		fprintf(stderr, "Error: %s\n", message);
 
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 	xlrRC = XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		sprintf(message, "Cannot set SkipCheckDir");
+		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot set SkipCheckDir");
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 		fprintf(stderr, "Error: %s\n", message);
 
@@ -244,7 +244,7 @@ int main(int argc, char **argv)
 	xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		sprintf(message, "Cannot set BankMode");
+		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot set BankMode");
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 		fprintf(stderr, "Error: %s\n", message);
 
@@ -298,7 +298,8 @@ int main(int argc, char **argv)
 				&mk5status, &replacedFrac);
 			if(replacedFrac > 0.01)
 			{
-				sprintf(message, "Module %s directory read encountered %4.2f%% data replacement rate",
+				snprintf(message, DIFX_MESSAGE_LENGTH, 
+					"Module %s directory read encountered %4.2f%% data replacement rate",
 					mk5status.vsnA, replacedFrac);
 				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 				fprintf(stderr, "Warning: %s\n", message);
@@ -307,7 +308,9 @@ int main(int argc, char **argv)
 			{
 				if(!die)
 				{
-					sprintf(message, "Directory read for module %s unsuccessful, error code=%d", mk5status.vsnA, v);
+					snprintf(message, DIFX_MESSAGE_LENGTH, 
+						"Directory read for module %s unsuccessful, error code=%d",
+						mk5status.vsnA, v);
 					difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 					fprintf(stderr, "Error: %s\n", message);
 				}
@@ -333,7 +336,8 @@ int main(int argc, char **argv)
 				&mk5status, &replacedFrac);
 			if(replacedFrac > 0.01)
 			{
-				sprintf(message, "Module %s directory read encountered %4.2f%% data replacement rate",
+				snprintf(message, DIFX_MESSAGE_LENGTH,
+					"Module %s directory read encountered %4.2f%% data replacement rate",
 					mk5status.vsnB, replacedFrac);
 				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 				fprintf(stderr, "Warning: %s\n", message);
@@ -342,7 +346,8 @@ int main(int argc, char **argv)
 			{
 				if(!die)
 				{
-					sprintf(message, "Directory read for module %s unsuccessful, error code=%d", mk5status.vsnB, v);
+					snprintf(message, DIFX_MESSAGE_LENGTH,
+						"Directory read for module %s unsuccessful, error code=%d", mk5status.vsnB, v);
 					difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 					fprintf(stderr, "Error: %s\n", message);
 				}
@@ -383,7 +388,8 @@ int main(int argc, char **argv)
 				&replacedFrac);
 			if(replacedFrac > 0.01)
 			{
-				sprintf(message, "Module %s directory read encountered %4.2f%% data replacement rate",
+				snprintf(message, DIFX_MESSAGE_LENGTH, 
+					"Module %s directory read encountered %4.2f%% data replacement rate",
 					vsn, replacedFrac);
 				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 				fprintf(stderr, "Warning: %s\n", message);
@@ -392,7 +398,8 @@ int main(int argc, char **argv)
 			{
 				if(!die)
 				{
-					sprintf(message, "Directory read for module %s unsuccessful, error code=%d", vsn, v);
+					snprintf(message, DIFX_MESSAGE_LENGTH,
+						"Directory read for module %s unsuccessful, error code=%d", vsn, v);
 					difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 					fprintf(stderr, "Error: %s\n", message);
 				}
@@ -415,7 +422,8 @@ int main(int argc, char **argv)
 	}
 	else if(modules[0])
 	{
-		sprintf(message, "Successful directory read for %s", modules);
+		snprintf(message, DIFX_MESSAGE_LENGTH,
+			"Successful directory read for %s", modules);
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_VERBOSE);
 	}
 

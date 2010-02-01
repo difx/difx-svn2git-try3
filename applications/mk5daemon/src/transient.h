@@ -3,38 +3,51 @@
 
 #include <string>
 #include <list>
+#include <pthread.h>
 #include <difxmessage.h>
 
 using namespace std;
 
-class Transient
+class Event
 {
 public:
-	Transient(double start, double stop, double pri) : 
+	Event(double start, double stop, double pri) : 
 		startMJD(start), stopMJD(stop), priority(pri) {}
 	double startMJD, stopMJD, priority;
 
-	friend bool operator< (Transient &t1, Transient &t2);
-
+	friend bool operator< (Event &t1, Event &t2);
 };
 
-class TransientQueue
+class EventQueue
 {
 public:
-	TransientQueue(string id) : jobId(id) {}
+	EventQueue(string id) : jobId(id), maxSize(5) {}
 	string jobId;
 	string destDir;
-	list<Transient> transient;
+	string user;
+	unsigned int maxSize;
+	list<Event> events;
+	list<string> units;
+
+	void addMark5Unit(const char *unit);
+	void addEvent(const DifxMessageTransient *dt);
+	void setUser(const char *u);
+	void copy();
+	void print() const;
 };
 
-class TransientManager
+class EventManager
 {
 public:
-	list<TransientQueue> queues;
+	list<EventQueue> queues;
+	pthread_mutex_t lock;
 
-	void startJob(string jobId);
-	void stopJob(string jobId);
-	void addEvent(const DifxMessageTransient *dt);
+	EventManager();
+	~EventManager();
+	EventQueue &startJob(const char *jobId);
+	void stopJob(const char *jobId);
+	bool addEvent(const DifxMessageTransient *dt);
+	void print();
 };
 
 #endif

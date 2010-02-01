@@ -34,6 +34,11 @@
 #include <time.h>
 #include <xlrapi.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 extern time_t watchdogTime;
 extern int watchdogVerbose;
 extern char watchdogStatement[256];
@@ -86,5 +91,9 @@ void setWatchdogTimeout(int timeout);
 int initWatchdog();
 
 void stopWatchdog();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

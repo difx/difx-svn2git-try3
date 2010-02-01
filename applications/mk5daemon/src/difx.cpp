@@ -335,7 +335,21 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		difxMessageSendDifxStatus2(jobName, DIFX_STATE_SPAWNING, 
 			message);
 
+		/* register this job with the Transient Event Monitor */
+		EventQueue &Q = D->eventManager.startJob(jobName);
+		for(i = 0; i < S->nDatastream; i++)
+		{
+			Q.addMark5Unit(S->datastreamNode[i]);
+		}
+		Q.setUser(user);
+
+		/* cause mpifxcorr to run! */
 		returnValue = Mk5Daemon_system(D, command, 1);
+
+		/* deregister this job with the Transient Event Monitor after 
+		 * performing any needed data copying
+		 */
+		D->eventManager.stopJob(jobName);
 
 		/* FIXME -- make use of returnValue  */
 		difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
