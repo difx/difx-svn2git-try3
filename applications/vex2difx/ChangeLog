@@ -1,6 +1,9 @@
 Version 1.0.3
 ~~~~~~~~~~~~~
 * Post DiFX-1.5.2
+* oms2v2d: trap missing FFT_SIZE and SPECTRAL_AVERAGE parameters
+* Actually respect clock breaks!
+* Fix some logic to avert some unneeded warnings
 
 Version 1.0.2
 ~~~~~~~~~~~~~

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #**************************************************************************
-#   Copyright (C) 2009 by Walter Brisken                                  *
+#   Copyright (C) 2009, 2010 by Walter Brisken                            *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -107,9 +107,16 @@ def writev2d(oms, v2dFile):
 	print 'Writing: %s' % v2dFile
 	out = open(v2dFile, 'w')
 
-	nFFT = int(corr['FFT_SIZE'][0])
-	specAvg = int(corr['SPECTRAL_AVERAGE'][0])
-	
+	try:
+		nFFT = int(corr['FFT_SIZE'][0])
+	except KeyError:
+		print 'Warning: FFT SIZE not provided.  Assuming 64.'
+		nFFT = 64
+	try:
+		specAvg = int(corr['SPECTRAL_AVERAGE'][0])
+	except KeyError:
+		specAvg = 1
+
 	if corr['POLARIZATION'][0] == 'NO':
 		doPolar = 'False'
 	else:
