@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009 by Walter Brisken                                  *
+ *   Copyright (C) 2009, 2010 by Walter Brisken                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -28,10 +28,9 @@
  *==========================================================================*/
 
 #include <iostream>
-#include <stdio.h>
-#include <string.h>
-#include <strings.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
 #include <mark5access.h>
 #include "mark5dir.h"
 #include "../config.h"
@@ -59,10 +58,9 @@ char Mark5DirDescription[][20] =
 void countReplaced(const unsigned long *data, int len, 
 	long long *wGood, long long *wBad)
 {
-	int i;
 	int nBad=0;
 
-	for(i = 0; i < len; i++)
+	for(int i = 0; i < len; i++)
 	{
 		if(data[i] == MARK5_FILL_WORD32)
 		{
@@ -104,12 +102,13 @@ int Mark5BankGet(SSHANDLE *xlrDevice)
 	return b;
 }
 
-/* returns 0 or 1 for bank A or B, or < 0 if module not found */
+/* returns 0 or 1 for bank A or B, or < 0 if module not found or on error */
 int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 {
 	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
 	int b = -1;
+	int bank=-1;
 
 	xlrRC = XLRGetBankStatus(*xlrDevice, BANK_A, &bank_stat);
 	if(xlrRC == XLR_SUCCESS)
@@ -117,13 +116,10 @@ int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 		if(strncasecmp(bank_stat.Label, vsn, 8) == 0)
 		{
 			b = 0;
-			xlrRC = XLRSelectBank(*xlrDevice, BANK_A);
-			if(xlrRC != XLR_SUCCESS)
-			{
-				b = -2;
-			}
+			bank = BANK_A;
 		}
 	}
+
 	if(b == -1)
 	{
 		xlrRC = XLRGetBankStatus(*xlrDevice, BANK_B, &bank_stat);
@@ -132,22 +128,53 @@ int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 			if(strncasecmp(bank_stat.Label, vsn, 8) == 0)
 			{
 				b = 1;
-				xlrRC = XLRSelectBank(*xlrDevice, BANK_B);
-				if(xlrRC != XLR_SUCCESS)
-				{
-					b = -3;
-				}
+				bank = BANK_B;
 			}
 		}
 	}
 
-	/* Close and Open the XLR device after a bank change -- a workaround to 
-	 * a streamstor bug */
-	XLRClose(*xlrDevice);
-	xlrRC = XLROpen(1, xlrDevice);
+	if(bank < 0)
+	{
+		return -1;
+	}
+
+	xlrRC = XLRGetBankStatus(*xlrDevice, bank, &bank_stat);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		b = -4;
+		return -4;
+	}
+	if(bank_stat.Selected) // No need to bank switch
+	{
+		return b;
+	}
+
+	xlrRC = XLRSelectBank(*xlrDevice, bank);
+	if(xlrRC != XLR_SUCCESS)
+	{
+		b = -2 - b;
+	}
+	else
+	{
+		sleep(5);
+
+		for(int i = 0; i < 100; i++)
+		{
+			xlrRC = XLRGetBankStatus(*xlrDevice, bank, &bank_stat);
+			if(xlrRC != XLR_SUCCESS)
+			{
+				return -4;
+			}
+			if(bank_stat.State == STATE_READY && bank_stat.Selected)
+			{
+				break;
+			}
+			usleep(100000);
+		}
+
+		if(bank_stat.State != STATE_READY || !bank_stat.Selected)
+		{
+			b = -4;
+		}
 	}
 
 	return b;
@@ -218,7 +245,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 {
 	XLR_RETURN_CODE xlrRC;
 	Mark5Directory m5dir;
-	int len, i, n;
+	int len, n;
 	struct mark5_format *mf;
 	Mark5Scan *scan;
 	char label[XLR_LABEL_LENGTH];
@@ -262,9 +289,9 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 
 	/* the adventurous would use md5 here */
 	signature = 1;
-	for(i = 0; i < sizeof(struct Mark5Directory)/4; i++)
+	for(unsigned int u = 0; u < sizeof(struct Mark5Directory)/4; u++)
 	{
-		x = ((unsigned int *)(&m5dir))[i] + 1;
+		x = ((unsigned int *)(&m5dir))[u] + 1;
 		signature = signature ^ x;
 	}
 
@@ -287,8 +314,9 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	module->bank = bank;
 	strcpy(module->label, label);
 	module->signature = signature;
+	module->needRealtimeMode = false;
 
-	for(i = 0; i < module->nscans; i++)
+	for(int i = 0; i < module->nscans; i++)
 	{
 		wGood = wBad = 0;
 		scan = module->scans + i;
@@ -416,7 +444,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 
 void printMark5Module(const struct Mark5Module *module)
 {
-	int i, n;
+	int n;
 	const Mark5Scan *scan;
 
 	if(!module)
@@ -433,7 +461,7 @@ void printMark5Module(const struct Mark5Module *module)
 		module->signature);
 
 	n = module->nscans;
-	for(i = 0; i < n; i++)
+	for(int i = 0; i < n; i++)
 	{
 		scan = module->scans + i;
 	
@@ -458,10 +486,11 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	FILE *in;
 	struct Mark5Scan *scan;
 	char line[256];
-	int i, nscans, n;
+	int nscans, n;
 	char bank;
 	char label[XLR_LABEL_LENGTH];
 	unsigned int signature;
+	char mode[12];
 
 	if(!module)
 	{
@@ -471,6 +500,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	module->label[0] = 0;
 	module->nscans = 0;
 	module->bank = -1;
+	module->needRealtimeMode = false;
 
 	in = fopen(filename, "r");
 	if(!in)
@@ -485,15 +515,22 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 		return -1;
 	}
 
-	n = sscanf(line, "%8s %d %c %u", label, &nscans, &bank, &signature);
+	n = sscanf(line, "%8s %d %c %u %2s", label, &nscans, &bank, &signature, mode);
 	if(n < 3)
 	{
 		fclose(in);
 		return -1;
 	}
-	if(n == 3)
+	else if(n == 3)
 	{
 		signature = ~0;
+	}
+	if(n > 4)
+	{
+		if(strcmp(mode, "RT") == 0)
+		{
+			module->needRealtimeMode = true;
+		}
 	}
 
 	if(nscans > MAXSCANS || nscans < 0)
@@ -507,7 +544,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	module->bank = bank-'A';
 	module->signature = signature;
 
-	for(i = 0; i < nscans; i++)
+	for(int i = 0; i < nscans; i++)
 	{
 		scan = module->scans + i;
 
@@ -543,7 +580,7 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 {
 	FILE *out;
 	struct Mark5Scan *scan;
-	int i;
+	char mode[12] = "";
 	
 	if(!module)
 	{
@@ -556,12 +593,18 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 		return -1;
 	}
 
-	fprintf(out, "%8s %d %c %u\n",
+	if(module->needRealtimeMode)
+	{
+		strcpy(mode, "RT");
+	}
+
+	fprintf(out, "%8s %d %c %u %s\n",
 		module->label,
 		module->nscans,
 		module->bank+'A',
-		module->signature);
-	for(i = 0; i < module->nscans; i++)
+		module->signature,
+		mode);
+	for(int i = 0; i < module->nscans; i++)
 	{
 		scan = module->scans + i;
 		
@@ -613,14 +656,17 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 		saveMark5Module(module, filename);
 	}
 
+	if(module->needRealtimeMode)
+	{
+		XLRSetOption(*xlrDevice, SS_OPT_REALTIMEPLAYBACK | SS_OPT_SKIPCHECKDIR);
+	}
+
 	return v;
 }
 
 int sanityCheckModule(const struct Mark5Module *module)
 {
-	int i;
-
-	for(i = 0; i < module->nscans; i++)
+	for(int i = 0; i < module->nscans; i++)
 	{
 		if(module->scans[i].format < 0)
 		{

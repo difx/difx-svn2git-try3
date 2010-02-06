@@ -23,6 +23,8 @@
 #ifndef NATIVEMK5_H
 #define NATIVEMK5_H
 
+#include <pthread.h>
+#include <time.h>
 #include "mode.h"
 #include "datastream.h"
 #include "mark5access.h"
@@ -46,11 +48,12 @@ public:
 	virtual void openfile(int configindex, int fileindex);
 	virtual void loopfileread();
 	virtual int calculateControlParams(int offsetsec, int offsetns);
+	int sendMark5Status(enum Mk5State state, int scanNumber, long long position, double dataMJD, float rate);
 
 protected:
 	void moduleToMemory(int buffersegment);
+	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
 #ifdef HAVE_DIFXMESSAGE
-	int sendMark5Status(enum Mk5State state, int scanNumber, long long position, double dataMJD, float rate);
 #endif
 
 private:
@@ -77,6 +80,12 @@ private:
 	int nError;
 	bool nomoredata;
 	int nfill, ninvalid, ngood;
+
+public:
+	time_t watchdogTime;
+	string watchdogStatement;
+	pthread_mutex_t watchdogLock;
+	pthread_t watchdogThread;
 };
 
 #endif

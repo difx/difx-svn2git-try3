@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009 by Walter Brisken                                  *
+ *   Copyright (C) 2009, 2010 by Walter Brisken                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -69,7 +69,8 @@ struct Mark5Module
 	int bank;
 	int nscans;
 	Mark5Scan scans[MAXSCANS];
-	unsigned int signature;
+	unsigned int signature;	/* a hash code used to determine if dir is current */
+	bool needRealtimeMode;	/* true for some classes of bad modules */
 };
 
 enum Mark5DirStatus
