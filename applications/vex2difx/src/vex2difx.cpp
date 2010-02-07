@@ -1641,6 +1641,20 @@ int usage(int argc, char **argv)
 	return 0;
 }
 
+void runCommand(const char *cmd, int verbose)
+{
+	if(verbose > 0)
+	{
+		cout << "Executing: " << cmd << endl;
+	}
+	int s = system(cmd);
+	if(s == -1)
+	{
+		cerr << "Error executing: " << cmd << endl;
+		exit(0);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	VexData *V;
@@ -1792,32 +1806,16 @@ int main(int argc, char **argv)
 		char cmd[512];
 
 		sprintf(cmd, "rm -f %s.params", v2dFile.c_str());
-		if(verbose > 0)
-		{
-			printf("Executing: %s\n", cmd);
-		}
-		system(cmd);
+		runCommand(cmd, verbose);
 
 		sprintf(cmd, "rm -f %s_*.input", P->jobSeries.c_str());
-		if(verbose > 0)
-		{
-			printf("Executing: %s\n", cmd);
-		}
-		system(cmd);
+		runCommand(cmd, verbose);
 
 		sprintf(cmd, "rm -f %s_*.calc", P->jobSeries.c_str());
-		if(verbose > 0)
-		{
-			printf("Executing: %s\n", cmd);
-		}
-		system(cmd);
-		
+		runCommand(cmd, verbose);
+
 		sprintf(cmd, "rm -f %s_*.flag", P->jobSeries.c_str());
-		if(verbose > 0)
-		{
-			printf("Executing: %s\n", cmd);
-		}
-		system(cmd);
+		runCommand(cmd, verbose);
 	}
 
 	ofstream of;

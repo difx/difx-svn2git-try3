@@ -4,6 +4,7 @@ Version 1.0.3
 * oms2v2d: trap missing FFT_SIZE and SPECTRAL_AVERAGE parameters
 * Actually respect clock breaks!
 * Fix some logic to avert some unneeded warnings
+* Backport some compiler warning fixes from trunk
 
 Version 1.0.2
 ~~~~~~~~~~~~~

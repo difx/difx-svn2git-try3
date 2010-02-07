@@ -351,8 +351,14 @@ int CorrSetup::setkv(const string &key, const string &value)
 		{
 			char cwd[1024];
 			string inFile;
+			char *ptr;
 
-			getcwd(cwd, 1023);
+			ptr = getcwd(cwd, 1023);
+			if(ptr == 0)
+			{
+				cerr << "Cannot getcwd()" << endl;
+				exit(0);
+			}
 			inFile = string(cwd);
 			inFile += string("/");
 			inFile += binConfigFile;
@@ -763,8 +769,14 @@ int CorrParams::setkv(const string &key, const string &value)
 		{
 			char cwd[1024];
 			string inFile;
+			char *ptr;
 
-			getcwd(cwd, 1023);
+			ptr = getcwd(cwd, 1023);
+			if(ptr == 0)
+			{
+				cerr << "Cannot getcwd()" << endl;
+				exit(0);
+			}
 			inFile = string(cwd);
 			inFile += string("/");
 			inFile += vexFile;
