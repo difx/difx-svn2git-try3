@@ -1,6 +1,35 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+/***************************************************************************
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
+ *
+ *==========================================================================*/
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 #include <time.h>
 #include <signal.h>
@@ -101,13 +130,18 @@ int Mk5Daemon_system(const Mk5Daemon *D, const char *command, int verbose)
 	}
 
 	v = system(command);
+
+	// For some reason system returns -1 even if successful
+	// possibly because of the fork()ed, threaded, ... situation?
+#if 0
 	if(v == -1)
 	{
 		snprintf(message, MAX_MESSAGE_SIZE, 
-			"system() failed running: %s", command);
+			"system() failed running: %s\n", command);
 
 		Logger_logData(D->log, message);
 	}
+#endif
 
 	return v;
 }

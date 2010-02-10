@@ -1,9 +1,38 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <xlrapi.h>
+/***************************************************************************
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
+ *
+ *==========================================================================*/
+
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
 #include <unistd.h>
 #include <ctype.h>
+#include <xlrapi.h>
 #include <difxmessage.h>
 #include "mk5daemon.h"
 
@@ -11,10 +40,9 @@
 /* see if vsn matches <chars> {+|-} <digits> */
 int legalVSN(const char *vsn)
 {
-	int i;
 	int state=0;
 
-	for(i = 0; i < 8; i++)
+	for(int i = 0; i < 8; i++)
 	{
 		switch(state)
 		{
@@ -170,7 +198,7 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 static int Mark5A_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 {
 	char message[MAX_MESSAGE_SIZE];
-	int i, n;
+	int n;
 	char *ptr[8];
 	int nptr = 0;
 
@@ -198,7 +226,7 @@ static int Mark5A_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 		return 1;
 	}
 
-	for(i = 0; message[i] && nptr < 8; i++)
+	for(int i = 0; message[i] && nptr < 8; i++)
 	{
 		if(message[i] == ':')
 		{
@@ -364,7 +392,7 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 	unsigned int xlrError;
 	char message[MAX_MESSAGE_SIZE];
 	char xlrErrorStr[XLR_ERROR_LENGTH];
-	int i, bank;
+	int bank;
 	
 	xlrRC = XLROpen(1, &xlrDevice);
 	D->nXLROpen++;
@@ -383,7 +411,7 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 		return 1;
 	}
 
-	for(i = 0; banks[i]; i++)
+	for(int i = 0; banks[i]; i++)
 	{
 		if(banks[i] == 'A' || banks[i] == 'a')
 		{

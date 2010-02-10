@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -28,16 +28,16 @@
  *==========================================================================*/
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <sys/time.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <signal.h>
 #include <unistd.h>
+#include <time.h>
+#include <sys/time.h>
 #include <difxmessage.h>
-#include "config.h"
 #include "mark5dir.h"
+#include "config.h"
 
 const char program[] = "mk5dir";
 const char author[]  = "Walter Brisken";
@@ -73,6 +73,8 @@ int usage(const char *pgm)
 	printf("  -h             Print this help message\n\n");
 	printf("  --verbose\n");
 	printf("  -v             Be more verbose\n\n");
+	printf("  --force\n");
+	printf("  -f             Reread directory even if not needed\n\n");
 	printf("<bank> is either A or B\n\n");
 	printf("<vsn> is a valid module VSN (8 characters)\n\n");
 	printf("Environment variable MARK5_DIR_PATH should point to the location of\n");
@@ -177,6 +179,7 @@ int main(int argc, char **argv)
 	char vsn[16] = "";
 	int a, v;
 	float replacedFrac;
+	int force=0;
 
 	if(argc < 2)
 	{
@@ -194,6 +197,11 @@ int main(int argc, char **argv)
 		        strcmp(argv[a], "--verbose") == 0)
 		{
 			verbose++;
+		}
+		else if(strcmp(argv[a], "-f") == 0 ||
+			strcmp(argv[a], "--force") == 0)
+		{
+			force = 1;
 		}
 		else if(vsn[0] == 0)
 		{
@@ -295,7 +303,7 @@ int main(int argc, char **argv)
 			mk5status.activeBank = 'A';
 			v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
 				mk5status.vsnA, mk5dirpath, &dirCallback, 
-				&mk5status, &replacedFrac);
+				&mk5status, &replacedFrac, force);
 			if(replacedFrac > 0.01)
 			{
 				snprintf(message, DIFX_MESSAGE_LENGTH, 
@@ -333,7 +341,7 @@ int main(int argc, char **argv)
 			mk5status.activeBank = 'B';
 			v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
 				mk5status.vsnB, mk5dirpath, &dirCallback, 
-				&mk5status, &replacedFrac);
+				&mk5status, &replacedFrac, force);
 			if(replacedFrac > 0.01)
 			{
 				snprintf(message, DIFX_MESSAGE_LENGTH,
@@ -385,7 +393,7 @@ int main(int argc, char **argv)
 
 			v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
 				vsn, mk5dirpath, &dirCallback, &mk5status,
-				&replacedFrac);
+				&replacedFrac, force);
 			if(replacedFrac > 0.01)
 			{
 				snprintf(message, DIFX_MESSAGE_LENGTH, 

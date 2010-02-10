@@ -114,6 +114,7 @@ int setvsn(int bank, const char *newVSN, int force)
 	XLR_RETURN_CODE xlrRC;
 	S_DRIVEINFO dinfo;
 	S_BANKSTATUS bankStat;
+	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
 	char oldLabel[XLR_LABEL_LENGTH+1];
 	int size, capacity;
@@ -141,9 +142,10 @@ int setvsn(int bank, const char *newVSN, int force)
 	if(!bankStat.Selected)
 	{
 		printf("Hold on a few seconds while switching banks...\n");
-		WATCHDOGTEST( xlrRC = XLRSelectBank(xlrDevice, bank) );
-		sleep(5);
+		WATCHDOGTEST( XLRSelectBank(xlrDevice, bank) );
 	}
+
+	WATCHDOGTEST( XLRGetDirectory(xlrDevice, &dir) );
 
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 	label[XLR_LABEL_LENGTH] = 0;
@@ -194,6 +196,8 @@ int setvsn(int bank, const char *newVSN, int force)
 	{
 		printf("\nNo VSN currently set on module\n");
 	}
+
+	printf("%lld bytes recorded on this module\n", dir.Length);
 
 	printf("\n");
 
@@ -360,8 +364,8 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	/* 20 seconds should be enough to complete any XLR command */
-	setWatchdogTimeout(20);
+	/* 60 seconds should be enough to complete any XLR command */
+	setWatchdogTimeout(60);
 
 	setWatchdogVerbosity(verbose);
 

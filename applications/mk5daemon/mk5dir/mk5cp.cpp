@@ -27,18 +27,17 @@
 //
 //============================================================================
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <string.h>
-#include <difxmessage.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <signal.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <time.h>
 #include <sys/time.h>
+#include <difxmessage.h>
 #include "config.h"
 #include "mark5dir.h"
-#include "../config.h"
 
 const char program[] = "mk5cp";
 const char author[]  = "Walter Brisken";
@@ -173,7 +172,7 @@ int copyByteRange(SSHANDLE xlrDevice, const char *outpath, const char *outname, 
 	long long togo;
 	int len;
 	unsigned long *data;
-	int i, a, b, v;
+	int a, b, v;
 	char filename[DIFX_MESSAGE_FILENAME_LENGTH];
 	struct timeval t0, t1, t2;
 	double dt;
@@ -216,7 +215,7 @@ int copyByteRange(SSHANDLE xlrDevice, const char *outpath, const char *outname, 
 	snprintf(message, DIFX_MESSAGE_LENGTH, "Copying portion of scan %d to file %s", scanNum+1, filename);
 	difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 
-	for(i = 0; togo > 0; i++)
+	for(int i = 0; togo > 0; i++)
 	{
 		if(die)
 		{
@@ -324,7 +323,7 @@ int copyScan(SSHANDLE xlrDevice, const char *vsn, const char *outpath, int scanN
 	long long togo;
 	int len, skip;
 	unsigned long *data;
-	int i, a, b, v;
+	int a, b, v;
 	char filename[DIFX_MESSAGE_FILENAME_LENGTH];
 	struct timeval t0, t1, t2;
 	double dt;
@@ -367,7 +366,7 @@ int copyScan(SSHANDLE xlrDevice, const char *vsn, const char *outpath, int scanN
 	snprintf(message, DIFX_MESSAGE_LENGTH, "Copying scan %d to file %s", scanNum+1, filename);
 	difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 
-	for(i = 0; togo > 0; i++)
+	for(int i = 0; togo > 0; i++)
 	{
 		if(die)
 		{
@@ -512,13 +511,13 @@ int main(int argc, char **argv)
 	DifxMessageMk5Status mk5status;
 	char vsn[16] = "";
 	int v;
-	int a, b, i, s, l, nGood, nBad;
-	int scanIndex;
+	int b, s, l, nGood, nBad;
 	int bank = -1;
 	float replacedFrac;
 	int bail = 0;
 	double mjdStart, mjdStop;
 	long long byteStart, byteStop;
+	int scanIndex;
 	Mark5Scan *scan;
 	char outname[DIFX_MESSAGE_FILENAME_LENGTH];
 
@@ -527,7 +526,7 @@ int main(int argc, char **argv)
 		return usage(argv[0]);
 	}
 
-	for(a = 1; a < argc; a++)
+	for(int a = 1; a < argc; a++)
 	{
 		if(strcmp(argv[a], "-h") == 0 ||
 		   strcmp(argv[a], "--help") == 0)
@@ -674,7 +673,7 @@ int main(int argc, char **argv)
 	{
 		v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
 			vsn, mk5dirpath, &dirCallback, &mk5status,
-			&replacedFrac);
+			&replacedFrac, false);
 		if(replacedFrac > 0.01)
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH,
@@ -794,6 +793,7 @@ int main(int argc, char **argv)
 		/* next look for scan range */
 		else if(isdigit(scanlist[0])) for(;;)
 		{
+			int a;
 
 			printf("scanlist = %s\n", scanlist);
 
@@ -823,7 +823,7 @@ int main(int argc, char **argv)
 
 			printf("reading %d to %d\n", a, b);
 
-			for(i = a; i <= b; i++)
+			for(int i = a; i <= b; i++)
 			{
 				if(die)
 				{
@@ -864,7 +864,7 @@ int main(int argc, char **argv)
 		else
 		{
 			l = strlen(scanlist);
-			for(i = 0; i < module.nscans; i++)
+			for(int i = 0; i < module.nscans; i++)
 			{
 				if(strncasecmp(module.scans[i].name, scanlist, l) == 0)
 				{

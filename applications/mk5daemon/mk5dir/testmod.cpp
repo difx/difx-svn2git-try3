@@ -82,6 +82,8 @@ int usage(const char *pgm)
 	printf("  -b <b>     Read/write <b> blocks per test\n\n");
 	printf("  --dirfile <f>\n");
 	printf("  -o <f>     Write the entire module directory to file <f>\n\n");
+	printf("  --position <p>\n");
+	printf("  -p <p>     Start read tests from pointer position <p>\n\n");
 	printf("and <bank> should be either A or B\n\n");
 
 	return 0;
@@ -183,7 +185,7 @@ int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep)
 	return 0;
 }
 
-long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, int size, int nRep)
+long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, int size, int nRep, long long ptr)
 {
 	XLR_RETURN_CODE xlrRC;
 	int r, v;
@@ -193,7 +195,7 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 	printf("Reading ");
 	for(r = 0; r < nRep; r++)
 	{
-		pos = (long long)size*(num*nRep + r);
+		pos = (long long)size*(num*nRep + r) + ptr;
 		a = pos>>32;
 		b = pos & 0xFFFFFFFF;
 		WATCHDOG( xlrRC = XLRReadData(xlrDevice, (PULONG)buffer2, a, b, size) );
@@ -282,7 +284,7 @@ int getLabels(SSHANDLE xlrDevice, DifxMessageMk5Status *mk5status)
 	return 0;
 }
 
-int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int options, int force, const char *dirFile)
+int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int options, int force, const char *dirFile, long long ptr)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
@@ -536,7 +538,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 				mk5status.state = MARK5_STATE_TESTREAD;
 				difxMessageSendMark5Status(&mk5status);
 
-				L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep);
+				L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep, 0);
 				if(L < 0)
 				{
 					return -1;
@@ -595,7 +597,74 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	}
 	else /* Read-only test here */
 	{
-		printf("\nRead-only test not yet available\n\n");
+		for(n = 0; n < nWrite; n++)
+		{
+			mk5status.position = (long long)bufferSize*nRep*n + ptr;
+			mk5status.scanNumber = n+1;
+
+			if(getLabels(xlrDevice, &mk5status) < 0)
+			{
+				fprintf(stderr, "Error getting bank status\n");
+				return -1;
+			}
+
+
+			printf("\nTest %d/%d\n", n+1, nWrite);
+			setbuffer(n, buffer1, bufferSize);
+
+			
+			mk5status.state = MARK5_STATE_TESTREAD;
+			difxMessageSendMark5Status(&mk5status);
+
+			L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep, ptr);
+			if(L < 0)
+			{
+				return -1;
+			}
+
+			totalError += L;
+			totalBytes += (long long)bufferSize*nRep;
+			if(die)
+			{
+				break;
+			}
+		}
+
+		printf("\n");
+
+		for(d = 0; d < 8; d++)
+		{
+			WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, dstats) );
+			if(xlrRC != XLR_SUCCESS)
+			{
+				fprintf(stderr, "XLRGetDriveStats failed for drive %d\n", d);
+				continue;
+			}
+			printf("Stats[%d] = %u %u %u %u %u %u %u %u\n", d,
+				(unsigned int)(dstats[0].count), 
+				(unsigned int)(dstats[1].count),
+				(unsigned int)(dstats[2].count), 
+				(unsigned int)(dstats[3].count),
+				(unsigned int)(dstats[4].count), 
+				(unsigned int)(dstats[5].count),
+				(unsigned int)(dstats[6].count), 
+				(unsigned int)(dstats[7].count));
+		}
+
+		if(die)
+		{
+			printf("User interrupt: Stopping test early!\n");
+		}
+
+		strncpy(label8, label, 8);
+		label8[8] = 0;
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
+
+		mk5status.state = MARK5_STATE_CLOSE;
+		mk5status.activeBank = ' ';
+		mk5status.position = 0;
+		mk5status.scanNumber = 0;
+		difxMessageSendMark5Status(&mk5status);
 	}
 
 	WATCHDOG( XLRClose(xlrDevice) );
@@ -618,6 +687,7 @@ int main(int argc, char **argv)
 	int force = 0;
 	int options = SS_OPT_DRVSTATS;
 	char *dirFile = 0;
+	long long ptr = 0;
 
 	for(a = 1; a < argc; a++)
 	{
@@ -683,6 +753,11 @@ int main(int argc, char **argv)
 				{
 					dirFile = argv[a+1];
 				}
+				else if(strcmp(argv[a], "-p") == 0 ||
+					strcmp(argv[a], "--pointer") == 0)
+				{
+					ptr = atoll(argv[a+1]);
+				}
 				else
 				{
 					fprintf(stderr, "Unknown option %s\n", argv[a]);
@@ -717,14 +792,14 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	/* 20 seconds should be enough to complete any XLR command */
-	setWatchdogTimeout(20);
+	/* 40 seconds should be enough to complete any XLR command */
+	setWatchdogTimeout(40);
 
 	difxMessageInit(-1, program);
 
 	/* *********** */
 
-	testModule(bank, readOnly, nRep, blockSize, nBlock, options, force, dirFile);
+	testModule(bank, readOnly, nRep, blockSize, nBlock, options, force, dirFile, ptr);
 
 	/* *********** */
 

@@ -1,7 +1,36 @@
-#include <stdio.h>
-#include <stdlib.h>
+/***************************************************************************
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
+ *
+ *==========================================================================*/
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
-#include <string.h>
 #include <pwd.h>
 #include "mk5daemon.h"
 
@@ -36,9 +65,7 @@ static int addUse(Uses *U, const char *hostname)
 
 int getUse(const Uses *U, const char *hostname)
 {
-	int i;
-
-	for(i = 0; U[i].n; i++)
+	for(int i = 0; U[i].n; i++)
 	{
 		if(strcmp(hostname, U[i].hostname) == 0)
 		{
@@ -51,7 +78,7 @@ int getUse(const Uses *U, const char *hostname)
 
 void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 {
-	int i, l, n;
+	int l, n;
 	int childPid;
 	char filebase[DIFX_MESSAGE_FILENAME_LENGTH];
 	char filename[DIFX_MESSAGE_FILENAME_LENGTH];
@@ -104,7 +131,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	/* generate filebase */
 	strcpy(filebase, S->inputFilename);
 	l = strlen(filebase);
-	for(i = l-1; i > 0; i--)
+	for(int i = l-1; i > 0; i--)
 	{
 		if(filebase[i] == '.')
 		{
@@ -113,7 +140,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		}
 	}
 	jobName = filebase;
-	for(i = 0; filebase[i]; i++)
+	for(int i = 0; filebase[i]; i++)
 	{
 		if(filebase[i] == '/')
 		{
@@ -163,11 +190,11 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	/* determine usage of each node */
 	uses = (Uses *)calloc(1 + S->nProcess + S->nDatastream, sizeof(Uses));
 	addUse(uses, S->headNode);
-	for(i = 0; i < S->nProcess; i++)
+	for(int i = 0; i < S->nProcess; i++)
 	{
 		addUse(uses, S->processNode[i]);
 	}
-	for(i = 0; i < S->nDatastream; i++)
+	for(int i = 0; i < S->nDatastream; i++)
 	{
 		addUse(uses, S->datastreamNode[i]);
 	}
@@ -194,12 +221,12 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	}
 
 	fprintf(out, "%s slots=1 max-slots=%d\n", S->headNode, getUse(uses, S->headNode));
-	for(i = 0; i < S->nDatastream; i++)
+	for(int i = 0; i < S->nDatastream; i++)
 	{
 		n = getUse(uses, S->datastreamNode[i]);
 		fprintf(out, "%s slots=1 max-slots=%d\n", S->datastreamNode[i], n);
 	}
-	for(i = 0; i < S->nProcess; i++)
+	for(int i = 0; i < S->nProcess; i++)
 	{
 		n = getUse(uses, S->processNode[i]);
 		fprintf(out, "%s slots=1 max-slots=%d\n", S->processNode[i], n);
@@ -239,7 +266,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 	fprintf(out, "NUMBER OF CORES:    %d\n", S->nProcess);
 
-	for(i = 0; i < S->nProcess; i++)
+	for(int i = 0; i < S->nProcess; i++)
 	{
 		n = S->nThread[i] - getUse(uses, S->processNode[i]) + 1;
 		if(n <= 0)
@@ -337,7 +364,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 		/* register this job with the Transient Event Monitor */
 		EventQueue &Q = D->eventManager.startJob(jobName);
-		for(i = 0; i < S->nDatastream; i++)
+		for(int i = 0; i < S->nDatastream; i++)
 		{
 			Q.addMark5Unit(S->datastreamNode[i]);
 		}

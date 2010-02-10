@@ -1,6 +1,6 @@
 
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -111,9 +111,9 @@ int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 {
 	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
+	S_DIR dir;
 	int b = -1;
 	int bank=-1;
-	int i;
 
 	xlrRC = XLRGetBankStatus(*xlrDevice, BANK_A, &bank_stat);
 	if(xlrRC == XLR_SUCCESS)
@@ -148,38 +148,40 @@ int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 	{
 		return -4;
 	}
-	if(bank_stat.Selected) // No need to bank switch
+	if(!bank_stat.Selected) // No need to bank switch
 	{
-		return b;
+		xlrRC = XLRSelectBank(*xlrDevice, bank);
+		if(xlrRC != XLR_SUCCESS)
+		{
+			b = -2 - b;
+		}
+		else
+		{
+			for(int i = 0; i < 100; i++)
+			{
+				xlrRC = XLRGetBankStatus(*xlrDevice, bank, &bank_stat);
+				if(xlrRC != XLR_SUCCESS)
+				{
+					return -4;
+				}
+				if(bank_stat.State == STATE_READY && bank_stat.Selected)
+				{
+					break;
+				}
+				usleep(100000);
+			}
+
+			if(bank_stat.State != STATE_READY || !bank_stat.Selected)
+			{
+				b = -4;
+			}
+		}
 	}
 
-	xlrRC = XLRSelectBank(*xlrDevice, bank);
+	xlrRC = XLRGetDirectory(*xlrDevice, &dir);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		b = -2 - b;
-	}
-	else
-	{
-		sleep(5);
-
-		for(i = 0; i < 100; i++)
-		{
-			xlrRC = XLRGetBankStatus(*xlrDevice, bank, &bank_stat);
-			if(xlrRC != XLR_SUCCESS)
-			{
-				return -4;
-			}
-			if(bank_stat.State == STATE_READY && bank_stat.Selected)
-			{
-				break;
-			}
-			usleep(100000);
-		}
-
-		if(bank_stat.State != STATE_READY || !bank_stat.Selected)
-		{
-			b = -4;
-		}
+		return -6;
 	}
 
 	return b;
@@ -361,6 +363,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 				die = callback(i, module->nscans, MARK5_DIR_READ_ERROR, data);
 			}
 			scan->format = -2;
+
 			continue;
 		}
 
@@ -618,7 +621,7 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
 	int (*callback)(int, int, int, void *), void *data,
-	float *replacedFrac)
+	float *replacedFrac, int force)
 {
 	char filename[256];
 	int v, curbank;
@@ -632,6 +635,10 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 	sprintf(filename, "%s/%s.dir", dir, vsn);
 	
 	v = loadMark5Module(module, filename);
+	if(force)
+	{
+		module->signature = 0;
+	}
 
 	v = getMark5Module(module, xlrDevice, mjdref, callback, data, replacedFrac);
 
