@@ -141,10 +141,10 @@ int setvsn(int bank, const char *newVSN, int force)
 	}
 	if(!bankStat.Selected)
 	{
-		printf("Hold on a few seconds while switching banks...\n");
 		WATCHDOGTEST( XLRSelectBank(xlrDevice, bank) );
 	}
 
+	/* the following line is essential to work around an apparent streamstor bug */
 	WATCHDOGTEST( XLRGetDirectory(xlrDevice, &dir) );
 
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );

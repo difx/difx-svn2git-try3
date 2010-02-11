@@ -291,6 +291,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	S_DRIVESTATS dstats[XLR_MAXBINS];
 	S_DRIVEINFO dinfo;
 	S_BANKSTATUS bankStat;
+	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
 	char oldLabel[XLR_LABEL_LENGTH+1];
 	int labelLength = 0, rs = 0;
@@ -307,7 +308,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	char *buffer1, *buffer2;
 	DifxMessageMk5Status mk5status;
 	char label8[10], message[1000];
-	char resp[12] = "";
+	char resp[12] = "Y";
 	char *rv;
 	char *buffer;
 	FILE *out;
@@ -328,10 +329,11 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	}
 	if(!bankStat.Selected)
 	{
-		printf("Hold on a few seconds while switching banks...\n");
 		WATCHDOGTEST( xlrRC = XLRSelectBank(xlrDevice, bank) );
-		sleep(5);
 	}
+
+	/* the following line is essential to work around an apparent streamstor bug */
+	WATCHDOGTEST( XLRGetDirectory(xlrDevice, &dir) );
 
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 
@@ -421,12 +423,17 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 
 	if(!readOnly)
 	{
-		if(!force)
+		if(!force && dir.Length > 0)
 		{
 			printf("\nAbout to perform destructive write/read test.\n");
-			printf("This will erase all data on this module!\n");
+			printf("This module contains %lld bytes of recorded data\n", dir.Length);
+			printf("This test will erase all data on this module!\n");
 			printf("Do you wish to continue? [y|n]\n");
 			rv = fgets(resp, 10, stdin);
+		}
+		else
+		{
+			printf("This module appears empty.\n");
 		}
 		if(force || resp[0] == 'Y' || resp[0] == 'y')
 		{
@@ -658,6 +665,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 
 		strncpy(label8, label, 8);
 		label8[8] = 0;
+		sprintf(message, "%8s read test complete", label8);
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 
 		mk5status.state = MARK5_STATE_CLOSE;

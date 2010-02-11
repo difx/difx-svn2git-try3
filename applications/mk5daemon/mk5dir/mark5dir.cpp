@@ -178,6 +178,7 @@ int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 		}
 	}
 
+	/* the following line is essential to work around an apparent streamstor bug */
 	xlrRC = XLRGetDirectory(*xlrDevice, &dir);
 	if(xlrRC != XLR_SUCCESS)
 	{
