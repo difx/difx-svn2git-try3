@@ -1,6 +1,7 @@
 Version 7.2
 ~~~~~~~~~~~
 Add transient XML type
+Fix errormon/errormon2 in cases where "entities" are in message strings
 
 Version 7.1
 ~~~~~~~~~~~

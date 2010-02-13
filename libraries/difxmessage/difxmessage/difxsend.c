@@ -51,8 +51,8 @@ int expandEntityRefrences(char *dest, const char *src)
 		}
 		else if(src[i] < 32)	/* ascii chars < 32 are not allowed */
 		{
-			sprintf(dest+j, "[[%2d]]", src[i]);
-			j += 6;
+			sprintf(dest+j, "[[%3d]]", (unsigned int)(src[i]));
+			j += 7;
 		}
 		else
 		{
@@ -169,8 +169,6 @@ int difxMessageSendDifxAlert(const char *alertMessage, int severity)
 	char body[DIFX_MESSAGE_LENGTH];
 	int v;
 
-	expandEntityRefrences(alertMessageExpanded, alertMessage);
-
 	if(difxMessagePort < 0)
 	{
 		/* send to stderr or stdout if no port is defined */
@@ -185,6 +183,8 @@ int difxMessageSendDifxAlert(const char *alertMessage, int severity)
 	}
 	else
 	{
+		expandEntityRefrences(alertMessageExpanded, alertMessage);
+
 		v = snprintf(body, DIFX_MESSAGE_LENGTH,
 			
 			"<difxAlert>"

@@ -122,6 +122,7 @@ class Parser:
         self.unit = ''
         self.mpiid = -1
         self.id = ''
+	self.tag = ''
 
     def feed(self, data):
         self._parser.Parse(data, 0)
@@ -131,8 +132,10 @@ class Parser:
         del self._parser # get rid of circular references
 
     def start(self, tag, attrs):
+        self.tag = tag
         if tag == 'difxAlert':
             self.ok = True
+	    self.tmp = ''
 
     def end(self, tag):
         if tag == 'alertMessage' and self.ok:
@@ -147,7 +150,10 @@ class Parser:
             self.mpiid = int(self.tmp)
 
     def data(self, data):
-        self.tmp = data
+        if self.tag == 'alertMessage':
+            self.tmp = self.tmp + data
+        else:
+            self.tmp = data
 
     def getinfo(self):
         if self.ok:
