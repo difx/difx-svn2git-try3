@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -344,6 +344,8 @@ static double evalPoly(const double *p, int n, double x)
 	
 int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 {
+	const int MaxLineLength=100;
+	
 	const char difxKeys[][MAX_DIFX_KEY_LEN] = 
 	{
 		"BASELINE NUM",
@@ -384,7 +386,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	double mjd, iat, dt, dt2;
 	int changed = 0;
 	int nFloat, readSize;
-	char line[100];
+	char line[MaxLineLength+1];
 	int freqNum;
 	int configId;
 	const DifxConfig *config;
@@ -393,13 +395,14 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	int terms1, terms2;
 	int d1, d2, aa1, aa2;	/* FIXME -- temporary */
 	int bin;
+	char *rv;
 
 	resetDifxParameters(dv->dp);
 
 	for(i = 0; i < 13; i++)
 	{
-		fgets(line, 99, dv->in);
-		if(feof(dv->in))
+		rv = fgets(line, MaxLineLength, dv->in);
+		if(!rv)
 		{
 			/* EOF should not happen in middle of text */
 			if(i != 0)
@@ -411,7 +414,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			{
 				return NEXT_FILE_ERROR;
 			}
-			fgets(line, 99, dv->in);
+			rv = fgets(line, MaxLineLength, dv->in);
 		}
 		DifxParametersaddrow(dv->dp, line);
 	}

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -220,6 +220,7 @@ static int parseGN(const char *filename, int row, GainRow *G)
 	int max = 0;
 	float *val = 0;
 	int action = 0;	/* State variable : 0= set LHS, 1= set RHS */
+	char *rv;
 
 	if(row < 0)
 	{
@@ -283,7 +284,7 @@ static int parseGN(const char *filename, int row, GainRow *G)
 		}
 		else if(c == '!') /* handle comment */
 		{
-			fgets(token, 999, in);
+			rv = fgets(token, MAXTOKEN, in);
 			token[0] = 0;
 			action = 0;
 			c = 0;

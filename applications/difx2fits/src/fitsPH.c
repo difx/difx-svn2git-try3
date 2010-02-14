@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id:$
- * $HeadURL:$
- * $LastChangedRevision:$
- * $Author:$
- * $LastChangedDate:$
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 
@@ -39,10 +39,12 @@
  */
 static int getNTone(const char *filename, double t1, double t2)
 {
+	const int MaxLineLength=1000;
 	FILE *in;
-	char line[1000];
+	char line[MaxLineLength+1];
 	int n, nTone, maxnTone=0;
 	double t;
+	char *rv;
 
 	in = fopen(filename, "r");
 	if(!in)
@@ -52,8 +54,8 @@ static int getNTone(const char *filename, double t1, double t2)
 	
 	for(;;)
 	{
-		fgets(line, 999, in);
-		if(feof(in))
+		rv = fgets(line, MaxLineLength, in);
+		if(!rv)
 		{
 			break;
 		}
@@ -246,6 +248,7 @@ static int parsePulseCal(const char *line,
 const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
 {
+	const int MaxLineLength=1000;
 	char stateFormFloat[4];
 	char toneFormDouble[4];
 	char toneFormFloat[4];
@@ -275,7 +278,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	int nColumn;
 	int nRowBytes;
 	char *fitsbuf, *p_fitsbuf;
-	char line[1000];
+	char line[MaxLineLength+1];
 	int nBand, nTone, nPol;
 	double time;
 	float timeInt;
@@ -293,6 +296,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	FILE *in;
 	/* The following are 1-based indices for FITS format */
 	int32_t antId1, arrayId1, sourceId1, freqId1;
+	char *rv;
 
 	if(D == 0)
 	{
@@ -320,7 +324,14 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		return D;
 	}
 	
-	fgets(line, 999, in);
+	rv = fgets(line, MaxLineLength, in);
+	if(!rv)
+	{
+		fprintf(stderr, "Warning: empty file: pcal\n");
+		fclose(in);
+
+		return D;
+	}
 
 	sprintf(stateFormFloat, "%dE", 4*nBand);
 	sprintf(toneFormFloat,  "%dE", nTone*nBand);
@@ -363,8 +374,8 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 
 	for(;;)
 	{
-		fgets(line, 999, in);
-		if(feof(in))
+		rv = fgets(line, MaxLineLength, in);
+		if(!rv)
 		{
 			break;
 		}

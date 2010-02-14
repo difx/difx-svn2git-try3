@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -255,6 +255,8 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		/* ... and to FITS antennaId */
 		antId1 = antId + 1;
 
+		time = 0.0;
+
 	        if(scan->im)  /* use polynomial model (preferred) */
 		{
 		  if(scan->im[antId] == 0)
@@ -336,6 +338,12 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 				ppoly[j][k] = gpoly[k]*freq;
 				prate[j][k] = grate[k]*freq;
 			}
+		}
+
+		if(time == 0.0)
+		{
+		  printf("\n    Model warning : time=0 for antId %d = %s",
+		    antId, D->antenna[antId].name);
 		}
 
 		p_fitsbuf = fitsbuf;

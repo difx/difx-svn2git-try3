@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id:$
- * $HeadURL:$
- * $LastChangedRevision:$
- * $Author:$
- * $LastChangedDate:$
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 
@@ -59,6 +59,8 @@ static int parseWeather(const char *line, WRrow *wr, char *antName)
 const DifxInput *DifxInput2FitsWR(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
 {
+	const int MaxLineLength=1000;
+
 	/*  define the flag FITS table columns */
 	struct fitsBinTableColumn columns[] =
 	{
@@ -83,7 +85,7 @@ const DifxInput *DifxInput2FitsWR(const DifxInput *D,
 	int nRowBytes;
 	char **fitsbuf, *p_fitsbuf;
 	char antName[64];
-	char line[1000];
+	char line[MaxLineLength+1];
 	double mjd;
 	int refDay;
 	double time;
@@ -93,6 +95,7 @@ const DifxInput *DifxInput2FitsWR(const DifxInput *D,
 	double *mjdLast;
 	/* 1-based index for FITS below */
 	int32_t antId1;
+	char *rv;
 	
 	in = fopen("weather", "r");
 	
@@ -126,8 +129,8 @@ const DifxInput *DifxInput2FitsWR(const DifxInput *D,
 	
 	for(;;)
 	{
-		fgets(line, 999, in);
-		if(feof(in))
+		rv = fgets(line, MaxLineLength, in);
+		if(!rv)
 		{
 			break;
 		}

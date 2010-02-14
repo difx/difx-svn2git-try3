@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -64,6 +64,7 @@ static int parseTsys(const char *line, char *antName,
 const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
 {
+	const int MaxLineLength=1000;
 	char bandFormFloat[4];
 	
 	/*  define the flag FITS table columns */
@@ -85,7 +86,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 	int nRowBytes;
 	char *fitsbuf, *p_fitsbuf;
 	int refDay;
-	char line[1000];
+	char line[MaxLineLength+1];
 	char antName[20];
 	float tSysRecChan[array_MAX_BANDS];
 	float tSys[2][array_MAX_BANDS];
@@ -103,6 +104,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 	FILE *in;
 	/* The following are 1-based indices for writing to FITS */
 	int32_t sourceId1, freqId1, arrayId1, antId1;
+	char *rv;
 
 	/* a portable way to set NaNs that is compatible with FITS */
 	union
@@ -160,7 +162,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 
 	freqId1 = 1;
 	arrayId1 = 1;
-	for(i = 0; i < 16; i++)
+	for(i = 0; i < array_MAX_BANDS; i++)
 	{
 		tAnt[0][i] = nan.f;	/* set to NaN */
 		tAnt[1][i] = nan.f;	/* set to NaN */
@@ -168,8 +170,8 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 	
 	for(;;)
 	{
-		fgets(line, 999, in);
-		if(feof(in))
+		rv = fgets(line, MaxLineLength, in);
+		if(!rv)
 		{
 			break;
 		}

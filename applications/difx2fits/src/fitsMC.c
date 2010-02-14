@@ -82,9 +82,9 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	const DifxJob *job;
 	const DifxModel *M;
 	const DifxPolyModel *P;
-	double time, deltat;      
-	double delay, delayRate;
-	double atmosDelay, atmosRate;
+	double time=0.0, deltat;      
+	double delay=0.0, delayRate=0.0;
+	double atmosDelay=0.0, atmosRate=0.0;
 	double clock, clockRate;
 	int configId, jobId, dsId, antId;
 	int *skip;
