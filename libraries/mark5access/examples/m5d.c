@@ -136,6 +136,7 @@ int main(int argc, char **argv)
 {
 	long long offset = 0;
 	long long n;
+	int v;
 
 	if(argc == 2)
 	{
@@ -147,8 +148,15 @@ int main(int argc, char **argv)
 		buffer = malloc(bufferlen);
 		
 		in = fopen(argv[1], "r");
-		fread(buffer, bufferlen, 1, in);
-		
+		v = fread(buffer, bufferlen, 1, in);
+		if(v == 0)
+		{
+			fprintf(stderr, "Not enough data in file\n");
+			free(buffer);
+
+			return 0;
+		}
+
 		mf = new_mark5_format_from_stream(
 			new_mark5_stream_memory(buffer, bufferlen/2));
 

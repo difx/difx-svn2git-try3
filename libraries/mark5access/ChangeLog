@@ -1,3 +1,7 @@
+Version 1.3.4
+* Some memory leak fixes from Alexander Neidhardt and Martin Ettl (from Wettzell)
+* Fix some compiler warnings
+
 Version 1.3.3
 * Fix blank range checking for a small subset of modes
 	(Thanks to Sergei Pogrebenko and Jan Wagner for the bug report)

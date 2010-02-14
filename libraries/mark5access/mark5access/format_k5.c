@@ -96,7 +96,6 @@ static int stream_frame_time_k5(const struct mark5_stream *ms,
 	int *mjd, int *sec, double *ns)
 {
 	struct format_k5 *k;
-	const uint8_t *buf;
 	int day, year, y1;
 
 	k = (struct format_k5 *)(ms->formatdata);

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006, 2007 by Walter Brisken                            *
+ *   Copyright (C) 2006-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -170,6 +170,8 @@ static int copy_format(const struct mark5_stream *ms,
 
 static int mark5_format_init(struct mark5_stream *ms)
 {
+	ms->nvalidatefail = 0;
+	ms->consecutivefails = 0;
 	ms->framenum = 0;
 	ms->readposition = 0;
 	ms->frame = 0;
@@ -202,6 +204,7 @@ struct mark5_stream *mark5_stream_open(const char *filename,
 	
 	if(set_stream(ms, s) < 0)
 	{
+		delete_mark5_stream(ms);
 		fprintf(stderr, "mark5_stream_open: Incomplete stream.\n");
 		
 		return 0;
@@ -519,6 +522,9 @@ struct mark5_format *new_mark5_format_from_stream(
 	
 	if(set_stream(ms, s) < 0)
 	{
+		free(mf);
+		free(ms);
+
 		fprintf(stderr, "new_mark5_format_from_stream: "
 				"Incomplete stream.\n");
 		
@@ -528,7 +534,9 @@ struct mark5_format *new_mark5_format_from_stream(
 	status = s->init_stream(ms);
 	if(status < 0)
 	{
-		delete_mark5_stream(ms);
+		free(mf);
+		free(ms);
+
 		fprintf(stderr, "new_mark5_format_from_stream: "
 				"init_stream() failed\n");
 		

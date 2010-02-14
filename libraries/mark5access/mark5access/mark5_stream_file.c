@@ -126,13 +126,15 @@ static int mark5_stream_file_fill(struct mark5_stream *ms)
 
 static int mark5_stream_file_init(struct mark5_stream *ms)
 {
+	const int FilenameLength=128;
 	struct mark5_stream_file *F;
-	char fn[64];
+	char fn[FilenameLength+1];
+	int v;
 
 	F = (struct mark5_stream_file *)(ms->inputdata);
 
-	strncpy(fn, F->files[0], 64);
-	fn[63] = 0;
+	strncpy(fn, F->files[0], FilenameLength);
+	fn[FilenameLength] = 0;
 	sprintf(ms->streamname, "File-1/1=%s", fn);
 
 	F->curfile = 0;
@@ -141,12 +143,17 @@ static int mark5_stream_file_init(struct mark5_stream *ms)
 	F->buffer = 0;
 	F->end = 0;
 	F->fetchsize = 0;
+
 	lseek64(F->in, F->offset, SEEK_SET);
 	F->buffer = (uint8_t *)calloc(1, F->buffersize);
 	ms->datawindow = F->buffer;
 	ms->datawindowsize = F->buffersize;
 
-	read(F->in, F->buffer, F->buffersize);
+	v = read(F->in, F->buffer, F->buffersize);
+	if(v < F->buffersize)
+	{
+		return -1;
+	}
 
 	return 0;
 }
@@ -201,6 +208,7 @@ static int mark5_stream_file_next(struct mark5_stream *ms)
 }
 
 /* Work in progress */
+#if 0
 static int mark5_stream_file_next_subframe(struct mark5_stream *ms)
 {
 	struct mark5_stream_file *F;
@@ -215,6 +223,7 @@ static int mark5_stream_file_next_subframe(struct mark5_stream *ms)
 
 	return 0;
 }
+#endif
 
 static int mark5_stream_file_seek(struct mark5_stream *ms, int64_t framenum)
 {

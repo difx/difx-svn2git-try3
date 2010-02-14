@@ -66,7 +66,7 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 	struct mark5_stream *ms;
 	double **data, **spec;
 	fftw_complex **zdata, **zx;
-	int c, i, j, k, status;
+	int c, i, j, status;
 	int chunk, nif;
 	long long total, unpacked;
 	FILE *out;
@@ -136,6 +136,7 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 
 		if(ms->consecutivefails > 5)
 		{
+			printf("Too many failures.  consecutive, total fails = %d %d\n", ms->consecutivefails, ms->nvalidatefail);
 			break;
 		}
 
@@ -222,6 +223,7 @@ int main(int argc, char **argv)
 {
 	long long offset = 0;
 	int nchan, nint;
+	int v;
 
 	if(argc == 2)
 	{
@@ -233,8 +235,15 @@ int main(int argc, char **argv)
 		buffer = malloc(bufferlen);
 		
 		in = fopen(argv[1], "r");
-		fread(buffer, bufferlen, 1, in);
-		
+		v = fread(buffer, bufferlen, 1, in);
+		if(v == 0)
+		{
+			fprintf(stderr, "Not enough data in file\n");
+			free(buffer);
+
+			return 0;
+		}
+
 		mf = new_mark5_format_from_stream(
 			new_mark5_stream_memory(buffer, bufferlen/2));
 

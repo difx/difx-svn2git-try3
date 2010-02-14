@@ -71,6 +71,9 @@ static float zeros[8];
 
 #endif
 
+int countbits(uint8_t v);
+int countbits32(uint32_t v);
+
 struct mark5_format_vlba_nomod
 {
 	int ntrack;
@@ -6988,11 +6991,6 @@ static int mark5_format_vlba_nomod_final(struct mark5_stream *ms)
 	}
 
 	return 0;
-}
-
-static int one(const struct mark5_stream *ms)
-{
-	return 1;
 }
 
 struct mark5_format_generic *new_mark5_format_vlba_nomod(int Mbps, int nchan,
