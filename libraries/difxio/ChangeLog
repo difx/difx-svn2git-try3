@@ -1,3 +1,6 @@
+2.12.2
+* Fix some compiler warnings
+
 2.12.1
 * Implement getDifxScanIMIndex2 which can calculate the offset time a bit more accurately.  All functions calling getDifxScanIMIndex should now call getDifxScanIMIndex2.
 * Add difxcalculator utility

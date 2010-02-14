@@ -158,8 +158,11 @@ DifxPolyco *dupDifxPolycoArray(const DifxPolyco *src, int nPolyco)
 
 int loadPulsarPolycoFile(DifxPolyco **dpArray, int *nPolyco, const char *filename)
 {
+	const int MaxLineLength=160;
 	FILE *in;
-	char buffer[160];
+	char buffer[MaxLineLength+1];
+	char *v;
+	int v2;
 	int r, c, len;
 	DifxPolyco *dp;
 	
@@ -172,8 +175,8 @@ int loadPulsarPolycoFile(DifxPolyco **dpArray, int *nPolyco, const char *filenam
 	
 	for(;;)
 	{
-		fgets(buffer, 159, in);
-		if(feof(in))
+		v = fgets(buffer, MaxLineLength, in);
+		if(!v)
 		{
 			if(*nPolyco < 1)
 			{
@@ -199,8 +202,8 @@ int loadPulsarPolycoFile(DifxPolyco **dpArray, int *nPolyco, const char *filenam
 			return -1;
 		}
 
-		fgets(buffer, 159, in);
-		if(feof(in))
+		v = fgets(buffer, MaxLineLength, in);
+		if(!v)
 		{
 			fprintf(stderr, "Early EOF in %s\n", filename);
 			fclose(in);
@@ -228,8 +231,8 @@ int loadPulsarPolycoFile(DifxPolyco **dpArray, int *nPolyco, const char *filenam
 
 		for(c = 0; c < dp->nCoef; c++)
 		{
-			fscanf(in, "%s", buffer);
-			if(feof(in))
+			v2 = fscanf(in, "%s", buffer);
+			if(feof(in) || v2 == 0)
 			{
 				fprintf(stderr, "Early EOF in %s\n", filename);
 				fclose(in);
@@ -244,7 +247,7 @@ int loadPulsarPolycoFile(DifxPolyco **dpArray, int *nPolyco, const char *filenam
 		}
 
 		/* get the end of line character out of the file */
-		fgets(buffer, 159, in);
+		v = fgets(buffer, MaxLineLength, in);
 		
 		// Correct for "FUT time" 
 		if(dp->mjd < 20000.0)

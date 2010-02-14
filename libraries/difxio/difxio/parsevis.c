@@ -104,16 +104,18 @@ void deleteDifxVisRecord(DifxVisRecord *vis)
 
 int DifxVisRecordgetnext(DifxVisRecord *vis)
 {
+	const int MaxLineLength = 100;
 	int i, v;
-	char line[100];
+	char line[MaxLineLength+1];
+	char *v2;
 
 	/* reset the parameter list */
 	resetDifxParameters(vis->params);
 
 	for(i = 0; i < 13; i++)
 	{
-		fgets(line, 99, vis->infile);
-		if(feof(vis->infile))
+		v2 = fgets(line, MaxLineLength, vis->infile);
+		if(!v2)
 		{
 			return -1;
 		}

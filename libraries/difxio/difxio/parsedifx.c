@@ -245,8 +245,10 @@ int DifxParametersaddrow(DifxParameters *dp, const char *line)
 
 DifxParameters *newDifxParametersfromfile(const char *filename)
 {
+	const int MaxLineLength=2000;
 	DifxParameters *dp;
-	char line[2000];
+	char line[MaxLineLength+1];
+	char *v;
 	FILE *in;
 
 	in = fopen(filename, "r");
@@ -260,8 +262,8 @@ DifxParameters *newDifxParametersfromfile(const char *filename)
 
 	for(;;)
 	{
-		fgets(line, 1999, in);
-		if(feof(in))
+		v = fgets(line, MaxLineLength, in);
+		if(!v)
 		{
 			break;
 		}

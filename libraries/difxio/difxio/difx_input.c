@@ -2554,10 +2554,12 @@ static DifxInput *populateRate(DifxInput *D, DifxParameters *rp)
 
 static int populateFlags(DifxInput *D, const char *flagfile)
 {
+	const int MaxLineLength=1000;
 	FILE *in;
 	double mjd1, mjd2;
 	int i, j=0, n=0, a, p;
-	char line[1000];
+	char line[MaxLineLength+1];
+	char *v;
 	int nUndecoded = 0;
 	DifxJob *J;
 
@@ -2569,8 +2571,8 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 		return 0;
 	}
 
-	fgets(line, 999, in);
-	if(feof(in))
+	v = fgets(line, MaxLineLength, in);
+	if(!v)
 	{
 		fprintf(stderr, "Warning: premature end of file %s\n",
 			flagfile);
@@ -2584,15 +2586,15 @@ static int populateFlags(DifxInput *D, const char *flagfile)
 		J->flag = newDifxAntennaFlagArray(J->nFlag);
 		for(i = 0; i < n; i++)
 		{
-			fgets(line, 999, in);
-			if(feof(in))
+			v = fgets(line, MaxLineLength, in);
+			if(!v)
 			{
 				fprintf(stderr, "Warning: premature end of file %s\n", 
 					flagfile);
 				J->nFlag = i;
 				break;
 			}
-			line[999] = 0;
+			line[MaxLineLength] = 0;
 
 			/* Allow read of plain numbers */
 			p = sscanf(line, "%lf%lf%d", &mjd1, &mjd2, &a);
