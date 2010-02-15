@@ -107,6 +107,7 @@ int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 {
 	S_BANKSTATUS bank_stat;
 	XLR_RETURN_CODE xlrRC;
+	S_DIR dir;
 	int b = -1;
 	int bank=-1;
 
@@ -143,38 +144,40 @@ int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn)
 	{
 		return -4;
 	}
-	if(bank_stat.Selected) // No need to bank switch
+	if(!bank_stat.Selected) // need to change banks
 	{
-		return b;
+		xlrRC = XLRSelectBank(*xlrDevice, bank);
+		if(xlrRC != XLR_SUCCESS)
+		{
+			b = -2 - b;
+		}
+		else
+		{
+			for(int i = 0; i < 100; i++)
+			{
+				xlrRC = XLRGetBankStatus(*xlrDevice, bank, &bank_stat);
+				if(xlrRC != XLR_SUCCESS)
+				{
+					return -4;
+				}
+				if(bank_stat.State == STATE_READY && bank_stat.Selected)
+				{
+					break;
+				}
+				usleep(100000);
+			}
+
+			if(bank_stat.State != STATE_READY || !bank_stat.Selected)
+			{
+				b = -4;
+			}
+		}
 	}
 
-	xlrRC = XLRSelectBank(*xlrDevice, bank);
+	xlrRC = XLRGetDirectory(*xlrDevice, &dir);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		b = -2 - b;
-	}
-	else
-	{
-		sleep(5);
-
-		for(int i = 0; i < 100; i++)
-		{
-			xlrRC = XLRGetBankStatus(*xlrDevice, bank, &bank_stat);
-			if(xlrRC != XLR_SUCCESS)
-			{
-				return -4;
-			}
-			if(bank_stat.State == STATE_READY && bank_stat.Selected)
-			{
-				break;
-			}
-			usleep(100000);
-		}
-
-		if(bank_stat.State != STATE_READY || !bank_stat.Selected)
-		{
-			b = -4;
-		}
+		return -6;
 	}
 
 	return b;

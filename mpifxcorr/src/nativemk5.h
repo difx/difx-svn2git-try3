@@ -48,12 +48,14 @@ public:
 	virtual void openfile(int configindex, int fileindex);
 	virtual void loopfileread();
 	virtual int calculateControlParams(int offsetsec, int offsetns);
+#ifdef HAVE_DIFXMESSAGE
 	int sendMark5Status(enum Mk5State state, int scanNumber, long long position, double dataMJD, float rate);
 
 protected:
 	void moduleToMemory(int buffersegment);
+#ifdef HAVE_XLRAPI_H
 	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
-#ifdef HAVE_DIFXMESSAGE
+#endif
 #endif
 
 private:

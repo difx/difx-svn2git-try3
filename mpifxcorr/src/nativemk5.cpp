@@ -67,13 +67,13 @@ void *watchdogFunction(void *data)
 		else if(nativeMk5->watchdogTime != 0)
 		{
 			deltat = time(0) - nativeMk5->watchdogTime;
-			if(deltat > 20)  // Nothing should take 20 seconds to complete!
+			if(deltat > 60)  // Nothing should take 20 seconds to complete!
 			{
 				cfatal << startl << "Watchdog caught a hang-up executing: " << nativeMk5->watchdogStatement << " Aborting!!!" << endl;
 				nativeMk5->sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
 				MPI_Abort(MPI_COMM_WORLD, 1);
 			}
-			else if(deltat != lastdeltat)
+			else if(deltat != lastdeltat && deltat > 4)
 			{
 				cwarn << startl << "Waiting " << deltat << " seconds executing: " << nativeMk5->watchdogStatement << endl;
 				lastdeltat = deltat;
@@ -608,6 +608,28 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	xlrRD.XferLength = bytes;
 	xlrRD.BufferAddr = buf;
 
+
+/* new code block */
+	WATCHDOG( xlrRC = XLRRead(xlrDevice, &xlrRD) );
+	if(xlrRC != XLR_SUCCESS)
+	{
+		xlrEC = XLRGetLastError();
+		XLRGetErrorMessage(errStr, xlrEC);
+		cerror << startl << "Cannot read data from Mark5 module: position=" << readpointer << ", length=" << bytes << ", error=" << errStr << endl;
+		dataremaining = false;
+		keepreading = false;
+		bufferinfo[buffersegment].validbytes = 0;
+
+		double errorTime = corrstartday + (readseconds + corrstartseconds + readnanoseconds*1.0e-9)/86400.0;
+		sendMark5Status(MARK5_STATE_ERROR, scan-module.scans+1, readpointer, errorTime, 0.0);
+		nError++;
+		return;
+	}
+/* end new code block */
+
+
+#if 0
+
 	for(t = 0; t < 2; t++)
 	{
 		WATCHDOG( xlrRC = XLRReadImmed(xlrDevice, &xlrRD) );
@@ -737,6 +759,8 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 		bufferinfo[buffersegment].validbytes = 0;
 		return;
 	}
+
+#endif
 
 	bufferinfo[buffersegment].validbytes = bytes;
 	bufferinfo[buffersegment].readto = true;
