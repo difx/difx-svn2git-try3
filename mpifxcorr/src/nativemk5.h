@@ -28,6 +28,7 @@
 #include "mode.h"
 #include "datastream.h"
 #include "mark5access.h"
+#include "config.h"
 
 #ifdef HAVE_XLRAPI_H
 #include "mark5dir.h"
