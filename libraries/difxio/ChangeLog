@@ -1,5 +1,6 @@
 2.12.2
 * Fix some compiler warnings
+* Fix memory leak (need to free baseline array)
 
 2.12.1
 * Implement getDifxScanIMIndex2 which can calculate the offset time a bit more accurately.  All functions calling getDifxScanIMIndex should now call getDifxScanIMIndex2.
