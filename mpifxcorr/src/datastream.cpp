@@ -1234,5 +1234,6 @@ void DataStream::processDelayFile(string delayfilename)
 
   cinfo << startl << "Telescope " << stationname << " has finished processing delay file, numdelays = " << totaldelays << ", numtelescopes = " << numdelaytelescopes << endl;
 
+  delete [] linedelays;
   delete [] delayTelescopeNames;
 }

@@ -1267,8 +1267,10 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
     {
       //cinfo << startl << "About to create polyco file " << polycocount << " from filename " << polycofilenames[i] << ", subcount " << j << endl;
       configs[configindex].polycos[polycocount] = new Polyco(polycofilenames[i], j, configindex, configs[configindex].numbins, configs[configindex].numchannels, binphaseends, binweights, double(2*configs[configindex].numchannels*configs[configindex].blockspersend)/(60.0*2000000.0*getDBandwidth(configindex,0,0)));
-      if (!configs[configindex].polycos[polycocount]->initialisedOK())
-        return false;
+      if (!configs[configindex].polycos[polycocount]->initialisedOK()) {
+	delete [] numsubpolycos;
+	return false;
+      }
       polycocount++;
     } 
   }
