@@ -439,16 +439,17 @@ int Configuration::getResultLength(int configindex)
 
 int Configuration::getDataBytes(int configindex, int datastreamindex)
 {
+  int validlength, payloadbytes;
   datastreamdata currentds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
-  int validlength = (configs[configindex].decimationfactor*configs[configindex].blockspersend*currentds.numinputbands*2*currentds.numbits*configs[configindex].numchannels)/8;
+  validlength = (configs[configindex].decimationfactor*configs[configindex].blockspersend*currentds.numinputbands*2*currentds.numbits*configs[configindex].numchannels)/8;
   if(currentds.format == MKIV || currentds.format == VLBA || currentds.format == VLBN || currentds.format == MARK5B || currentds.format == VDIF)
   {
     //must be an integer number of frames, with enough margin for overlap on either side
     validlength += (configs[configindex].decimationfactor*configs[configindex].guardblocks*currentds.numinputbands*2*currentds.numbits*configs[configindex].numchannels)/8;
-    return ((validlength/currentds.framebytes)+2)*currentds.framebytes;
+    payloadbytes = getFramePayloadBytes(configindex, datastreamindex);
+    validlength = (validlength/getFramePayloadBytes(configindex, datastreamindex) + 2)*currentds.framebytes;
   }
-  else
-    return validlength;
+  return validlength;
 }
 
 int Configuration::getMaxProducts(int configindex)
