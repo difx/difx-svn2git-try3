@@ -1,3 +1,8 @@
+Version 1.5.3, current development
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Bug fix for calculation of buffer sizes for Mk4/VLBA/VDIF format, which 
+  could lead to MODE errors and the loss of a few FFTs in very rare cases
+
 Version 1.5.2, 2009 Nov 23
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 * Warn when difxmessage is in use so the user knows why no messages appear on the screen
