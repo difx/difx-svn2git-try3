@@ -323,12 +323,12 @@ void DataStream::initialiseFile(int configindex, int fileindex)
     cinfo << startl << "Processed a new style header, all info ignored except date/time" << endl;
   }
   
-  cinfo << startl << "DATASTREAM " << mpiid << " got the header " << inputline << " ok" << endl;
+  cinfo << startl << "DATASTREAM " << mpiid << " got the header " << inputline << endl;
 
   //convert this date into MJD
   config->getMJD(filestartday, filestartseconds, year, month, day, hour, minute, second);
 
-  cinfo << startl << "DATASTREAM " << mpiid << " worked out a filestartday of " << filestartday << " and a filestartseconds of " << filestartseconds << endl;
+  //cinfo << startl << "DATASTREAM " << mpiid << " worked out a filestartday of " << filestartday << " and a filestartseconds of " << filestartseconds << endl;
 
   //set readseconds, accounting for the intclockseconds
   readseconds = 86400*(filestartday-corrstartday) + (filestartseconds-corrstartseconds) + intclockseconds;
@@ -982,7 +982,7 @@ int DataStream::initialiseFrame(char * frameheader)
     inputline = string(at, 15);
   }
 
-  cinfo << startl << "DATASTREAM " << mpiid << " read a header line of " << inputline << "!" << endl;
+  cinfo << startl << "DATASTREAM " << mpiid << " read a header line " << inputline << endl;
   year = atoi((inputline.substr(0,4)).c_str());
   month = atoi((inputline.substr(4,2)).c_str());
   day = atoi((inputline.substr(6,2)).c_str());
@@ -992,7 +992,7 @@ int DataStream::initialiseFrame(char * frameheader)
 
   config->getMJD(filestartday, filestartseconds, year, month, day, hour, minute, second);
 
-  cinfo << startl << "DATASTREAM " << mpiid << " worked out a filestartday of " << filestartday << " and a filestartseconds of " << filestartseconds << endl;
+  //cinfo << startl << "DATASTREAM " << mpiid << " worked out a filestartday of " << filestartday << " and a filestartseconds of " << filestartseconds << endl;
 
   readseconds = 86400*(filestartday-corrstartday) + (filestartseconds-corrstartseconds) + intclockseconds;
   readnanoseconds = 0;
