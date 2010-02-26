@@ -352,7 +352,10 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	fitsbuf = (char *)calloc(nRowBytes, 1);
 	if(fitsbuf == 0)
 	{
-		return 0;
+		fclose(in);
+		fprintf(stderr, "Error: DifxInput2FitsPH: Memory allocation failure\n");
+
+		exit(0);
 	}
 
 

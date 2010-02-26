@@ -487,12 +487,19 @@ const DifxInput *DifxInput2FitsGN(const DifxInput *D,
 		float f;
 	} nan;
 
+	if(!D)
+	{
+		return 0;
+	}
+
 	nan.i32 = -1;
 
 	G = calloc(MAXENTRIES, sizeof(GainRow));
-	if(!G || !D)
+	if(!G)
 	{
-		return D;
+		fprintf(stderr, "DifxInput2FitsGN: Memory allocation error\n");
+
+		exit(0);
 	}
 	
 	nPol = D->nPol;

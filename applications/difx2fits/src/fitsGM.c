@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -174,9 +174,19 @@ const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 	fitsWriteEnd(out);
 
 	fitsbuf = (char *)calloc(nRowBytes, 1);
-	if(fitsbuf == 0)
+
+	if(fitsbuf == 0 ||
+	   onPhase == 0 ||
+	   offPhase == 0 ||
+	   poly == 0)
 	{
-		return 0;
+		if(fitsbuf) free(fitsbuf);
+		if(onPhase) free(onPhase);
+		if(offPhase) free(offPhase);
+		if(poly) free(poly);
+		fprintf(stderr, "DifxInput2FitsGM: Memory allocation error\n");
+
+		exit(0);
 	}
 	
 	gateId1 = 0;

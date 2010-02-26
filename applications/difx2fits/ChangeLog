@@ -2,6 +2,7 @@ Version 2.6.2
 * Fixes by Olaf Wuchnitz: print format for writing strings to FITS and argument order in memcpy
 * Sniffer: keep one more amplitude digit
 * Some compiler warning fixes
+* Some cppcheck results from Martin Ettl
 
 Version 2.6.1
 * makefits: copy jobmatrix file
