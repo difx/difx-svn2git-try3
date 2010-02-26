@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007 by Walter Brisken                                  *
+ *   Copyright (C) 2007-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -164,6 +164,8 @@ int main(int argc, char **argv)
 		delete_mark5_format(mf);
 
 		free(buffer);
+
+		fclose(in);
 
 		return 0;
 	}
