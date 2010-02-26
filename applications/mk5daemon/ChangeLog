@@ -2,7 +2,7 @@ Version 1.3
 ~~~~~~~~~~~
 * set svn properties
 * mk5dir, mk5cp: use XLRGetDirectory to work around streamstor bug
-* mkdir: add --force option
+* mk5dir: add --force option
 * mount and dismount commands (not using DBUS yet)
 * make destination directory before copy
 * Mark5 maint programs testmod and vsn added
@@ -10,6 +10,7 @@ Version 1.3
 * remove auto-starting of the Mark5A program
 * Fix compiler warnings and move to safer string manipulation
 * rename .c to .cpp to reflect the fact that g++ is needed
+* close popen with pclose (suggested by Martin Ettl)
 
 Version 1.2
 ~~~~~~~~~~~

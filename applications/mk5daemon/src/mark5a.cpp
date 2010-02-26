@@ -79,6 +79,9 @@ static void *mark5Arun(void *ptr)
 			started=1;
 		}
 	}
+
+	pclose(pin);
+
 	Logger_logData(D->log, "Mark5A stopped\n");
 	D->processDone = 1;
 

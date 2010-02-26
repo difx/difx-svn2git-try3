@@ -123,7 +123,7 @@ static void mountdisk(Mk5Daemon *D, const char *diskdev)
 	char rv[256] = "hidden message";
 	char *c;
 	int l;
-	FILE *p;
+	FILE *pin;
 
 	if(strlen(diskdev) > 10)
 	{
@@ -142,9 +142,9 @@ static void mountdisk(Mk5Daemon *D, const char *diskdev)
 	snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
 	Logger_logData(D->log, message);
 
-	p = popen(command, "r");
-	c = fgets(rv, 255, p);
-	fclose(p);
+	pin = popen(command, "r");
+	c = fgets(rv, 255, pin);
+	pclose(pin);
 
 	if(c)
 	{
@@ -171,16 +171,16 @@ static void umountdisk(Mk5Daemon *D)
 	char rv[256] = "I like chinchillas";
 	char *c;
 	int l;
-	FILE *p;
+	FILE *pin;
 
 	command = "/bin/umount /mnt/usb 2>&1";
 	
 	snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s\n", command);
 	Logger_logData(D->log, message);
 
-	p = popen(command, "r");
-	c = fgets(rv, 255, p);
-	fclose(p);
+	pin = popen(command, "r");
+	c = fgets(rv, 255, pin);
+	pclose(pin);
 
 	if(c)
 	{

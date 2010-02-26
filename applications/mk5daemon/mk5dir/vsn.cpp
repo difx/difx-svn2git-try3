@@ -220,7 +220,7 @@ int setvsn(int bank, const char *newVSN, int force)
 			continue;
 		}
 		size = roundsize(dinfo.Capacity);
-		printf(" %d  %s %s %s  %d %d %d", d, drivename, driveserial, driverev, 
+		printf(" %d  %s (%s) %s  %d %d %d", d, drivename, driveserial, driverev, 
 			size, dinfo.SMARTCapable, dinfo.SMARTState);
 		if(dinfo.SMARTCapable && !dinfo.SMARTState)
 		{

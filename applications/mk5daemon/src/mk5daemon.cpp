@@ -174,23 +174,23 @@ void deleteMk5Daemon(Mk5Daemon *D)
 int running(const char *name)
 {
 	const int MaxLineLength = 512;
-	FILE *in;
+	FILE *pin;
 	int n;
 	char command[MAX_COMMAND_SIZE];
 	char line[MaxLineLength];
 
 	snprintf(command, MAX_COMMAND_SIZE,  "ps -e | grep %s", name);
 
-	in = popen(command, "r");
-	if(!in)
+	pin = popen(command, "r");
+	if(!pin)
 	{
 		printf("ERROR Cannot run ps\n");
 		return 1;
 	}
 
-	n = fread(line, 1, MaxLineLength, in);
+	n = fread(line, 1, MaxLineLength, pin);
 	line[MaxLineLength-1] = 0;
-	fclose(in);
+	pclose(pin);
 
 	if(n > 0)
 	{
