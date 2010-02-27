@@ -1,3 +1,32 @@
+/***************************************************************************
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id: fitsML.c 1442 2009-09-02 19:41:48Z WalterBrisken $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/master_tags/DiFX-1.5.2/applications/difx2fits/src/fitsML.c $
+ * $LastChangedRevision: 1442 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2009-09-02 21:41:48 +0200 (Wed, 02 Sep 2009) $
+ *
+ *==========================================================================*/
+
 #include <stdlib.h>
 #include <sys/types.h>
 #include <strings.h>
@@ -38,7 +67,8 @@ void calcPolynomial(double gpoly[array_N_POLY],
 }
 
 const DifxInput *DifxInput2FitsML(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
+	struct CommandLineOptions *opts)
 {
 	char bandFormDouble[4];
 	char bandFormFloat[4];
@@ -108,6 +138,11 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	double clockRate;
 
 	if(D == 0)
+	{
+		return 0;
+	}
+
+	if(!opts->writemodel)
 	{
 		return 0;
 	}
@@ -202,7 +237,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 
 	   for(p = 0; p < np; p++)
 	   {
-	      for(a = 0; a < scan->nAntenna; a++)
+	      for(a = 0; a < config->nAntenna; a++)
 	      {
 		dsId = config->ant2dsId[a];
 		if(dsId < 0 || dsId >= D->nDatastream)
@@ -212,54 +247,73 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		/* convert to D->antenna[] index ... */
 		antId = D->datastream[dsId].antennaId;
 
+		if(antId < 0 || antId >= scan->nAntenna)
+		{
+		  continue;
+		}
+
 		/* ... and to FITS antennaId */
 		antId1 = antId + 1;
 
-	        if(scan->im)  /* use polynomial model */
+	        if(scan->im)  /* use polynomial model (preferred) */
 		{
-		  if(scan->im[a] == 0)
+		  if(scan->im[antId] == 0)
 		  {
-		      if(skip[antId] == 0)
-		      {
-		        printf("\n    Warning : skipping antId %d", antId);
-		        skip[antId]++;
-		        printed++;
-		        skipped++;
-		      }
-		      continue;
+		    if(skip[antId] == 0)
+		    {
+		      printf("\n    Polynomial model error : skipping antId %d = %s",
+		        antId, D->antenna[antId].name);
+		      skip[antId]++;
+		      printed++;
+		      skipped++;
+		    }
+		    continue;
 		  }
-	       	
-		  P = scan->im[a] + p;
+	       
+		  P = scan->im[antId] + p;
 
-	          time = P->mjd - (int)(job->mjdStart) + P->sec/86400.0;
-		  deltat = (P->mjd - job->mjdStart)*86400.0 + P->sec;
+	          time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
+		  deltat = (P->mjd - D->mjdStart)*86400.0 + P->sec;
 
 	          for(k = 0; k < array_N_POLY; k++)
 		  {
 		    gpoly[k] = -P->delay[k]*1.0e-6;
 		  }
 		}
-		else	   /* use tabulated model */
+		else if(scan->model)	   /* use tabulated model */
 		{
-		  if(scan->model[a] == 0)
+		  if(scan->model[antId] == 0)
 		  {
-		      if(skip[antId] == 0)
-		      {
-		        printf("\n    Warning : skipping antId %d", antId);
-		        skip[antId]++;
-		        printed++;
-		        skipped++;
-		      }
-		      continue;
+		    if(skip[antId] == 0)
+		    {
+		      printf("\n    Tabulated model error : skipping antId %d = %s",
+		        antId, D->antenna[antId].name);
+		      skip[antId]++;
+		      printed++;
+		      skipped++;
+		    }
+		    continue;
 		  }
 	       	
-		  M = scan->model[a] + p;
+		  M = scan->model[antId] + p;
 
 		  time = start + timeInt*p;
 		  deltat = modelInc*p;
 
 		  calcPolynomial(gpoly,
 			-M[-1].t, -M[0].t, -M[1].t, -M[2].t, modelInc);
+		}
+		else
+		{
+		  if(skip[antId] == 0)
+		  {
+		    printf("\n    Model error : no model information for antId %d = %s",
+		      antId, D->antenna[antId].name);
+		    skip[antId]++;
+		    printed++;
+		    skipped++;
+		  }
+		  deltat = modelInc*p;
 		}
 
 		clockRate = D->antenna[antId].rate*1.0e-6;

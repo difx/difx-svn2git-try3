@@ -1,3 +1,32 @@
+/***************************************************************************
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id: fitsMC.c 1375 2009-08-19 01:55:17Z WalterBrisken $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/master_tags/DiFX-1.5.2/applications/difx2fits/src/fitsMC.c $
+ * $LastChangedRevision: 1375 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2009-08-19 03:55:17 +0200 (Wed, 19 Aug 2009) $
+ *
+ *==========================================================================*/
+
 #include <stdlib.h>
 #include <sys/types.h>
 #include <strings.h>
@@ -43,7 +72,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
  	int nRowBytes;
 	char *p_fitsbuf, *fitsbuf;
 	int nBand, nPol;
-	int b, j, s, p, np, ant;
+	int b, j, s, p, np, a;
 	float LOOffset[array_MAX_BANDS];
 	float LORate[array_MAX_BANDS];
 	float dispDelay;
@@ -58,6 +87,9 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	double atmosDelay, atmosRate;
 	double clock, clockRate;
 	int configId, jobId, dsId, antId;
+	int *skip;
+	int skipped=0;
+	int printed=0;
 	/* 1-based indices for FITS file */
 	int32_t antId1, arrayId1, sourceId1, freqId1;
 
@@ -100,15 +132,20 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	
 	fitsWriteEnd(out);
               
+	arrayId1 = 1;
+	
+	/* some values that are always zero */
 	for(b = 0; b < nBand; b++)
 	{
 		LOOffset[b] = 0.0;
 		LORate[b] = 0.0;
 	}
+
 	dispDelay = 0.0;
 	dispDelayRate = 0.0;
 
-	arrayId1 = 1;
+	skip = (int *)calloc(D->nAntenna, sizeof(int));
+
 	for(s = 0; s < D->nScan; s++)
 	{
 	   scan = D->scan + s;
@@ -135,28 +172,43 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	   for(p = 0; p < np; p++)
 	   {
 	      /* loop over original .input file antenna list */
-	      for(ant = 0; ant < scan->nAntenna; ant++)
+	      for(a = 0; a < config->nAntenna; a++)
 	      {
-	        dsId = config->ant2dsId[ant];
+	        dsId = config->ant2dsId[a];
 		if(dsId < 0 || dsId >= D->nDatastream)
 		{
 			continue;
 		}
+		/* convert to D->antenna[] index ... */
 		antId = D->datastream[dsId].antennaId;
 
-		antId1 = config->datastreamId[ant] + 1;
-
-		if(scan->im)  /* use polynomial model */
+		if(antId < 0 || antId >= scan->nAntenna)
 		{
-		  if(scan->im[ant] == 0)
+		  continue;
+		}
+
+		/* ... and to FITS antennaId */
+		antId1 = antId + 1;
+
+		if(scan->im)  /* use polynomial model (preferred) */
+		{
+		  if(scan->im[antId] == 0)
 		  {
+		    if(skip[antId] == 0)
+		    {
+		      printf("\n    Polynomial model error : skipping antId %d = %s", 
+		        antId, D->antenna[antId].name);
+		      skip[antId]++;
+		      printed++;
+		      skipped++;
+		    }
 		    continue;
 		  }
 
-		  P = scan->im[ant] + p;
+		  P = scan->im[antId] + p;
 
-		  time = P->mjd - (int)(job->mjdStart) + P->sec/86400.0;
-		  deltat = (P->mjd - job->mjdStart)*86400.0 + P->sec;
+		  time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
+		  deltat = (P->mjd - D->mjdStart)*86400.0 + P->sec;
 
 		  /* in general, convert from (us) to (sec) */
 		  atmosDelay = (P->dry[0] + P->wet[0])*1.0e-6;
@@ -167,14 +219,22 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		  delay     = -P->delay[0]*1.0e-6 - atmosDelay;
 		  delayRate = -P->delay[1]*1.0e-6 - atmosRate;
 		}
-		else	   /* use tabulated model */
+		else if(scan->model)	   /* use tabulated model */
 		{
-		  if(scan->model[ant] == 0)
+		  if(scan->model[antId] == 0)
 		  {
+		    if(skip[antId] == 0)
+		    {
+		      printf("\n    Tabulated model error : skipping antId %d = %s", 
+		        antId, D->antenna[antId].name);
+		      skip[antId]++;
+		      printed++;
+		      skipped++;
+		    }
 		    continue;
 		  }
 
-		  M = scan->model[ant] + p;
+		  M = scan->model[antId] + p;
 	          
 		  time = scan->mjdStart - (int)D->mjdStart + job->modelInc*p/86400.0;
 		  deltat = job->modelInc*p;
@@ -188,9 +248,22 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		  delay     = -M->t*1.0e-6  - atmosDelay;
 		  delayRate = -M->dt*1.0e-6 - atmosRate;
 		}
+		else
+		{
+		  if(skip[antId] == 0)
+		  {
+		    printf("\n    Model error : no model information for antId %d = %s",
+		      antId, D->antenna[antId].name);
+		    skip[antId]++;
+		    printed++;
+		    skipped++;
+
+		  }
+		  deltat = job->modelInc*p;
+		}
 		
-		clockRate = D->antenna[ant].rate*1.0e-6;
-		clock     = D->antenna[ant].delay*1.0e-6 + clockRate*deltat;
+		clockRate = D->antenna[antId].rate*1.0e-6;
+		clock     = D->antenna[antId].delay*1.0e-6 + clockRate*deltat;
           
 	        p_fitsbuf = fitsbuf;
 
@@ -224,9 +297,15 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	     } /* Antenna loop */
 	   } /* Intervals in scan loop */
 	} /* Scan loop */
+
+  	if(printed)
+	{
+		printf("\n                            ");
+	}
   
 	/* release buffer space */
 	free(fitsbuf);
+	free(skip);
 
 	return D;
 }

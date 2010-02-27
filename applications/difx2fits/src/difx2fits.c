@@ -1,3 +1,32 @@
+/***************************************************************************
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id: difx2fits.c 1447 2009-09-04 15:05:30Z WalterBrisken $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/master_tags/DiFX-1.5.2/applications/difx2fits/src/difx2fits.c $
+ * $LastChangedRevision: 1447 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2009-09-04 17:05:30 +0200 (Fri, 04 Sep 2009) $
+ *
+ *==========================================================================*/
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -9,8 +38,6 @@
 const char program[] = PACKAGE_NAME;
 const char author[]  = PACKAGE_BUGREPORT;
 const char version[] = VERSION;
-
-#define MAX_INPUT_FILES 4096
 
 
 static int usage(const char *pgm)
@@ -55,9 +82,6 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  --average <nchan>\n");
 	fprintf(stderr, "  -a        <nchan>   Average <nchan> channels\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "  --time-average <nInt>\n");
-	fprintf(stderr, "  -t        <nInt>    Average <nInt> time integrations\n");
-	fprintf(stderr, "\n");
 	fprintf(stderr, "  --bin        <bin>\n");
 	fprintf(stderr, "  -B           <bin>  Select on this pulsar bin number\n");
 	fprintf(stderr, "\n");
@@ -79,6 +103,9 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  --scale <scale>\n");
 	fprintf(stderr, "  -s      <scale>     Scale visibility data "
 		"by <scale>\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --deltat <deltat>\n");
+	fprintf(stderr, "  -t       <deltat>   Set interval (sec) in printing job matrix\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --keep-order\n");
 	fprintf(stderr, "  -k                  Keep antenna order\n");
@@ -102,29 +129,6 @@ static int usage(const char *pgm)
 	return 0;
 }
 
-struct CommandLineOptions
-{
-	char *fitsFile;
-	char *baseFile[MAX_INPUT_FILES];
-	char *shiftFile;
-	int nBaseFile;
-	int writemodel;
-	int pretend;
-	double scale;
-	int verbose;
-	int timeAvg;
-	/* some overrides */
-	int specAvg;
-	int doalldifx;
-	float nOutChan;
-	float startChan;
-	int keepOrder;
-	int dontCombine;
-	int overrideVersion;
-	double sniffTime;
-	int pulsarBin;
-};
-
 struct CommandLineOptions *newCommandLineOptions()
 {
 	struct CommandLineOptions *opts;
@@ -134,7 +138,7 @@ struct CommandLineOptions *newCommandLineOptions()
 	
 	opts->writemodel = 1;
 	opts->sniffTime = 30.0;
-	opts->timeAvg = 1;
+	opts->jobMatrixDeltaT = 20.0;
 
 	return opts;
 }
@@ -237,19 +241,17 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					printf("Scaling data by %f\n", 
 						opts->scale);
 				}
+				else if(strcmp(argv[i], "--deltat") == 0 ||
+				        strcmp(argv[i], "-t") == 0)
+				{
+					i++;
+					opts->jobMatrixDeltaT = atof(argv[i]);
+				}
 				else if(strcmp(argv[i], "--average") == 0 ||
 				        strcmp(argv[i], "-a") == 0)
 				{
 					i++;
 					opts->specAvg = atoi(argv[i]);
-				}
-				else if(strcmp(argv[i], "--time-average") == 0 ||
-				        strcmp(argv[i], "-t") == 0)
-				{
-					i++;
-					opts->timeAvg = atoi(argv[i]);
-					printf("Averaging each %d time integrations.\n", 
-						opts->timeAvg);
 				}
 				else if(strcmp(argv[i], "--bin") == 0 ||
 					strcmp(argv[i], "-B") == 0)
@@ -419,9 +421,8 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 	return 0;
 }
 
-static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput *CorrModel,
-	struct fitsPrivate *out, int write_model, double scale, int verbose, int timeAvg,
-	double sniffTime, int pulsarBin)
+static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput *OldModel,
+	struct fitsPrivate *out, struct CommandLineOptions *opts)
 {
 	struct fits_keywords keys;
 	long long last_bytes = 0;
@@ -460,14 +461,11 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
-	if(write_model)
-	{
-		printf("  ML -- model               ");
-		fflush(stdout);
-		D = DifxInput2FitsML(D, &keys, out);
-		printf("%lld bytes\n", out->bytes_written - last_bytes);
-		last_bytes = out->bytes_written;
-	}
+	printf("  ML -- model               ");
+	fflush(stdout);
+	D = DifxInput2FitsML(D, &keys, out, opts);
+	printf("%lld bytes\n", out->bytes_written - last_bytes);
+	last_bytes = out->bytes_written;
 
 	printf("  CT -- correlator (eop)    ");
 	fflush(stdout);
@@ -495,14 +493,13 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput
 
 	printf("  GM -- pulsar gate model   ");
 	fflush(stdout);
-	D = DifxInput2FitsGM(D, &keys, out);
+	D = DifxInput2FitsGM(D, &keys, out, opts);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
-	printf("  UV -- visibility          \n");
+	printf("  UV -- visibility          ");
 	fflush(stdout);
-	D = DifxInput2FitsUV(D, CorrModel, &keys, out, scale, verbose, timeAvg, sniffTime, pulsarBin);
-	printf("                            ");
+	D = DifxInput2FitsUV(D, OldModel, &keys, out, opts);
 	printf("%lld bytes\n", out->bytes_written - last_bytes);
 	last_bytes = out->bytes_written;
 
@@ -544,7 +541,7 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D, const DifxInput
 
 int convertFits(struct CommandLineOptions *opts, int passNum)
 {
-	DifxInput *D, *D1, *D2, *CorrModel, *NewModel;
+	DifxInput *D, *D1, *D2, *OldModel, *NewModel;
 	struct fitsPrivate outfile;
 	char outFitsName[256];
 	int i;
@@ -615,6 +612,9 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 
 			D = mergeDifxInputs(D1, D2, opts->verbose);
 
+			deleteDifxInput(D1);
+			deleteDifxInput(D2);
+
 			if(!D)
 			{
 				fprintf(stderr, "Merging failed on <%s>.\n",
@@ -679,30 +679,30 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		{
 			NewModel->startChan = (NewModel->config[0].nChan*opts->startChan) + 0.5;
 		}
-		CorrModel = D;
+		OldModel = D;
 		D = NewModel;
 	}
 	else
 	{
-		CorrModel = D;
+		OldModel = D;
 	}
 
 	if(opts->verbose > 2)
 	{
 		printDifxInput(D);
-		if(D != CorrModel)
+		if(D != OldModel)
 		{
 			//FIXME is there any difference in the output? 
 			printf("unshifted input\n");
-			printDifxInput(CorrModel);
+			printDifxInput(OldModel);
 		}
 	}
 
 	D = updateDifxInput(D);
 	//FIXME is this necessary?
-	if(D != CorrModel)
+	if(D != OldModel)
 		{
-		CorrModel = updateDifxInput(CorrModel);
+		OldModel = updateDifxInput(OldModel);
 		}
 	if(!D)
 	{
@@ -724,10 +724,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			{
 				fprintf(stderr, "Not converting.\n");
 				deleteDifxInput(D);
-				if(D != CorrModel)
-				{
-					deleteDifxInput(CorrModel);
-				}
+				deleteDifxInput(OldModel);
 				return 0;
 			}
 		}
@@ -737,11 +734,11 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		fprintf(stderr, "Warning -- working on unversioned job\n");
 	}
 
-	if(CorrModel->job->difxVersion[0] != D->job->difxVersion[0])
+	if(OldModel->job->difxVersion[0] != D->job->difxVersion[0])
 	{
 		if(strncmp(difxVersion, D->job->difxVersion, 63))
 		{
-			fprintf(stderr, "Job made for version %s with uvshift input made for %s \n", CorrModel->job->difxVersion, D->job->difxVersion);
+			fprintf(stderr, "Job made for version %s with uvshift input made for %s \n", OldModel->job->difxVersion, D->job->difxVersion);
 			if(opts->overrideVersion)
 			{
 				fprintf(stderr, "Continuing because of --override-version but not setting a version\n");
@@ -751,15 +748,12 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 			{
 				fprintf(stderr, "Not converting.\n");
 				deleteDifxInput(D);
-				if(D != CorrModel)
-				{
-					deleteDifxInput(CorrModel);
-				}
+				deleteDifxInput(OldModel);
 				return 0;
 			}
 		}
 	}
-	else if((D != CorrModel) && (!CorrModel->job->difxVersion[0]))
+	else if((D != OldModel) && (!OldModel->job->difxVersion[0]))
 	{
 		fprintf(stderr, "Warning -- Original input is unversioned\n");
 	}
@@ -774,10 +768,6 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		fprintf(stderr, "Data geometry changes during obs, cannot "
 			"make into FITS.\n");
 		deleteDifxInput(D);
-		if(D != CorrModel)
-		{
-			deleteDifxInput(CorrModel);
-		}
 		return 0;
 	}
 
@@ -797,15 +787,15 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		if(opts->pulsarBin == 0)
 		{
 			sprintf(outFitsName, "%s%s.%d.FITS",
-				CorrModel->job[0].obsCode,
-				CorrModel->job[0].obsSession,
+				D->job[0].obsCode,
+				D->job[0].obsSession,
 				passNum);
 		}
 		else
 		{
 			sprintf(outFitsName, "%s%s.%d.bin%04d.FITS",
-				CorrModel->job[0].obsCode,
-				CorrModel->job[0].obsSession,
+				D->job[0].obsCode,
+				D->job[0].obsSession,
 				passNum,
 				opts->pulsarBin);
 		}
@@ -816,48 +806,41 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 		if(!opts->keepOrder)
 		{
 			DifxInputSortAntennas(D, opts->verbose);
-			DifxInputSortAntennas(CorrModel, opts->verbose);
 		}
 
 		if(opts->verbose > 2)
 		{
 			printDifxInput(D);
-			if(CorrModel != D)
+			if(OldModel != D)
 			{
 				printf("shifted input");
-				printDifxInput(CorrModel);
+				printDifxInput(OldModel);
 			}
 		}
 
 		if(fitsWriteOpen(&outfile, outFitsName) < 0)
 		{
 			deleteDifxInput(D);
-			if(D != CorrModel)
-			{
-				deleteDifxInput(CorrModel);
-			}
+			deleteDifxInput(OldModel);
 			fprintf(stderr, "Cannot open output file\n");
 			return 0;
 		}
 
-		if(!CorrModel)
+		if(!OldModel)
 		{
-			CorrModel = D;
+			OldModel = D;
 		}
 
-		if(DifxInput2FitsTables(D, CorrModel, &outfile, opts->writemodel, 
-			opts->scale, opts->verbose, opts->timeAvg, opts->sniffTime,
-			opts->pulsarBin) == D)
-		{
+		if(DifxInput2FitsTables(D, OldModel, &outfile, opts) == D)		{
 			printf("\nConversion successful\n\n");
 		}
 		
 		fitsWriteClose(&outfile);
 	}
 
-	if(CorrModel != D)
+	if(OldModel != D)
 	{
-		deleteDifxInput(CorrModel);
+		deleteDifxInput(OldModel);
 	}
 	deleteDifxInput(D);
 

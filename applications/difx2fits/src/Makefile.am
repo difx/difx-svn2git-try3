@@ -1,4 +1,5 @@
 bin_PROGRAMS = difx2fits
+
 if WITH_FFTW
 fftw_sources = \
 	sniffer.c \
@@ -35,4 +36,7 @@ difx2fits_SOURCES = \
 	fits.h \
 	fitsUV.h \
 	other.h \
+	jobmatrix.c \
+	jobmatrix.h \
 	$(fftw_sources)
+

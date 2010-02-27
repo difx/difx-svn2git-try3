@@ -1,27 +1,80 @@
-#!/bin/env python
+#!/usr/bin/env python
+
+#**************************************************************************
+#   Copyright (C) 2009 by Walter Brisken                                  *
+#                                                                         *
+#   This program is free software; you can redistribute it and/or modify  *
+#   it under the terms of the GNU General Public License as published by  *
+#   the Free Software Foundation; either version 3 of the License, or     *
+#   (at your option) any later version.                                   *
+#                                                                         *
+#   This program is distributed in the hope that it will be useful,       *
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+#   GNU General Public License for more details.                          *
+#                                                                         *
+#   You should have received a copy of the GNU General Public License     *
+#   along with this program; if not, write to the                         *
+#   Free Software Foundation, Inc.,                                       *
+#   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+#**************************************************************************
+
+#===========================================================================
+# SVN properties (DO NOT CHANGE)
+#
+# $Id: makefits 1640 2009-11-18 18:09:57Z WalterBrisken $
+# $HeadURL: https://svn.atnf.csiro.au/difx/master_tags/DiFX-1.5.2/applications/difx2fits/utils/makefits $
+# $LastChangedRevision: 1640 $
+# $Author: WalterBrisken $
+# $LastChangedDate: 2009-11-18 19:09:57 +0100 (Wed, 18 Nov 2009) $
+#
+#============================================================================
 
 from sys import argv, exit
 from string import split, strip
 from glob import glob
-from os import getenv, mkdir, chdir, system, getcwd, rmdir
+from os import getenv, chdir, system, getcwd, rmdir, umask
 from os.path import isfile, isdir, getsize
 from time import gmtime, time
 
 program = 'makefits'
-version = '0.1'
+version = '0.4'
 author  = 'Walter Brisken'
-verdate = '20090406'
+verdate = '20090917'
+
+calFiles = ['flag', 'pcal', 'tsys', 'weather']
 
 def usage(prog):
 	print '\n%s ver %s  %s  %s' % (program, version, author, verdate)
 	print '\nUsage:  %s [options] <pass name>' % prog
+	print '\nOptions can include:'
 	print '  --verbose'
 	print '  -v         Send more output to the screen\n'
 	print '  --help'
-	print '  -h         Print this help information\n'
+	print '  -h         Print this help information and quit\n'
 	print '  --override-version'
 	print '             To force operation with mixed DiFX versions\n'
+	print '  --allow-partial'
+	print '             Bypass check for complete set of correlated\n'
 	exit(0)
+
+def testgainfiles():
+	gcPath = getenv("GAIN_CURVE_PATH")
+	if gcPath == None:
+		return []
+	gcFiles = glob(gcPath + '/*')
+	missing = []
+	for f in gcFiles:
+		if not isfile(f):
+			if len(missing) == 0:
+				print ''
+			print 'Warning: symlink %s is broken' % f
+			missing.append(f)
+	
+	if len(missing) > 0:
+		print ''
+
+	return missing
 
 def parsekv(str):
 	kv = {}
@@ -34,24 +87,56 @@ def parsekv(str):
 		kv[p[0]] = p[1]
 	return kv
 
+# turn unix time into mjd.  Should only be used when precision is not required
 def getmjd(t):
 	return 40587.0 + t/86400.0
+
+def countDigits(n):
+	nDig = 1
+	
+	while True:
+		n /= 10
+		if n == 0:
+			break;
+		nDig += 1
+	
+	return nDig
 
 def mergesnifferfiles(expt, list, passname, ext, cwd, verbose, hasHeaderLine):
 	dir = cwd + '/sniffer'
 	
 	if not isdir(dir):
-		mkdir(dir)
+		cmd = 'mkdir -p %s' % dir
+		if verbose:
+			print 'Executing: %s' % cmd
+		system(cmd)
 
-	outfile = '%s/%s.%s.%s' % (dir, expt, passname, ext)
-	if isfile(outfile):
-		system('mv %s %s.old' % (outfile, outfile))
-	out = open(outfile, 'w')
+	outFile = '%s/%s.%s.%s' % (dir, expt, passname, ext)
+	if isfile(outFile):
+		cmd = 'mv %s %s.old' % (outFile, outFile)
+		if verbose:
+			print 'Executing: %s' % cmd
+		system(cmd)
 	skipFirst = False
-	if verbose:
-		print '\nMaking sniffer file %s from:' % outfile
+
+	files = []
 	for i in list:
 		infile = '%s.%d.%s' % (expt, i, ext)
+		if isfile(infile):
+			files.append(infile)
+		else:
+			print 'Warning: %s not found' % infile
+
+	if len(files) == 0:
+		print 'No %s files to merge!' % ext
+		return None
+
+	out = open(outFile, 'w')
+
+	if verbose:
+		print '\nMaking sniffer file %s from:' % outFile
+	
+	for infile in files:
 		if verbose:
 			print '  %s' % infile
 		data = open(infile, 'r').readlines()
@@ -62,6 +147,8 @@ def mergesnifferfiles(expt, list, passname, ext, cwd, verbose, hasHeaderLine):
 			out.write(d)
 		system('rm %s' % infile)
 	out.close()
+
+	return outFile
 
 def genDateStr(t):
 	d = gmtime(t)
@@ -87,11 +174,11 @@ class Job:
 		for f in files:
 			file = dir + '/' + self.name + f
 			if not isfile(file):
-				print 'Error : %s not found' % file
+				print '%s not found' % file
 				return False
 		ddir = dir + '/' + self.name + '.difx'
 		if not isdir(ddir):
-			print 'Error : difx output dir %s not found' % ddir
+			print 'difx output dir %s not found' % ddir
 			return False
 		return True
 
@@ -140,6 +227,9 @@ class JobList:
 		return difxVersion
 
 	def makefits(self, queuedir, verbose, sniff, options=''):
+
+		groupId = getenv('DIFX_GROUP_ID')
+
 		dir = queuedir + '/' + self.kv['exper']
 		cwd = getcwd()
 		
@@ -147,11 +237,27 @@ class JobList:
 
 		datestr = genDateStr(t)
 
-		tmp = dir + '/' + 'makefilts.tmp'
+		tmp = dir + '/' + 'makefits.tmp'
 		if isdir(tmp):
 			print '\nError: temporary directory %s already exists.  Aborting.' % tmp
 			exit(0)
-		mkdir(tmp)
+		cmd = 'mkdir -p %s' % tmp
+		if verbose:
+			print 'Executing: %s' % cmd
+		system(cmd)
+
+		calfiles = ''
+		for f in calFiles:
+			if not isfile(f):
+				print 'Warning: file "%s" not in current directory.' % f
+			else:
+				calfiles = calfiles + ' ' + f
+		if len(calfiles) > 0:
+			cmd = 'cp %s %s' % (calfiles, tmp)
+			if verbose:
+				print 'Executing: %s' % cmd
+			system(cmd)
+
 		if verbose:
 			print 'Changing to directory: %s' % tmp
 		chdir(tmp)
@@ -188,22 +294,91 @@ class JobList:
 		out = open('%s/%s.fitslist' % (cwd, self.kv['pass']), 'w')
 		out.write('exper=%s  pass=%s  jobs=%s  mjd=%9.7f  DiFX=%s  difx2fits=0\n' % \
 			(self.kv['exper'], self.kv['pass'], self.filename, getmjd(t), self.kv['DiFX']))
+		nDigit = countDigits(indices[-1])
+		format = 'VLBA_%%s_%%s_%%0%dd_%%s.idifits' % nDigit
 		for i in indices:
 			fn = '%s.%d.FITS' % (expt, i)
 			size = getsize(fn)/1000000.0
-			archfile = 'VLBA_%s_%s_%d_%s.idifits' % \
-				(self.kv['exper'], self.kv['pass'], j, datestr)
-			out.write('%s %3.1f %s\n' % (archfile, size, fn))
+			archfile = format % (self.kv['exper'], self.kv['pass'], j, datestr)
+			out.write('%s %4.2f %s\n' % (archfile, size, fn))
+			cmd = 'mv %s %s/%s' % (fn, dir, archfile)
 			if verbose:
-				print 'mv  %s -> ../%s' % (fn, archfile)
-			cmd = 'mv %s ../%s' % (fn, archfile)
+				print 'Executing: %s' % cmd
 			system(cmd)
+			if groupId != None:
+				# make sure anyone in the difx group can remove the file later
+				cmd = 'chown -R :%s %s/%s' % (groupId, dir, archfile)
+				if verbose:
+					print 'Executing: %s' % cmd
+				system(cmd)
 			j = j + 1
 		out.close()
 
+		j = 1
+		format = 'VLBA_%%s_%%s_%%0%dd_%%s.jobmatrix.txt' % nDigit
+		for i in indices:
+			fn = '%s.%d.jobmatrix' % (expt, i)
+			if isfile(fn):
+				archfile = format % (self.kv['exper'], self.kv['pass'], j, datestr)
+				cmd = 'mv %s %s/%s' % (fn, dir, archfile)
+				if verbose:
+					print 'Executing: %s' % cmd
+				system(cmd)
+				if groupId != None:
+					# make sure anyone in the difx group can remove the file later
+					cmd = 'chown -R :%s %s/%s' % (groupId, dir, archfile)
+					if verbose:
+						print 'Executing: %s' % cmd
+					system(cmd)
+			j = j + 1
+
+		# merge and gzip difxlog files
+		logFile = '%s/%s.difxlog' % (cwd, self.kv['pass'])
+		cmd = 'cat'
+		nLog = 0
+		for j in self.jobs:
+			fn = dir + '/' + j.name + '.difxlog'
+			if isfile(fn):
+				cmd = cmd + ' ' + fn
+				nLog += 1
+		if nLog > 0:
+			cmd = cmd + ' > ' + logFile
+			if verbose:
+				print 'Executing: %s' % cmd
+			system(cmd)
+			cmd = 'gzip -f %s' % logFile
+			if verbose:
+				print 'Executing: %s' % cmd
+			system(cmd)
+			if groupId != None:
+				cmd = 'chown -R :%s %s.gz' % (groupId, logFile)
+				if verbose:
+					print 'Executing: %s' % cmd
+				system(cmd)
+		else:
+			if verbose:
+				print 'No .difxlog files to merge'
+
+		# merge sniffer files
+		sniffFiles = ''
 		if sniff:
-			for x in [['acb', False] , ['apd', True], ['log', False], ['wts', True], ['xcb', False]]:
-				mergesnifferfiles(expt, indices, self.kv['pass'], x[0], cwd, verbose, x[1])
+			for x in [['acb', False] , ['apd', True], ['apc', True], ['log', False], ['wts', True], ['xcb', False]]:
+				sniffFile = mergesnifferfiles(expt, indices, self.kv['pass'], x[0], cwd, verbose, x[1])
+				if sniffFile != None:
+					sniffFiles += ' ' + sniffFile
+
+		if sniffFiles != '':
+			if groupId != None:
+				cmd = 'chown -R :%s %s' % (groupId, sniffFiles)
+				if verbose:
+					print 'Executing: %s' % cmd
+				system(cmd)
+
+		if len(calfiles) > 0:
+			cmd = 'rm %s' % calfiles
+			if verbose:
+				print 'Executing: %s' % cmd
+			system(cmd)
 
 		chdir(cwd)
 
@@ -215,14 +390,32 @@ class JobList:
 
 		return True
 
-	def verify(self, queuedir):
+	def verify(self, queuedir, allowPartial):
 		dir = queuedir + '/' + self.kv['exper']
+
+		completeJobs = []
 
 		OK = True
 		for j in self.jobs:
 			if j.verify(dir) == False:
 				OK = False
-		return OK
+			else:
+				completeJobs.append(j)
+		if not allowPartial:
+			return OK
+
+		nFail = len(self.jobs) - len(completeJobs)
+		if nFail == 0:
+			return True
+
+		if len(completeJobs) == 0:
+			print 'No jobs are complete.  Cannot continue'
+			return False
+
+		print '%d of %d jobs were not complete.  Continuing anyway...' % \
+			(nFail, len(self.jobs))
+		self.jobs = completeJobs
+		return True
 
 	def show(self, indent=0):
 		id = ' '*indent
@@ -233,12 +426,17 @@ class JobList:
 		for j in self.jobs:
 			j.show(indent+2)
 
+# main below here
+
+umask(02)
+
 difxQueueBase = getenv('DIFX_QUEUE_BASE')
 if difxQueueBase == None:
 	print 'Error: env var DIFX_QUEUE_BASE is not set.  Cannot proceed.'
 	exit(0)
 
 overrideVersion = False
+allowPartial = False
 verbose = False
 sniff = True
 
@@ -248,6 +446,8 @@ for a in argv[1:]:
 	if a[0] == '-':
 		if a == '--override-version':
 			overrideVersion = True
+		elif a == '--allow-partial':
+			allowPartial = True
 		elif a in ('-h', '--help'):
 			usage(argv[0])
 			opts = opts + ' -v'
@@ -267,6 +467,8 @@ if opts == '':
 if len(args) < 1:
 	usage(argv[0])
 
+gcFilesMissing = testgainfiles()
+
 for arg in args:
 	if arg[-8:] == '.joblist':
 		joblistfile = arg
@@ -284,10 +486,19 @@ for arg in args:
 	if verbose:
 		jl.show()
 
-	OK = jl.verify(difxQueueBase)
+	OK = jl.verify(difxQueueBase, allowPartial)
 
 	if not OK:
-		print 'job list verification failed!'
+		if not allowPartial:
+			print '\nJob list verification failed!'
+			print 'Run with --allow-partial to process a subset of data.\n'
 		exit(0)
 
 	OK = jl.makefits(difxQueueBase, verbose, sniff, opts)
+
+if len(gcFilesMissing) > 0:
+	print '\nWarning: some gain curve files were not found:'
+	for f in fcFilesMissing:
+		print '  %s' % f
+	print ''
+

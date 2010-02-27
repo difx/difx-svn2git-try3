@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2009 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,22 +19,31 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: fitsGD.c 1373 2009-08-18 23:34:30Z WalterBrisken $
- * $HeadURL: https://svn.atnf.csiro.au/difx/master_tags/DiFX-1.5.2/applications/difx2fits/src/fitsGD.c $
- * $LastChangedRevision: 1373 $
+ * $Id: jobmatrix.h 1442 2009-09-02 19:41:48Z WalterBrisken $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/master_tags/DiFX-1.5.2/applications/difx2fits/src/jobmatrix.h $
+ * $LastChangedRevision: 1442 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2009-08-19 01:34:30 +0200 (Wed, 19 Aug 2009) $
+ * $LastChangedDate: 2009-09-02 21:41:48 +0200 (Wed, 02 Sep 2009) $
  *
  *==========================================================================*/
 
-#include <stdlib.h>
-#include <sys/types.h>
-#include <strings.h>
-#include "config.h"
-#include "difx2fits.h"
+#ifndef __JOBMATRIX_H__
+#define __JOBMATRIX_H__
 
-const DifxInput *DifxInput2FitsGD(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
-{
-	return D;
-}	
+#include "difxio/difx_input.h"
+#include "fitsUV.h"
+
+struct _JobMatrix;
+
+typedef struct _JobMatrix JobMatrix;
+
+JobMatrix *newJobMatrix(const DifxInput *D, const char *filebase, 
+	double deltaT);
+
+void writeJobMatrix(JobMatrix *jm);
+
+void deleteJobMatrix(JobMatrix *jm);
+
+int feedJobMatrix(JobMatrix *jm, const struct UVrow *data, int jobId);
+
+#endif

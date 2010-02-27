@@ -1,3 +1,32 @@
+/***************************************************************************
+ *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id: fitsTS.c 1388 2009-08-21 22:00:37Z WalterBrisken $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/master_tags/DiFX-1.5.2/applications/difx2fits/src/fitsTS.c $
+ * $LastChangedRevision: 1388 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2009-08-22 00:00:37 +0200 (Sat, 22 Aug 2009) $
+ *
+ *==========================================================================*/
+
 #include <stdlib.h>
 #include <sys/types.h>
 #include <strings.h>
@@ -173,8 +202,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 			scan = D->scan + scanId;
 
 			sourceId = scan->sourceId;
-			if(sourceId < 0 || mjd < D->mjdStart || 
-				mjd > D->mjdStop)
+			if(sourceId < 0)
 			{
 				continue;
 			}
