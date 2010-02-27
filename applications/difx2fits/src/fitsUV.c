@@ -632,7 +632,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			const DifxPolyModel *imOld1, *imOld2;
 			int n, termsOld1, termsOld2;
 
-			n = getDifxScanIMIndex(scan, mjd, &dt);
+			n = getDifxScanIMIndex2(scan, mjd, &dt);
 
 			oldScan = dv->OldModel->scan + scanId;
 			imOld2 = oldScan->im[a2];
