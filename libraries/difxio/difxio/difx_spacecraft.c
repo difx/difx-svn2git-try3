@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -369,8 +369,6 @@ int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds)
 				i, j, value);
 		}
 		n += (ds[i].nPoint + 2);
-
-		return -1;
 	}
 
 	return n;
