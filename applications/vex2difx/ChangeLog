@@ -5,6 +5,8 @@ Version 1.0.3
 * Actually respect clock breaks!
 * Fix some logic to avert some unneeded warnings
 * Backport some compiler warning fixes from trunk
+* Don't require DIFX_VERSION to be set
+* Check that all supplied antenna, source, scan and mode names are in vex file
 
 Version 1.0.2
 ~~~~~~~~~~~~~
