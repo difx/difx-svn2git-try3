@@ -32,6 +32,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <pwd.h>
+#include <sys/statvfs.h>
 #include "mk5daemon.h"
 
 const char defaultMpiWrapper[] = "mpirun";
@@ -63,7 +64,7 @@ static int addUse(Uses *U, const char *hostname)
 	return i;
 }
 
-int getUse(const Uses *U, const char *hostname)
+static int getUse(const Uses *U, const char *hostname)
 {
 	for(int i = 0; U[i].n; i++)
 	{
@@ -76,12 +77,78 @@ int getUse(const Uses *U, const char *hostname)
 	return 0;
 }
 
+static int checkDiskFree(const char *path, long long minFree)
+{
+	struct statvfs fiData;
+	char message[MAX_MESSAGE_SIZE] = "";
+	int v;
+	long long freeSpace;
+	
+	v = statvfs(path, &fiData);
+
+	if(v == 0)
+	{
+		freeSpace = fiData.f_bsize * fiData.f_bavail;
+		if(freeSpace < minFree)
+		{
+			snprintf(message, MAX_MESSAGE_SIZE, 
+				"%s has less than %lld bytes free.  mpifxcorr will likely crash!", 
+				path, minFree);
+		}
+		else if(fiData.f_ffree < 3)
+		{
+			snprintf(message, MAX_MESSAGE_SIZE, 
+				"%s has no free inodes.  mpifxcorr will likely crash!", 
+				path);
+		}
+	}
+	else
+	{
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"statvfs failed when accessing directory %s", 
+			path);
+	}
+
+	if(message[0])
+	{
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int isUsed(const Mk5Daemon *D, const DifxMessageStart *S)
+{
+	if(strcmp(S->headNode, D->hostName) == 0)
+	{
+		return 1;
+	}
+	for(int i = 0; i < S->nDatastream; i++)
+	{
+		if(strcmp(S->datastreamNode[i], D->hostName) == 0)
+		{
+			return 1;
+		}
+	}
+	for(int i = 0; i < S->nProcess; i++)
+	{
+		if(strcmp(S->processNode[i], D->hostName) == 0)
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 {
 	int l, n;
 	int childPid;
 	char filebase[DIFX_MESSAGE_FILENAME_LENGTH];
 	char filename[DIFX_MESSAGE_FILENAME_LENGTH];
+	char destdir[DIFX_MESSAGE_FILENAME_LENGTH];
 	char message[MAX_MESSAGE_SIZE];
 	char command[MAX_COMMAND_SIZE];
 	FILE *out;
@@ -94,18 +161,15 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	const char *difxProgram;
 	int returnValue;
 
+	if(!G)
+	{
+		difxMessageSendDifxAlert(
+			"Developer error: Mk5Daemon_startMpifxcorr received null DifxMessageGeneric",
+			DIFX_ALERT_LEVEL_ERROR);
+		return;
+	}
 
 	S = &G->body.start;
-
-	if(G->nTo != 1)
-	{
-		return;
-	}
-
-	if(strcmp(G->to[0], D->hostName) != 0)
-	{
-		return;
-	}
 
 	if(S->headNode[0] == 0 || S->nDatastream <= 0 || S->nProcess <= 0 || S->inputFilename[0] != '/')
 	{
@@ -113,6 +177,55 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		Logger_logData(D->log, "Mk5Daemon_startMpifxcorr: degenerate request\n");
 		return;
 	}
+
+	if(G->nTo != 1)
+	{
+		return;
+	}
+
+	if(isUsed(D, S))
+	{
+		returnValue = checkDiskFree("/tmp", 24000);
+	}
+	else
+	{
+		returnValue = 0;
+	}
+
+	if(strcmp(G->to[0], D->hostName) != 0)
+	{
+		return;
+	}
+
+	if(returnValue < 0)
+	{
+		difxMessageSendDifxAlert("Since /tmp is full, mpifxcorr will not be started.",
+			DIFX_ALERT_LEVEL_ERROR);
+		return;
+	}
+
+
+	/* Check to make sure the destination directory has some free space */
+	strcpy(destdir, S->inputFilename);
+	n = 0;
+	for(l = 0; destdir[l]; l++)
+	{
+		if(destdir[l] == '/')
+		{
+			n = l;
+		}
+	}
+	destdir[n+1] = 0;
+	returnValue = checkDiskFree(destdir, 100000000);
+	if(returnValue < 0)
+	{
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"The output directory %s is full, mpifxcorr will not be started.", 
+			destdir);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		return;
+	}
+
 
 	if(!D->isHeadNode)
 	{
