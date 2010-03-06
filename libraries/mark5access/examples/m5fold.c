@@ -107,8 +107,8 @@ int fold(const char *filename, const char *formatname, int nbin, int nint,
 	for(i = 0; i < nif; i++)
 	{
 		data[i] = (double *)malloc(chunk*sizeof(double));
-		bins[i] = (double *)malloc(nbin*sizeof(double));
-		weight[i] = (int *)malloc(nbin*sizeof(int));
+		bins[i] = (double *)calloc(nbin, sizeof(double));
+		weight[i] = (int *)calloc(nbin, sizeof(int));
 	}
 
 	for(j = 0; j < nint; j++)
