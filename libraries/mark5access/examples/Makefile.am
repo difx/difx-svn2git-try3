@@ -14,7 +14,9 @@ bin_PROGRAMS = \
 	test_mark5_stream \
 	test_unpacker \
 	m5test \
+	m5fold \
 	m5d \
+	mk5access_testcase \
 	$(fftw_programs)
 
 test_mark5_stream_SOURCES = \
@@ -22,6 +24,9 @@ test_mark5_stream_SOURCES = \
 
 test_unpacker_SOURCES = \
 	test_unpacker.c
+
+mk5access_testcase_SOURCES = \
+	mk5access_testcase.c
 
 m5d_SOURCES = \
 	m5d.c
@@ -31,3 +36,6 @@ m5test_SOURCES = \
 
 m5spec_SOURCES = \
 	m5spec.c
+
+m5fold_SOURCES = \
+	m5fold.c
