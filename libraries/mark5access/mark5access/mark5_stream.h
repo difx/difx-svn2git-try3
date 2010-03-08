@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006, 2007 by Walter Brisken                            *
+ *   Copyright (C) 2006-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -64,7 +64,8 @@ enum Mark5Format
 	MK5_FORMAT_VLBN    =  6			/* VLBA with no modulation */
 };
 
-#define MAXBLANKZONES	32
+#define OPTIMAL_2BIT_HIGH	3.3359
+#define MAXBLANKZONES		32
 
 enum Mark5Blanker
 {

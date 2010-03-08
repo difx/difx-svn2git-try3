@@ -35,7 +35,9 @@
 const char program[] = "m5fold";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "2010 Mar 6";
+const char verdate[] = "2010 Mar 7";
+
+const int ChunkSize = 10000;
 
 int usage(const char *pgm)
 {
@@ -44,19 +46,123 @@ int usage(const char *pgm)
 	printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
 	printf("A Mark5 power folder.  Can use VLBA, Mark3/4, and Mark5B "
 		"formats using the\nmark5access library.\n\n");
-	printf("Usage : %s <infile> <dataformat> <nbin> <nint> <freq> <outfile> [<offset>]\n\n", program);
+	printf("Usage: %s <infile> <dataformat> <nbin> <nint> <freq> <outfile> [<offset>]\n\n", program);
 	printf("  <infile> is the name of the input file\n\n");
 	printf("  <dataformat> should be of the form: "
 		"<FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
 	printf("    VLBA1_2-256-8-2\n");
 	printf("    MKIV1_4-128-2-1\n");
 	printf("    Mark5B-512-16-2\n\n");
-	printf("  <nchan> is the number of channels to make per IF\n\n");
-	printf("  <nint> is the number of FFT frames to spectrometize\n\n");
+	printf("  <nbin> is the number of bins per if across 1 period\n");
+	printf("         if negative, the conversion to true power is not performed\n\n");
+	printf("  <nint> is the number of %d sample chunks to work on\n\n", ChunkSize);
+	printf("  <freq> [Hz] -- the inverse of the period to be folded\n\n");
 	printf("  <outfile> is the name of the output file\n\n");
 	printf("  <offset> is number of bytes into file to start decoding\n\n");
-
+	printf("Example: look for the 80 Hz switched power:\n\n");
+	printf("  m5fold 2bit.data.vlba VLBA1_1-128-8-2 128 10000 80 switched_power.out\n\n");
+	printf("Output: A file witn <nchan>+1 columns.  First column is time [s].\n");
+	printf("  Each remaining column is folded power for that baseband channel.\n");
+	printf("  If nbin is positive, the scaling is such that <v^2> = 1 yields a\n");
+	printf("  power reading of 1.0.  Optimal S/N occurs for power ~= 1.03\n\n");
+	printf("Note: This program is useless on 1-bit quantized data\n\n");
 	return 0;
+}
+
+/* returns theoretical <v^2> for 2 bit samples for a given power level, p */
+double powerfunc(double p)
+{
+	double n1=0.0;
+
+	/* calculate n1 -- the fraction of samples in the "low" state */
+	if(p <= 0.0)
+	{
+		n1 = 1.0;
+	}
+	else
+	{
+		n1 = erf(M_SQRT1_2/p);
+	}
+
+	return n1 + (1.0-n1)*OPTIMAL_2BIT_HIGH*OPTIMAL_2BIT_HIGH;
+}
+
+void plotpower()
+{
+	FILE *out;
+	double p, q;
+
+	out = fopen("powerfunc.txt", "w");
+
+	for(p = 0; p < 5.0; p += 0.01)
+	{
+		q = powerfunc(p);
+		fprintf(out, "%f %f\n", p, q); 
+	}
+
+	fclose(out);
+}
+
+#if 0
+/* series expansion from wikipedia */
+double inverseerfbyseries(double x)
+{
+	return (1.0/M_2_SQRTPI)*
+	(
+		x +
+		(M_PI/12.0)*x*x*x +
+		(7.0*M_PI*M_PI/480.0)*x*x*x*x*x +
+		(127.0*M_PI*M_PI*M_PI/40320.0)*x*x*x*x*x*x*x +
+		(4369.0*M_PI*M_PI*M_PI*M_PI/5806080.0)*x*x*x*x*x*x*x*x*x +
+		(34807.0*M_PI*M_PI*M_PI*M_PI*M_PI/182476800.0)*x*x*x*x*x*x*x*x*x*x*x  /* + ... */
+	);
+}
+#endif
+
+/* Approximation by Sergei Winitzki: 
+ * http://homepages.physik.uni-muenchen.de/~Winitzki/erf-approx.pdf*/
+double inverseerf(double x)
+{
+	const double a = 8.0/(3.0*M_PI) * (M_PI-3.0)/(4.0-M_PI);
+	double b, c;
+
+	if(x == 0.0)
+	{
+		return 0.0;
+	}
+	else if(x < 0.0)
+	{
+		return -inverseerf(-x);
+	}
+	else
+	{
+		c = log(1.0-x*x);
+		b = 2.0/(M_PI*a) + 0.5*c;
+		return sqrt(-b + sqrt(b*b - c/a) );
+	}
+}
+
+double correctpower(double x)
+{
+	const double a = OPTIMAL_2BIT_HIGH*OPTIMAL_2BIT_HIGH;
+
+	if(x <= 0.0)
+	{
+		return -1.0;
+	}
+
+	return 1.0/(M_SQRT2*inverseerf( (x-a)/(1.0-a) ) );
+}
+
+void testierf()
+{
+	double x, y, z;
+	for(x = 0.0; x < 10.0; x += 0.2)
+	{
+		y = erf(x);
+		z = inverseerf(y);
+		printf("%f %f %f\n", x, y, z);
+	}
 }
 
 int fold(const char *filename, const char *formatname, int nbin, int nint,
@@ -66,13 +172,18 @@ int fold(const char *filename, const char *formatname, int nbin, int nint,
 	double **data, **bins;
 	int **weight;
 	int c, i, j, k, status;
-	int chunk, nif, bin;
+	int nif, bin;
 	long long total, unpacked;
 	FILE *out;
 	double R;
-	long long sampnum = 0;
+	long long sampnum;
+	int docorrection = 1;
 
-	chunk = 10000;
+	if(nbin < 0)
+	{
+		nbin = -nbin;
+		docorrection = 0;
+	}
 
 	total = unpacked = 0;
 
@@ -86,7 +197,21 @@ int fold(const char *filename, const char *formatname, int nbin, int nint,
 		return 0;
 	}
 
+	if(ms->nbit < 2)
+	{
+		fprintf(stderr, "Warning: 1-bit data supplied.  Results will be\n");
+		fprintf(stderr, "useless.  Proceeding anyway!\n\n");
+	}
+
+	if(ms->nbit > 2)
+	{
+		fprintf(stderr, "More than 2 bits: power not being corrected!\n");
+		docorrection = 0;
+	}
+
 	mark5_stream_print(ms);
+
+	sampnum = (int)((double)ms->ns*(double)ms->samprate*1.0e-9 + 0.5);
 
 	out = fopen(outfile, "w");
 	if(!out)
@@ -106,14 +231,14 @@ int fold(const char *filename, const char *formatname, int nbin, int nint,
 	weight = (int **)malloc(nif*sizeof(double *));
 	for(i = 0; i < nif; i++)
 	{
-		data[i] = (double *)malloc(chunk*sizeof(double));
+		data[i] = (double *)malloc(ChunkSize*sizeof(double));
 		bins[i] = (double *)calloc(nbin, sizeof(double));
 		weight[i] = (int *)calloc(nbin, sizeof(int));
 	}
 
 	for(j = 0; j < nint; j++)
 	{
-		status = mark5_stream_decode_double(ms, chunk, data);
+		status = mark5_stream_decode_double(ms, ChunkSize, data);
 		
 		if(status < 0)
 		{
@@ -121,7 +246,7 @@ int fold(const char *filename, const char *formatname, int nbin, int nint,
 		}
 		else
 		{
-			total += chunk;
+			total += ChunkSize;
 			unpacked += status;
 		}
 
@@ -131,8 +256,13 @@ int fold(const char *filename, const char *formatname, int nbin, int nint,
 			break;
 		}
 
-		for(k = 0; k < chunk; k++)
+		for(k = 0; k < ChunkSize; k++)
 		{
+			if(data[0][k] == 0.0)
+			{
+				// A blanked sample.  all IFs are blanked simultaneously
+				continue;
+			}
 			bin = (int)(sampnum*R) % nbin;
 			for(i = 0; i < nif; i++)
 			{
@@ -150,13 +280,28 @@ int fold(const char *filename, const char *formatname, int nbin, int nint,
 	{
 		for(i = 0; i < nif; i++)
 		{
-			if(weight[i][k]) bins[i][k] /= weight[i][k];
+			if(weight[i][k]) 
+			{
+				bins[i][k] /= weight[i][k];
+			}
+		}
+	}
+
+	/* convert the mean quantized voltage squared to nominal power */
+	if(docorrection)
+	{
+		for(k = 0; k < nbin; k++)
+		{
+			for(i = 0; i < nif; i++)
+			{
+				bins[i][k] = correctpower(bins[i][k]);
+			}
 		}
 	}
 
 	for(c = 0; c < nbin; c++)
 	{
-		fprintf(out, "%d ", c);
+		fprintf(out, "%f ", c/(freq*nbin));
 		for(i = 0; i < nif; i++)
 		{
 			fprintf(out, " %f", bins[i][c]);
@@ -186,47 +331,8 @@ int main(int argc, char **argv)
 	long long offset = 0;
 	int nbin, nint;
 	double freq;
-	int v;
 
-	if(argc == 2)
-	{
-		struct mark5_format *mf;
-		int bufferlen = 1<<11;
-		char *buffer;
-		FILE *in;
-
-		buffer = malloc(bufferlen);
-		
-		in = fopen(argv[1], "r");
-		v = fread(buffer, bufferlen, 1, in);
-		if(v == 0)
-		{
-			fprintf(stderr, "Not enough data in file\n");
-			free(buffer);
-
-			return 0;
-		}
-
-		mf = new_mark5_format_from_stream(
-			new_mark5_stream_memory(buffer, bufferlen/2));
-
-		print_mark5_format(mf);
-		delete_mark5_format(mf);
-
-		mf = new_mark5_format_from_stream(
-			new_mark5_stream_memory(buffer, bufferlen/2));
-
-		print_mark5_format(mf);
-		delete_mark5_format(mf);
-
-		free(buffer);
-
-		fclose(in);
-
-		return 0;
-	}
-
-	else if(argc < 6)
+	if(argc < 6)
 	{
 		return usage(argv[0]);
 	}
@@ -234,6 +340,8 @@ int main(int argc, char **argv)
 	nbin = atol(argv[3]);
 	nint = atol(argv[4]);
 	freq = atof(argv[5]);
+
+	/* if supplied nint is non-sensical, assume whole file */
 	if(nint <= 0)
 	{
 		nint = 2000000000L;

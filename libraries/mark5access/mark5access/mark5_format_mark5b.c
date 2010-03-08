@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007 by Walter Brisken                                  *
+ *   Copyright (C) 2007-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -40,10 +40,9 @@
 #define MK5B_PAYLOADSIZE 10000
 
 const uint32_t mark5bSync       = 0xABADDEED;
-const uint32_t mark5cCompatSync = 0xF00FF00F;	/* FIXME: replace with actual */
 
 /* the high mag value for 2-bit reconstruction */
-static const float HiMag = 3.3359;
+static const float HiMag = OPTIMAL_2BIT_HIGH;
 
 struct mark5_format_mark5b
 {
@@ -171,47 +170,6 @@ static int mark5_stream_frame_time_mark5b(const struct mark5_stream *ms,
 			/* "unround" the number */
 			*ns = 156250*(((int)(*ns)+156249)/156250);
 		}
-	}
-
-	return 0;
-}
-
-static int mark5_stream_frame_time_mark5cb(const struct mark5_stream *ms,
-	int *mjd, int *sec, double *ns)
-{
-	struct mark5_format_mark5b *m;
-	const uint8_t *buf;
-	int n;	/* frame number within the 1 second period */
-	int i;
-	uint8_t nibs[8];
-
-	m = (struct mark5_format_mark5b *)(ms->formatdata);
-
-	buf = ms->frame + 8;
-	
-	/* 15 lowest bits of second 32-bit word */
-	n = mark5_stream_frame_num_mark5b(ms);
-
-	buf = ms->frame + 8;
-
-	for(i = 0; i < 4; i++)
-	{
-		nibs[2*i+0] = buf[3-i] >> 4;
-		nibs[2*i+1] = buf[3-i] & 0x0F;
-	}
-
-	if(mjd)
-	{
-		*mjd = m->kday + nibs[0]*100 + nibs[1]*10 + nibs[2];
-	}
-	if(sec) 
-	{
-		*sec = nibs[3]*10000 + nibs[4]*1000 + nibs[5]*100 + nibs[6]*10
-	        	+ nibs[7];
-	}
-	if(ns)
-	{
-		*ns = ms->framens*n;
 	}
 
 	return 0;
@@ -2155,22 +2113,6 @@ static int mark5_format_mark5b_init(struct mark5_stream *ms)
 		if(ms->frameoffset >= 0)
 		{
 			ms->format = MK5_FORMAT_MARK5B;
-		}
-		else if(ms->Mbps > 0)
-		{
-			/* then look for Mark5C compatibility mode sync word */
-			ms->frameoffset = findfirstframe(ms->datawindow, bytes,
-				mark5cCompatSync);
-			if(ms->frameoffset >= 0)
-			{
-				ms->format = MK5_FORMAT_MARK5CB;
-				ms->gettime = mark5_stream_frame_time_mark5cb;
-				ms->framens = 80000000/ms->Mbps;
-			}
-			else
-			{
-				return -1;
-			}
 		}
 		else 
 		{

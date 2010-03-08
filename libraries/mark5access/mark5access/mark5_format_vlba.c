@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006, 2007 by Walter Brisken                            *
+ *   Copyright (C) 2006-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -41,7 +41,7 @@
 #define PAYLOADSIZE 20000
 
 /* the high mag value for 2-bit reconstruction */
-static const float HiMag = 3.3359;
+static const float HiMag = OPTIMAL_2BIT_HIGH;
 
 static uint32_t *modulate = 0;
 
@@ -7043,11 +7043,6 @@ static int mark5_format_vlba_final(struct mark5_stream *ms)
 	}
 
 	return 0;
-}
-
-static int one(const struct mark5_stream *ms)
-{
-	return 1;
 }
 
 struct mark5_format_generic *new_mark5_format_vlba(int Mbps, int nchan,
