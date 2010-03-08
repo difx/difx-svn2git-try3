@@ -33,7 +33,7 @@
 const char program[] = "m5d";
 const char author[]  = "Walter Brisken";
 const char version[] = "1.0";
-const char verdate[] = "2007 Oct 6";
+const char verdate[] = "2010 Mar 7";
 
 int usage(const char *pgm)
 {
