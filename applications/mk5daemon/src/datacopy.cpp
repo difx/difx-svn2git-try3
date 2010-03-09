@@ -124,5 +124,5 @@ void Mk5Daemon_startMk5Copy(Mk5Daemon *D, const char *options)
 
 void Mk5Daemon_stopMk5Copy(Mk5Daemon *D)
 {
-	Mk5Daemon_system(D, "killall -HUP mk5cp", 1);
+	Mk5Daemon_system(D, "killall -INT mk5cp", 1);
 }

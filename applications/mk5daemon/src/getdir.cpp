@@ -92,5 +92,5 @@ void Mk5Daemon_startMk5Dir(Mk5Daemon *D, const char *bank)
 
 void Mk5Daemon_stopMk5Dir(Mk5Daemon *D)
 {
-	Mk5Daemon_system(D, "killall -HUP mk5dir", 1);
+	Mk5Daemon_system(D, "killall -INT mk5dir", 1);
 }

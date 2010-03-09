@@ -58,7 +58,6 @@ void siginthand(int j)
 		printf("Being killed\n");
 	}
 	die = 1;
-	signal(SIGHUP, oldsiginthand);
 }
 
 int usage(const char *pgm)
@@ -667,7 +666,7 @@ int main(int argc, char **argv)
 	memset(&module, 0, sizeof(module));
 	module.bank = -1;
 
-	oldsiginthand = signal(SIGHUP, siginthand);
+	oldsiginthand = signal(SIGINT, siginthand);
 
 	if(strlen(vsn) == 8)
 	{
