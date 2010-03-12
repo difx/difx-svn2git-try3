@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007 by Walter Brisken and Adam Deller                  *
+ *   Copyright (C) 2007-2010 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -35,6 +35,11 @@
 #define FILL_PATTERN 0x11223344UL
 #endif
 
+
+/* This macro is meant to contain a full c++ statement, usually one
+ * including a StreamStor command.  It talks to the watchdog thread
+ * which will wake things up if the command takes too long.
+ */
 #define WATCHDOG(statement) \
 { \
 	pthread_mutex_lock(&watchdogLock); \
@@ -67,7 +72,7 @@ void *watchdogFunction(void *data)
 		else if(nativeMk5->watchdogTime != 0)
 		{
 			deltat = time(0) - nativeMk5->watchdogTime;
-			if(deltat > 60)  // Nothing should take 20 seconds to complete!
+			if(deltat > 60)  // Nothing should take 60 seconds to complete!
 			{
 				cfatal << startl << "Watchdog caught a hang-up executing: " << nativeMk5->watchdogStatement << " Aborting!!!" << endl;
 				nativeMk5->sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
@@ -556,11 +561,9 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	long long start;
 	unsigned long *buf, *data;
 	unsigned long a, b;
-	int i, t;
 	S_READDESC      xlrRD;
 	XLR_RETURN_CODE xlrRC;
 	XLR_ERROR_CODE  xlrEC;
-	XLR_READ_STATUS xlrRS=XLR_SUCCESS;
 	int bytes;
 	char errStr[XLR_ERROR_LENGTH];
 	static int now = 0;
@@ -608,8 +611,6 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	xlrRD.XferLength = bytes;
 	xlrRD.BufferAddr = buf;
 
-
-/* new code block */
 	WATCHDOG( xlrRC = XLRRead(xlrDevice, &xlrRD) );
 	if(xlrRC != XLR_SUCCESS)
 	{
@@ -625,142 +626,6 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 		nError++;
 		return;
 	}
-/* end new code block */
-
-
-#if 0
-
-	for(t = 0; t < 2; t++)
-	{
-		WATCHDOG( xlrRC = XLRReadImmed(xlrDevice, &xlrRD) );
-
-		if(xlrRC != XLR_SUCCESS)
-		{
-			WATCHDOG( xlrEC = XLRGetLastError() );
-			WATCHDOG( XLRGetErrorMessage(errStr, xlrEC) );
-			cerror << startl << "Cannot read data from Mark5 module: [1] position=" << readpointer << ", length=" << bytes << ", error=" << errStr << endl;
-			dataremaining = false;
-			keepreading = false;
-			bufferinfo[buffersegment].validbytes = 0;
-
-			double errorTime = corrstartday + (readseconds + corrstartseconds + readnanoseconds*1.0e-9)/86400.0;
-			sendMark5Status(MARK5_STATE_ERROR, scan-module.scans+1, readpointer, errorTime, 0.0);
-			nError++;
-			return;
-		}
-
-		/* Wait up to 5 seconds for a return */
-		for(i = 1; i < 240; i++)
-		{
-			WATCHDOG( xlrRS = XLRReadStatus(0) );
-			if(xlrRS == XLR_READ_COMPLETE)
-			{
-				break;
-			}
-			else if(xlrRS == XLR_READ_ERROR)
-			{
-				WATCHDOG( xlrEC = XLRGetLastError() );
-				WATCHDOG( XLRGetErrorMessage(errStr, xlrEC) );
-				cerror << startl << "Cannot read data from Mark5 module: [2] position=" << readpointer << ", length=" << bytes << ", error=" << errStr << endl;
-
-				dataremaining = false;
-				keepreading = false;
-				bufferinfo[buffersegment].validbytes = 0;
-
-				double errorTime = corrstartday + (readseconds + corrstartseconds + readnanoseconds*1.0e-9)/86400.0;
-				sendMark5Status(MARK5_STATE_ERROR, scan-module.scans+1, readpointer, errorTime, 0.0);
-				nError++;
-				return;
-			}
-			if(i % 10 == 0 && i > 30)
-			{
-				cwarn << startl << "Waited " << (i/10) << " sec  state="; 
-				if(xlrRS == XLR_READ_WAITING)
-				{
-					cwarn << "XLR_READ_WAITING" << endl;
-				}
-				else if(xlrRS == XLR_READ_RUNNING)
-				{
-					cwarn << "XLR_READ_RUNNING" << endl;
-				}
-				else
-				{
-					cwarn << "XLR_READ_OTHER" << endl;
-				}
-			}
-			usleep(100000);
-		}
-		if(xlrRS == XLR_READ_COMPLETE)
-		{
-			break;
-		}
-		else if(t == 0)
-		{
-			cwarn << startl << "XLRCardReset() being called!" << endl;
-			WATCHDOG( xlrRC = XLRCardReset(1) );
-			if(xlrRC != XLR_SUCCESS)
-			{
-				cerror << startl << "XLRCardReset() failed.  Remainder of data from this antenna will not be correlated and a reboot of this Mark5 unit is probably needed." << endl;
-				sendMark5Status(MARK5_STATE_ERROR, scan-module.scans+1, readpointer, 0.0, 0.0);
-				nError++;
-				dataremaining = false;
-				keepreading = false;
-				bufferinfo[buffersegment].validbytes = 0;
-				return;
-			}
-			else
-			{
-				cinfo << startl << "XLRCardReset() success!" << endl;
-			}
-
-			cinfo << startl << "XLROpen() being called!" << endl;
-			WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
-			if(xlrRC != XLR_SUCCESS)
-			{
-				cerror << startl << "XLROpen() failed.  Remainder of data from this antenna will not be correlated and a reboot of this Mark5 unit is probably needed." << endl;
-				sendMark5Status(MARK5_STATE_ERROR, scan-module.scans+1, readpointer, 0.0, 0.0);
-				nError++;
-				dataremaining = false;
-				keepreading = false;
-				bufferinfo[buffersegment].validbytes = 0;
-				return;
-			}
-			else
-			{
-				cinfo << startl << "XLROpen() success!" << endl;
-			}
-
-			WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-			if(xlrRC != XLR_SUCCESS)
-			{
-				cerror << startl << "Cannot put Mark5 unit in bank mode" << endl;
-			}
-
-			WATCHDOG( xlrRC = XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
-			if(xlrRC == XLR_SUCCESS)
-			{
-				WATCHDOG( xlrRC = XLRSetOption(xlrDevice, SS_OPT_REALTIMEPLAYBACK) );
-			}
-			if(xlrRC == XLR_SUCCESS)
-			{
-				WATCHDOG( xlrRC = XLRSetFillData(xlrDevice, FILL_PATTERN) );
-			}
-			if(xlrRC != XLR_SUCCESS)
-			{
-				cerror << startl << "Cannot set Mark5 data replacement mode / fill pattern" << endl;
-			}
-
-		}
-	}
-
-	if(xlrRS != XLR_READ_COMPLETE)
-	{
-		cerror << startl << "Waited 6 seconds for a Mark5 read and gave up.  position=" << readpointer << " length=" << bytes << endl;
-		bufferinfo[buffersegment].validbytes = 0;
-		return;
-	}
-
-#endif
 
 	bufferinfo[buffersegment].validbytes = bytes;
 	bufferinfo[buffersegment].readto = true;
