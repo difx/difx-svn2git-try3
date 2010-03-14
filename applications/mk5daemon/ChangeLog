@@ -13,6 +13,7 @@ Version 1.3
 * close popen with pclose (suggested by Martin Ettl)
 * complain if /tmp or correlation destination directory are running low on space
 * update in-line help for mk5control
+* infrastructure in place for transient event copy
 
 Version 1.2
 ~~~~~~~~~~~

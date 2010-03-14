@@ -27,56 +27,53 @@
  *
  *==========================================================================*/
 
-#ifndef __TRANSIENT_H__
-#define __TRANSIENT_H__
+#include <cstring>
+#include "transient.h"
 
-#include <string>
-#include <list>
-#include <pthread.h>
-#include <difxmessage.h>
+ int main()
+ {
+	EventManager E;
+	DifxMessageTransient dt;
 
-using namespace std;
+	E.print();
 
-class Event
-{
-public:
-	Event(double start, double stop, double pri) : 
-		startMJD(start), stopMJD(stop), priority(pri) {}
-	double startMJD, stopMJD, priority;
+	dt.startMJD = 45000.0;
+	dt.stopMJD = 55000.0;
+	dt.priority = 4.0;
+	strcpy(dt.destDir, "/dev/null");
 
-	friend bool operator< (Event &t1, Event &t2);
-};
+	EventQueue *Q = E.startJob("jobXX");
+	E.print();
+	EventQueue *R = E.startJob("jobYY");
 
-class EventQueue
-{
-public:
-	EventQueue(string id) : jobId(id), destDir("nowhere"), user("nobody"), maxSize(5) {}
-	string jobId;
-	string destDir;
-	string user;
-	unsigned int maxSize;
-	list<Event> events;
-	list<string> units;
+	Q->addMark5Unit("mk5-1");
+	Q->addMark5Unit("mk5-2");
+	Q->setUser("Homer");
+	R->addMark5Unit("mk5-3");
+	R->addMark5Unit("mk5-4");
+	R->setUser("Marge");
 
-	void addMark5Unit(const char *unit);
-	void addEvent(const DifxMessageTransient *dt);
-	void setUser(const char *u);
-	void copy();
-	void print() const;
-};
+	for(int g = 0; g < 10; g++)
+	{
+		dt.priority = g;
+		strcpy(dt.jobId, "jobXX");
+		E.addEvent(&dt);
+		dt.priority = 10-g;
+		strcpy(dt.jobId, "jobYY");
+		E.addEvent(&dt);
+		dt.priority = g;
+		strcpy(dt.jobId, "jobZZ");
+		E.addEvent(&dt);
+		E.print();
+	}
 
-class EventManager
-{
-public:
-	list<EventQueue> queues;
-	pthread_mutex_t lock;
+	E.print();
 
-	EventManager();
-	~EventManager();
-	EventQueue *startJob(const char *jobId);
-	void stopJob(const char *jobId);
-	bool addEvent(const DifxMessageTransient *dt);
-	void print();
-};
+	E.stopJob("jobXX");
 
-#endif
+	E.print();
+	E.stopJob("jobYY");
+	E.print();
+
+ 	return 0;
+ }

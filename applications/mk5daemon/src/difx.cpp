@@ -476,13 +476,12 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 			message);
 
 		/* register this job with the Transient Event Monitor */
-		EventQueue &Q = D->eventManager.startJob(jobName);
+		EventQueue *Q = D->eventManager.startJob(jobName);
 		for(int i = 0; i < S->nDatastream; i++)
 		{
-			Q.addMark5Unit(S->datastreamNode[i]);
+			Q->addMark5Unit(S->datastreamNode[i]);
 		}
-		Q.setUser(user);
-
+		Q->setUser(user);
 		/* cause mpifxcorr to run! */
 		returnValue = Mk5Daemon_system(D, command, 1);
 

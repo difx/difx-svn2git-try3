@@ -96,8 +96,18 @@ void EventQueue::setUser(const char *u)
 void EventQueue::print() const
 {
 	list<Event>::const_iterator e;
+	list<string>::const_iterator u;
 
 	cout << "  Job [" << jobId << "]:" << endl;
+
+	cout << "    user: " << user << endl;
+
+	cout << "    units:";
+	for(u = units.begin(); u != units.end(); u++)
+	{
+		cout << " " << *u;
+	}
+	cout << endl;
 
 	for(e = events.begin(); e != events.end(); e++)
 	{
@@ -115,7 +125,7 @@ EventManager::~EventManager()
 	pthread_mutex_destroy(&lock);
 }
 
-EventQueue &EventManager::startJob(const char *jobId)
+EventQueue *EventManager::startJob(const char *jobId)
 {
 	list<EventQueue>::iterator q;
 	bool existed=false;
@@ -138,7 +148,7 @@ EventQueue &EventManager::startJob(const char *jobId)
 
 	pthread_mutex_unlock(&lock);
 
-	return queues.back();
+	return &queues.back();
 }
 
 void EventManager::stopJob(const char *jobId)

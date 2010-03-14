@@ -1,4 +1,8 @@
-bin_PROGRAMS = mk5daemon
+bin_PROGRAMS = \
+	mk5daemon
+
+noinst_PROGRAMS = \
+	testtransient
 
 mk5daemon_SOURCES = \
 	difx.cpp \
@@ -17,3 +21,9 @@ mk5daemon_SOURCES = \
 	mk5daemon.h \
 	transient.cpp \
 	transient.h
+
+testtransient_SOURCES = \
+	testtransient.cpp \
+	transient.cpp \
+	transient.h
+	
