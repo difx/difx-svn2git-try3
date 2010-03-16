@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #**************************************************************************
-#   Copyright (C) 2009, 2010 by Walter Brisken                            *
+#   Copyright (C) 2009, 2010 by Walter Brisken / Adam Deller              *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -279,7 +279,7 @@ def checkFile(module, verbose=1):
 		print "MODULE: " + module
 	for s in range(len(scans)):
 		if verbose > 3:
-			print "Scan %i runs from %s to %s" % (s, mjd2vex(scans[s].startMJD), mjd2vex(scans[s].stopMJD))
+			print "Scan %i runs from %s to %s" % (s+1, mjd2vex(scans[s].startMJD), mjd2vex(scans[s].stopMJD))
 		if scans[s].error != None:
 			errors.append('Scan %d : %s' % (s+1, scans[s].error))
 	
