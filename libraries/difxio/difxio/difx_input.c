@@ -603,6 +603,7 @@ static int makeFreqId2IFmap(DifxInput *D, int configId)
 	{
 		fprintf(stderr, "Weird number of polarizations: %d\n", nPol);
 		free(freqIds);
+
 		return -1;
 	}
 	dc->nPol = nPol;
@@ -1167,7 +1168,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D,
 				return 0;
 			}
 			a = atoi(DifxParametersvalue(ip, r));
-			D->datastream[e].RCfreqId[i] = D->datastream[e].freqId[a];
+			D->datastream[e].RCfreqId[i] = a;
 		}
 	}
 

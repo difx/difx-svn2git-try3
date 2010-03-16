@@ -434,10 +434,16 @@ int DifxDatastreamGetRecChans(DifxDatastream *dd, int freqId, char *pols, int *r
 {
 	int r;
 	int n=0;
+	int localFqId;
 
 	for(r = 0; r < dd->nRecChan; r++)
 	{
-		if(dd->RCfreqId[r] == freqId)
+		localFqId = dd->RCfreqId[r];
+		if(localFqId < 0 || localFqId >= dd->nFreq)
+		{
+			fprintf(stderr, "Error: DifxDatastreamGetRecChans: localFqId=%d out of range (%d)\n", localFqId, dd->nFreq);
+		}
+		else if(dd->freqId[localFqId] == freqId)
 		{
 			if(dd->RCpolName[r] <= ' ')
 			{
@@ -445,11 +451,13 @@ int DifxDatastreamGetRecChans(DifxDatastream *dd, int freqId, char *pols, int *r
 			}
 			if(n >= 2)
 			{
-				fprintf(stderr, "Warning: skipping dup rechan\n");
+				fprintf(stderr, "Warning: skipping dup rechan 1 : r=%d freqId=%d localFqId=%d\n",
+					r, freqId, localFqId);
 			}
 			else if(n == 1 && dd->RCpolName[r] == pols[0])
 			{
-				fprintf(stderr, "Warning: skipping dup rechan\n");
+				fprintf(stderr, "Warning: skipping dup rechan 2 : r=%d freqId=%d localFqId=%d\n",
+					r, freqId, localFqId);
 			}
 			else
 			{
@@ -460,6 +468,7 @@ int DifxDatastreamGetRecChans(DifxDatastream *dd, int freqId, char *pols, int *r
 		}
 	}
 
+	/* check to see if a swap to cannonical polarization order is due */
 	if(n == 2)
 	{
 		if(pols[0] == 'L' && pols[1] == 'R')

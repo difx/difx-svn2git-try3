@@ -347,6 +347,7 @@ int DifxConfigRecChan2IFPol(const DifxInput *D, int configId,
 	DifxDatastream *ds;
 	int datastreamId;
 	int d;
+	int localFqId;
 	
 	if(recChan < 0 || antennaId < 0)
 	{
@@ -390,7 +391,14 @@ int DifxConfigRecChan2IFPol(const DifxInput *D, int configId,
 		return -3;
 	}
 	
-	*bandId = ds->RCfreqId[recChan];
+	localFqId = ds->RCfreqId[recChan];
+	if(localFqId < 0 || localFqId >= ds->nFreq)
+	{
+		fprintf(stderr, "DifxConfigRecChan2IFPol: recChanId=%d is out of range (nFreq=%d)\n", localFqId, ds->nFreq);
+		return -5;
+	}
+
+	*bandId = ds->freqId[localFqId];
 	*polId = DifxConfigGetPolId(dc, ds->RCpolName[recChan]);
 
 	return 0;
