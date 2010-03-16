@@ -4,6 +4,7 @@ Version 2.6.2
 * Sniffer: apd and apc files: keep 2 more time digits
 * Some compiler warning fixes
 * Some cppcheck results from Martin Ettl
+* Fix usage of RCfreqId
 
 Version 2.6.1
 * makefits: copy jobmatrix file

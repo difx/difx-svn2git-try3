@@ -180,6 +180,7 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 	const DifxConfig *dc;
 	const DifxDatastream *ds;
 	char *rv;
+	int localFqId;
 
 	if(!D)
 	{
@@ -330,7 +331,13 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 		for(c = 0; c < ds->nRecChan; c++)
 		{
 			polName = ds->RCpolName[c];
-			freqNum = ds->RCfreqId[c];
+			localFqId = ds->RCfreqId[c];
+			if(localFqId < 0 || localFqId >= ds->nFreq)
+			{
+				fprintf(stderr, "Developer error: localFqId=%d and ds->nFreq=%d.  configId=%d datastreamId=%d recChan=%d\n", localFqId, ds->nFreq, configId, d, c);
+				continue;
+			}
+			freqNum = ds->freqId[localFqId];
 			i = dc->freqId2IF[freqNum];
 			if(polName == dc->pol[0])
 			{
