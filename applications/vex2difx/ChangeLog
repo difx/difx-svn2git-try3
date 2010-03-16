@@ -8,6 +8,7 @@ Version 1.0.3
 * Don't require DIFX_VERSION to be set
 * Check that all supplied antenna, source, scan and mode names are in vex file
 * Huge speed-up by not constantly sorting events
+* Try to match Upper and Lower sideband channels when necessary
 
 Version 1.0.2
 ~~~~~~~~~~~~~
