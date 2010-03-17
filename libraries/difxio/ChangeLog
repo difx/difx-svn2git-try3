@@ -1,3 +1,6 @@
+2.12.3
+* Post DiFX-1.5.3
+
 2.12.2
 * Fix some compiler warnings
 * Fix memory leak (need to free baseline array)
