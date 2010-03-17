@@ -1,6 +1,5 @@
 Version 1.0.3
 ~~~~~~~~~~~~~
-* Post DiFX-1.5.2
 * oms2v2d: trap missing FFT_SIZE and SPECTRAL_AVERAGE parameters
 * Actually respect clock breaks!
 * Fix some logic to avert some unneeded warnings
@@ -9,6 +8,7 @@ Version 1.0.3
 * Check that all supplied antenna, source, scan and mode names are in vex file
 * Huge speed-up by not constantly sorting events
 * Try to match Upper and Lower sideband channels when necessary
+* Version for DiFX-1.5.3
 
 Version 1.0.2
 ~~~~~~~~~~~~~
