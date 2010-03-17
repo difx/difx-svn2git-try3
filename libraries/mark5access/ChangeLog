@@ -4,6 +4,7 @@ Version 1.3.4
 * Apply some minor fixes suggested by Martin Ettl
 * Add m5fold utility
 * Remove the "mark5cb" mode which never turned out to exist
+* Version for DiFX-1.5.3
 
 Version 1.3.3
 * Fix blank range checking for a small subset of modes
