@@ -1,4 +1,4 @@
-AC_INIT([mpifxcorr], [1.5.2], [Adam Deller <adeller@astro.swin.edu.au>])
+AC_INIT([mpifxcorr], [1.5.3], [Adam Deller <adeller@astro.swin.edu.au>])
 PACKAGE_VERSION=AC_PACKAGE_VERSION
 AC_SUBST([PACKAGE_VERSION])
 AC_SUBST([LIBRARY_VERSION])
@@ -51,7 +51,7 @@ dnl **** Find difxmessage library                         ****
 dnl **********************************************************
 dm_enabled=true
 PKG_CHECK_MODULES(DIFXMESSAGE,
-        difxmessage >= 0.7,
+        difxmessage >= 7.2,
 	[AC_DEFINE([HAVE_DIFXMESSAGE], 1, [1=has DIFXMESSAGE])],
 	dm_enabled=false)
 AM_CONDITIONAL(WITH_DIFXMESSAGE, $dm_enabled)
@@ -104,7 +104,7 @@ dnl **********************************************************
 dnl **********************************************************
 dnl **** Find mark5access library                         ****
 dnl **********************************************************
-PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.3.3)
+PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.3.5)
 dnl **********************************************************
 
 
