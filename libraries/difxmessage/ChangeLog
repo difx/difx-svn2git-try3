@@ -3,6 +3,8 @@ Version 7.2
 Add transient XML type
 Fix errormon/errormon2 in cases where "entities" are in message strings
 Use pclose after popen (difxlog)
+Lots of protection against excessive string lengths
+For DiFX-1.5.3
 
 Version 7.1
 ~~~~~~~~~~~
