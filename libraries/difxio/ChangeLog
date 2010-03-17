@@ -2,6 +2,7 @@
 * Fix some compiler warnings
 * Fix memory leak (need to free baseline array)
 * Print all spacecraft entries, not just for the first spacecraft
+* RCFreqId was used with two meanings (that usually gave the same value).  The true usage is now used everywhere. (Thanks to Randall Wayth for helping find this!)
 
 2.12.1
 * Implement getDifxScanIMIndex2 which can calculate the offset time a bit more accurately.  All functions calling getDifxScanIMIndex should now call getDifxScanIMIndex2.
