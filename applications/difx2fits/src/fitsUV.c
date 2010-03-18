@@ -632,7 +632,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			const DifxPolyModel *imOld1, *imOld2;
 			int n, termsOld1, termsOld2;
 
-			n = getDifxScanIMIndex2(scan, mjd, &dt);
+			n = getDifxScanIMIndex2(scan, mjd, iat, &dt);
 
 			oldScan = dv->OldModel->scan + scanId;
 			imOld2 = oldScan->im[a2];
@@ -653,7 +653,10 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 			printf("mjd: %f\tdelayOld1 %f\tdelayOld2 %f\n", dv->mjd, delayOld1, delayOld2);
 */
 			dv->shiftDelay = (delay2 - delayOld2) - (delay1 - delayOld1);
-			printf("dt: %18.15f\ta1: %02d\ta2: %02d\tshiftDelay: %18.15e\n", dt, a1, a2, dv->shiftDelay);
+			printf("dt: %18.15f\ta1: %02d\ta2: %02d\tshiftDelay: %18.15e d1: %18.15e  d2: %18.15e  dc1: %18.15e  dc2: %18.15e \n", 
+					dt, a1, a2, dv->shiftDelay,
+					delay1, delay2, delayOld1, delayOld2);
+			shiftPhase(dv, verbose);
 		}
 	}
 
@@ -874,7 +877,7 @@ static double getDifxScaleFactor(const DifxInput *D, double s, int verbose)
 
 int shiftPhase(DifxVis *dv, int verbose)
 {
-	if(dv->shiftDelay == 0)
+	if(dv->shiftDelay < 1e-9) /*don't shift for less than 0.001ps*/
 	{
 		return(0);
 	}
@@ -908,9 +911,9 @@ int shiftPhase(DifxVis *dv, int verbose)
 	{
 		if(isUSB)
 		{
-			freq[i] = (double)bandFreq + (double)i * chanBW;
+			freq[i] = (double)bandFreq + ((double) i) * chanBW;
 		}
-		else
+		else //FIXME
 		{
 			freq[i] = bandFreq - i * chanBW;
 		}
@@ -952,7 +955,6 @@ static int storevis(DifxVis *dv, int verbose)
 	dv->weight[D->nPolar*dv->bandId + dv->polId] = 
 		dv->recweight;
 	
-	shiftPhase(dv, verbose);
 
 	for(i = startChan; i < stopChan; i++)
 	{
