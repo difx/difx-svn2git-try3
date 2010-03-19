@@ -9,6 +9,7 @@ Version 2.6.2
 * Some cppcheck results from Martin Ettl
 * Fix usage of RCfreqId
 * Don't fail to set proper .jobmatrix filename when not running sniffer
+* Properly index config table in fitsGM.c
 * Version for DiFX-1.5.3
 
 Version 2.6.1
