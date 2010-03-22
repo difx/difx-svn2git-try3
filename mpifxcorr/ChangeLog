@@ -2,6 +2,8 @@ Version 1.5.3, 2010 March 17
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 * Bug fix for calculation of buffer sizes for Mk4/VLBA/VDIF format, which 
   could lead to MODE errors and the loss of a few FFTs in very rare cases
+* Add an extra second to polyco valid range to ensure that exact boundary
+  cases get caught by one or the other polyco
 
 Version 1.5.2, 2009 Nov 23
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
