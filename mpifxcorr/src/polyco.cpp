@@ -311,8 +311,9 @@ void Polyco::setTime(int startmjd, double startmjdfraction)
 bool Polyco::includesTime(int incmjd, double incmjdfraction)
 {
     double differencemins = (incmjd - mjd)*1440 + (incmjdfraction - mjdfraction)*1440;
+    double rangemins = double(timespan)/2.0 + 1.0/60.0; //allow an extra second range to avoid being bitten by roundoff
 
-    return (differencemins <= double(timespan/2.0)) && (differencemins >= -double(timespan/2.0));
+    return (differencemins <= rangemins) && (differencemins >= -rangemins);
 }
 
 Polyco * Polyco::getCurrentPolyco(int requiredconfig, int mjd, double mjdfraction, Polyco ** polycos, int npolycos, bool printtimes)
@@ -403,7 +404,7 @@ bool Polyco::loadPolycoFile(string filename, int subcount)
       //get the dm, dopplershift and logresidual
       input.get(buffer, 22);
       dm = atof(buffer);
-      if(!fieldOK(buffer, 19))
+      if(!fieldOK(buffer, 21))
       {
         cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the DM field contained " << buffer << ".  Aborting!" << endl;
         return false;
@@ -463,7 +464,7 @@ bool Polyco::loadPolycoFile(string filename, int subcount)
 
       input.get(buffer, 22);
       obsfrequency = atof(buffer);
-      if(!fieldOK(buffer, 19))
+      if(!fieldOK(buffer, 21))
       {
         cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the observing frequency field contained " << buffer << ".  Aborting!" << endl;
         return false;
