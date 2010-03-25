@@ -130,6 +130,7 @@ static int set_format(struct mark5_stream *ms,
 		ms->init_format = f->init_format;
 		ms->final_format = f->final_format;
 		ms->decode = f->decode;
+		ms->complex_decode = f->complex_decode;
 		ms->validate = f->validate;
 		ms->gettime = f->gettime;
 		ms->fixmjd = f->fixmjd;
@@ -358,7 +359,21 @@ struct mark5_format_generic *new_mark5_format_generic_from_string(
 			d = 1;
 		}
 
-		return new_mark5_format_vdif(a, b, c, d, e, 32);
+		return new_mark5_format_vdif(a, b, c, d, e, 32, 0);
+	}
+	else if(strncasecmp(formatname, "VDIFC_", 6) == 0)
+	{
+	  r = sscanf(formatname+5, "%d-%d-%d-%d/%d", &e, &a, &b, &c, &d);
+		if(r < 4)
+		{
+			return 0;
+		}
+		if(r < 5)
+		{
+			d = 1;
+		}
+
+		return new_mark5_format_vdif(a, b, c, d, e, 32, 1);
 	}
 	else if(strncasecmp(formatname, "VLBN1_", 6) == 0)
 	{
@@ -1097,27 +1112,40 @@ int mark5_stream_decode_complex(struct mark5_stream *ms, int nsamp,
 	int i;
 	int r;
 	
-	r = mark5_stream_decode(ms, nsamp, (float **)data);
-	if(r < 0) 
+	if (ms->complex_decode) 
 	{
-		return r;
-	}
+	  if (!ms) 
+	  {
+	    return -1;
+	  } 
+	  if (ms->readposition<0)
+	  {
+	    return(-1);
+	  }
+	  return ms->complex_decode(ms, nsamp, data);
+	} 
+	else
+	{
+	  r = mark5_stream_decode(ms, nsamp, (float **)data);
+	  if(r >= 0) 
+	  {
 
-	/* convert in place */
-	for(c = 0; c < ms->nchan; c++)
-	{
+	    /* convert in place */
+	    for(c = 0; c < ms->nchan; c++)
+	    {
 		fc = data[c]+nsamp;
 		f = ((float *)(data[c]))+nsamp;
 		for(i = 0; i < nsamp; i++)
 		{
-			fc--;
-			f--;
-			fc->re = *f;
-			fc->im = 0.0;
+		    fc--;
+		    f--;
+		    fc->re = *f;
+		    fc->im = 0.0;
 		}
+	    }
+	  }
+	    return r;
 	}
-
-	return r;
 }
 
 int mark5_stream_decode_double_complex(struct mark5_stream *ms, int nsamp, 
