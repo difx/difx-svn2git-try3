@@ -41,8 +41,8 @@
 
 const char program[] = "mk5dir";
 const char author[]  = "Walter Brisken";
-const char version[] = "0.5";
-const char verdate[] = "20100131";
+const char version[] = "0.6";
+const char verdate[] = "20100325";
 
 int verbose = 0;
 int die = 0;
