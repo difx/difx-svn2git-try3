@@ -126,6 +126,7 @@ struct mark5_stream
 	int (*init_format)(struct mark5_stream *ms);
 	int (*final_format)(struct mark5_stream *ms);
 	int (*decode)(struct mark5_stream *ms, int nsamp, float **data);
+        int (*complex_decode)(struct mark5_stream *ms, int nsamp, mark5_float_complex **data);
 	int (*validate)(const struct mark5_stream *ms);
 	int (*gettime)(const struct mark5_stream *ms, int *mjd, 
 		int *sec, double *ns);
@@ -148,6 +149,8 @@ struct mark5_format_generic
 	int (*final_format)(struct mark5_stream *ms);	/* required */
 	int (*decode)(struct mark5_stream *ms, 		/* required */
 		int nsamp, float **data); 
+	int (*complex_decode)(struct mark5_stream *ms,
+		int nsamp, mark5_float_complex **data); 
 	int (*validate)(const struct mark5_stream *ms);
 	int (*gettime)(const struct mark5_stream *ms, 	/* required */
 		int *mjd, int *sec, double *ns);
@@ -245,7 +248,7 @@ struct mark5_format_generic *new_mark5_format_mark5b(int Mbps,
 
 struct mark5_format_generic *new_mark5_format_vdif(int Mbps,
 	int nchan, int nbit, int decimation, 
-	int databytesperpacket, int frameheadersize);
+	int databytesperpacket, int frameheadersize, int usecomplex);
 
 void mark5_format_vdif_set_leapsecs(struct mark5_stream *ms, int leapsecs);
 
