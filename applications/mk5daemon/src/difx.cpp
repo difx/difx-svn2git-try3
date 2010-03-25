@@ -105,7 +105,7 @@ static int checkDiskFree(const char *path, long long minFree)
 	else
 	{
 		snprintf(message, MAX_MESSAGE_SIZE, 
-			"statvfs failed when accessing directory %s", 
+			"statvfs failed when accessing directory %s : it seems not to exist!", 
 			path);
 	}
 
@@ -183,6 +183,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		return;
 	}
 
+	/* Check to make sure /tmp has some free space */
 	if(isUsed(D, S))
 	{
 		returnValue = checkDiskFree("/tmp", 24000);
@@ -204,6 +205,15 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		return;
 	}
 
+	/* Check to make sure the input file exists */
+	if(access(S->inputFilename, R_OK) != 0)
+	{
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"Input file %s not found -- cannot correlate it!",
+			S->inputFilename);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		return;
+	}
 
 	/* Check to make sure the destination directory has some free space */
 	strcpy(destdir, S->inputFilename);

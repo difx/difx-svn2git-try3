@@ -76,6 +76,120 @@ void countReplaced(const unsigned long *data, int len,
 	*wBad += nBad;
 }
 
+
+static int mjd2ymd(long mjd, int *pYear, int *pMonth, int *pDay)
+/*
+ * RETURNS OK = 0 | ERROR = -1
+ *
+ * This function converts the given date to a year, month, and day.  If the 
+ * given date does not fall between 0001JAN01 AD (MJD = -678,575) and 
+ * 10000JAN00 AD (MJD = 2,973,483) ERROR is returned.
+ */
+{
+/* 2,400,000 (difference between Julian Date and Modified Julian Date) 
+   minus # days from jan 1, 4713 BC (beginning of Julian calendar) */
+#define AD 678576
+
+	static int monlen[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+
+	int icen4, icen, iyr4, iyr, imon, iday;
+
+	/* check input range and calc days since jan 1 1 AD (Gregorian Calendar) */
+	if (mjd > 2973483)
+	{
+		return -1;
+	}
+	if ((mjd += AD - 1) < 0)
+	{
+		return -1;
+	}
+	/* calc number of fours of Gregorian centuries */
+	icen4 = mjd / 146097;
+
+	/* calc number of centuries since last 
+	fours of Gregorian centuries (e.g. since 1600 or 2000) */
+	mjd -= (icen4 * 146097);
+	if ((icen = mjd / 36524) == 4)
+	{
+		icen = 3; 
+	}
+
+	/* calc number of quadrenia(four years) since jan 1, 1901 */
+	mjd -= (icen * 36524);
+	iyr4 = mjd / 1461;
+
+	/* calc number of years since last quadrenia */
+	mjd -= (iyr4 * 1461);
+	if ((iyr = mjd / 365) == 4)
+	{
+		iyr = 3;
+	}
+
+	/* calc number of months, days since jan 1 of current year */
+	iday = mjd - iyr * 365;
+	for(imon = 0; iday >= 0; imon++)
+	{
+		iday = iday - monlen[imon] - ((iyr == 3 && imon == 1) ? 1 : 0);
+	}
+	imon--;		/* restore imon, iday to last loop value */
+	iday = iday + monlen[imon] + ((iyr == 3 && imon == 1) ? 1 : 0);
+
+	/* calc return values */
+	*pYear = icen4 * 400 + icen * 100 + iyr4 * 4 + iyr + 1;
+	*pMonth = imon + 1;
+	*pDay = iday + 1;
+
+	return 0;
+}
+
+/* return day of year given year, month, day */
+int ymd2doy(int yr, int mo, int day)
+{
+	int monstart1[] = {0,31,59,90,120,151,181,212,243,273,304,334};
+	int monstart2[] = {0,31,60,91,121,152,182,213,244,274,305,335};
+	int L2;
+	
+	L2 = yr/4-(yr+7)/4-yr/100+(yr+99)/100+yr/400-(yr+399)/400;
+	if(L2 == -1)
+	{
+		return day + monstart2[mo-1];
+	}
+	else
+	{
+		return day + monstart1[mo-1];
+	}
+}
+
+int ymd2mjd(int yr, int mo, int day)
+{
+	int doy;
+	int yr1 = yr - 1;
+
+	doy = ymd2doy(yr, mo, day);
+
+	return doy-678576+365*yr1+yr1/4-yr1/100+yr1/400;
+}
+
+int doy2mjd(int yr, int doy)
+{
+	int yr1 = yr - 1;
+
+	return doy-678576+365*yr1+yr1/4-yr1/100+yr1/400;
+}
+
+int addDecades(int mjd, int nDecade)
+{
+	int y, m, d;
+	int doy;
+
+	mjd2ymd(mjd, &y, &m, &d);
+	doy = ymd2doy(y, m, d);
+
+	y += 10*nDecade;
+
+	return doy2mjd(y, doy);
+}
+
 /* returns active bank, or -1 if none */
 int Mark5BankGet(SSHANDLE *xlrDevice)
 {
@@ -392,11 +506,20 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 			break;
 		}
 
+		/* Fix mjd.  FIXME: this should be done in mark5access */
+		if(mf->format == 0 || mf->format == 2)  /* VLBA or Mark5B format */
+		{
+			n = (mjdref - mf->mjd + 500) / 1000;
+			mf->mjd += n*1000;
+		}
+		else if(mf->format == 1)	/* Mark5B format */
+		{
+			n = (int)((mjdref - mf->mjd + 1826)/3652.4);
+			mf->mjd = addDecades(mf->mjd, n);
+		}
+		
 		scan->mjd = mf->mjd;
 		scan->sec = mf->sec;
-		n = (mjdref - scan->mjd + 500) / 1000;
-		scan->mjd += n*1000;
-		
 		scan->format      = mf->format;
 		scan->frameoffset = mf->frameoffset;
 		scan->tracks      = mf->ntrack;
