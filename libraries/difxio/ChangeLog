@@ -1,15 +1,24 @@
 2.12.3
 * Post DiFX-1.5.3
+* testdifxinput can not concatenate
+* Get rid of baselineFreq2IF map -- its use was flawed and is actually not 
+  needed
+* Support for subset of sub-band processing, including new array freqIdUsed
+  and ammendments to freqId2IF: -1 now means that freq is not to be used
 
 2.12.2
 * Fix some compiler warnings
 * Fix memory leak (need to free baseline array)
 * Print all spacecraft entries, not just for the first spacecraft
-* RCFreqId was used with two meanings (that usually gave the same value).  The true usage is now used everywhere. (Thanks to Randall Wayth for helping find this!)
+* RCFreqId was used with two meanings (that usually gave the same value).  
+  The true usage is now used everywhere. (Thanks to Randall Wayth for helping 
+  find this!)
 * Version for DiFX-1.5.3
 
 2.12.1
-* Implement getDifxScanIMIndex2 which can calculate the offset time a bit more accurately.  All functions calling getDifxScanIMIndex should now call getDifxScanIMIndex2.
+* Implement getDifxScanIMIndex2 which can calculate the offset time a bit 
+  more accurately.  All functions calling getDifxScanIMIndex should now call 
+  getDifxScanIMIndex2.
 * Add difxcalculator utility
 * Version for DiFX-1.5.2
 
@@ -35,7 +44,7 @@
 2.10
 * Deallocation option of function DifxBaselineAllocPolProds()
   - needed for more flexible frequency selection in vex2difx
-* Consider antenna reordering when concattenating scans
+* Consider antenna reordering when concatenating scans
 * use same mjd rounding for .calc and .input files
 * Version for DiFX-1.5
 

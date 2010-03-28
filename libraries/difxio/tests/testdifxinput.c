@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -28,23 +28,56 @@
  *==========================================================================*/
 
 #include <stdio.h>
+#include <string.h>
 #include "difx_input.h"
 
 int main(int argc, char **argv)
 {
-	DifxInput *D;
-	
+	DifxInput *D = 0;
+	int a;
+	int verbose = 0;
+
 	if(argc < 2)
 	{
 		printf("Usage : %s <inputfilebase>\n", argv[0]);
 		return 0;
 	}
 	
-	D = loadDifxInput(argv[1]);
-	if(!D)
+	for(a = 1; a < argc; a++)
 	{
-		fprintf(stderr, "D == 0.  quitting\n");
-		return 0;
+		if(strcmp(argv[a], "-v") == 0 ||
+		   strcmp(argv[a], "--verbose") == 0)
+		{
+			verbose++;
+			continue;
+		}
+		if(D == 0)
+		{
+			D = loadDifxInput(argv[a]);
+		}
+		else
+		{
+			DifxInput *D1, *D2;
+
+			D1 = D;
+			D2 = loadDifxInput(argv[a]);
+			if(D2)
+			{
+				D = mergeDifxInputs(D1, D2, verbose);
+				deleteDifxInput(D1);
+				deleteDifxInput(D2);
+			}
+			else
+			{
+				deleteDifxInput(D);
+				D = 0;
+			}
+		}
+		if(!D)
+		{
+			fprintf(stderr, "D == 0.  quitting\n");
+			return 0;
+		}
 	}
 
 	D = updateDifxInput(D);

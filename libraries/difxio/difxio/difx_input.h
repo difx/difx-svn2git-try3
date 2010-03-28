@@ -33,6 +33,16 @@
 #define DIFX_SESSION_LEN	4
 #define MAX_MODEL_ORDER		5
 
+
+#define DIFXIO_POL_R		0x01
+#define DIFXIO_POL_L		0x02
+#define DIFXIO_POL_X		0x10
+#define DIFXIO_POL_Y		0x20
+#define DIFXIO_POL_ERROR	0x100
+#define DIFXIO_POL_RL		(DIFXIO_POL_R | DIFXIO_POL_L)
+#define DIFXIO_POL_XY		(DIFXIO_POL_X | DIFXIO_POL_Y)
+
+
 #include <stdio.h>
 
 #ifdef __cplusplus
@@ -120,6 +130,7 @@ typedef struct
 	int pulsarId;		/* -1 if not pulsar */
 	int nPol;		/* number of pols in datastreams (1 or 2) */
 	char pol[2];		/* the polarizations */
+	int polMask;		/* bit field using DIFX_POL_x from above */
 	int doPolar;		/* >0 if cross hands to be correlated */
 	int quantBits;		/* 1 or 2 */
 	int nAntenna;
@@ -132,11 +143,11 @@ typedef struct
 	
 	int nIF;		/* number of FITS IFs to create */
 	DifxIF *IF;		/* FITS IF definitions */
-	int freqId;		/* 0-based number -- uniq FITS IF[] index */
-	int *freqId2IF;		/* map from freq table index to IF */
+	int fitsFreqId;		/* 0-based number -- uniq FITS IF[] index NOT AN INDEX TO DifxFreq[]! */
+	int *freqId2IF;		/* map from freq table [0 to nFreq] index to IF [0 to nIF-1] or -1 */
+				/* a value of -1 indicates this Freq is not used */
+	int *freqIdUsed;	/* Is the Freq table index used by this config? */
 
-	int ***baselineFreq2IF;	/* [a1][a2][freqNum] -> IF 
-				 * Indices are antenna numbers from .difx/ */
 	int *ant2dsId;		/* map from .input file antenna# to internal
 				 * DifxDatastream Id. [0..nAntenna-1]
 				 * this should be used only in conjunction
@@ -482,8 +493,8 @@ DifxConfig *mergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
 	const int *pulsarIdRemap, int *ndc);
 int DifxConfigCalculateDoPolar(DifxConfig *dc, DifxBaseline *db);
 int DifxConfigGetPolId(const DifxConfig *dc, char polName);
-int DifxConfigRecChan2IFPol(const DifxInput *D, int configId,
-	int antennaId, int recChan, int *bandId, int *polId);
+int DifxConfigRecChan2FreqPol(const DifxInput *D, int configId,
+	int antennaId, int recChan, int *freqId, int *polId);
 int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const DifxPulsar *pulsar);
 
 /* DifxModel functions */
@@ -564,10 +575,6 @@ void fprintDifxIF(FILE *fp, const DifxIF *di);
 void printDifxIFSummary(const DifxIF *di);
 void fprintDifxIFSummary(FILE *fp, const DifxIF *di);
 int isSameDifxIF(const DifxIF *di1, const DifxIF *di2);
-void deleteBaselineFreq2IF(int ***map);
-void printBaselineFreq2IF(int ***map, int nAnt, int nChan);
-void fprintBaselineFreq2IF(FILE *fp, int ***map, int nAnt, int nChan);
-int makeBaselineFreq2IF(DifxInput *D, int configId);
 
 /* DifxAntennaFlag functions */
 DifxAntennaFlag *newDifxAntennaFlagArray(int nFlag);

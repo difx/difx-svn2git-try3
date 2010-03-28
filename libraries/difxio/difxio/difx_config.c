@@ -105,10 +105,10 @@ void deleteDifxConfigInternals(DifxConfig *dc)
 		free(dc->freqId2IF);
 		dc->freqId2IF = 0;
 	}
-	if(dc->baselineFreq2IF)
+	if(dc->freqIdUsed)
 	{
-		deleteBaselineFreq2IF(dc->baselineFreq2IF);
-		dc->baselineFreq2IF = 0;
+		free(dc->freqIdUsed);
+		dc->freqIdUsed = 0;
 	}
 	if(dc->ant2dsId)
 	{
@@ -134,7 +134,6 @@ void deleteDifxConfigArray(DifxConfig *dc, int nConfig)
 void fprintDifxConfig(FILE *fp, const DifxConfig *dc)
 {
 	int i;
-	int nAnt;
 	char p0, p1;
 
 	fprintf(fp, "  Difx Config [%s] : %p\n", dc->name, dc);
@@ -146,6 +145,7 @@ void fprintDifxConfig(FILE *fp, const DifxConfig *dc)
 	p0 = dc->pol[0] ? dc->pol[0] : ' ';
 	p1 = dc->pol[1] ? dc->pol[1] : ' ';
 	fprintf(fp, "    polarization [%d] = %c%c\n", dc->nPol, p0, p1);
+	fprintf(fp, "    polMask = 0x%03x\n", dc->polMask);
 	fprintf(fp, "    doPolar = %d\n", dc->doPolar);
 	fprintf(fp, "    quantization bits = %d\n", dc->quantBits);
 	fprintf(fp, "    datastream ids [%d] =", dc->nDatastream);
@@ -163,9 +163,18 @@ void fprintDifxConfig(FILE *fp, const DifxConfig *dc)
 	if(dc->freqId2IF)
 	{
 		fprintf(fp, "    frequency to IF map =");
-		for(i = 0; dc->freqId2IF[i] >= 0; i++)
+		for(i = 0; dc->freqId2IF[i] >= -1; i++)
 		{
 			fprintf(fp, " %d", dc->freqId2IF[i]);
+		}
+		fprintf(fp, "\n");
+	}
+	if(dc->freqIdUsed)
+	{
+		fprintf(fp, "    frequency usage =");
+		for(i = 0; dc->freqIdUsed[i] >= 0; i++)
+		{
+			fprintf(fp, " %d", dc->freqIdUsed[i]);
 		}
 		fprintf(fp, "\n");
 	}
@@ -185,15 +194,6 @@ void fprintDifxConfig(FILE *fp, const DifxConfig *dc)
 		{
 			fprintDifxIF(fp, dc->IF+i);
 		}
-	}
-
-	if(dc->baselineFreq2IF)
-	{
-		/* count number of antennas in the array first */
-		for(nAnt = 0; dc->baselineFreq2IF[nAnt]; nAnt++);
-		
-		fprintf(fp, "    baselineFreq2IF map:\n");
-		fprintBaselineFreq2IF(fp, dc->baselineFreq2IF, nAnt, dc->nIF);
 	}
 }
 
@@ -250,7 +250,7 @@ int isSameDifxConfig(const DifxConfig *dc1, const DifxConfig *dc2)
 	   dc1->nDatastream != dc2->nDatastream ||
 	   dc1->nBaseline != dc2->nBaseline ||
 	   dc1->nIF != dc2->nIF ||
-	   dc1->freqId != dc2->freqId)
+	   dc1->fitsFreqId != dc2->fitsFreqId)
 	{
 		return 0;
 	}
@@ -339,9 +339,24 @@ int DifxConfigGetPolId(const DifxConfig *dc, char polName)
 	return -1;
 }
 
-/* antennaId is the index to D->antenna */
-int DifxConfigRecChan2IFPol(const DifxInput *D, int configId,
-	int antennaId, int recChan, int *bandId, int *polId)
+/* Inputs:
+ *   D         -- pointer to DifxInput structure
+ *   configId  -- index for D->config (must be in [0 to D->nConfig-1])
+ *   antennaId -- index to D->antenna (must be in [0 to D->nAntenna-1])
+ *   recChan   -- record channel number for specified antenna.  This is
+ *                index to the datastream "local frequency table"
+ * Outputs:
+ *   freqId    -- index to D->freq (in [0 to D->nFreq-1])
+ *                or -1 on out of range
+ *   polId     -- polarization ID for config.  pols are prioritized
+ *                in order R, L, X, Y.  Value is 0 or 1
+ *                or -1 on out of range
+ * Return:
+ *   0         -- success
+ *   <0        -- some error occurred
+ */
+int DifxConfigRecChan2FreqPol(const DifxInput *D, int configId,
+	int antennaId, int recChan, int *freqId, int *polId)
 {
 	DifxConfig *dc;
 	DifxDatastream *ds;
@@ -351,7 +366,7 @@ int DifxConfigRecChan2IFPol(const DifxInput *D, int configId,
 	
 	if(recChan < 0 || antennaId < 0)
 	{
-		*bandId = -1;
+		*freqId = -1;
 		*polId = -1;
 		return 0;
 	}
@@ -394,11 +409,11 @@ int DifxConfigRecChan2IFPol(const DifxInput *D, int configId,
 	localFqId = ds->RCfreqId[recChan];
 	if(localFqId < 0 || localFqId >= ds->nFreq)
 	{
-		fprintf(stderr, "DifxConfigRecChan2IFPol: recChanId=%d is out of range (nFreq=%d)\n", localFqId, ds->nFreq);
+		fprintf(stderr, "DifxConfigRecChan2FreqPol: recChanId=%d is out of range (nFreq=%d)\n", localFqId, ds->nFreq);
 		return -5;
 	}
 
-	*bandId = ds->freqId[localFqId];
+	*freqId = ds->freqId[localFqId];
 	*polId = DifxConfigGetPolId(dc, ds->RCpolName[recChan]);
 
 	return 0;
@@ -505,7 +520,7 @@ void moveDifxConfig(DifxConfig *dest, DifxConfig *src)
 	src->baselineId = 0;
 	src->IF = 0;
 	src->freqId2IF = 0;
-	src->baselineFreq2IF = 0;
+	src->freqIdUsed = 0;
 	src->ant2dsId = 0;
 }
 
