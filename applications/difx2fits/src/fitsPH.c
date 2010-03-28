@@ -90,7 +90,7 @@ static int parsePulseCal(const char *line,
 	int np, nb, nt, ns;
 	int nRecChan, recChan;
 	int n, p, i, v;
-	int polId, bandId, tone, state;
+	int polId, freqId, bandId, tone, state;
 	int pol, band;
 	int scanId;
 	double A;
@@ -176,17 +176,29 @@ static int parsePulseCal(const char *line,
 				{
 					continue;
 				}
-				v = DifxConfigRecChan2IFPol(D, *configId,
-					*antId, recChan, &bandId, &polId);
+				v = DifxConfigRecChan2FreqPol(D, *configId,
+					*antId, recChan, &freqId, &polId);
 				if(v >= 0)
 				{
-					if(bandId < 0 || polId < 0)
+					if(freqId < 0 || polId < 0)
 					{
-						fprintf(stderr, "Error: derived "
-							"bandId and polId (%d,%d) are "
+						fprintf(stderr, "parsePulseCal(1): Developer error: derived "
+							"freqId and polId (%d,%d) are "
 							"not legit.  From "
 							"recChan=%d.\n",
-							bandId, polId, recChan);
+							freqId, polId, recChan);
+						continue;
+					}
+					else if(freqId >= D->nFreq)
+					{
+						fprintf(stderr, "parsePulseCal(1): Developer error: freqId=%d, nFreq=%d\n",
+							freqId, D->nFreq);
+						continue;
+					}
+					bandId = D->config[*configId].freqId2IF[freqId];
+					if(bandId < 0)
+					{
+						/* This sub-band is not to go to the FITS file */
 						continue;
 					}
 					freqs[polId][tone + bandId*nt] = A*1.0e6;
@@ -219,24 +231,48 @@ static int parsePulseCal(const char *line,
 			{
 				n = sscanf(line, "%d%n", &recChan, &p);
 				line += p;
-				v = DifxConfigRecChan2IFPol(D, *configId,
-					*antId, recChan, &bandId, &polId);
-				for(state = 0; state < 4; state++)
+				v = DifxConfigRecChan2FreqPol(D, *configId,
+					*antId, recChan, &freqId, &polId);
+				if(v >= 0)
 				{
-					if(state < ns)
+					if(freqId < 0 || polId < 0)
 					{
-						n = sscanf(line, "%f%n", &B, &p);
-						if(n < 1)
+						fprintf(stderr, "parsePulseCal(2): Developer error: derived "
+							"freqId and polId (%d,%d) are "
+							"not legit.  From "
+							"recChan=%d.\n",
+							freqId, polId, recChan);
+						continue;
+					}
+					else if(freqId >= D->nFreq)
+					{
+						fprintf(stderr, "parsePulseCal(2): Developer error: freqId=%d, nFreq=%d\n",
+							freqId, D->nFreq);
+						continue;
+					}
+					bandId = D->config[*configId].freqId2IF[freqId];
+					if(bandId < 0)
+					{
+						/* This sub-band is not to go to the FITS file */
+						continue;
+					}
+					for(state = 0; state < 4; state++)
+					{
+						if(state < ns)
 						{
-							return -5;
+							n = sscanf(line, "%f%n", &B, &p);
+							if(n < 1)
+							{
+								return -5;
+							}
+							line += p;
 						}
-						line += p;
+						else
+						{
+							B = 0.0;
+						}
+						stateCount[polId][state + bandId*4] = B;
 					}
-					else
-					{
-						B = 0.0;
-					}
-					stateCount[polId][state + bandId*4] = B;
 				}
 			}
 		}
@@ -398,7 +434,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 				continue;
 			}
 
-			freqId1 = D->config[configId].freqId + 1;
+			freqId1 = D->config[configId].fitsFreqId + 1;
 			sourceId1 = D->source[sourceId].fitsSourceId + 1;
 			antId1 = antId + 1;
 

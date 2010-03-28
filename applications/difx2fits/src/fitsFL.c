@@ -45,7 +45,7 @@ typedef struct
 	int32_t sourceId1;
 	int32_t arrayId1;
 	int32_t baselineId1[2];
-	int32_t freqId1;
+	int32_t freqId1;		/* AIPS FreqID, not DifxFreq index! */
 	float timeRange[2];
 	int32_t chanRange1[2];
 	char reason[64];
@@ -171,10 +171,10 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 	int i, c, d, p, v;
 	int hasData[2][array_MAX_BANDS];
 	int recChan;
-	int configId = 0;	/* currently only support 1 config */
+	int configId = 0;	/* FIXME: currently only support 1 config */
+	int freqId;		/* index to D->freq[] */
 	int antennaId;
 	char polName;
-	int freqNum;
 	FILE *in;
 	FlagDatum FL;
 	const DifxConfig *dc;
@@ -257,14 +257,35 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 			}
 
 			/* convert the recorder channel number into FITS
-			 * useful values -- the IF index (bandId) and the
+			 * useful values -- the Freq index (freqId) and the
 			 * polarization index (polId).  Both are zero-based
 			 * numbers, with -1 implying "all values"
 			 */
-			v = DifxConfigRecChan2IFPol(D, configId,
-				antennaId, recChan, &FL.bandId, &FL.polId);
+			v = DifxConfigRecChan2FreqPol(D, configId,
+				antennaId, recChan, &freqId, &FL.polId);
 			if(v < 0)
 			{
+				fprintf(stderr, "DifxInput2FitsFL: Developer error: DifxConfigRecChan2FreqPol returned %d\n", v);
+				continue;
+			}
+
+			if(recChan < 0)
+			{
+				FL.bandId = -1;
+			}
+			else if(freqId >= 0 && freqId < D->nFreq)
+			{
+				FL.bandId = D->config[configId].freqId2IF[freqId];
+				if(FL.bandId < 0)
+				{
+					/* This sub-band is not going into the FITS file */
+					continue;
+				}
+			}
+			else
+			{
+				/* This shouldn't happen -- a recChan not associated with a Freq? */
+				fprintf(stderr, "DifxInput2FitsFL: Developer error: DifxConfigRecChan2FreqPol returned freqId = %d polId = %d\n", freqId, FL.polId);
 				continue;
 			}
 
@@ -305,11 +326,11 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 	    dc = D->config + configId;
 
 	    /* want to loop only over unique freqIds */
-	    if(dc->freqId < FL.freqId1)
+	    if(dc->fitsFreqId < FL.freqId1)
 	    {
 	    	continue;       /* this freqId1 done already */
 	    }
-	    FL.freqId1 = dc->freqId + 1;
+	    FL.freqId1 = dc->fitsFreqId + 1;
 	    for(d = 0; d < dc->nDatastream; d++)
 	    {
 		if(dc->datastreamId[d] < 0)
@@ -334,11 +355,21 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 			localFqId = ds->RCfreqId[c];
 			if(localFqId < 0 || localFqId >= ds->nFreq)
 			{
-				fprintf(stderr, "Developer error: localFqId=%d and ds->nFreq=%d.  configId=%d datastreamId=%d recChan=%d\n", localFqId, ds->nFreq, configId, d, c);
+				fprintf(stderr, "DifxInput2FitsFL: Developer error: localFqId=%d and ds->nFreq=%d.  configId=%d datastreamId=%d recChan=%d\n", localFqId, ds->nFreq, configId, d, c);
 				continue;
 			}
-			freqNum = ds->freqId[localFqId];
-			i = dc->freqId2IF[freqNum];
+			freqId = ds->freqId[localFqId];
+			i = dc->freqId2IF[freqId];
+			if(i < 0)
+			{
+				/* this recChan is not going into this FITS file */
+				continue;
+			}
+			else if(i > dc->nIF)
+			{
+				fprintf(stderr, "DifxInput2FitsFL: Developer error: localFqId=%d, ds->nFreq=%d, configId=%d, datastreamId=%d, and recChan=%d -> if=%d\n", localFqId, ds->nFreq, configId, d, c, i);
+				continue;
+			}
 			if(polName == dc->pol[0])
 			{
 				p = 0;

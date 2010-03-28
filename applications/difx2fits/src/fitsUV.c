@@ -146,7 +146,7 @@ int DifxVisNextFile(DifxVis *dv)
 DifxVis *newDifxVis(const DifxInput *D, int jobId)
 {
 	DifxVis *dv;
-	int i, c, v;
+	int c, v;
 	int polMask = 0;
 
 	dv = (DifxVis *)calloc(1, sizeof(DifxVis));
@@ -187,33 +187,11 @@ DifxVis *newDifxVis(const DifxInput *D, int jobId)
 		{
 			dv->nFreq = D->nIF;
 		}
-		for(i = 0; i < D->nIF; i++)
-		{
-			if(D->config[c].IF[i].pol[0] == 'R' ||
-			   D->config[c].IF[i].pol[1] == 'R')
-			{
-				polMask |= 0x01;
-			}
-			if(D->config[c].IF[i].pol[0] == 'L' ||
-			   D->config[c].IF[i].pol[1] == 'L')
-			{
-				polMask |= 0x02;
-			}
-			if(D->config[c].IF[i].pol[0] == 'X' ||
-			   D->config[c].IF[i].pol[1] == 'X')
-			{
-				polMask |= 0x10;
-			}
-			if(D->config[c].IF[i].pol[0] == 'Y' ||
-			   D->config[c].IF[i].pol[1] == 'Y')
-			{
-				polMask |= 0x20;
-			}
-		}
+		polMask |= D->config[c].polMask;
 	}
 
 	/* check for polarization confusion */
-	if( ((polMask & 0x0F) > 0 && (polMask & 0xF0) > 0) || polMask == 0 )
+	if( ((polMask & DIFXIO_POL_RL) > 0 && (polMask & DIFXIO_POL_XY) > 0) || polMask == 0 )
 	{
 		fprintf(stderr, "Error: bad polarization combinations : %x\n",
 			polMask);
@@ -221,15 +199,15 @@ DifxVis *newDifxVis(const DifxInput *D, int jobId)
 		return 0;
 	}
 
-	if(polMask & 0x01)
+	if(polMask & DIFXIO_POL_R)
 	{
 		dv->polStart = -1;
 	}
-	else if(polMask & 0x02)
+	else if(polMask & DIFXIO_POL_L)
 	{
 		dv->polStart = -2;
 	}
-	else if(polMask & 0x10)
+	else if(polMask & DIFXIO_POL_X)
 	{
 		dv->polStart = -5;
 	}
@@ -387,8 +365,8 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	int changed = 0;
 	int nFloat, readSize;
 	char line[MaxLineLength+1];
-	int freqNum;
-	int configId;
+	int freqId;		/* index to D->freq[] */
+	int configId;		/* index to D->config[] */
 	const DifxConfig *config;
 	const DifxScan *scan;
 	const DifxPolyModel *im1, *im2;
@@ -439,7 +417,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	bl           = atoi(DifxParametersvalue(dv->dp, rows[0]));
 	mjd          = atoi(DifxParametersvalue(dv->dp, rows[1]));
 	iat	     = atof(DifxParametersvalue(dv->dp, rows[2]))/86400.0;
-	freqNum      = atoi(DifxParametersvalue(dv->dp, rows[5]));
+	freqId       = atoi(DifxParametersvalue(dv->dp, rows[5]));
 	bin          = atoi(DifxParametersvalue(dv->dp, rows[7]));
 
 	/* if chan weights are written the data volume is 3/2 as large */
@@ -501,6 +479,11 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 		dv->flagTransition = 0;
 	}
 
+	if(!config->freqIdUsed[freqId])
+	{
+		return SKIPPED_RECORD;
+	}
+
 	aa1 = a1 = (bl/256) - 1;
 	aa2 = a2 = (bl%256) - 1;
 
@@ -533,8 +516,8 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 
 	dv->scanId = scanId;
 	dv->sourceId = scan->sourceId;
-	dv->freqId = config->freqId;
-	dv->bandId = config->baselineFreq2IF[aa1][aa2][freqNum];
+	dv->freqId = config->fitsFreqId;
+	dv->bandId = config->freqId2IF[freqId];
 	dv->polId  = getPolProdId(dv, DifxParametersvalue(dv->dp, rows[6]));
 
 	/* stash the weight for later incorporation into a record */

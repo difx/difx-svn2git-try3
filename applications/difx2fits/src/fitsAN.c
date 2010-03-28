@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2009 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id:$
- * $HeadURL:$
- * $LastChangedRevision:$
- * $Author:$
- * $LastChangedDate:$
+ * $Id$
+ * $HeadURL$
+ * $LastChangedRevision$
+ * $Author$
+ * $LastChangedDate$
  *
  *==========================================================================*/
 
@@ -61,7 +61,7 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D,
 	char *fitsbuf;
 	double start, stop;
 	char *p_fitsbuf;
-	int a, b, c;
+	int a, b, c, ds, dsId;
 	char antName[8];
 	double time;
 	float timeInt;
@@ -98,7 +98,19 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D,
 	arrayWriteKeys (p_fits_keys, out);
 	fitsWriteInteger(out, "TABREV", 1, "");
 	fitsWriteInteger(out, "NOPCAL", 0, "");
-	fitsWriteString(out, "POLTYPE", "APPROX", "");
+	if((D->config[0].polMask & DIFXIO_POL_RL) > 0)
+	{
+		fitsWriteString(out, "POLTYPE", "APPROX", "");
+		polTypeA = 'R';
+		polTypeB = 'L';
+	}
+	else
+	{
+		fitsWriteString(out, "POLTYPE", "X-Y LIN", "");
+		polTypeA = 'X';
+		polTypeB = 'Y';
+		fprintf(stderr, "Warning: Use of X-Y polarization is at your own risk!\n");
+	}
 	fitsWriteEnd(out);
 
 	start = D->mjdStart - (int)D->mjdStart;
@@ -106,9 +118,6 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D,
 
 	arrayId1 = 1;
 	freqId1 = 0;
-	nLevel = 1 << (D->quantBits);
-	polTypeA = 'R';
-	polTypeB = 'L';
 	time = 0.5 * (stop + start);
 	timeInt = stop - start;
 	for(b = 0; b < nBand; b++)
@@ -121,13 +130,23 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D,
 
 	for(c = 0; c < D->nConfig; c++)
 	{
-		if(D->config[c].freqId < freqId1)
+		if(D->config[c].fitsFreqId < freqId1)
 		{
 			continue;	/* already got this freqid */
 		}
-		freqId1 = D->config[c].freqId + 1; /* FITS fqId starts at 1 */
+		freqId1 = D->config[c].fitsFreqId + 1; /* FITS fqId starts at 1 */
 		for(a = 0; a < D->nAntenna; a++)
 		{
+			nLevel = 1 << (D->quantBits);
+			for(ds = 0; ds < D->config[c].nDatastream; ds++)
+			{
+				dsId = D->config[c].datastreamId[ds];
+				if(D->datastream[dsId].antennaId == a)
+				{
+					nLevel = 1 << D->datastream[dsId].quantBits;
+				}
+			}
+
 			p_fitsbuf = fitsbuf;
 			antId1 = a + 1;	  /* FITS antId1 starts at 1 */
 			strcpypad(antName, D->antenna[a].name, 8);

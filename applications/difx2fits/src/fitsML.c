@@ -218,7 +218,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	   }
 
 	   config = D->config + configId;
-	   freqId1 = config->freqId + 1;
+	   freqId1 = config->fitsFreqId + 1;
 	   sourceId1 = D->source[scan->sourceId].fitsSourceId + 1;
 
 	   modelInc = job->modelInc;

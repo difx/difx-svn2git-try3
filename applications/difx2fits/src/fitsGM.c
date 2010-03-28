@@ -224,7 +224,7 @@ const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 		for(p = 0; p < dp->nPolyco; p++)
 		{
 			sourceId1 = sourceId+1;
-			freqId1 = config->freqId+1;
+			freqId1 = config->fitsFreqId+1;
 			gateId1++;
 			pc = dp->polyco + p;
 

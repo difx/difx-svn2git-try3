@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -155,7 +155,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	   	continue;
 	   }
 	   config = D->config + configId;
-	   freqId1 = config->freqId + 1;
+	   freqId1 = config->fitsFreqId + 1;
 	   sourceId1 = D->source[scan->sourceId].fitsSourceId + 1;
 	   jobId = D->scan[s].jobId;
 	   job = D->job + jobId;

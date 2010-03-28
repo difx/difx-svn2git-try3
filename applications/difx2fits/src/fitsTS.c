@@ -94,7 +94,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 	int nBand;
 	int configId, sourceId, scanId;
 	int i, j, nPol=0;
-	int bandId, polId, antId;
+	int freqId, bandId, polId, antId;
 	int nRecChan;
 	int v;
 	double f;
@@ -210,7 +210,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 			}
 
 			configId = scan->configId;
-			freqId1 = D->config[configId].freqId + 1;
+			freqId1 = D->config[configId].fitsFreqId + 1;
 
 			for(j = 0; j < 2; j++)
 			{
@@ -225,19 +225,25 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D,
 			 */
 			for(i = 0; i < nRecChan; i++)
 			{
-				v = DifxConfigRecChan2IFPol(D, configId,
-					antId, i, &bandId, &polId);
+				v = DifxConfigRecChan2FreqPol(D, configId,
+					antId, i, &freqId, &polId);
 				if(v < 0)
 				{
 					continue;
 				}
-				if(bandId < 0 || polId < 0)
+				if(freqId < 0 || polId < 0 || freqId >= D->nFreq)
 				{
-					fprintf(stderr, "Error: derived "
-						"bandId and polId (%d,%d) are "
+					fprintf(stderr, "DifxInput2FitsTS: Developer error: derived "
+						"freqId and polId (%d,%d) are "
 						"not legit.  From "
 						"recChan=%d.\n", 
-						bandId, polId, i);
+						freqId, polId, i);
+				}
+				bandId = D->config[configId].freqId2IF[freqId];
+				if(bandId < 0)
+				{
+					/* This Freq is not entering this FITS file */
+					continue;
 				}
 				if(tSysRecChan[i] < 990.0)
 				{

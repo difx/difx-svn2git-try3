@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -200,7 +200,7 @@ const DifxInput *DifxInput2FitsSU(const DifxInput *D,
 		decEpoch = source->dec * 180.0 / M_PI;
 		RAApp = RAEpoch;
 		decApp = decEpoch;
-		freqId1 = config->freqId + 1;  /* FITS 1-based */
+		freqId1 = config->fitsFreqId + 1;  /* FITS 1-based */
 		strcpypad(sourceName, source->name, 16);
 
 		p_fitsbuf = fitsbuf;
