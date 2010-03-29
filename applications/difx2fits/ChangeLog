@@ -2,6 +2,7 @@ Version 2.6.3
 * Support for sub-band subsets
 * Per antenna quantization bits
 * Slightly better support for X-Y correlations (still probably fails somehow)
+* makefits: pass --override-version on to difx2fits
 * Post DiFX-1.5.3
 
 Version 2.6.2

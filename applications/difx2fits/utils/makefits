@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #**************************************************************************
-#   Copyright (C) 2009 by Walter Brisken                                  *
+#   Copyright (C) 2009-2010 by Walter Brisken                             *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -38,9 +38,9 @@ from os.path import isfile, isdir, getsize
 from time import gmtime, time
 
 program = 'makefits'
-version = '0.4'
+version = '0.5'
 author  = 'Walter Brisken'
-verdate = '20090917'
+verdate = '20100329'
 
 calFiles = ['flag', 'pcal', 'tsys', 'weather']
 
@@ -446,6 +446,7 @@ for a in argv[1:]:
 	if a[0] == '-':
 		if a == '--override-version':
 			overrideVersion = True
+			opts = opts + ' ' + '--override-version'
 		elif a == '--allow-partial':
 			allowPartial = True
 		elif a in ('-h', '--help'):

@@ -479,7 +479,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 		dv->flagTransition = 0;
 	}
 
-	if(!config->freqIdUsed[freqId])
+	if(config->freqIdUsed[freqId] <= 0)
 	{
 		return SKIPPED_RECORD;
 	}
