@@ -1,6 +1,6 @@
 2.12.3
 * Post DiFX-1.5.3
-* testdifxinput can not concatenate
+* testdifxinput can now concatenate
 * Get rid of baselineFreq2IF map -- its use was flawed and is actually not 
   needed
 * Support for subset of sub-band processing, including new array freqIdUsed
