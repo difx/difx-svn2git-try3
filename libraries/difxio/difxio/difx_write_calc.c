@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -101,7 +101,7 @@ int writeDifxCalc(const DifxInput *D, const char *filename)
 		writeDifxLineInt(out, "START CHANNEL", D->startChan);
 	}
 	writeDifxLine(out, "TAPER FUNCTION", D->job->taperFunction);
-	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1);
+	writeDifxAntennaArray(out, D->nAntenna, D->antenna, D->mjdStart, 1, 1, 1, 0, 1);
 	writeDifxScanArray(out, D->nScan, D->scan, D->config, 1, 1, 1);
 	writeDifxEOPArray(out, D->nEOP, D->eop);
 	writeDifxSpacecraftArray(out, D->nSpacecraft, D->spacecraft);

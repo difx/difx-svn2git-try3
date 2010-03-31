@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007, 2008, 2009 by Walter Brisken                      *
+ *   Copyright (C) 2007-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -1030,6 +1030,7 @@ static DifxInput *parseDifxInputTelescopeTable(DifxInput *D,
 		strcpy(D->antenna[a].name, DifxParametersvalue(ip, rows[0]));
 		D->antenna[a].delay = atof(DifxParametersvalue(ip, rows[1]));
 		D->antenna[a].rate  = atof(DifxParametersvalue(ip, rows[2]));
+		D->antenna[a].clockEpoch = D->job->mjdStart;
 	}
 
 	return D;
@@ -2504,7 +2505,6 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 					return 0;
 				}
 			}
-			//printf("XX %e %e %e %e\n", scan->im[0][p].delay[0], scan->im[0][p].delay[1], scan->im[0][p].delay[2], scan->im[a][p].delay[3]);
 		}
 	}
 

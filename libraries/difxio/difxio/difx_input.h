@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007, 2008, 2009 by Walter Brisken                      *
+ *   Copyright (C) 2007-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -185,8 +185,9 @@ typedef struct
 {
 	char name[32];		/* null terminated */
 	int origId;		/* antennaId before a sort */
-	double delay;		/* (us) at start of job */
+	double delay;		/* (us) at clockEpoch */
 	double rate;		/* (us/s) */
+	double clockEpoch;	/* mjd -- reference point for clock model */
 	char mount[8];		/* azel, ... */
 	double offset[3];	/* axis offset, (m) */
 	double X, Y, Z;		/* telescope position, (m) */
@@ -401,11 +402,12 @@ void printDifxAntenna(const DifxAntenna *da);
 void fprintDifxAntenna(FILE *fp, const DifxAntenna *da);
 void fprintDifxAntennaSummary(FILE *fp, const DifxAntenna *da);
 int isSameDifxAntenna(const DifxAntenna *da1, const DifxAntenna *da2);
+int isSameDifxAntennaClock(const DifxAntenna *da1, const DifxAntenna *da2);
 void copyDifxAntenna(DifxAntenna *dest, const DifxAntenna *src);
 DifxAntenna *mergeDifxAntennaArrays(const DifxAntenna *da1, int nda1,
 	const DifxAntenna *da2, int nda2, int *antennaIdRemap,
 	int *nda);
-int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
+int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da, double mjdStart,
         int doMount, int doOffset, int doCoords, int doClock, int doShelf);
 
 /* DifxDatastream functions */

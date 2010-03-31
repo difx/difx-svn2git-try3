@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -102,6 +102,7 @@ void fprintDifxAntenna(FILE *fp, const DifxAntenna *da)
 	fprintf(fp, "  DifxAntenna [%s] : %p\n", da->name, da);
 	fprintf(fp, "    Delay = %f us\n", da->delay);
 	fprintf(fp, "    Rate = %e us/s\n", da->rate);
+	fprintf(fp, "    Clock Epoch = %14.8f\n", da->clockEpoch);
 	fprintf(fp, "    Mount = %s\n", da->mount);
 	fprintf(fp, "    Offset = %f, %f, %f m\n", 
 		da->offset[0], da->offset[1], da->offset[2]);
@@ -119,8 +120,8 @@ void printDifxAntenna(const DifxAntenna *da)
 void fprintDifxAntennaSummary(FILE *fp, const DifxAntenna *da)
 {
 	fprintf(fp, "  %s\n", da->name);
-	fprintf(fp, "    Clock: Delay = %f us  Rate = %e us/s\n", 
-		da->delay, da->rate);
+	fprintf(fp, "    Clock: Delay = %f us  Rate = %e us/s  Epoch = %12.6f\n", 
+		da->delay, da->rate, da->clockEpoch);
 	fprintf(fp, "    Mount = %s\n", da->mount);
 	fprintf(fp, "    Offset = %f, %f, %f m\n", 
 		da->offset[0], da->offset[1], da->offset[2]);
@@ -153,13 +154,33 @@ int isSameDifxAntenna(const DifxAntenna *da1, const DifxAntenna *da2)
 	}
 }
 
+int isSameDifxAntennaClock(const DifxAntenna *da1, const DifxAntenna *da2)
+{
+	double deltat;
+
+	if(da1->rate != da2->rate)
+	{
+		return 0;
+	}
+
+	deltat = (da1->delay - da2->delay) + da1->rate*(da2->clockEpoch - da1->clockEpoch)*86400.0;
+
+	if(fabs(deltat) > 1.0e-10)	/* give a 10^-16 sec tolerance. */
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
 void copyDifxAntenna(DifxAntenna *dest, const DifxAntenna *src)
 {
 	int i;
 	
 	strcpy(dest->name, src->name);
-	dest->delay = src->delay;
-	dest->rate  = src->rate;
+	dest->delay      = src->delay;
+	dest->rate       = src->rate;
+	dest->clockEpoch = src->clockEpoch;
 	strcpy(dest->mount, src->mount);
 	for(i = 0; i < 3; i++)
 	{
@@ -230,11 +251,12 @@ DifxAntenna *mergeDifxAntennaArrays(const DifxAntenna *da1, int nda1,
 	return da;
 }
 
-int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da, 
+int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da, double mjdStart, 
 	int doMount, int doOffset, int doCoords, int doClock, int doShelf)
 {
 	int n;	/* number of lines written */
 	int i;
+	double delay;	/* clock delay corrected for start time */
 
 	if(doClock)
 	{
@@ -281,8 +303,9 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 		}
 		if(doClock)
 		{
+			delay = da[i].delay + da[i].rate*(mjdStart - da[i].clockEpoch)*86400.0;
 			writeDifxLineDouble1(out, "CLOCK DELAY (us) %d", i,
-				"%17.15f", da[i].delay);
+				"%17.15f", delay);
 			writeDifxLineDouble1(out, "CLOCK RATE(us/s) %d", i,
 				"%10.8e", da[i].rate);
 			n += 2;

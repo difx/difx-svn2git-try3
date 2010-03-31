@@ -36,6 +36,7 @@ int main(int argc, char **argv)
 	DifxInput *D = 0;
 	int a;
 	int verbose = 0;
+	int mergable, compatible;
 
 	if(argc < 2)
 	{
@@ -63,9 +64,22 @@ int main(int argc, char **argv)
 			D2 = loadDifxInput(argv[a]);
 			if(D2)
 			{
-				D = mergeDifxInputs(D1, D2, verbose);
-				deleteDifxInput(D1);
-				deleteDifxInput(D2);
+				mergable = areDifxInputsMergable(D1, D2);
+				compatible = areDifxInputsCompatible(D1, D2);
+				if(mergable && compatible)
+				{
+					D = mergeDifxInputs(D1, D2, verbose);
+					deleteDifxInput(D1);
+					deleteDifxInput(D2);
+				}
+				else
+				{
+					printf("cannot merge jobs: mergable=%d compatible=%d\n",
+						mergable, compatible);
+					deleteDifxInput(D1);
+					deleteDifxInput(D2);
+					D = 0;
+				}
 			}
 			else
 			{
