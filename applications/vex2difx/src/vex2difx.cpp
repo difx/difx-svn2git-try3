@@ -43,7 +43,7 @@
 
 const string program("vex2difx");
 const string version("1.0.3");
-const string verdate("20100312");
+const string verdate("20100330");
 const string author("Walter Brisken");
 
 
@@ -447,6 +447,7 @@ DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const CorrParam
 		}
 		A[i].delay = offset*1.0e6;	// convert to sec from us
 		A[i].rate  = rate*1.0e6;	// convert to sec/sec from us/sec
+		A[i].clockEpoch = J.mjdStart;
 		A[i].offset[0] = ant->axisOffset;
 		A[i].offset[1] = 0.0;
 		A[i].offset[2] = 0.0;
