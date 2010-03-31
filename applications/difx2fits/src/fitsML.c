@@ -128,7 +128,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 	float dispDelayRate;
 	double modelInc;
 	double start;
-	double deltat;
+	double clockDeltaT;	/* in seconds */
 	double freq;
 	int *skip;
 	int skipped=0;
@@ -275,7 +275,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		  P = scan->im[antId] + p;
 
 	          time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
-		  deltat = (P->mjd - D->mjdStart)*86400.0 + P->sec;
+		  clockDeltaT = (P->mjd - D->antenna[antId].clockEpoch)*86400.0 + P->sec;
 
 	          for(k = 0; k < array_N_POLY; k++)
 		  {
@@ -300,7 +300,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		  M = scan->model[antId] + p;
 
 		  time = start + timeInt*p;
-		  deltat = modelInc*p;
+		  clockDeltaT = modelInc*p + (D->mjdStart - D->antenna[antId].clockEpoch)*86400.0;
 
 		  calcPolynomial(gpoly,
 			-M[-1].t, -M[0].t, -M[1].t, -M[2].t, modelInc);
@@ -315,12 +315,12 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D,
 		    printed++;
 		    skipped++;
 		  }
-		  deltat = modelInc*p;
+		  clockDeltaT = modelInc*p + (D->mjdStart - D->antenna[antId].clockEpoch)*86400.0;
 		}
 
 		clockRate = D->antenna[antId].rate*1.0e-6;
 
-		gpoly[0] -= (D->antenna[antId].delay*1.0e-6 + clockRate*deltat);
+		gpoly[0] -= (D->antenna[antId].delay*1.0e-6 + clockRate*clockDeltaT);
 		gpoly[1] -= clockRate;		
 
 		/* All others are derived from gpoly */

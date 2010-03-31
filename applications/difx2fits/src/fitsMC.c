@@ -82,7 +82,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	const DifxJob *job;
 	const DifxModel *M;
 	const DifxPolyModel *P;
-	double time=0.0, deltat;      
+	double time=0.0;
+	double clockDeltaT;     /* in seconds */ 
 	double delay=0.0, delayRate=0.0;
 	double atmosDelay=0.0, atmosRate=0.0;
 	double clock, clockRate;
@@ -208,7 +209,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		  P = scan->im[antId] + p;
 
 		  time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
-		  deltat = (P->mjd - D->mjdStart)*86400.0 + P->sec;
+		  clockDeltaT = (P->mjd - D->antenna[antId].clockEpoch)*86400.0 + P->sec;
 
 		  /* in general, convert from (us) to (sec) */
 		  atmosDelay = (P->dry[0] + P->wet[0])*1.0e-6;
@@ -237,7 +238,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		  M = scan->model[antId] + p;
 	          
 		  time = scan->mjdStart - (int)D->mjdStart + job->modelInc*p/86400.0;
-		  deltat = job->modelInc*p;
+		  clockDeltaT = job->modelInc*p + (D->mjdStart - D->antenna[antId].clockEpoch)*86400.0;
 
 		  /* in general, convert from (us) to (sec) */
 		  atmosDelay = (M->dry  + M->wet)*1.0e-6;
@@ -259,11 +260,11 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		    skipped++;
 
 		  }
-		  deltat = job->modelInc*p;
+		  clockDeltaT = job->modelInc*p + (D->mjdStart - D->antenna[antId].clockEpoch)*86400.0;
 		}
 		
 		clockRate = D->antenna[antId].rate*1.0e-6;
-		clock     = D->antenna[antId].delay*1.0e-6 + clockRate*deltat;
+		clock     = D->antenna[antId].delay*1.0e-6 + clockRate*clockDeltaT;
           
 	        p_fitsbuf = fitsbuf;
 
