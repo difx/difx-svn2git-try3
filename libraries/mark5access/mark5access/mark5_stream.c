@@ -1139,8 +1139,7 @@ int mark5_stream_decode_complex(struct mark5_stream *ms, int nsamp,
 		{
 		    fc--;
 		    f--;
-		    fc->re = *f;
-		    fc->im = 0.0;
+		    *fc= *f;
 		}
 	    }
 	  }
@@ -1153,30 +1152,55 @@ int mark5_stream_decode_double_complex(struct mark5_stream *ms, int nsamp,
 {
 	mark5_double_complex *dc;
 	float *f;
+	mark5_float_complex *fc;
 	int c;
 	int i;
 	int r;
 	
-	r = mark5_stream_decode(ms, nsamp, (float **)data);
-	if(r < 0) 
+	if (ms->complex_decode) 
 	{
-		return r;
-	}
+	  r = mark5_stream_decode_complex(ms, nsamp, (mark5_float_complex**)data);
+	  if(r < 0) 
+	  {
+	    return r;
+	  }
 
-	/* convert in place */
-	for(c = 0; c < ms->nchan; c++)
+	  /* convert in place */
+	  for(c = 0; c < ms->nchan; c++)
+	  {
+		dc = data[c]+nsamp;
+		fc = ((mark5_float_complex*)(data[c]))+nsamp;
+		for(i = 0; i < nsamp; i++)
+		{
+			dc--;
+			f--;
+			*dc = *fc;
+		}
+	  }
+
+	}
+	else
 	{
+
+	  r = mark5_stream_decode(ms, nsamp, (float **)data);
+	  if(r < 0) 
+	  {
+	    return r;
+	  }
+
+	  /* convert in place */
+	  for(c = 0; c < ms->nchan; c++)
+	  {
 		dc = data[c]+nsamp;
 		f = ((float *)(data[c]))+nsamp;
 		for(i = 0; i < nsamp; i++)
 		{
 			dc--;
 			f--;
-			dc->re = *f;
-			dc->im = 0.0;
+			*dc = *f;
 		}
+	  }
 	}
-
 	return r;
 }
 

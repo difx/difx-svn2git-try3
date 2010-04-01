@@ -35,15 +35,9 @@
 #define _GNU_SOURCE
 #endif
 
-/* do the fftw trick -- if <complex.h> has been included, use it */
-
-#ifdef _Complex_I
+#include <complex.h>
 typedef double complex mark5_double_complex;
 typedef float  complex mark5_float_complex;
-#else
-typedef struct { double re, im; } mark5_double_complex;
-typedef struct { float  re, im; } mark5_float_complex;
-#endif
 
 #include <stdio.h>
 
