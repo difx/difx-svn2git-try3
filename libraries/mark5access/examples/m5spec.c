@@ -131,7 +131,7 @@ int spec(const char *filename, const char *formatname, int nchan, int nint,
 
 	  for(j = 0; j < nint; j++)
 	  {
-	    status = mark5_stream_decode_complex(ms, chunk , (float complex**)cdata);
+	    status = mark5_stream_decode_double_complex(ms, chunk , (float complex**)cdata);
 		
 		if(status < 0)
 		{
