@@ -35,6 +35,14 @@
 #define MAXSCANS  1024 /* Maximum number of scans in SDir */
 #define MAXLENGTH   64 /* Maximum length of a scan's extended name +1 */
 
+// Test for SDK 9+
+#ifdef XLR_MAX_IP_ADDR
+typedef unsigned int streamstordatatype;
+#else
+typedef unsigned long streamstordatatype;
+#endif
+
+
 /* as implemented in Mark5 */
 struct Mark5Directory
 {
@@ -108,7 +116,7 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 	int (*callback)(int, int, int, void *), void *data,
 	float *replacedFrac);
 
-void countReplaced(const unsigned long *data, int len,
+void countReplaced(const streamstordatatype *data, int len,
 	long long *wGood, long long *wBad);
 
 #endif

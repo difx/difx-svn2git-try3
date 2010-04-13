@@ -55,7 +55,7 @@ char Mark5DirDescription[][20] =
 	"Decoded WR"
 };
 
-void countReplaced(const unsigned long *data, int len, 
+void countReplaced(const streamstordatatype *data, int len, 
 	long long *wGood, long long *wBad)
 {
 	int nBad=0;
@@ -254,7 +254,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	char label[XLR_LABEL_LENGTH];
 	int bank;
 	unsigned long a, b;
-	unsigned long *buffer;
+	streamstordatatype *buffer;
 	int bufferlen;
 	unsigned int x, signature;
 	int die = 0;
@@ -310,7 +310,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 		return 0;
 	}
 
-	buffer = (unsigned long *)malloc(bufferlen);
+	buffer = (streamstordatatype *)malloc(bufferlen);
 	
 	memset(module, 0, sizeof(struct Mark5Module));
 	module->nscans = m5dir.nscans;

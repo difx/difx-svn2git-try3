@@ -609,7 +609,7 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	xlrRD.AddrHi = a;
 	xlrRD.AddrLo = b;
 	xlrRD.XferLength = bytes;
-	xlrRD.BufferAddr = buf;
+	xlrRD.BufferAddr = (streamstordatatype *)buf;
 
 	WATCHDOG( xlrRC = XLRRead(xlrDevice, &xlrRD) );
 	if(xlrRC != XLR_SUCCESS)

@@ -1,4 +1,4 @@
-AC_INIT([mpifxcorr], [1.5.3], [Adam Deller <adeller@astro.swin.edu.au>])
+AC_INIT([mpifxcorr], [1.5.4], [Adam Deller <adeller@astro.swin.edu.au>])
 PACKAGE_VERSION=AC_PACKAGE_VERSION
 AC_SUBST([PACKAGE_VERSION])
 AC_SUBST([LIBRARY_VERSION])
@@ -45,7 +45,6 @@ else
 fi
 dnl **********************************************************
 
-
 dnl **********************************************************
 dnl **** Find difxmessage library                         ****
 dnl **********************************************************
@@ -57,21 +56,18 @@ PKG_CHECK_MODULES(DIFXMESSAGE,
 AM_CONDITIONAL(WITH_DIFXMESSAGE, $dm_enabled)
 
 dnl **********************************************************
-dnl **** Look for StreamStor libraries                    ****
+dnl **** Find streamstor library                          ****
 dnl **** cause native Mark5 to be built if found.         ****
 dnl **********************************************************
 ss_enabled=true
-AC_CHECK_HEADER([xlrapi.h],
-		[AC_DEFINE([HAVE_XLRAPI_H], 1, [1=has SS])],
-		[ss_enabled=false])
-if test ${ss_enabled} = true; then
-	SS_LIBS="-lwdapi921 -lssapi -lrt"
-else
-	SS_LIBS=""
-fi
+PKG_CHECK_MODULES(SS,
+        streamstor >= 8.0,
+	[AC_DEFINE([HAVE_XLRAPI_H], 1, [1=has SS])],
+	ss_enabled=false)
 AM_CONDITIONAL(WITH_SS, $ss_enabled)
-dnl **********************************************************
-
+if test ss_enabled = false; then
+	echo 'No suitable streamstor.pc file found so native mark5 support will be suppressed.  See documentation if you are surprised by this.'
+fi
 
 dnl **********************************************************
 dnl **** Look for RPFITS                                  ****
@@ -108,7 +104,7 @@ PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.3.5)
 dnl **********************************************************
 
 
-CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${IPP_CFLAGS} ${RPFITS_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${CFLAG_QUIET}"
+CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${IPP_CFLAGS} ${RPFITS_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${SS_CFLAGS} ${CFLAG_QUIET}"
 LIBS="${M5ACCESS_LIBS} ${SS_LIBS} ${IPP_LIBS} ${RPFITS_LIBS} ${DIFXMESSAGE_LIBS}"
 
 echo "CXXFLAGS = ${CXXFLAGS}"
