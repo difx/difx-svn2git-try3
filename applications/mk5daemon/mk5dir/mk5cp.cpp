@@ -170,7 +170,7 @@ int copyByteRange(SSHANDLE xlrDevice, const char *outpath, const char *outname, 
 	long long readptr;
 	long long togo;
 	int len;
-	unsigned long *data;
+	streamstordatatype *data;
 	int a, b, v;
 	char filename[DIFX_MESSAGE_FILENAME_LENGTH];
 	struct timeval t0, t1, t2;
@@ -195,7 +195,7 @@ int copyByteRange(SSHANDLE xlrDevice, const char *outpath, const char *outname, 
 
 	readptr = byteStart;
 	togo = byteStop-byteStart;
-	data = (unsigned long *)malloc(chunksize);
+	data = (streamstordatatype *)malloc(chunksize);
 	len = chunksize;
 
 	mk5status->status = MARK5_COPY_SUCCESS;
@@ -321,7 +321,7 @@ int copyScan(SSHANDLE xlrDevice, const char *vsn, const char *outpath, int scanN
 	long long readptr;
 	long long togo;
 	int len, skip;
-	unsigned long *data;
+	streamstordatatype *data;
 	int a, b, v;
 	char filename[DIFX_MESSAGE_FILENAME_LENGTH];
 	struct timeval t0, t1, t2;
@@ -346,7 +346,7 @@ int copyScan(SSHANDLE xlrDevice, const char *vsn, const char *outpath, int scanN
 
 	readptr = scan->start;
 	togo = scan->length;
-	data = (unsigned long *)malloc(chunksize);
+	data = (streamstordatatype *)malloc(chunksize);
 	len = chunksize;
 
 	mk5status->status = MARK5_COPY_SUCCESS;

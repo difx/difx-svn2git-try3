@@ -39,6 +39,14 @@
 extern "C" {
 #endif
 
+
+// Test for SDK 9+
+#ifdef XLR_MAX_IP_ADDR
+typedef unsigned int streamstordatatype;
+#else
+typedef unsigned long streamstordatatype;
+#endif
+
 /* as implemented in Mark5 */
 struct Mark5Directory
 {
@@ -111,7 +119,7 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 	int (*callback)(int, int, int, void *), void *data,
 	float *replacedFrac, int force);
 
-void countReplaced(const unsigned long *data, int len,
+void countReplaced(const streamstordatatype *data, int len,
 	long long *wGood, long long *wBad);
 
 int getByteRange(const struct Mark5Scan *scan, long long *byteStart, long long *byteStop, double mjdStart, double mjdStop);

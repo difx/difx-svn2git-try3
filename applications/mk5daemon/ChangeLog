@@ -3,6 +3,7 @@ Version 1.4
 * Post DiFX-1.5.3
 * Check that input file exists before attempting correlation
 * mk5dir: Mark4 directories from after 2009 Dec 31 would end up with wrong MJD
+* Support for Streamstor SDK 9.0
 
 Version 1.3
 ~~~~~~~~~~~

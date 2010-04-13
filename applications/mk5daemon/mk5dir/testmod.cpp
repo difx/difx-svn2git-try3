@@ -38,6 +38,7 @@
 #include <sys/time.h>
 #include "config.h"
 #include "watchdog.h"
+#include "mark5dir.h"
 #include "../config.h"
 
 const char program[] = "testmod";
@@ -198,7 +199,7 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 		pos = (long long)size*(num*nRep + r) + ptr;
 		a = pos>>32;
 		b = pos & 0xFFFFFFFF;
-		WATCHDOG( xlrRC = XLRReadData(xlrDevice, (PULONG)buffer2, a, b, size) );
+		WATCHDOG( xlrRC = XLRReadData(xlrDevice, (streamstordatatype *)buffer2, a, b, size) );
 		if(xlrRC != XLR_SUCCESS)
 		{
 			fprintf(stderr, "XLRReadData error pos=%Ld a=%u b=%u size=%d\n", pos, a, b, size);
