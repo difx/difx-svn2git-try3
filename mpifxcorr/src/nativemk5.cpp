@@ -655,6 +655,14 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	}
 	else if((sec % 86400) != sec2 || fabs(ns - readnanoseconds) > 0.5)
 	{
+		// If offset is small, just nudge it 
+		// Data will be invalid this time through, but should be OK next time
+		if(abs(sec-sec2) < 2)
+		{
+			readseconds -= (sec-sec2);
+			readnanoseconds = (int)(ns + 0.4);
+			cwarn << startl << "Nudged time just a bit" << endl;
+		}
 		invalidtime++;
 		ninvalid++;
 		invalidstart = readpointer;
@@ -664,11 +672,24 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 		{
 			cwarn << startl << invalidtime << " consecutive sync errors starting at readpos " << invalidstart << " (" << mjd << "," << sec << "," << ns << ")!=(" << sec2 << "," << readnanoseconds << ")" << " length=" << bytes << endl ;
 		}
-		if(invalidtime == 100)
+		// After 10 sync errors try to find the sync word again
+		if(invalidtime % 11 == 10)
+		{
+			struct mark5_format *mf;
+			mf = new_mark5_format_from_stream(new_mark5_stream_memory(data, bytes));
+			if(mf)
+			{
+				readpointer += mf->frameoffset;
+				cwarn << startl << "Jumping " << mf->frameoffset << " bytes" << endl;
+				invalidtime = 0;
+				delete_mark5_format(mf);
+			}
+		}
+		// Call it an error after 25 sync errors
+		if(invalidtime == 25)
 		{
 			cerror << startl << invalidtime << " consecutive sync errors.  Something is probably wrong!" << endl;
 		}
-		// FIXME -- if invalidtime > threshhold, look for sync again
 	}
 	else
 	{
