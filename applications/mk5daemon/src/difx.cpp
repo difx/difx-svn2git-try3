@@ -36,7 +36,7 @@
 #include "mk5daemon.h"
 
 const char defaultMpiWrapper[] = "mpirun";
-const char defaultMpiOptions[] = "--mca btl ^udapl,openib --mca mpi_yield_when_idle 1";
+const char defaultMpiOptions[] = "--mca btl ^udapl,openib --mca mpi_yield_when_idle 1 --mca rmaps seq";
 const char defaultDifxProgram[] = "mpifxcorr";
 
 typedef struct
@@ -160,6 +160,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	const char *mpiWrapper;
 	const char *difxProgram;
 	int returnValue;
+	char altDifxProgram[64];
 
 	if(!G)
 	{
@@ -214,6 +215,10 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 		return;
 	}
+
+	snprintf(message, MAX_MESSAGE_SIZE,
+		"DiFX version %s to be started", S->difxVersion);
+	difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 
 	/* Check to make sure the destination directory has some free space */
 	strcpy(destdir, S->inputFilename);
@@ -343,6 +348,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		return;
 	}
 
+#if 0
 	fprintf(out, "%s slots=1 max-slots=%d\n", S->headNode, getUse(uses, S->headNode));
 	for(int i = 0; i < S->nDatastream; i++)
 	{
@@ -353,6 +359,16 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	{
 		n = getUse(uses, S->processNode[i]);
 		fprintf(out, "%s slots=1 max-slots=%d\n", S->processNode[i], n);
+	}
+#endif
+	fprintf(out, "%s\n", S->headNode);
+	for(int i = 0; i < S->nDatastream; i++)
+	{
+		fprintf(out, "%s\n", S->datastreamNode[i]);
+	}
+	for(int i = 0; i < S->nProcess; i++)
+	{
+		fprintf(out, "%s\n", S->processNode[i]);
 	}
 
 	fclose(out);
@@ -437,6 +453,11 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	{
 		difxProgram = S->difxProgram;
 	}
+	else if(strcmp(S->difxVersion, "unknown") != 0)
+	{
+		snprintf(altDifxProgram, 63, "runmpifxcorr.%s", S->difxVersion);
+		difxProgram = altDifxProgram;
+	}
 	else
 	{
 		difxProgram = defaultDifxProgram;
@@ -486,19 +507,19 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 			message);
 
 		/* register this job with the Transient Event Monitor */
-		EventQueue *Q = D->eventManager.startJob(jobName);
-		for(int i = 0; i < S->nDatastream; i++)
-		{
-			Q->addMark5Unit(S->datastreamNode[i]);
-		}
-		Q->setUser(user);
+//		EventQueue *Q = D->eventManager.startJob(jobName);
+//		for(int i = 0; i < S->nDatastream; i++)
+//		{
+//			Q->addMark5Unit(S->datastreamNode[i]);
+//		}
+//		Q->setUser(user);
 		/* cause mpifxcorr to run! */
 		returnValue = Mk5Daemon_system(D, command, 1);
 
 		/* deregister this job with the Transient Event Monitor after 
 		 * performing any needed data copying
 		 */
-		D->eventManager.stopJob(jobName);
+//		D->eventManager.stopJob(jobName);
 
 		/* FIXME -- make use of returnValue  */
 		difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
