@@ -21,6 +21,11 @@ mpifxcorr_SOURCES = \
 	mk5mode.cpp \
 	polyco.cpp \
 	alert.cpp \
+	filters.cpp \
+	filterchain.cpp \
+	filter_avg.cpp \
+	filter_iir.cpp \
+	filter_iirsos.cpp \
 	$(mark5_files)
 
 library_includedir = $(includedir)/mpifxcorr
