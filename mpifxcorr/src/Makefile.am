@@ -7,8 +7,7 @@ mark5_files = \
 	nativemk5_stubs.cpp
 endif
 
-bin_PROGRAMS = mpifxcorr neuteredmpifxcorr
-
+bin_PROGRAMS = mpifxcorr
 mpifxcorr_SOURCES = \
 	mpifxcorr.cpp \
 	fxmanager.cpp \
@@ -16,8 +15,8 @@ mpifxcorr_SOURCES = \
 	datastream.cpp \
 	visibility.cpp \
 	configuration.cpp \
+	uvw.cpp \
 	mode.cpp \
-        model.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
 	polyco.cpp \
@@ -32,10 +31,10 @@ library_include_HEADERS = \
 	architecture.h \
 	visibility.h \
 	configuration.h \
+	uvw.h \
 	mk5.h \
 	mk5mode.h \
-        model.h \
-        mode.h \
+	mode.h \
 	polyco.h \
 	mark5dir.h \
 	nativemk5.h \
@@ -52,7 +51,7 @@ libmpifxcorr_a_SOURCES = \
 	mk5.cpp \
 	mk5mode.cpp \
 	fxmanager.cpp \
-        model.cpp \
+	uvw.cpp \
 	visibility.cpp \
 	alert.cpp \
 	$(mark5_files)
@@ -63,17 +62,6 @@ libfxcorr_a_SOURCES = \
 	mk5mode.cpp \
 	polyco.cpp \
 	visibility.cpp \
-        model.cpp \
+	uvw.cpp \
 	alert.cpp
 
-neuteredmpifxcorr_SOURCES = \
-	mpifxcorr.cpp \
-	fxmanager.cpp \
-	core.cpp \
-	datastream.cpp \
-	mk5.cpp \
-	$(mark5_files)
-
-neuteredmpifxcorr_CXXFLAGS = -DNEUTERED_DIFX $(AM_CXXFLAGS)
-
-neuteredmpifxcorr_LDADD = $(top_builddir)/src/libfxcorr.a

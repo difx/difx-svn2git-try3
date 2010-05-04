@@ -44,12 +44,12 @@ public:
   * @param subcount The index of the polyco in the file to load
   * @param confindex The configuration index which this polyco relates to (ie which pulsar)
   * @param nbins The number of pulsar bins to use
-  * @param maxchans The number of spectral points per band
+  * @param nchans The number of spectral points per band
   * @param bphases The phases of the endpoints of each pulsar bin
   * @param bweights The weights associated with each pulsar bin
   * @param calcmins The period of time over which a given set of phase offsets is expected to be accurate
   */
-  Polyco(string filename, int subcount, int confindex, int nbins, int maxchans, double * bphases, double * bweights, double calcmins);
+  Polyco(string filename, int subcount, int confindex, int nbins, int nchans, double * bphases, double * bweights, double calcmins);
 
  /**
   * Copy constructor - performs deep copy of provided Polyco
@@ -79,12 +79,10 @@ public:
   * Sets the frequency band information and allocates the necessary arrays for bin calculation
   * @param nfreqs The number of frequencies to calculate for
   * @param freqs Array of frequency values, in MHz
-  * @param bws Array of bandwidths, in MHz
-  * @param nchans Array of number of channels
-  * @param compute Array specifying which frequencies should actually be computed
+  * @param bw The bandwidth of the bands, in MHz
   * @return Whether bin values are legal or not (should abort if not legal)
   */
-  bool setFrequencyValues(int nfreqs, double * freqs, double * bws, int * nchans, bool * compute);
+  bool setFrequencyValues(int nfreqs, double * freqs, double bw);
 
  /**
   * Sets the active time (from which subsequent offsets will refer to) to the given values
@@ -118,11 +116,11 @@ public:
   */
   inline bool initialisedOK() { return readok; }
   
-// /**
-//  * Returns the bin counts
-//  * @return The bin counts (number of times each bin has been calculated since last cleared) for this Polyco
-//  */
-//  inline s32 *** getBinCounts() { return currentbincounts; }
+ /**
+  * Returns the bin counts
+  * @return The bin counts (number of times each bin has been calculated since last cleared) for this Polyco
+  */
+  inline s32 *** getBinCounts() { return currentbincounts; }
  /**
   * Returns the configuration index
   * @return The configuration index this Polyco corresponds to
@@ -133,28 +131,23 @@ public:
   * @return The bin weights for this Polyco
   */
   inline f64* getBinWeights() { return binweights; }
+
  /**
   * Returns the weight*width product for the specified bin
   * @return The weight*width product for the specified bin
   */
   inline f64 getBinWeightTimesWidth(int bin) { f64 w = binphases[bin]-binphases[(bin+numbins-1)%numbins]; return (w<0.0)?binweights[bin]*(1.0+w):binweights[bin]*w; }
 
-/**
+ /**
   * Returns the width of the specified bin
   * @return The width of the specified bin
   */
   inline f64 getBinWidth(int bin) { f64 w = binphases[bin]-binphases[(bin+numbins-1)%numbins]; return (w<0.0)?(1.0+w):w; }
 
-// /**
-//  * Clears the bin counts
-//  */
-//  void incrementBinCount();
-
  /**
-  * Returns the estimated number of bytes used by the Polyco
-  * @return Estimated memory size of the Polyco (bytes)
+  * Clears the bin counts
   */
-  inline int getEstimatedBytes() { return estimatedbytes; }
+  void incrementBinCount();
 
   inline int getMJD() { return mjd; }
   inline double getMJDfraction() { return mjdfraction; }
@@ -182,16 +175,13 @@ protected:
   bool fieldOK(char * buffer, int width);
 
   string pulsarname;
-  int configindex, numbins, maxchannels, numfreqs, observatory, timespan, numcoefficients, mjd, estimatedbytes;
-  double mjdfraction, dt0, dm, dopplershift, logresidual, refphase, f0, obsfrequency, binaryphase, minbinwidth, calclengthmins;
+  int configindex, numbins, numchannels, numfreqs, observatory, timespan, numcoefficients, mjd;
+  double mjdfraction, dt0, dm, dopplershift, logresidual, refphase, f0, obsfrequency, binaryphase, minbinwidth, bandwidth, calclengthmins;
   bool readok;
   double * coefficients;
   f64 * binphases;
   f64 * binweights;
   f32 * lofrequencies;
-  f32 * bandwidths;
-  int * numchannels;
-  bool * computefor;
   f64 * freqcoefficientarray;
   f64 * phasecoefficientarray;
   f64 * timepowerarray;

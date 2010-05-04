@@ -27,7 +27,9 @@
 #include "architecture.h"
 #include "visibility.h"
 #include "core.h"
+#include "uvw.h"
 #include <pthread.h>
+
 
 /**
 @class FxManager
@@ -54,6 +56,9 @@ public:
   * @param port The port to send monitoring data down
   * @param monitor_skip Only send 1 in every monitor_skip visibilities to the monitor
   */
+
+  enum monsockStatusType {CLOSED, PENDING, OPENED};
+
   FxManager(Configuration * conf, int ncores, int * dids, int * cids, int id, MPI_Comm rcomm, bool mon, char * hname, int port, int monitor_skip);
   ~FxManager();
 
@@ -67,11 +72,7 @@ public:
   */
   void execute();
 
- /**
-  * Returns the estimated number of bytes used by the FxManager
-  * @return Estimated memory size of the FxManager (bytes)
-  */
-  inline int getEstimatedBytes() { return estimatedbytes; }
+  void MonitorThread();
 
 protected:
  /** 
@@ -79,12 +80,25 @@ protected:
   * @param thismanager Pointer to this FxManager object
   */
   static void * launchNewWriteThread(void * thismanager);
+
+  static void * launchMonitorThread(void * thismanager);
+
   
 private:
-  //constants
+ /** @name RPFITS constants
+  * These constants are used by the RPFITS standard and are necessary for creating RPFITS files
+  */
+ //@{
+  static const int ANTENNA_NAME_LENGTH = 8;
+  static const int SOURCE_NAME_LENGTH = 16;
+  static const int SOURCE_CALCODE_LENGTH = 4;
+  static const int RPFITS_HEADER_LENGTH = 80;
+  static const int STOKES_NAME_LENGTH = 2;
+  static const int MAX_FILENAME_LENGTH = 256;
   static const string CIRCULAR_POL_NAMES[4];
   static const string LL_CIRCULAR_POL_NAMES[4];
   static const string LINEAR_POL_NAMES[4];
+ //@}
 
   //methods
  /** 
@@ -108,48 +122,69 @@ private:
   int locateVisIndex(int coreid);
 
  /** 
-  * Open the files
+  * Opens the RPFITS file if necessary
   */
   void initialiseOutput();
-
- /**
-  * Prints a summary of the internal buffers and how many subints were received from each core
-  * @param visindex The index in the visibility buffer which was just completed
-  */
-  void printSummary(int visindex);
 
  /** 
   * While the correlation is active, continually tries to obtain a lock on the next Visibility, write it out, and increment it
   */
   void loopwrite();
 
+ /** 
+  * Closes the RPFITS file if necessary
+  */
+  void finaliseOutput();
+
+ /** 
+  * Writes the RPFITS header to disk
+  */
+  void writeheader();
+
+
+  /* 
+   * Copy vis data into buffer and signal to monitor thread to start copying 
+   */
+
+  void sendMonitorData(int visID);
+  bool checkSocketStatus();
+  int openMonitorSocket();
+
   //variables
   Configuration * config;
   MPI_Comm return_comm;
-  int numcores, mpiid, numdatastreams, startmjd, startseconds, initns, initsec, initscan, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis, writesegment, estimatedbytes;
-  double inttime;
+  int numcores, mpiid, numdatastreams, startmjd, startseconds, startns, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis, skipseconds;
+  double inttime, halfsampleseconds;
   bool keepwriting, circularpols, writethreadinitialised, visibilityconfigok;
-  int senddata[4]; //targetcoreid, scan, scanoffsetseconds, scanoffsetnanoseconds
-  Model * model;
+  int senddata[3];
+  Uvw * uvw;
   int * datastreamids;
   int * coreids;
-  int * corecounts;
-  int * recentcorecounts;
   int * numsent;
   int * extrareceived;
   int *** coretimes;
   bool monitor;
   char * hostname;
-  int monitorport, mon_socket;
   cf32 * resultbuffer;
-  char * todiskbuffer;
   Visibility ** visbuffer;
-  pthread_mutex_t * bufferlock;
+  pthread_mutex_t * bufferlock, startlock;
   bool * islocked;
   pthread_cond_t writecond;
   pthread_t writethread;
 
   int lastsource;
+
+  // Variables needed for monitoring
+  int monitorport;
+  int mon_socket;
+  int monitor_skip;
+  pthread_cond_t monitorcond;
+  pthread_mutex_t moncondlock, monitorwritelock;
+  pthread_t monthread;
+  monsockStatusType monsockStatus;
+  char *buf;
+  int bufsize, nbuf;
+
 };
 
 #endif

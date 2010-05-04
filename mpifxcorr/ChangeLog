@@ -1,23 +1,25 @@
-Version 2.0, 2009 September 24
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* Many, many changes both visibly and under the hood
-* Allows support of multiple phase centres
-* Writes each pulsar bin/source to a different DiFX file
-* More efficient implementation of station-based processing, using
-  complex multiplications to replace many sin/cos calculations (~20% speedup)
-* More cache-efficient implementation of baseline-based processing
-  for correlations with many channels where whole output array can't
-  fit in cache simultaneously (factor of ~2 speedup for >=2k channels)
-* Allows support of zoom bands
-* Replaces blockspersend with subintNS, guardBlocks with guardNS
-* Shifts numchannels/oversample/decimation etc from Configuration to Freq
-* Allows use of Rule table in input file
-* Adds support for LO offsets
-* mostly complete Mark5B support
-* Mark5B eVLBI support
-* Visibilities with zero weight are not written to disk
-* See http://cira.ivec.org/dokuwiki/doku.php/difx/documentation for more info
-  on changes, particulaly for the file formats
+Version 1.5.4
+~~~~~~~~~~~~~
+* Support for streamstor SDK 9.0+
+
+Version 1.5.3, 2010 March 17
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Bug fix for calculation of buffer sizes for Mk4/VLBA/VDIF format, which 
+  could lead to MODE errors and the loss of a few FFTs in very rare cases
+* Add an extra second to polyco valid range to ensure that exact boundary
+  cases get caught by one or the other polyco
+
+Version 1.5.2, 2009 Nov 23
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Warn when difxmessage is in use so the user knows why no messages appear on the screen
+* Improved real-time correlation monitoring
+* Primitive support for single-thread VDIF
+* Support for unmodulated VLBA format (called VLBN internally)
+
+Version 1.5.1, 2009 Sep 8
+~~~~~~~~~~~~~~~~~~~~~~~~~
+* Mark5 bank switching more reliable
+* Zero-weight data is not written
 
 Version 1.5 Perth, 2008 March 7
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -58,3 +60,7 @@ the first written channel is the DC channel and for lower sideband data
 the last written channel is the DC channel.  The Nyquist channel is always
 dropped.
 
+Nomenclature still version 1.5 - full name now 1.5.0 - 02 June 2009
+
+  * Many bugfixes have been made and this version is now committed as the 
+  "official" 1.5 branch release

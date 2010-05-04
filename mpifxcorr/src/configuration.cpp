@@ -25,7 +25,6 @@
 #include "mk5mode.h"
 #include "configuration.h"
 #include "mode.h"
-#include "visibility.h"
 #include "alert.h"
 
 int Configuration::MONITOR_TCP_WINDOWBYTES;
@@ -33,31 +32,17 @@ int Configuration::MONITOR_TCP_WINDOWBYTES;
 Configuration::Configuration(const char * configfile, int id)
   : mpiid(id), consistencyok(true)
 {
-  string configfilestring = configfile;
-  int basestart = configfilestring.find_last_of('/');
-  if(basestart == string::npos)
-    basestart = 0;
-  else
-    basestart = basestart+1;
-  jobname = configfilestring.substr(basestart, string(configfile).find_last_of('.')-basestart);
-
   sectionheader currentheader = INPUT_EOF;
   commonread = false;
   datastreamread = false;
   configread = false;
-  freqread = false;
-  ruleread = false;
-  baselineread = false;
-  maxnumchannels = 0;
-  estimatedbytes = 0;
-  model = NULL;
-
+  uvw = NULL;
+  
   //open the file
   ifstream * input = new ifstream(configfile);
   if(input->fail() || !input->is_open())
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Cannot open file " << configfile << " - aborting!!!" << endl;
+    cfatal << startl << "Cannot open file " << configfile << " - aborting!!!" << endl;
     consistencyok = false;
   }
   else
@@ -74,52 +59,34 @@ Configuration::Configuration(const char * configfile, int id)
       case CONFIG:
         if(!commonread)
         {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Input file out of order!  Attempted to read configuration details without knowledge of common settings - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read configuration details without knowledge of common settings - aborting!!!" << endl;
           consistencyok = false;
         }
         else
-          consistencyok = processConfig(input);
-        break;
-      case RULE:
-        if(!configread) {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Input file out of order!  Attempted to read rule details without knowledge of configurations - aborting!!!" << endl;
-          consistencyok = false;
-        }
-        else
-          consistencyok = processRuleTable(input);
+          consistencyok = consistencyok && processConfig(input);
         break;
       case FREQ:
-        consistencyok = processFreqTable(input);
+        processFreqTable(input);
         break;
       case TELESCOPE:
         processTelescopeTable(input);
         break;
       case DATASTREAM:
-        if(!configread || ! freqread)
+        if(!configread)
         {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Input file out of order!  Attempted to read datastreams without knowledge of one or both of configs/freqs - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read datastreams without knowledge of configs - aborting!!!" << endl;
           consistencyok = false;
         }
         else
-          consistencyok = processDatastreamTable(input);
+          consistencyok = consistencyok && processDatastreamTable(input);
         break;
       case BASELINE:
-        if(!configread || !freqread)
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Input file out of order! Attempted to read baselines without knowledge of freqs - aborting!!!" << endl;
-          consistencyok = false;
-        }
-        consistencyok = processBaselineTable(input);
+        consistencyok = consistencyok && processBaselineTable(input);
         break;
       case DATA:
         if(!datastreamread)
         {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Input file out of order!  Attempted to read datastream data files without knowledge of datastreams - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read datastream data files without knowledge of datastreams - aborting!!!" << endl;
           consistencyok = false;
         }
         else
@@ -128,8 +95,7 @@ Configuration::Configuration(const char * configfile, int id)
       case NETWORK:
         if(!datastreamread)
         {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Input file out of order!  Attempted to read datastream network details without knowledge of datastreams - aborting!!!" << endl;
+          cfatal << startl << "Input file out of order!  Attempted to read datastream network details without knowledge of datastreams - aborting!!!" << endl;
           consistencyok = false;
         }
         else
@@ -140,70 +106,14 @@ Configuration::Configuration(const char * configfile, int id)
     }
     currentheader = getSectionHeader(input);
   }
-  if(!configread || !ruleread || !commonread || !datastreamread || !freqread)
+  if(!configread)
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "One or more sections missing from input file - aborting!!!" << endl;
+    cfatal << startl << "No config section in input file - aborting!!!" << endl;
     consistencyok = false;
   }
   input->close();
   delete input;
-  //work out which frequencies are used in each config, and the minimum #channels
-  freqdata freq;
-  for(int i=0;i<numconfigs;i++)
-  {
-    freq = freqtable[getBFreqIndex(i,0,0)];
-    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
-    configs[i].frequsedbybaseline = new bool[freqtablelength];
-    for(int j=0;j<freqtablelength;j++)
-      configs[i].frequsedbybaseline[j] = false;
-    for(int j=0;j<numbaselines;j++)
-    {
-      for(int k=0;k<baselinetable[configs[i].baselineindices[j]].numfreqs;k++)
-      {
-        //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
-        freq = freqtable[getBFreqIndex(i,j,k)];
-        configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)] = true;
-        if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
-          configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
-      }
-    }
-  }
-  //process the pulsar configuration files
-  for(int i=0;i<numconfigs;i++)
-  {
-    if(configs[i].pulsarbin)
-    {
-      if (consistencyok)
-        consistencyok = processPulsarConfig(configs[i].pulsarconfigfilename, i);
-      if (consistencyok)
-        consistencyok = setPolycoFreqInfo(i);
-    }
-
-    if(configs[i].phasedarray)
-    {
-      if (consistencyok)
-        consistencyok = processPhasedArrayConfig(configs[i].phasedarrayconfigfilename, i);
-    }
-  }
-  //cout << "About to open the Model, consistencyok is " << consistencyok << endl;
-  if(consistencyok) {
-    model = new Model(this, calcfilename);
-    consistencyok = model->openSuccess();
-  }
-  for(int i=0;i<telescopetablelength;i++) {
-    if(consistencyok)
-      consistencyok = model->addClockTerms(telescopetable[i].name, telescopetable[i].clockrefmjd, telescopetable[i].clockorder, telescopetable[i].clockpoly);
-  }
-  estimatedbytes += model->getEstimatedBytes();
-  //cout << "About to populateScanConfigList(), consistencyok is " << consistencyok << endl;
-  if(consistencyok)
-    consistencyok = populateScanConfigList();
-  if(consistencyok)
-    consistencyok = populateModelDatastreamMap();
-  if(consistencyok)
-    consistencyok = populateResultLengths();
-  if(consistencyok)
+  if (consistencyok)
     consistencyok = consistencyCheck();
   commandthreadinitialised = false;
   dumpsta = false;
@@ -230,7 +140,6 @@ Configuration::~Configuration()
       delete [] configs[i].datastreamindices;
       delete [] configs[i].baselineindices;
       delete [] configs[i].ordereddatastreamindices;
-      delete [] configs[i].frequsedbybaseline;
     }
     delete [] configs;
   }
@@ -238,44 +147,40 @@ Configuration::~Configuration()
   {
     for(int i=0;i<datastreamtablelength;i++)
     {
-      delete [] datastreamtable[i].recordedfreqtableindices;
-      delete [] datastreamtable[i].recordedfreqpols;
-      delete [] datastreamtable[i].recordedfreqclockoffsets;
-      delete [] datastreamtable[i].recordedfreqlooffsets;
-      delete [] datastreamtable[i].zoomfreqtableindices;
-      delete [] datastreamtable[i].zoomfreqpols;
-      delete [] datastreamtable[i].zoomfreqparentdfreqindices;
-      delete [] datastreamtable[i].zoomfreqchanneloffset;
-      delete [] datastreamtable[i].recordedbandpols;
-      delete [] datastreamtable[i].recordedbandlocalfreqindices;
-      delete [] datastreamtable[i].zoombandpols;
-      delete [] datastreamtable[i].zoombandlocalfreqindices;
-      delete [] datastreamtable[i].datafilenames;
+      for(int j=0;j<datastreamtable[i].numfreqs;j++)
+      {
+        delete [] datastreamtable[i].freqtableindices;
+        delete [] datastreamtable[i].freqpols;
+        delete [] datastreamtable[i].freqclockoffsets;
+      }
+      for(int j=0;j<datastreamtable[i].numinputbands;j++)
+      {
+        delete [] datastreamtable[i].inputbandpols;
+        delete [] datastreamtable[i].inputbandlocalfreqindices;
+      }
+      for(int j=0;j<datastreamtable[i].numdatafiles;j++)
+        delete [] datastreamtable[i].datafilenames;
     }
     delete [] datastreamtable;
   }
-  if(model)
-    delete model;
+  if(uvw)
+    delete uvw;
   delete [] freqtable;
   delete [] telescopetable;
   for(int i=0;i<baselinetablelength;i++)
   {
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
-      for(int k=0;k<baselinetable[i].numpolproducts[j];k++)
-        delete [] baselinetable[i].polpairs[j][k];
-      delete [] baselinetable[i].polpairs[j];
       delete [] baselinetable[i].datastream1bandindex[j];
       delete [] baselinetable[i].datastream2bandindex[j];
     }
     delete [] baselinetable[i].datastream1bandindex;
     delete [] baselinetable[i].datastream2bandindex;
     delete [] baselinetable[i].numpolproducts;
-    delete [] baselinetable[i].freqtableindices;
-    delete [] baselinetable[i].polpairs;
   }
   delete [] baselinetable;
   delete [] numprocessthreads;
+  delete [] firstnaturalconfigindices;
 }
 
 int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int nbits, int framebytes, int decimationfactor, char *formatname)
@@ -374,10 +279,10 @@ void Configuration::getFrameInc(int configindex, int configdatastreamindex, int 
   double samplerate; /* in Hz */
   double seconds;
 
-  nchan = getDNumRecordedBands(configindex, configdatastreamindex);
-  samplerate = 2.0e6*getDRecordedBandwidth(configindex, configdatastreamindex, 0);
+  nchan = getDNumInputBands(configindex, configdatastreamindex);
+  samplerate = 2.0e6*getDBandwidth(configindex, configdatastreamindex, 0);
   qb = getDNumBits(configindex, configdatastreamindex);
-  decimationfactor = getDDecimationFactor(configindex, configdatastreamindex);
+  decimationfactor = getDecimationFactor(configindex);
   payloadsize = getFramePayloadBytes(configindex, configdatastreamindex);
 
   seconds = payloadsize*8/(samplerate*nchan*qb*decimationfactor);
@@ -391,14 +296,29 @@ int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex
   int payloadsize;
   double samplerate; /* in Hz */
 
-  nchan = getDNumRecordedBands(configindex, configdatastreamindex);
-  samplerate = 2.0e6*getDRecordedBandwidth(configindex, configdatastreamindex, 0);
+  nchan = getDNumInputBands(configindex, configdatastreamindex);
+  samplerate = 2.0e6*getDBandwidth(configindex, configdatastreamindex, 0);
   qb = getDNumBits(configindex, configdatastreamindex);
-  decimationfactor = getDDecimationFactor(configindex, configdatastreamindex);
+  decimationfactor = getDecimationFactor(configindex);
   payloadsize = getFramePayloadBytes(configindex, configdatastreamindex);
 
   // This will always work out to be an integer 
   return int(samplerate*nchan*qb*decimationfactor/(8*payloadsize) + 0.5);
+}
+
+int Configuration::getMaxResultLength()
+{
+  int length;
+  int maxlength = getResultLength(0);
+
+  for(int i=1;i<numconfigs;i++)
+  {
+    length = getResultLength(i);
+    if(length > maxlength)
+      maxlength = length;
+  }
+
+  return maxlength;
 }
 
 int Configuration::getMaxDataBytes()
@@ -434,14 +354,14 @@ int Configuration::getMaxDataBytes(int datastreamindex)
   return maxlength;
 }
 
-int Configuration::getMaxBlocksPerSend()
+int Configuration::getMaxSendBlocks()
 {
   int length;
-  int maxlength = configs[0].blockspersend;
+  int maxlength = configs[0].blockspersend + configs[0].guardblocks;
 
   for(int i=1;i<numconfigs;i++)
   {
-    length = configs[i].blockspersend;
+    length = configs[i].blockspersend + configs[i].guardblocks;
     if(length > maxlength)
       maxlength = length;
   }
@@ -449,13 +369,13 @@ int Configuration::getMaxBlocksPerSend()
   return maxlength;
 }
 
-int Configuration::getMaxNumRecordedFreqs()
+int Configuration::getMaxNumFreqs()
 {
   int currentnumfreqs, maxnumfreqs = 0;
   
   for(int i=0;i<numconfigs;i++)
   {
-    currentnumfreqs = getMaxNumRecordedFreqs(i);
+    currentnumfreqs = getMaxNumFreqs(i);
     if(currentnumfreqs > maxnumfreqs)
       maxnumfreqs = currentnumfreqs;
   }
@@ -463,29 +383,29 @@ int Configuration::getMaxNumRecordedFreqs()
   return maxnumfreqs;
 }
 
-int Configuration::getMaxNumRecordedFreqs(int configindex)
+int Configuration::getMaxNumFreqs(int configindex)
 {
   int maxnumfreqs = 0;
   
   for(int i=0;i<numdatastreams;i++)
   {
-    if(datastreamtable[configs[configindex].datastreamindices[i]].numrecordedfreqs > maxnumfreqs)
-      maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[i]].numrecordedfreqs;
+    if(datastreamtable[configs[configindex].datastreamindices[i]].numfreqs > maxnumfreqs)
+      maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[i]].numfreqs;
   }
-
+  
   return maxnumfreqs;
 }
 
 int Configuration::getMaxNumFreqDatastreamIndex(int configindex)
 {
   int maxindex = 0;
-  int maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[0]].numrecordedfreqs;
+  int maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[0]].numfreqs;
   
   for(int i=1;i<numdatastreams;i++)
   {
-    if(datastreamtable[configs[configindex].datastreamindices[i]].numrecordedfreqs > maxnumfreqs)
+    if(datastreamtable[configs[configindex].datastreamindices[i]].numfreqs > maxnumfreqs)
     {
-      maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[i]].numrecordedfreqs;
+      maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[i]].numfreqs;
       maxindex = i;
     }
   }
@@ -493,32 +413,41 @@ int Configuration::getMaxNumFreqDatastreamIndex(int configindex)
   return maxindex;
 }
 
-int Configuration::getMaxPhaseCentres(int configindex)
+int Configuration::getResultLength(int configindex)
 {
-  int maxphasecentres = 1;
-  for(int i=0;i<model->getNumScans();i++) {
-    if(scanconfigindices[i] == configindex) {
-      if(model->getNumPhaseCentres(i) > maxphasecentres)
-        maxphasecentres = model->getNumPhaseCentres(i);
-    }
+  datastreamdata currentdatastream;
+  int numbands = 0;
+  int bandsperautocorr = (configs[configindex].writeautocorrs)?2:1;
+
+  //add up all the bands in the baselines
+  for(int i=0;i<numbaselines;i++)
+    numbands += baselinetable[configs[configindex].baselineindices[i]].totalbands;
+
+  //multiply this by number of pulsar bins if necessary
+  if(configs[configindex].pulsarbin && !configs[configindex].scrunchoutput)
+    numbands *= configs[configindex].numbins;
+
+  //add all the bands from all the datastreams
+  for(int i=0;i<numdatastreams;i++)
+  {
+    currentdatastream = datastreamtable[configs[configindex].datastreamindices[i]];
+    numbands += currentdatastream.numoutputbands*bandsperautocorr;
   }
-  return maxphasecentres;
+
+  return numbands*(configs[configindex].numchannels+1);
 }
 
 int Configuration::getDataBytes(int configindex, int datastreamindex)
 {
   int validlength, payloadbytes;
   datastreamdata currentds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
-  freqdata arecordedfreq = freqtable[currentds.recordedfreqtableindices[0]]; 
-  validlength = (arecordedfreq.decimationfactor*configs[configindex].blockspersend*currentds.numrecordedbands*2*currentds.numbits*arecordedfreq.numchannels)/8;
+  validlength = (configs[configindex].decimationfactor*configs[configindex].blockspersend*currentds.numinputbands*2*currentds.numbits*configs[configindex].numchannels)/8;
   if(currentds.format == MKIV || currentds.format == VLBA || currentds.format == VLBN || currentds.format == MARK5B || currentds.format == VDIF)
   {
     //must be an integer number of frames, with enough margin for overlap on either side
-    validlength += (arecordedfreq.decimationfactor*(int)(configs[configindex].guardns/(1000.0/(freqtable[currentds.recordedfreqtableindices[0]].bandwidth*2.0))+0.5)*currentds.numrecordedbands*2*currentds.numbits*arecordedfreq.numchannels)/8;
+    validlength += (configs[configindex].decimationfactor*configs[configindex].guardblocks*currentds.numinputbands*2*currentds.numbits*configs[configindex].numchannels)/8;
     payloadbytes = getFramePayloadBytes(configindex, datastreamindex);
     validlength = (validlength/getFramePayloadBytes(configindex, datastreamindex) + 2)*currentds.framebytes;
-
-    //cout << "About to set databytes to " << validlength << " since currentds.framebytes is " << currentds.framebytes << " and blockspersend is " << configs[configindex].blockspersend << endl;
   }
   return validlength;
 }
@@ -554,20 +483,11 @@ int Configuration::getMaxProducts()
 
 int Configuration::getDMatchingBand(int configindex, int datastreamindex, int bandindex)
 {
-  datastreamdata ds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
-  if(bandindex >= ds.numrecordedbands) {
-    for(int i=0;i<ds.numzoombands;i++)
-    {
-      if(ds.zoombandlocalfreqindices[bandindex] == ds.zoombandlocalfreqindices[i] && (i != bandindex))
-        return i;
-    }
-  }
-  else {
-    for(int i=0;i<ds.numrecordedbands;i++)
-    {
-      if(ds.recordedbandlocalfreqindices[bandindex] == ds.recordedbandlocalfreqindices[i] && (i != bandindex))
-        return i;
-    }
+  for(int i=0;i<datastreamtable[configs[configindex].datastreamindices[datastreamindex]].numoutputbands;i++)
+  {
+    if(datastreamtable[configs[configindex].datastreamindices[datastreamindex]].inputbandlocalfreqindices[bandindex] ==
+       datastreamtable[configs[configindex].datastreamindices[datastreamindex]].inputbandlocalfreqindices[i] && (i != bandindex))
+      return i;
   }
 
   return -1;
@@ -578,6 +498,12 @@ int Configuration::getCNumProcessThreads(int corenum)
   if(corenum < numcoreconfs)
     return numprocessthreads[corenum];
   return 1;
+}
+
+bool Configuration::loaduvwinfo(bool sourceonly)
+{
+  uvw = new Uvw(this, uvwfilename, sourceonly);
+  return uvw->openSuccess();
 }
 
 bool Configuration::stationUsed(int telescopeindex)
@@ -596,54 +522,57 @@ bool Configuration::stationUsed(int telescopeindex)
   return toreturn;
 }
 
+int Configuration::getConfigIndex(int offsetseconds)
+{
+  int currentconfigindex;
+  string currentsourcename;
+
+  if(!uvw)
+  {
+    cfatal << startl << "Developer error: UVW has not been created!!!" << endl;
+    return -1; //nasty, but this should never happen except in a programmer error.  Caller will probably crash.
+  }
+
+  uvw->getSourceName(startmjd, startseconds + offsetseconds, currentsourcename);
+  currentconfigindex = defaultconfigindex;
+  for(int i=0;i<numconfigs;i++)
+  {
+    if(configs[i].sourcename == currentsourcename.substr(0, (configs[i].sourcename).length()))
+      currentconfigindex = i;
+  }
+
+  return currentconfigindex;
+}
+
 Mode* Configuration::getMode(int configindex, int datastreamindex)
 {
   configdata conf = configs[configindex];
   datastreamdata stream = datastreamtable[conf.datastreamindices[datastreamindex]];
   int framesamples, framebytes;
-  int guardsamples = (int)(conf.guardns/(1000.0/(freqtable[stream.recordedfreqtableindices[0]].bandwidth*2.0)) + 0.5);
-  int streamrecbandchan = freqtable[stream.recordedfreqtableindices[0]].numchannels;
-  int streamdecimationfactor = freqtable[stream.recordedfreqtableindices[0]].decimationfactor;
-  int streamchanstoaverage = freqtable[stream.recordedfreqtableindices[0]].channelstoaverage;
-  double streamrecbandwidth = freqtable[stream.recordedfreqtableindices[0]].bandwidth;
 
   switch(stream.format)
   {
     case LBASTD:
       if(stream.numbits != 2)
         cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth,  stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::stdunpackvalues);
       break;
     case LBAVSOP:
       if(stream.numbits != 2)
         cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
-      break;
-    case LBA8BIT:
-      if(stream.numbits != 8) {
-        cerror << startl << "8BIT LBA mode must have 8 bits! aborting" << endl;
-        return NULL;
-      }
-      return new LBA8BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 8/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
-      break;
-    case LBA16BIT:
-      if(stream.numbits != 16) {
-        cerror << startl << "16BIT LBA mode must have 16 bits! aborting" << endl;
-        return NULL;
-      }
-      return new LBA16BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 16/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
+      return new LBAMode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, 2/*bits*/, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, LBAMode::vsopunpackvalues);
       break;
     case MKIV:
     case VLBA:
     case VLBN:
     case MARK5B:
     case VDIF:
-      framesamples = getFramePayloadBytes(configindex, datastreamindex)*8/(getDNumBits(configindex, datastreamindex)*getDNumRecordedBands(configindex, datastreamindex)*streamdecimationfactor);
+      framesamples = getFramePayloadBytes(configindex, datastreamindex)*8/(getDNumBits(configindex, datastreamindex)*getDNumInputBands(configindex, datastreamindex)*conf.decimationfactor);
       framebytes = getFrameBytes(configindex, datastreamindex);
-      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      return new Mk5Mode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, stream.numbits, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     default:
-      cerror << startl << "Unknown mode being requested!!!" << endl;
+      cerror << startl << "Unsupported format or mode requested!!!" << endl;
       return NULL;
   }
 }
@@ -660,8 +589,6 @@ Configuration::sectionheader Configuration::getSectionHeader(ifstream * input)
     return COMMON;
   if(line.substr(0, 16) == "# CONFIGURATIONS")
     return CONFIG;
-  if(line.substr(0, 7) == "# RULES")
-    return RULE;
   if(line.substr(0, 12) == "# FREQ TABLE")
     return FREQ;
   if(line.substr(0, 17) == "# TELESCOPE TABLE")
@@ -683,27 +610,22 @@ Configuration::sectionheader Configuration::getSectionHeader(ifstream * input)
 
 bool Configuration::processBaselineTable(ifstream * input)
 {
-  int tempint, dsband;
+  int tempint;
   int ** tempintptr;
   string line;
-  datastreamdata dsdata;
-  baselinedata bldata;
 
   getinputline(input, &line, "BASELINE ENTRIES");
   baselinetablelength = atoi(line.c_str());
   baselinetable = new baselinedata[baselinetablelength];
-  estimatedbytes += baselinetablelength*sizeof(baselinedata);
   if(baselinetablelength < numbaselines)
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Not enough baselines are supplied in the baseline table (" << baselinetablelength << ") compared to the number of baselines (" << numbaselines << ")!!!" << endl;
+    cfatal << startl << "Not enough baselines are supplied in the baseline table (" << baselinetablelength << ") compared to the number of baselines (" << numbaselines << ")!!!" << endl;
     return false;
   }
 
   for(int i=0;i<baselinetablelength;i++)
   {
     //read in the info for this baseline
-    baselinetable[i].localfreqindices = new int[freqtablelength];
     baselinetable[i].totalbands = 0;
     getinputline(input, &line, "D/STREAM A INDEX ", i);
     baselinetable[i].datastream1index = atoi(line.c_str());
@@ -711,21 +633,15 @@ bool Configuration::processBaselineTable(ifstream * input)
     baselinetable[i].datastream2index = atoi(line.c_str());
     getinputline(input, &line, "NUM FREQS ", i);
     baselinetable[i].numfreqs = atoi(line.c_str());
-    baselinetable[i].oddlsbfreqs = new int[baselinetable[i].numfreqs];
     baselinetable[i].numpolproducts = new int[baselinetable[i].numfreqs];
     baselinetable[i].datastream1bandindex = new int*[baselinetable[i].numfreqs];
     baselinetable[i].datastream2bandindex = new int*[baselinetable[i].numfreqs];
-    baselinetable[i].freqtableindices = new int[baselinetable[i].numfreqs];
-    baselinetable[i].polpairs = new char**[baselinetable[i].numfreqs];
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
-      baselinetable[i].oddlsbfreqs[j] = 0;
       getinputline(input, &line, "POL PRODUCTS ", i);
       baselinetable[i].numpolproducts[j] = atoi(line.c_str());
       baselinetable[i].datastream1bandindex[j] = new int[baselinetable[i].numpolproducts[j]];
       baselinetable[i].datastream2bandindex[j] = new int[baselinetable[i].numpolproducts[j]];
-      estimatedbytes += baselinetable[i].numpolproducts[j]*2*4;
-      baselinetable[i].polpairs[j] = new char*[baselinetable[i].numpolproducts[j]];
       for(int k=0;k<baselinetable[i].numpolproducts[j];k++)
       {
         baselinetable[i].totalbands++;
@@ -733,34 +649,11 @@ bool Configuration::processBaselineTable(ifstream * input)
         baselinetable[i].datastream1bandindex[j][k] = atoi(line.c_str());
         getinputline(input, &line, "D/STREAM B BAND ", k);
         baselinetable[i].datastream2bandindex[j][k] = atoi(line.c_str());
-        baselinetable[i].polpairs[j][k] = new char[3];
-        estimatedbytes += 3;
-      }
-      dsdata = datastreamtable[baselinetable[i].datastream1index];
-      dsband = baselinetable[i].datastream1bandindex[j][0];
-      if(dsband >= dsdata.numrecordedbands) //it is a zoom band
-        baselinetable[i].freqtableindices[j] = dsdata.zoomfreqtableindices[dsdata.zoombandlocalfreqindices[dsband-dsdata.numrecordedbands]];
-      else
-        baselinetable[i].freqtableindices[j] = dsdata.recordedfreqtableindices[dsdata.recordedbandlocalfreqindices[dsband]];
-      for(int k=0;k<baselinetable[i].numpolproducts[j];k++) {
-        dsdata = datastreamtable[baselinetable[i].datastream1index];
-        dsband = baselinetable[i].datastream1bandindex[j][k];
-        if(dsband >= dsdata.numrecordedbands) //it is a zoom band
-          baselinetable[i].polpairs[j][k][0] = dsdata.zoombandpols[dsband-dsdata.numrecordedbands];
-        else
-          baselinetable[i].polpairs[j][k][0] = dsdata.recordedbandpols[dsband];
-        dsdata = datastreamtable[baselinetable[i].datastream2index];
-        dsband = baselinetable[i].datastream2bandindex[j][k];
-        if(dsband >= dsdata.numrecordedbands) //it is a zoom band
-          baselinetable[i].polpairs[j][k][1] = dsdata.zoombandpols[dsband-dsdata.numrecordedbands];
-        else
-          baselinetable[i].polpairs[j][k][1] = dsdata.recordedbandpols[dsband];
       }
     }
     if(datastreamtable[baselinetable[i].datastream1index].telescopeindex > datastreamtable[baselinetable[i].datastream2index].telescopeindex)
     {
-      if(mpiid == 0) //only write one copy of this error message
-        cerror << startl << "First datastream for baseline " << i << " has a higher number than second datastream - reversing!!!" << endl;
+      cerror << startl << "First datastream for baseline " << i << " has a higher number than second datastream - reversing!!!" << endl;
       tempint = baselinetable[i].datastream1index;
       baselinetable[i].datastream1index = baselinetable[i].datastream2index;
       baselinetable[i].datastream2index = tempint;
@@ -769,20 +662,6 @@ bool Configuration::processBaselineTable(ifstream * input)
       baselinetable[i].datastream2bandindex = tempintptr;
     }
   }
-  for(int f=0;f<freqtablelength;f++)
-  {
-    for(int i=0;i<baselinetablelength;i++)
-    {
-      bldata = baselinetable[i];
-      bldata.localfreqindices[f] = -1;
-      for(int j=0;j<bldata.numfreqs;j++)
-      {
-        if(bldata.freqtableindices[j] == f)
-          bldata.localfreqindices[f] = j;
-      }
-    }
-  }
-  baselineread = true;
   return true;
 }
 
@@ -790,7 +669,8 @@ void Configuration::processCommon(ifstream * input)
 {
   string line;
 
-  getinputline(input, &calcfilename, "CALC FILENAME");
+  getinputline(input, &delayfilename, "DELAY FILENAME");
+  getinputline(input, &uvwfilename, "UVW FILENAME");
   getinputline(input, &coreconffilename, "CORE CONF FILENAME");
   getinputline(input, &line, "EXECUTE TIME (SEC)");
   executeseconds = atoi(line.c_str());
@@ -806,7 +686,11 @@ void Configuration::processCommon(ifstream * input)
   getinputline(input, &line, "VIS BUFFER LENGTH");
   visbufferlength = atoi(line.c_str());
   getinputline(input, &line, "OUTPUT FORMAT");
-  if(line == "SWIN" || line == "DIFX")
+  if(line == "RPFITS")
+  {
+    outformat = RPFITS;
+  }
+  else if(line == "SWIN" || line == "DIFX")
   {
     outformat = DIFX;
   }
@@ -816,9 +700,8 @@ void Configuration::processCommon(ifstream * input)
   }
   else
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cerror << startl << "Unknown output format " << line << " (case sensitive choices are SWIN, DIFX (same thing) and ASCII), assuming SWIN/DIFX" << endl;
-    outformat = DIFX;
+    cerror << startl << "Unknown output format " << line << " (case sensitive choices are RPFITS, SWIN and ASCII)" << endl;
+    consistencyok = false;
   }
   getinputline(input, &outputfilename, "OUTPUT FILENAME");
 
@@ -830,35 +713,59 @@ bool Configuration::processConfig(ifstream * input)
   string line;
   bool found;
 
+  maxnumchannels = 0;
   maxnumpulsarbins = 0;
-  maxnumbufferedffts = 0;
+  numindependentchannelconfigs = 0;
 
   getinputline(input, &line, "NUM CONFIGURATIONS");
   numconfigs = atoi(line.c_str());
   configs = new configdata[numconfigs];
-  estimatedbytes += numconfigs*sizeof(configdata);
+  firstnaturalconfigindices = new int[numconfigs];
+  defaultconfigindex = -1;
   for(int i=0;i<numconfigs;i++)
   {
     found = false;
     configs[i].datastreamindices = new int[numdatastreams];
     configs[i].baselineindices = new int [numbaselines];
-    getinputline(input, &(configs[i].name), "CONFIG NAME");
+    getinputline(input, &(configs[i].sourcename), "CONFIG SOURCE");
+    if(configs[i].sourcename == "DEFAULT")
+      defaultconfigindex = i;
     getinputline(input, &line, "INT TIME (SEC)");
     configs[i].inttime = atof(line.c_str());
-    getinputline(input, &line, "SUBINT NANOSECONDS");
-    configs[i].subintns = atoi(line.c_str());
-    getinputline(input, &line, "GUARD NANOSECONDS");
-    configs[i].guardns = atoi(line.c_str());
-    getinputline(input, &line, "FRINGE ROTN ORDER");
-    configs[i].fringerotationorder = atoi(line.c_str());
-    getinputline(input, &line, "ARRAY STRIDE LEN");
-    configs[i].arraystridelen = atoi(line.c_str());
-    getinputline(input, &line, "XMAC STRIDE LEN");
-    configs[i].xmacstridelen = atoi(line.c_str());
-    getinputline(input, &line, "NUM BUFFERED FFTS");
-    configs[i].numbufferedffts = atoi(line.c_str());
-    if(configs[i].numbufferedffts > maxnumbufferedffts)
-      maxnumbufferedffts = configs[i].numbufferedffts;
+    getinputline(input, &line, "NUM CHANNELS");
+    configs[i].numchannels = atoi(line.c_str());
+    getinputline(input, &line, "CHANNELS TO AVERAGE");
+    configs[i].channelstoaverage = atoi(line.c_str());
+    getinputline(input, &line, "OVERSAMPLE FACTOR");
+    configs[i].oversamplefactor = atoi(line.c_str());
+    getinputline(input, &line, "DECIMATION FACTOR");
+    configs[i].decimationfactor = atoi(line.c_str());
+    configs[i].independentchannelindex = i;
+    for(int j=numindependentchannelconfigs-1;j>=0;j--)
+    {
+      if(configs[i].numchannels == configs[firstnaturalconfigindices[j]].numchannels)
+      {
+        found = true;
+        configs[i].independentchannelindex = j;
+      }
+    }
+    if(!found)
+      firstnaturalconfigindices[numindependentchannelconfigs++] = i;
+    if(configs[i].numchannels > maxnumchannels)
+      maxnumchannels = configs[i].numchannels;
+    getinputline(input, &line, "BLOCKS PER SEND");
+    configs[i].blockspersend = atoi(line.c_str());
+    getinputline(input, &line, "GUARD BLOCKS");
+    configs[i].guardblocks = atoi(line.c_str());
+    getinputline(input, &line, "POST-F FRINGE ROT");
+    configs[i].postffringerot = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
+    getinputline(input, &line, "QUAD DELAY INTERP");
+    configs[i].quadraticdelayinterp = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
+    if(configs[i].postffringerot && configs[i].quadraticdelayinterp)
+    {
+      cfatal << startl << "Cannot quad interpolate delays with post-f fringe rotation - aborting!!!" << endl;
+      return false;
+    }
     getinputline(input, &line, "WRITE AUTOCORRS");
     configs[i].writeautocorrs = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
     getinputline(input, &line, "PULSAR BINNING");
@@ -866,14 +773,6 @@ bool Configuration::processConfig(ifstream * input)
     if(configs[i].pulsarbin)
     {
       getinputline(input, &configs[i].pulsarconfigfilename, "PULSAR CONFIG FILE");
-    }
-    getinputline(input, &line, "PHASED ARRAY");
-    configs[i].phasedarray = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
-    if(configs[i].phasedarray)
-    {
-      if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "Error - phased array is not yet supported!!!" << endl;
-      getinputline(input, &configs[i].phasedarrayconfigfilename, "PHASED ARRAY CONFIG FILE");
     }
     for(int j=0;j<numdatastreams;j++)
     {
@@ -886,6 +785,10 @@ bool Configuration::processConfig(ifstream * input)
       configs[i].baselineindices[j] = atoi(line.c_str());
     }
   }
+  if(defaultconfigindex < 0)
+  {
+//    cwarn << startl << "No default config found - sources which were not specified will not be correlated!!!" << endl;
+  }
 
   configread = true;
   return true;
@@ -893,20 +796,15 @@ bool Configuration::processConfig(ifstream * input)
 
 bool Configuration::processDatastreamTable(ifstream * input)
 {
-  datastreamdata * dsdata;
-  int configindex, freqindex, decimationfactor, tonefreq;
-  double lofreq, parentlowbandedge, parenthighbandedge, lowbandedge, highbandedge;
-  string line;
   bool ok = true;
+  string line;
 
   getinputline(input, &line, "DATASTREAM ENTRIES");
   datastreamtablelength = atoi(line.c_str());
   datastreamtable = new datastreamdata[datastreamtablelength];
-  estimatedbytes += datastreamtablelength*sizeof(datastreamdata);
   if(datastreamtablelength < numdatastreams)
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Not enough datastreams are supplied in the datastream table (" << datastreamtablelength << ") compared to the number of datastreams (" << numdatastreams << "!!!" << endl;
+    cfatal << startl << "Not enough datastreams are supplied in the datastream table (" << datastreamtablelength << ") compared to the number of datastreams (" << numdatastreams << ")!!!" << endl;
     return false;
   }
   //create the ordereddatastream array
@@ -921,11 +819,8 @@ bool Configuration::processDatastreamTable(ifstream * input)
 
   for(int i=0;i<datastreamtablelength;i++)
   {
-    dsdata = &(datastreamtable[i]);
-    configindex=-1;
-    datastreamtable[i].numdatafiles = 0; //default in case its a network datastream
-    datastreamtable[i].tcpwindowsizekb = 0; //default in case its a file datastream
-    datastreamtable[i].portnumber = -1; //default in case its a file datastream
+    int configindex=-1;
+    int decimationfactor = 1;
 
     //get configuration index for this datastream
     for(int c=0; c<numconfigs; c++)
@@ -941,6 +836,11 @@ bool Configuration::processDatastreamTable(ifstream * input)
       if(configindex >= 0) break;
     }
 
+    if(configindex >= 0)
+    {
+      decimationfactor = configs[configindex].decimationfactor;
+    }
+
     //read all the info for this datastream
     getinputline(input, &line, "TELESCOPE INDEX");
     datastreamtable[i].telescopeindex = atoi(line.c_str());
@@ -951,10 +851,8 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].format = LBASTD;
     else if(line == "LBAVSOP")
       datastreamtable[i].format = LBAVSOP;
-    else if(line == "LBA8BIT")
-      datastreamtable[i].format = LBA8BIT;
-    else if(line == "LBA16BIT")
-      datastreamtable[i].format = LBA16BIT;
+    else if(line == "NZ")
+      datastreamtable[i].format = NZ;
     else if(line == "K5")
       datastreamtable[i].format = K5;
     else if(line == "MKIV")
@@ -969,8 +867,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].format = VDIF;
     else
     {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Unknown data format " << line << " (case sensitive choices are LBASTD, LBAVSOP, LBA8BIT, K5, MKIV, VLBA, VLBN, MARK5B and VDIF)" << endl;
+      cfatal << startl << "Unknown data format " << line << " (case sensitive choices are LBASTD, LBAVSOP, NZ, K5, MKIV, VLBA, VLBN, MARK5B and VDIF)" << endl;
       return false;
     }
     getinputline(input, &line, "QUANTISATION BITS");
@@ -988,150 +885,50 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].source = EVLBI;
     else
     {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Unknown data source " << line << " (case sensitive choices are FILE, MODULE and EVLBI)" << endl;
+      cfatal << startl << "Unnkown data source " << line << " (case sensitive choices are FILE, MODULE and EVLBI)" << endl;
       return false;
     }
+
     getinputline(input, &line, "FILTERBANK USED");
     datastreamtable[i].filterbank = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
-    if(datastreamtable[i].filterbank) {
-      if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "Filterbank channelization requested but not yet supported!!!" << endl;
-    }
-    getinputline(input, &line, "PHASE CAL INT (MHZ)");
-    datastreamtable[i].phasecalintervalmhz = atoi(line.c_str());
-    if(datastreamtable[i].phasecalintervalmhz != 0)
+    if(datastreamtable[i].filterbank)
+      cwarn << startl << "Filterbank not yet supported!!!" << endl;
+    getinputline(input, &line, "NUM FREQS");
+    datastreamtable[i].numfreqs = atoi(line.c_str());
+    datastreamtable[i].freqpols = new int[datastreamtable[i].numfreqs];
+    datastreamtable[i].freqtableindices = new int[datastreamtable[i].numfreqs];
+    datastreamtable[i].freqclockoffsets = new double[datastreamtable[i].numfreqs];
+    datastreamtable[i].numinputbands = 0;
+    for(int j=0;j<datastreamtable[i].numfreqs;j++)
     {
-      if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "Phase cal extraction requested not yet supported!!!" << endl;
-    }
-
-    getinputline(input, &line, "NUM RECORDED FREQS");
-    datastreamtable[i].numrecordedfreqs = atoi(line.c_str());
-    datastreamtable[i].recordedfreqpols = new int[datastreamtable[i].numrecordedfreqs];
-    datastreamtable[i].recordedfreqtableindices = new int[datastreamtable[i].numrecordedfreqs];
-    datastreamtable[i].recordedfreqclockoffsets = new double[datastreamtable[i].numrecordedfreqs];
-    datastreamtable[i].recordedfreqlooffsets = new double[datastreamtable[i].numrecordedfreqs];
-    estimatedbytes += 8*datastreamtable[i].numrecordedfreqs*3;
-    datastreamtable[i].numrecordedbands = 0;
-    for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
-    {
-      getinputline(input, &line, "REC FREQ INDEX ", j);
-      datastreamtable[i].recordedfreqtableindices[j] = atoi(line.c_str());
+      getinputline(input, &line, "FREQ TABLE INDEX ", j);
+      datastreamtable[i].freqtableindices[j] = atoi(line.c_str());
       getinputline(input, &line, "CLK OFFSET ", j);
-      datastreamtable[i].recordedfreqclockoffsets[j] = atof(line.c_str());
-      if(j == 0 && datastreamtable[i].recordedfreqclockoffsets[j] != 0.0 && mpiid == 0)
-        cwarn << startl << "Model accountability is compromised if the first band of a telescope has a non-zero clock offset! If this is the first/only datastream for " << telescopetable[datastreamtable[i].telescopeindex].name << ", you should adjust the telescope clock so that the offset for this band is ZERO!" << endl;
-      getinputline(input, &line, "FREQ OFFSET ", j); //Freq offset is positive if recorded LO frequency was higher than the frequency in the frequency table
-      datastreamtable[i].recordedfreqlooffsets[j] = atof(line.c_str());
-      getinputline(input, &line, "NUM REC POLS ", j);
-      datastreamtable[i].recordedfreqpols[j] = atoi(line.c_str());
-      datastreamtable[i].numrecordedbands += datastreamtable[i].recordedfreqpols[j];
+      datastreamtable[i].freqclockoffsets[j] = atof(line.c_str());
+      getinputline(input, &line, "NUM POLS ", j);
+      datastreamtable[i].freqpols[j] = atoi(line.c_str());
+      datastreamtable[i].numinputbands += datastreamtable[i].freqpols[j];
     }
-    decimationfactor = freqtable[datastreamtable[i].recordedfreqtableindices[0]].decimationfactor;
-    datastreamtable[i].bytespersamplenum = (datastreamtable[i].numrecordedbands*datastreamtable[i].numbits*decimationfactor)/8;
+    datastreamtable[i].bytespersamplenum = (datastreamtable[i].numinputbands*datastreamtable[i].numbits*decimationfactor)/8;
     if(datastreamtable[i].bytespersamplenum == 0)
     {
       datastreamtable[i].bytespersamplenum = 1;
-      datastreamtable[i].bytespersampledenom = 8/(datastreamtable[i].numrecordedbands*datastreamtable[i].numbits*decimationfactor);
+      datastreamtable[i].bytespersampledenom = 8/(datastreamtable[i].numinputbands*datastreamtable[i].numbits*decimationfactor);
     }
     else
       datastreamtable[i].bytespersampledenom = 1;
-    datastreamtable[i].recordedbandpols = new char[datastreamtable[i].numrecordedbands];
-    datastreamtable[i].recordedbandlocalfreqindices = new int[datastreamtable[i].numrecordedbands];
-    estimatedbytes += datastreamtable[i].numrecordedbands*5;
-    for(int j=0;j<datastreamtable[i].numrecordedbands;j++)
+    if(!datastreamtable[i].filterbank)
+      datastreamtable[i].numoutputbands = datastreamtable[i].numinputbands;
+    datastreamtable[i].inputbandpols = new char[datastreamtable[i].numinputbands];
+    datastreamtable[i].inputbandlocalfreqindices = new int[datastreamtable[i].numinputbands];
+    for(int j=0;j<datastreamtable[i].numinputbands;j++)
     {
-      getinputline(input, &line, "REC BAND ", j);
-      datastreamtable[i].recordedbandpols[j] = *(line.data());
-      getinputline(input, &line, "REC BAND ", j);
-      datastreamtable[i].recordedbandlocalfreqindices[j] = atoi(line.c_str());
-      if(datastreamtable[i].recordedbandlocalfreqindices[j] >= datastreamtable[i].numrecordedfreqs) {
-        if(mpiid == 0) //only write one copy of this error message
-          cerror << startl << "Attempting to refer to freq outside local table!!!" << endl;
-        return false;
-      }
-    }
-    getinputline(input, &line, "NUM ZOOM FREQS");
-    datastreamtable[i].numzoomfreqs = atoi(line.c_str());
-    datastreamtable[i].zoomfreqtableindices = new int[datastreamtable[i].numzoomfreqs];
-    datastreamtable[i].zoomfreqpols = new int[datastreamtable[i].numzoomfreqs];
-    datastreamtable[i].zoomfreqparentdfreqindices = new int[datastreamtable[i].numzoomfreqs];
-    datastreamtable[i].zoomfreqchanneloffset = new int[datastreamtable[i].numzoomfreqs];
-    estimatedbytes += datastreamtable[i].numzoomfreqs*16;
-    datastreamtable[i].numzoombands = 0;
-    for(int j=0;j<datastreamtable[i].numzoomfreqs;j++)
-    {
-      getinputline(input, &line, "ZOOM FREQ INDEX ");
-      datastreamtable[i].zoomfreqtableindices[j] = atoi(line.c_str());
-      getinputline(input, &line, "NUM ZOOM POLS ", j);
-      datastreamtable[i].zoomfreqpols[j] = atoi(line.c_str());
-      datastreamtable[i].numzoombands += datastreamtable[i].zoomfreqpols[j];
-      datastreamtable[i].zoomfreqparentdfreqindices[j] = -1;
-      for (int k=0;k<datastreamtable[i].numrecordedfreqs;k++) {
-        parentlowbandedge = freqtable[datastreamtable[i].recordedfreqtableindices[k]].bandedgefreq;
-        parenthighbandedge = freqtable[datastreamtable[i].recordedfreqtableindices[k]].bandedgefreq + freqtable[datastreamtable[i].recordedfreqtableindices[k]].bandwidth;
-        if(freqtable[datastreamtable[i].recordedfreqtableindices[k]].lowersideband) {
-          parentlowbandedge -= freqtable[datastreamtable[i].recordedfreqtableindices[k]].bandwidth;
-          parenthighbandedge -= freqtable[datastreamtable[i].recordedfreqtableindices[k]].bandwidth;
-        }
-        lowbandedge = freqtable[datastreamtable[i].zoomfreqtableindices[k]].bandedgefreq;
-        highbandedge = freqtable[datastreamtable[i].zoomfreqtableindices[k]].bandedgefreq + freqtable[datastreamtable[i].zoomfreqtableindices[k]].bandwidth;
-        if(freqtable[datastreamtable[i].zoomfreqtableindices[k]].lowersideband) {
-          parentlowbandedge -= freqtable[datastreamtable[i].zoomfreqtableindices[k]].bandwidth;
-          parenthighbandedge -= freqtable[datastreamtable[i].zoomfreqtableindices[k]].bandwidth;
-        }
-        if (highbandedge < parenthighbandedge && lowbandedge > parentlowbandedge) {
-          datastreamtable[i].zoomfreqparentdfreqindices[j] = k;
-          datastreamtable[i].zoomfreqchanneloffset[j] = (int)(((lowbandedge - parentlowbandedge)/freqtable[datastreamtable[i].recordedfreqtableindices[0]].bandwidth)*freqtable[datastreamtable[i].recordedfreqtableindices[0]].numchannels);
-          if (freqtable[datastreamtable[i].zoomfreqtableindices[j]].lowersideband)
-            datastreamtable[i].zoomfreqchanneloffset[j] += freqtable[datastreamtable[i].zoomfreqtableindices[j]].numchannels;
-        }
-      }
-    }
-    datastreamtable[i].zoombandpols = new char[datastreamtable[i].numzoombands];
-    datastreamtable[i].zoombandlocalfreqindices = new int[datastreamtable[i].numzoombands];
-    estimatedbytes += 5*datastreamtable[i].numzoombands;
-    for(int j=0;j<datastreamtable[i].numzoombands;j++)
-    {
-      getinputline(input, &line, "ZOOM BAND ", j);
-      datastreamtable[i].zoombandpols[j] = *(line.data());
-      getinputline(input, &line, "ZOOM BAND ", j);
-      datastreamtable[i].zoombandlocalfreqindices[j] = atoi(line.c_str());
-      if(datastreamtable[i].zoombandlocalfreqindices[j] >= datastreamtable[i].numzoomfreqs) {
-        if(mpiid == 0) //only write one copy of this error message
-          cerror << startl << "Attempting to refer to freq outside local table!!!" << endl;
-        return false;
-      }
-    }
-    if(dsdata->phasecalintervalmhz > 0)
-    {
-      dsdata->numrecordedfreqpcaltones = new int[dsdata->numrecordedfreqs];
-      dsdata->recordedfreqpcaltonefreqs = new int*[dsdata->numrecordedfreqs];
-      dsdata->maxrecordedpcaltones = 0;
-      estimatedbytes += sizeof(int)*(dsdata->numrecordedfreqs);
-      for(int j=0;j<dsdata->numrecordedfreqs;j++)
-      {
-        datastreamtable[i].numrecordedfreqpcaltones[j] = 0;
-        freqindex = dsdata->recordedfreqtableindices[j];
-        lofreq = freqtable[freqindex].bandedgefreq;
-        if(freqtable[freqindex].lowersideband)
-          lofreq -= freqtable[freqindex].bandwidth;
-        tonefreq = (int(lofreq)/dsdata->phasecalintervalmhz)*dsdata->phasecalintervalmhz;
-        if(tonefreq < lofreq)
-          tonefreq += dsdata->phasecalintervalmhz;
-        while(tonefreq + dsdata->numrecordedfreqpcaltones[j]*dsdata->phasecalintervalmhz < lofreq + freqtable[freqindex].bandwidth)
-          dsdata->numrecordedfreqpcaltones[j]++;
-        if(dsdata->numrecordedfreqpcaltones[j] > dsdata->maxrecordedpcaltones)
-          dsdata->maxrecordedpcaltones = dsdata->numrecordedfreqpcaltones[j];
-        datastreamtable[i].recordedfreqpcaltonefreqs[j] = new int[datastreamtable[i].numrecordedfreqpcaltones[j]];
-        estimatedbytes += sizeof(int)*datastreamtable[i].numrecordedfreqpcaltones[j];
-        tonefreq = (int(lofreq)/dsdata->phasecalintervalmhz)*dsdata->phasecalintervalmhz;
-        if(tonefreq < lofreq)
-          tonefreq += dsdata->phasecalintervalmhz;
-        for(int k=0;k<datastreamtable[i].numrecordedfreqpcaltones[j];k++)
-          datastreamtable[i].recordedfreqpcaltonefreqs[j][k] = tonefreq + k*dsdata->phasecalintervalmhz;
-      }
+      getinputline(input, &line, "INPUT BAND ", j);
+      datastreamtable[i].inputbandpols[j] = *(line.data());
+      getinputline(input, &line, "INPUT BAND ", j);
+      datastreamtable[i].inputbandlocalfreqindices[j] = atoi(line.c_str());
+      if(datastreamtable[i].inputbandlocalfreqindices[j] >= datastreamtable[i].numfreqs)
+        cerror << startl << "Attempting to refer to freq outside local table!!!" << endl;
     }
     datastreamtable[i].tcpwindowsizekb = 0;
     datastreamtable[i].portnumber = 0;
@@ -1139,15 +936,12 @@ bool Configuration::processDatastreamTable(ifstream * input)
 
   for(int i=0;i<numconfigs;i++)
   {
-    //work out blockspersend
-    freqdata f = freqtable[datastreamtable[configs[i].datastreamindices[0]].recordedfreqtableindices[0]];
-    double ffttime = 1000.0*f.numchannels/f.bandwidth;
-    double bpersenddouble = configs[i].subintns/ffttime;
-    configs[i].blockspersend = int(bpersenddouble + 0.5);
-    if (fabs(bpersenddouble - configs[i].blockspersend) > Mode::TINY) {
-      ok = false;
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "The supplied value of subint nanoseconds (" << configs[i].subintns << ") for config " << i << " does not yield an integer number of FFTs! (FFT time is " << ffttime << ") - aborting!!!" << endl;
+    if(configs[i].pulsarbin)
+    {
+      //process the pulsar config file
+      ok = ok && processPulsarConfig(configs[i].pulsarconfigfilename, i);
+      if (ok)
+        ok = ok && setPolycoFreqInfo(i);
     }
   }
   if(!ok)
@@ -1158,7 +952,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
   numcoreconfs = 0;
   if(!coreinput.is_open() || coreinput.bad())
   {
-    cerror << startl << "Could not open " << coreconffilename << " - will set all numthreads to 1!" << endl;
+    cerror << startl << "Could not open " << coreconffilename << " - will set all numthreads to 1!!!" << endl;
   }
   else
   {
@@ -1186,71 +980,6 @@ bool Configuration::processDatastreamTable(ifstream * input)
   return true;
 }
 
-bool Configuration::processRuleTable(ifstream * input)
-{
-  int count=0;
-  string key, val;
-  getinputline(input, &key, "NUM RULES");
-  numrules = atoi(key.c_str());
-  rules = new ruledata[numrules];
-  estimatedbytes += numrules*sizeof(ruledata);
-  for(int i=0;i<numrules;i++) {
-    rules[i].configindex = -1;
-    rules[i].sourcename = "";
-    rules[i].scanId = "";
-    rules[i].calcode = "";
-    rules[i].qual = -1;
-    rules[i].mjdStart = -999.9;
-    rules[i].mjdStop = -999.9;
-  }
-
-  while(count<numrules && !input->eof())
-  {
-    getinputkeyval(input, &key, &val);
-    if(strstr(key.c_str(), "CONFIG NAME")) {
-      rules[count].configname = val;
-      count++;
-    }
-    else if(strstr(key.c_str(), "SOURCE")) {
-      rules[count].sourcename = val;
-    }
-    else if(strstr(key.c_str(), "SCAN ID")) {
-      rules[count].scanId = val;
-    }
-    else if(strstr(key.c_str(), "CALCODE")) {
-      rules[count].calcode = val;
-    }
-    else if(strstr(key.c_str(), "QUAL")) {
-      rules[count].qual = atoi(val.c_str());
-    }
-    else if(strstr(key.c_str(), "MJD START")) {
-      rules[count].mjdStart = atof(val.c_str());
-    }
-    else if(strstr(key.c_str(), "MJD STOP")) {
-      rules[count].mjdStop = atof(val.c_str());
-    }
-    else {
-      if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "Received unknown key " << key << " with val " << val << " in rule table - ignoring!" << endl;
-    }
-  }
-
-  for(int i=0;i<numrules;i++) {
-    for(int j=0;j<numconfigs;j++) {
-      if(rules[i].configname.compare(configs[j].name) == 0) {
-        rules[i].configindex = j;
-      }
-    }
-    if(rules[i].configindex < 0) {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Found a rule with config name " << rules[i].configname << " that doesn't match any configs - aborting!" << endl;
-      return false;
-    }
-  }
-  ruleread = true;
-  return true;
-}
-
 void Configuration::processDataTable(ifstream * input)
 {
   string line;
@@ -1265,14 +994,14 @@ void Configuration::processDataTable(ifstream * input)
   }
 }
 
-bool Configuration::processFreqTable(ifstream * input)
+void Configuration::processFreqTable(ifstream * input)
 {
   string line;
 
   getinputline(input, &line, "FREQ ENTRIES");
   freqtablelength = atoi(line.c_str());
   freqtable = new freqdata[freqtablelength];
-  estimatedbytes += freqtablelength*sizeof(freqdata);
+
   for(int i=0;i<freqtablelength;i++)
   {
     getinputline(input, &line, "FREQ (MHZ) ", i);
@@ -1281,47 +1010,7 @@ bool Configuration::processFreqTable(ifstream * input)
     freqtable[i].bandwidth = atof(line.c_str());
     getinputline(input, &line, "SIDEBAND ", i);
     freqtable[i].lowersideband = ((line == "L") || (line == "l") || (line == "LOWER") || (line == "lower"))?true:false;
-    getinputline(input, &line, "NUM CHANNELS ");
-    freqtable[i].numchannels = atoi(line.c_str());
-    if(freqtable[i].numchannels > maxnumchannels)
-      maxnumchannels = freqtable[i].numchannels;
-    getinputline(input, &line, "CHANS TO AVG ");
-    freqtable[i].channelstoaverage = atoi(line.c_str());
-    if(freqtable[i].channelstoaverage <= 0 || (freqtable[i].channelstoaverage > 1 && freqtable[i].channelstoaverage%2 != 0)) {
-      if(mpiid == 0) //only write one copy of this error message
-        cerror << startl << "Channels to average must be positive and a power of two - not the case for frequency entry " << i << "(" << freqtable[i].channelstoaverage << ") - aborting!!!" << endl;
-      return false;
-    }
-    getinputline(input, &line, "OVERSAMPLE FAC. ");
-    freqtable[i].oversamplefactor = atoi(line.c_str());
-    getinputline(input, &line, "DECIMATION FAC. ");
-    freqtable[i].decimationfactor = atoi(line.c_str());
-    freqtable[i].matchingwiderbandindex = -1;
-    freqtable[i].matchingwiderbandoffset = -1;
   }
-  //now look for matching wider bands
-  for(int i=freqtablelength-1;i>0;i--)
-  {
-    double f1chanwidth = freqtable[i].bandwidth/freqtable[i].numchannels;
-    double f1loweredge = freqtable[i].bandedgefreq;
-    if (freqtable[i].lowersideband)
-      f1loweredge -= freqtable[i].bandwidth;
-    for(int j=i-1;j>=0;j--)
-    {
-      double f2chanwidth = freqtable[j].bandwidth/freqtable[j].numchannels;
-      double f2loweredge = freqtable[j].bandedgefreq;
-      if (freqtable[j].lowersideband)
-        f2loweredge -= freqtable[j].bandwidth;
-      if((i != j) && (f1chanwidth == f2chanwidth) && (f1loweredge < f2loweredge) &&
-          (f1loweredge + freqtable[i].bandwidth > f2loweredge + freqtable[j].bandwidth))
-      {
-        freqtable[j].matchingwiderbandindex = i;
-        freqtable[j].matchingwiderbandoffset = int(((f2loweredge-f1loweredge)/freqtable[i].bandwidth)*freqtable[i].numchannels + 0.5);
-      }
-    }
-  }
-  freqread = true;
-  return true;
 }
 
 void Configuration::processTelescopeTable(ifstream * input)
@@ -1331,19 +1020,14 @@ void Configuration::processTelescopeTable(ifstream * input)
   getinputline(input, &line, "TELESCOPE ENTRIES");
   telescopetablelength = atoi(line.c_str());
   telescopetable = new telescopedata[telescopetablelength];
-  estimatedbytes += telescopetablelength*sizeof(telescopedata);
+
   for(int i=0;i<telescopetablelength;i++)
   {
     getinputline(input, &(telescopetable[i].name), "TELESCOPE NAME ", i);
-    getinputline(input, &line, "CLOCK REF MJD ", i);
-    telescopetable[i].clockrefmjd = atof(line.c_str());
-    getinputline(input, &line, "CLOCK POLY ORDER ", i);
-    telescopetable[i].clockorder = atoi(line.c_str());
-    telescopetable[i].clockpoly = new double[telescopetable[i].clockorder+1];
-    for(int j=0;j<telescopetable[i].clockorder+1;j++) {
-      getinputline(input, &line, "CLOCK COEFF ", i);
-      telescopetable[i].clockpoly[j] = atof(line.c_str());
-    }
+    getinputline(input, &line, "CLOCK DELAY (us) ", i);
+    telescopetable[i].clockdelay = atof(line.c_str());
+    getinputline(input, &line, "CLOCK RATE(us/s) ", i);
+    telescopetable[i].clockrate = atof(line.c_str());
   }
 }
 
@@ -1360,304 +1044,10 @@ void Configuration::processNetworkTable(ifstream * input)
   }
 }
 
-bool Configuration::populateScanConfigList()
-{
-  bool applies, srcnameapplies, calcodeapplies, qualapplies;
-  Model::source * src;
-  ruledata r;
-
-  scanconfigindices = new int[model->getNumScans()];
-  estimatedbytes += 4*model->getNumScans();
-  for(int i=0;i<model->getNumScans();i++) {
-    scanconfigindices[i] = -1;
-    for(int j=0;j<numrules;j++) {
-      applies = true;
-      r = rules[j];
-      if((r.scanId.compare("") != 0) && (r.scanId.compare(model->getScanIdentifier(i)) != 0))
-        applies = false;
-      if(r.mjdStart > 0 && r.mjdStart > model->getScanStartMJD(i))
-        applies = false;
-      if(r.mjdStop > 0 && r.mjdStop > model->getScanEndMJD(i))
-        applies = false;
-      //cout << "Looking at scan " << i+1 << "/" << model->getNumScans() << endl;
-      srcnameapplies = false;
-      calcodeapplies = false;
-      qualapplies = false;
-      if(r.sourcename.compare("") == 0)
-        srcnameapplies = true;
-      if(r.calcode.compare("") == 0)
-        calcodeapplies = true;
-      if(r.qual < 0)
-        qualapplies = true;
-      for(int k=0;k<model->getNumPhaseCentres(i);k++) {
-        //cout << "Looking at source " << k << " of scan " << i << endl;
-        src = model->getScanPhaseCentreSource(i, k);
-        if(r.sourcename.compare(src->name) == 0)
-          srcnameapplies = true;
-        if(r.calcode.compare(src->calcode) == 0)
-          calcodeapplies = true;
-        if(r.qual == src->qual)
-          calcodeapplies = true;
-      }
-      if(applies && srcnameapplies && calcodeapplies && qualapplies) {
-        if(scanconfigindices[i] < 0 || scanconfigindices[i] == r.configindex) {
-          scanconfigindices[i] = r.configindex;
-        }
-        else {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Conflicting rules apply to scan " << i << " - aborting!!!" << endl;
-          return false;
-        }
-      }
-    }
-  }
-
-  return true;
-}
-
-bool Configuration::populateModelDatastreamMap()
-{
-  Model::station s;
-  string tname;
-
-  for(int i=0;i<datastreamtablelength;i++) {
-    datastreamtable[i].modelfileindex = -1;
-    tname = telescopetable[datastreamtable[i].telescopeindex].name;
-    for(int j=0;j<model->getNumStations();j++) {
-      s = model->getStation(j);
-      if(tname.compare(s.name) == 0)
-        datastreamtable[i].modelfileindex = j;
-    }
-  }
-
-  for(int i=0;i<numconfigs;i++) {
-    for(int j=0;j<numdatastreams;j++) {
-      if(datastreamtable[configs[i].datastreamindices[j]].modelfileindex < 0) {
-        cfatal << startl << "Couldn't find datastream " << telescopetable[datastreamtable[configs[i].datastreamindices[j]].telescopeindex].name << " in the model file - aborting!!!" << endl;
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-bool Configuration::populateResultLengths()
-{
-  datastreamdata dsdata;
-  baselinedata bldata;
-  bool found;
-  int threadfindex, threadbindex, coreresultindex, toadd;
-  int bandsperautocorr, freqindex, freqchans, chanstoaverage, maxconfigphasecentres, xmacstridelen, binloop;
-  int numaccs;
-
-  maxthreadresultlength = 0;
-  maxcoreresultlength = 0;
-  for(int c=0;c<numconfigs;c++)
-  {
-    //find a scan that matches this config
-    found = false;
-    maxconfigphasecentres = 1;
-    for(int i=0;i<model->getNumScans();i++) {
-      if(scanconfigindices[i] == c) {
-        if(model->getNumPhaseCentres(i) > maxconfigphasecentres)
-          maxconfigphasecentres = model->getNumPhaseCentres(i);
-        found = true;
-      }
-    }
-    if(!found) {
-      if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "Did not find a scan matching config index " << c << endl;
-    }
-    if(getMaxProducts(c) > 2)
-      bandsperautocorr = 2;
-    else
-      bandsperautocorr = 1;
-
-    if(configs[c].phasedarray) //set up for phased array
-    {
-      //the thread space is just for one round of results
-      threadfindex = 0;
-      if(configs[c].padomain == FREQUENCY)
-      {
-        for(int f=0;f<freqtablelength;f++)
-        {
-          threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels;
-        }
-        configs[c].threadresultlength = threadfindex;
-      }
-      else
-      {
-        for(int f=0;f<freqtablelength;f++)
-        {
-          threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels;
-        }
-        configs[c].threadresultlength = threadfindex;
-      }
-
-      //the core space needs room for as many dumps as necessary
-      numaccs = configs[c].subintns/configs[c].paaccumulationns;
-      if(configs[c].padomain == FREQUENCY)
-      {
-        configs[c].coreresultlength = (configs[c].threadresultlength*numaccs*8)/configs[c].pabits;
-      }
-      else
-      {
-        configs[c].coreresultlength = (configs[c].threadresultlength*configs[c].blockspersend*8)/configs[c].pabits;
-      }
-    }
-    else //set up for normal cross-correlations
-    {
-      xmacstridelen = configs[c].xmacstridelen;
-      binloop = 1;
-      if(configs[c].pulsarbin && !configs[c].scrunchoutput)
-        binloop = configs[c].numbins;
-
-      //work out the offsets for threadresult, and the total length too
-      configs[c].completestridelength = new int[freqtablelength];
-      configs[c].numxmacstrides = new int[freqtablelength];
-      configs[c].threadresultfreqoffset = new int[freqtablelength];
-      configs[c].threadresultbaselineoffset = new int*[freqtablelength];
-      threadfindex = 0;
-      for(int i=0;i<freqtablelength;i++)
-      {
-        if(configs[c].frequsedbybaseline[i])
-        {
-          configs[c].threadresultfreqoffset[i] = threadfindex;
-          freqchans = freqtable[i].numchannels;
-          configs[c].numxmacstrides[i] = freqtable[i].numchannels/xmacstridelen;
-          configs[c].threadresultbaselineoffset[i] = new int[numbaselines];
-          threadbindex = 0;
-          for(int j=0;j<numbaselines;j++)
-          {
-            configs[c].threadresultbaselineoffset[i][j] = threadbindex;
-            bldata = baselinetable[configs[c].baselineindices[j]];
-            if(bldata.localfreqindices[i] >= 0)
-            {
-              configs[c].threadresultbaselineoffset[i][j] = threadbindex;
-              threadbindex += binloop*bldata.numpolproducts[bldata.localfreqindices[i]]*xmacstridelen;
-            }
-          }
-          configs[c].completestridelength[i] = threadbindex;
-          threadfindex += configs[c].numxmacstrides[i]*configs[c].completestridelength[i];
-        }
-      }
-      configs[c].threadresultlength = threadfindex;
-
-      //work out the offsets for coreresult, and the total length too
-      configs[c].coreresultbaselineoffset = new int*[freqtablelength];
-      configs[c].coreresultbweightoffset  = new int*[freqtablelength];
-      configs[c].coreresultautocorroffset = new int[numdatastreams];
-      configs[c].coreresultacweightoffset = new int[numdatastreams];
-      configs[c].coreresultpcaloffset     = new int[numdatastreams];
-      coreresultindex = 0;
-      for(int i=0;i<freqtablelength;i++)
-      {
-        if(configs[c].frequsedbybaseline[i])
-        {
-          freqchans = freqtable[i].numchannels;
-          chanstoaverage = freqtable[i].channelstoaverage;
-          configs[c].coreresultbaselineoffset[i] = new int[numbaselines];
-          for(int j=0;j<numbaselines;j++)
-          {
-            bldata = baselinetable[configs[c].baselineindices[j]];
-            if(bldata.localfreqindices[i] >= 0)
-            {
-              configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
-              coreresultindex += maxconfigphasecentres*binloop*bldata.numpolproducts[bldata.localfreqindices[i]]*freqchans/chanstoaverage;
-            }
-          }
-        }
-      }
-      for(int i=0;i<freqtablelength;i++)
-      {
-        if(configs[c].frequsedbybaseline[i])
-        {
-          configs[c].coreresultbweightoffset[i] = new int[numbaselines];
-          for(int j=0;j<numbaselines;j++)
-          {
-            bldata = baselinetable[configs[c].baselineindices[j]];
-            if(bldata.localfreqindices[i] >= 0)
-            {
-              configs[c].coreresultbweightoffset[i][j] = coreresultindex;
-              //baselineweights are only floats so need to divide by 2...
-              toadd = binloop*bldata.numpolproducts[bldata.localfreqindices[i]]/2;
-              if(toadd == 0)
-                toadd = 1; 
-              coreresultindex += toadd;
-            }
-          }
-        }
-      }
-      for(int i=0;i<numdatastreams;i++)
-      {
-        dsdata = datastreamtable[configs[c].datastreamindices[i]];
-        configs[c].coreresultautocorroffset[i] = coreresultindex;
-        for(int j=0;j<getDNumRecordedBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
-            freqindex = getDRecordedFreqIndex(c, i, j);
-            freqchans = getFNumChannels(freqindex);
-            chanstoaverage = getFChannelsToAverage(freqindex);
-            coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
-          }
-        }
-        for(int j=0;j<getDNumZoomBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
-            freqindex = getDZoomFreqIndex(c, i, j);
-            freqchans = getFNumChannels(freqindex);
-            chanstoaverage = getFChannelsToAverage(freqindex);
-            coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
-          }
-        }
-      }
-      for(int i=0;i<numdatastreams;i++)
-      {
-        dsdata = datastreamtable[configs[c].datastreamindices[i]];
-        configs[c].coreresultacweightoffset[i] = coreresultindex;
-        toadd = 0;
-        for(int j=0;j<getDNumRecordedBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
-            toadd += bandsperautocorr;
-          }
-        }
-        for(int j=0;j<getDNumZoomBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
-            toadd += bandsperautocorr;
-          }
-        }
-        //this will also be just floats, not complex, so need to divide by 2
-        toadd /= 2;
-        if(toadd == 0)
-          toadd = 1;
-        coreresultindex += toadd;
-      }
-      for(int i=0;i<numdatastreams;i++)
-      {
-        configs[c].coreresultpcaloffset[i] = coreresultindex;
-        dsdata = datastreamtable[configs[c].datastreamindices[i]];
-        if(dsdata.phasecalintervalmhz > 0)
-        {
-          for(int j=0;j<getDNumRecordedFreqs(c, i);j++)
-            coreresultindex += dsdata.recordedfreqpols[j]*getDRecordedFreqNumPCalTones(c, i, j);
-        }
-      }
-      configs[c].coreresultlength = coreresultindex;
-    }
-    if(configs[c].threadresultlength > maxthreadresultlength)
-      maxthreadresultlength = configs[c].threadresultlength;
-    if(configs[c].coreresultlength > maxcoreresultlength)
-      maxcoreresultlength = configs[c].coreresultlength;
-  }
-
-  return true;
-}
-
 bool Configuration::consistencyCheck()
 {
-  int tindex, count, freqindex, freq1index, freq2index;
-  double bandwidth, sampletimens, ffttime, numffts, f1, f2;
-  datastreamdata ds1, ds2;
-  baselinedata bl;
+  int tindex, count;
+  double bandwidth, sampletimens, ffttime, nsincrement;
 
   //check entries in the datastream table
   for(int i=0;i<datastreamtablelength;i++)
@@ -1665,128 +1055,32 @@ bool Configuration::consistencyCheck()
     //check the telescope index is acceptable
     if(datastreamtable[i].telescopeindex < 0 || datastreamtable[i].telescopeindex >= telescopetablelength)
     {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Datastream table entry " << i << " has a telescope index (" << datastreamtable[i].telescopeindex << ") that refers outside the telescope table range (table length " << telescopetablelength << ") - aborting!!!" << endl;
+      cerror << startl << "Datastream table entry " << i << " has a telescope index that refers outside the telescope table range (" << datastreamtable[i].telescopeindex << ")" << endl;
       return false;
     }
 
-    //check the recorded bands all refer to valid local freqs
-    for(int j=0;j<datastreamtable[i].numrecordedbands;j++)
+    //check the local freq indices are all ok
+    for(int j=0;j<datastreamtable[i].numinputbands;j++)
     {
-      if(datastreamtable[i].recordedbandlocalfreqindices[j] < 0 || datastreamtable[i].recordedbandlocalfreqindices[j] >= datastreamtable[i].numrecordedfreqs)
+      if(datastreamtable[i].inputbandlocalfreqindices[j] < 0 || datastreamtable[i].inputbandlocalfreqindices[j] >= datastreamtable[i].numfreqs)
       {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Datastream table entry " << i << " has an recorded band local frequency index (band " << j << ") which is equal to " << datastreamtable[i].recordedbandlocalfreqindices[j] << " that refers outside the local frequency table range (" << datastreamtable[i].numrecordedfreqs << ") - aborting!!!" << endl;
+        cerror << startl << "Datastream table entry " << i << " has an input band local frequency index (band " << j << ") that refers outside the local frequency table range (" << datastreamtable[i].inputbandlocalfreqindices[j] << ")" << endl;
         return false;
       }
     }
 
-    //check that the zoom mode bands also refer to valid local freqs
-    for(int j=0;j<datastreamtable[i].numzoombands;j++)
+    //check the frequency table indices are ok and all the bandwidths all match
+    bandwidth = freqtable[datastreamtable[i].freqtableindices[0]].bandwidth;
+    for(int j=0;j<datastreamtable[i].numfreqs;j++)
     {
-      if(datastreamtable[i].zoombandlocalfreqindices[j] < 0 || datastreamtable[i].zoombandlocalfreqindices[j] >= datastreamtable[i].numzoomfreqs)
+      if(datastreamtable[i].freqtableindices[j] < 0 || datastreamtable[i].freqtableindices[j] >= freqtablelength)
       {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Datastream table entry " << i << " has an zoom band local frequency index (band " << j << ") which is equal to " << datastreamtable[i].zoombandlocalfreqindices[j] << " that refers outside the local frequency table range (" << datastreamtable[i].numzoomfreqs << ") - aborting!!!" << endl;
+        cerror << startl << "Datastream table entry " << i << " has a frequency index (freq " << j << ") that refers outside the frequency table range (" << datastreamtable[i].freqtableindices[j] << ")" << endl;
         return false;
       }
-    }
-
-    //check that all zoom freqs come later in the freq table than regular freqs
-    for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
-    {
-      int rfreqtableindex = datastreamtable[i].recordedfreqtableindices[j];
-      for(int k=0;k<datastreamtable[i].numzoomfreqs;k++)
+      if(bandwidth != freqtable[datastreamtable[i].freqtableindices[j]].bandwidth)
       {
-        if(datastreamtable[i].zoomfreqtableindices[k] < rfreqtableindex)
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Datastream table entry " << i << " has a zoom band (index " << k << ") which comes earlier in the freq table than a recorded band (index " << j << ") - aborting!!!" << endl;
-          return false;
-        }
-      }
-    }
-
-    //check the frequency table indices are ok and all the bandwidths, number of channels, oversampling etc match for the recorded freqs
-    bandwidth = freqtable[datastreamtable[i].recordedfreqtableindices[0]].bandwidth;
-    int oversamp = freqtable[datastreamtable[i].recordedfreqtableindices[0]].oversamplefactor;
-    int decim = freqtable[datastreamtable[i].recordedfreqtableindices[0]].decimationfactor;
-    int toaver = freqtable[datastreamtable[i].recordedfreqtableindices[0]].channelstoaverage;
-    if(oversamp < decim)
-    {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Oversamplefactor (" << oversamp << ") is less than decimation factor (" << decim << ") - aborting!!!" << endl;
-      return false;
-    }
-    for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
-    {
-      if(datastreamtable[i].recordedfreqtableindices[j] < 0 || datastreamtable[i].recordedfreqtableindices[j] >= freqtablelength)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Datastream table entry " << i << " has a recorded frequency index (freq " << j << ") which is equal to " << datastreamtable[i].recordedfreqtableindices[j] << " that refers outside the frequency table range (" << freqtablelength << ") - aborting!!!" << endl;
-        return false;
-      }
-      if(bandwidth != freqtable[datastreamtable[i].recordedfreqtableindices[j]].bandwidth)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "All recorded bandwidths for a given datastream must be equal - aborting!!!!" << endl;
-        return false;
-      }
-      if(oversamp != freqtable[datastreamtable[i].recordedfreqtableindices[j]].oversamplefactor)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "All recorded oversample factors for a given datastream must be equal - aborting!!!!" << endl;
-        return false;
-      }
-      if(decim != freqtable[datastreamtable[i].recordedfreqtableindices[j]].decimationfactor)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "All recorded decimations for a given datastream must be equal - aborting!!!!" << endl;
-        return false;
-      }
-      if(toaver != freqtable[datastreamtable[i].recordedfreqtableindices[j]].channelstoaverage)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "All recorded channels to average for a given datastream must be equal - aborting!!!!" << endl;
-        return false;
-      }
-    }
-
-    //repeat for the zoom freqs, also check that they fit into a recorded freq and the channel widths match, and the polarisations match
-    for(int j=0;j<datastreamtable[i].numzoomfreqs;j++)
-    {
-      if(datastreamtable[i].zoomfreqtableindices[j] < 0 || datastreamtable[i].zoomfreqtableindices[j] >= freqtablelength)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Datastream table entry " << i << " has a zoom frequency index (freq " << j << ") which is equal to " << datastreamtable[i].zoomfreqtableindices[j] << " that refers outside the frequency table range (" << freqtablelength << ") - aborting!!!" << endl;
-        return false;
-      }
-      if(datastreamtable[i].zoomfreqparentdfreqindices[j] < 0) {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Datastream table entry " << i << " has a zoom frequency index (freq " << j << ") which does not fit into any of the recorded bands - aborting!!!" << endl;
-        return false;
-      }
-      double zoomfreqchannelwidth = freqtable[datastreamtable[i].zoomfreqtableindices[j]].bandwidth/freqtable[datastreamtable[i].zoomfreqtableindices[j]].numchannels;
-      double parentfreqchannelwidth = freqtable[datastreamtable[i].recordedfreqtableindices[datastreamtable[i].zoomfreqparentdfreqindices[j]]].bandwidth/freqtable[datastreamtable[i].recordedfreqtableindices[datastreamtable[i].zoomfreqparentdfreqindices[j]]].numchannels;
-      if(fabs(zoomfreqchannelwidth - parentfreqchannelwidth) > Mode::TINY) {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Datastream table entry " << i << " has a zoom frequency index (freq " << j << ") whose channel width (" << zoomfreqchannelwidth << ") does not match its parents channel width (" << parentfreqchannelwidth << ") - aborting!!!" << endl;
-        return false;
-      }
-    }
-
-    //check that each zoom band has actually been recorded in the same polarisation
-    for(int j=0;j<datastreamtable[i].numzoombands;j++) {
-      bool matchingpol = false;
-      for(int k=0;k<datastreamtable[i].numrecordedbands;k++) {
-        if(datastreamtable[i].zoomfreqparentdfreqindices[datastreamtable[i].zoombandlocalfreqindices[j]] == datastreamtable[i].recordedbandlocalfreqindices[k]) {
-          if (datastreamtable[i].zoombandpols[j] == datastreamtable[i].recordedbandpols[k])
-            matchingpol = true;
-        }
-      }
-      if(!matchingpol) {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Datastream table entry " << i << " has a zoom band (band " << j << ") which does have have a parent band of the same polarisation (" << datastreamtable[i].zoombandpols[j] << ") - aborting!!!" << endl;
+        cerror << startl << "All bandwidths for a given datastream must be equal" << endl;
         return false;
       }
     }
@@ -1800,45 +1094,15 @@ bool Configuration::consistencyCheck()
     {
       if(tindex != datastreamtable[configs[0].datastreamindices[i]].telescopeindex)
       {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "All configs must have the same telescopes!  Config " << j << " datastream " << i << " refers to different telescopes - aborting!!!" << endl;
+        cerror << startl << "All configs must have the same telescopes!  Config " << j << " datastream " << i << " refers to different telescopes" << endl;
         return false;
       }
     }
   }
 
   //check entries in the config table, check that number of channels * sample time yields a whole number of nanoseconds and that the nanosecond increment is not too large for an int, and generate the ordered datastream indices array
-  //also check that guardns is large enough
-  int nchan, chantoav;
-  double samplens;
   for(int i=0;i<numconfigs;i++)
   {
-    //check the fringe rotation settings
-    if(configs[i].fringerotationorder < 0 || configs[i].fringerotationorder > 2) {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Fringe rotation order must be 0, 1 or 2 for all configurations - aborting!!!" << endl;
-      return false;
-    }
-    //check that arraystridelen is ok, and guardns is ok
-    for(int j=0;j<numdatastreams;j++) {
-      for(int k=0;k<datastreamtable[configs[i].datastreamindices[j]].numrecordedfreqs;k++) {
-        nchan = freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[k]].numchannels;
-        if(nchan % configs[i].arraystridelen != 0) {
-    //for(int j=0;j<freqtablelength;j++) {
-      //if(freqtable[j].numchannels % configs[i].arraystridelen != 0) {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Config[" << i << "] has a stride length of " << configs[i].arraystridelen << " which is not an integral divisor of the number of channels in frequency[" << k << "] of datastream " << j << " (which is " << nchan << ") - aborting!!!" << endl;
-          return false;
-        }
-      }
-      samplens = 1000.0/freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].bandwidth;
-      if(configs[i].guardns < 4.0*samplens*datastreamtable[configs[i].datastreamindices[j]].bytespersampledenom) {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Config[" << i << "] has a guard ns which is potentially too short (" << configs[i].guardns << ").  To be safe (against backwards shuffling of the start of a Datastream send) guardns should be at least " << 4.0*samplens*datastreamtable[configs[i].datastreamindices[j]].bytespersampledenom << " - aborting!!!" << endl;
-        return false;
-      }
-    }
-
     //work out the ordereddatastreamindices
     count = 0;
     for(int j=0;j<datastreamtablelength;j++)
@@ -1852,42 +1116,32 @@ bool Configuration::consistencyCheck()
     }
     if(count != numdatastreams)
     {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Not all datastreams accounted for in the datastream table for config " << i << endl;
+      cerror << startl << "Not all datastreams accounted for in the datastream table for config " << i << endl;
       return false;
     }
 
-    //check that the subint time results in a whole number of FFTs for each datastream
-    //also that the blockspersend is the same for all datastreams
+    //check that oversamplefactor >= decimationfactor
+    if(configs[i].oversamplefactor < configs[i].decimationfactor)
+    {
+      cerror << startl << "Oversamplefactor (" << configs[i].oversamplefactor << ") is less than decimation factor (" << configs[i].decimationfactor << ")" << endl;
+      return false;
+    }
+
+    //check that number of channels * sample time yields a whole number of nanoseconds for every datastream
     for(int j=0;j<numdatastreams;j++)
     {
-      sampletimens = 1000.0/(2.0*freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].bandwidth);
-      ffttime = sampletimens*freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].numchannels*2;
-      numffts = configs[i].subintns/ffttime;
+      sampletimens = 1000.0/(2.0*freqtable[datastreamtable[configs[i].datastreamindices[j]].freqtableindices[0]].bandwidth);
+      ffttime = sampletimens*configs[i].numchannels*2;
+      nsincrement = ffttime*configs[i].blockspersend*(databufferfactor/numdatasegments);
       if(ffttime - (int)(ffttime+0.5) > 0.00000001 || ffttime - (int)(ffttime+0.5) < -0.000000001)
       {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "FFT chunk time for config " << i << ", datastream " << j << " is not a whole number of nanoseconds (" << ffttime << ") - aborting!!!" << endl;
+        cerror << startl << "FFT chunk time for config " << i << ", datastream " << j << " is not a whole number of nanoseconds (" << ffttime << ")" << endl;
         return false;
       }
-      if(fabs(numffts - int(numffts+0.5)) > Mode::TINY) {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Send of size " << configs[i].subintns << " does not yield an integer number of FFTs for datastream " << j << " in config " << i << " - aborting!!!" << endl;
-        return false;
-      }
-      if(((double)configs[i].subintns)*(databufferfactor/numdatasegments) > (((long long)1 << (sizeof(int)*8 - 1)) - 1))
+      if(nsincrement > INT_MAX)
       {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Increment per read in nanoseconds is " << ((double)configs[i].subintns)*(databufferfactor/numdatasegments) << " - too large to fit in an int - aborting!!!" << endl;
+        cerror << startl << "Increment per read in nanoseconds is " << nsincrement << " - too large to fit in an int" << endl;
         return false;
-      }
-      for (int k=1;k<getDNumRecordedFreqs(i,j);k++) {
-        freqdata f = freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[k]];
-        if (fabs((1000.0*f.numchannels)/f.bandwidth) - ffttime > Mode::TINY) {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Frequency " << k << " of datastream " << j << " of config " << i << " has a different bandwidth or num channels to the other freqs of this datastream - aborting!!!" << endl;
-          return false;
-        }
       }
     }
 
@@ -1898,43 +1152,18 @@ bool Configuration::consistencyCheck()
       b = configs[i].baselineindices[j];
       if(b < 0 || b >= baselinetablelength) //bad index
       {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Config " << i << " baseline index " << j << " refers to baseline " << b << " which is outside the range of the baseline table - aborting!!!" << endl;
+        cerror << startl << "Config " << i << " baseline index " << j << " refers to baseline " << b << " which is outside the range of the baseline table" << endl;
         return false;
       }
       if(datastreamtable[baselinetable[b].datastream2index].telescopeindex < lastt2 && datastreamtable[baselinetable[b].datastream1index].telescopeindex <= lastt1)
       {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Config " << i << " baseline index " << j << " refers to baseline " << datastreamtable[baselinetable[b].datastream2index].telescopeindex << "-" << datastreamtable[baselinetable[b].datastream1index].telescopeindex << " which is out of order with the previous baseline " << lastt1 << "-" << lastt2 << " - aborting!!!" << endl;
+        cerror << startl << "Config " << i << " baseline index " << j << " refers to baseline " << datastreamtable[baselinetable[b].datastream2index].telescopeindex << "-" << datastreamtable[baselinetable[b].datastream1index].telescopeindex << " which is out of order with the previous baseline " << lastt1 << "-" << lastt2 << endl;
         return false;
       }
       lastt1 = datastreamtable[baselinetable[b].datastream1index].telescopeindex;
       lastt2 = datastreamtable[baselinetable[b].datastream2index].telescopeindex;
     }
-
-    for(int j=0;j<numbaselines;j++)
-    {
-      bl = baselinetable[configs[i].baselineindices[j]];
-      for(int k=0;k<bl.numfreqs;k++)
-      {
-        chantoav = freqtable[bl.freqtableindices[k]].channelstoaverage;
-        nchan = freqtable[bl.freqtableindices[k]].numchannels;
-        if(configs[i].xmacstridelen%chantoav != 0 && chantoav%configs[i].xmacstridelen != 0)
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Config[" << i << "] has an xmac stride length of " << configs[i].xmacstridelen << " which is not 2^N x the channels to average in frequency [" << k << "] of baseline " << j << " (which is " << chantoav << ") - aborting!!!" << endl;
-          return false;
-        }
-        if(nchan%configs[i].xmacstridelen != 0)
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Config[" << i << "] has an xmac stride length of " << configs[i].xmacstridelen << " which is not an integer divisor of the number of channels in frequency[" << k << "] of baseline " << j << " (which is " << nchan << ") - aborting!!!" << endl;
-          return false;
-        }
-      }
-    }
   }
-
 
   //check the baseline table entries
   for(int i=0;i<baselinetablelength;i++)
@@ -1942,252 +1171,35 @@ bool Configuration::consistencyCheck()
     //check the datastream indices
     if(baselinetable[i].datastream1index < 0 || baselinetable[i].datastream2index < 0 || baselinetable[i].datastream1index >= datastreamtablelength || baselinetable[i].datastream2index >= datastreamtablelength)
     {
-      if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Baseline table entry " << i << " has a datastream index outside the datastream table range! Its two indices are " << baselinetable[i].datastream1index << ", " << baselinetable[i].datastream2index << " - aborting!!!" << endl;
+      cerror << startl << "Baseline table entry " << i << " has a datastream index outside the datastream table range! Its two indices are " << baselinetable[i].datastream1index << ", " << baselinetable[i].datastream2index << endl;
       return false;
     }
 
-    ds1 = datastreamtable[baselinetable[i].datastream1index];
-    ds2 = datastreamtable[baselinetable[i].datastream2index];
+    //check the band indices
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
-      freq1index = baselinetable[i].freqtableindices[j];
-      if(baselinetable[i].datastream2bandindex[j][0] >= ds2.numrecordedbands) //zoom band
-        freq2index = ds2.zoomfreqtableindices[ds2.zoombandlocalfreqindices[baselinetable[i].datastream2bandindex[j][0]]-ds2.numrecordedbands];
-      else
-        freq2index = ds2.recordedfreqtableindices[ds2.recordedbandlocalfreqindices[baselinetable[i].datastream2bandindex[j][0]]];
-      if(freq1index != freq2index)
-      {
-        //these had better be compatible, otherwise bail
-        f1 = freqtable[freq1index].bandedgefreq;
-        f2 = freqtable[freq2index].bandedgefreq;
-        if(freqtable[freq1index].lowersideband)
-          f1 -= freqtable[freq1index].bandwidth;
-        if(freqtable[freq2index].lowersideband)
-          f2 -= freqtable[freq2index].bandwidth;
-        if(freqtable[freq1index].bandedgefreq == freqtable[freq2index].bandedgefreq &&  freqtable[freq1index].bandedgefreq == freqtable[freq2index].bandedgefreq)
-        {
-          //different freqs, same value??
-          if(mpiid == 0) //only write one copy of this error message
-            cwarn << startl << "Baseline " << i << " frequency " << j << " points at two different frequencies that are apparently identical - this is not wrong, but very strange.  Check the input file" << endl;
-        }
-        else if(f1 == f2 && freqtable[freq1index].bandwidth == freqtable[freq2index].bandwidth)
-        {
-          //correlating a USB with an LSB
-          if(mpiid == 0) //only write one copy of this error message
-            cinfo << startl << "Baseline " << i << " frequency " << j << " is correlating an USB frequency with a LSB frequency" << endl;
-          if(freqtable[freq1index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] = 1; //datastream1 has the LSB (2 is USB)
-          else
-            baselinetable[i].oddlsbfreqs[j] = 2; //datastream2 has the LSB (1 is USB)
-        }
-        else
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cwarn << startl << "Baseline table entry " << i << ", frequency " << j << " is trying to correlate two different frequencies!  Correlation will go on, but the results for these bands will probably be garbage!" << endl;
-          if(freqtable[freq1index].lowersideband && !freqtable[freq2index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] = 1;
-          else if(freqtable[freq2index].lowersideband && !freqtable[freq1index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] = 2;
-        }
-      }
       for(int k=0;k<baselinetable[i].numpolproducts[j];k++)
       {
-        //check the band indices
-        if((baselinetable[i].datastream1bandindex[j][k] < 0) || (baselinetable[i].datastream1bandindex[j][k] >= (ds1.numrecordedbands + ds1.numzoombands)))
+        if(baselinetable[i].datastream1bandindex[j][k] < 0 || baselinetable[i].datastream1bandindex[j][k] >= datastreamtable[baselinetable[i].datastream1index].numinputbands)
         {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 1 refers to a band outside datastream 1's range (" << baselinetable[i].datastream1bandindex[j][k] << ") - aborting!!!" << endl;
+          cerror << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 1 refers to a band outside datastream 1's range (" << baselinetable[i].datastream1bandindex[j][k] << ")" << endl;
           return false;
         }
-        ds1 = datastreamtable[baselinetable[i].datastream2index];
-        if((baselinetable[i].datastream2bandindex[j][k] < 0) || (baselinetable[i].datastream2bandindex[j][k] >= (ds1.numrecordedbands + ds1.numzoombands)))
+        if(baselinetable[i].datastream2bandindex[j][k] < 0 || baselinetable[i].datastream2bandindex[j][k] >= datastreamtable[baselinetable[i].datastream2index].numinputbands)
         {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 refers to a band outside datastream 2's range (" << baselinetable[i].datastream2bandindex[j][k] << ") - aborting!!!" << endl;
+          cerror << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 refers to a band outside datastream 2's range (" << baselinetable[i].datastream2bandindex[j][k] << ")" << endl;
           return false;
         }
-
-        //check that the freqs pointed at match
-        if(baselinetable[i].datastream1bandindex[j][k] >= ds1.numrecordedbands) //zoom band
-          freqindex = ds1.zoomfreqtableindices[ds1.zoombandlocalfreqindices[baselinetable[i].datastream1bandindex[j][k]]-ds1.numrecordedbands];
-        else
-          freqindex = ds1.recordedfreqtableindices[ds1.recordedbandlocalfreqindices[baselinetable[i].datastream1bandindex[j][k]]];
-        if(freqindex != freq1index)
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 1 does not match the frequency of the first polarisation product - aborting!!!" << endl;
-          return false;
-        }
-        if(baselinetable[i].datastream2bandindex[j][k] >= ds2.numrecordedbands) //zoom band
-          freqindex = ds2.zoomfreqtableindices[ds2.zoombandlocalfreqindices[baselinetable[i].datastream2bandindex[j][0]]-ds2.numrecordedbands];
-        else
-          freqindex = ds2.recordedfreqtableindices[ds2.recordedbandlocalfreqindices[baselinetable[i].datastream2bandindex[j][k]]];
-        if(freqindex != freq2index)
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 does not match the frequency of the first polarisation product - aborting!!!" << endl;
-          return false;
-        }
-      }
-    }
-  }
-
-  //for each config, check if there are any USB x LSB correlations 
-  for(int i=0;i<numconfigs;i++)
-  {
-    configs[i].anyusbxlsb = false;
-    for(int j=0;j<numbaselines;j++)
-    {
-      for(int k=0;k<baselinetable[j].numfreqs;k++)
-      {
-        if(baselinetable[j].oddlsbfreqs[k] > 0)
-          configs[i].anyusbxlsb = true;
-      }
-    }
-  }
-
-  //for each config, if it is phased array and FILTERBANK, check that the
-  //accumulation time is an integer number of FFTs and will divide evenly 
-  //into the SUBINT/#threads for all Cores
-  for(int i=0;i<numconfigs;i++)
-  {
-    if(configs[i].phasedarray == true)
-    {
-      if(configs[i].subintns%configs[i].paaccumulationns != 0)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "For config " << i << ", the requested phased array accumulation time (" << configs[i].paaccumulationns << " ns) does not fit evenly into a subintegration (" << configs[i].subintns << " ns) - aborting!!!" << endl;
-        return false;
-      }
-      for(int j=0;j<numcoreconfs;j++)
-      {
-        if(configs[i].subintns%(configs[i].paaccumulationns*getCNumProcessThreads(j)) != 0)
-        {
-          if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "For config " << i << ", the requested phased array accumulation time (" << configs[i].paaccumulationns << " ns) does not fit evenly into a thread subintegration (" << configs[i].subintns/getCNumProcessThreads(j) << " ns for thread " << j << ") - aborting!!!" << endl;
-          return false;
-        }
-      }
-      ffttime = ((double)configs[i].subintns)/configs[i].blockspersend;
-      double accffts = configs[i].paaccumulationns/ffttime;
-      if(fabs(accffts)-int(accffts+0.5) > 0.00000000001 || int(accffts+0.5)%configs[i].numbufferedffts != 0)
-      {
-        if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "For config " << i << ", the requested phased array accumulation time (" << configs[i].paaccumulationns << " ns) is not an integer number of FFTs - aborting!!!" << endl;
-        return false;
       }
     }
   }
 
   if(databufferfactor % numdatasegments != 0)
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "There must be an integer number of sends per datasegment.  Presently databufferfactor is " << databufferfactor << ", and numdatasegments is " << numdatasegments << " - aborting!!!" << endl;
+    cerror << startl << "There must be an integer number of sends per datasegment.  Presently databufferfactor is " << databufferfactor << ", and numdatasegments is " << numdatasegments << endl;
     return false;
   }
 
-  return true;
-}
-
-bool Configuration::processPhasedArrayConfig(string filename, int configindex)
-{
-  string line;
-
-  if(mpiid == 0) //only write one copy of this info message
-    cinfo << startl << "About to process phased array file " << filename << endl;
-  ifstream phasedarrayinput(filename.c_str(), ios::in);
-  if(!phasedarrayinput.is_open() || phasedarrayinput.bad())
-  {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Could not open phased array config file " << line << " - aborting!!!" << endl;
-    return false;
-  }
-  getinputline(&phasedarrayinput, &line, "OUTPUT TYPE");
-  if(line == "FILTERBANK")
-    configs[configindex].padomain = FREQUENCY;
-  else if (line == "TIMESERIES") {
-    if(mpiid == 0) //only write one copy of this warning
-      cwarn << startl << "Time series output is requested but not yet supported." << endl;
-    configs[configindex].padomain = TIME;
-  }
-  else {
-    if(mpiid == 0) //only write one copy of this error message
-      cerror << startl << "Unknown phased array output type " << line << " - setting to FILTERBANK" << endl;
-    configs[configindex].padomain = FREQUENCY;
-  }
-  getinputline(&phasedarrayinput, &line, "OUTPUT FORMAT");
-  if(line == "DIFX") {
-    if(configs[configindex].padomain == TIME) {
-      if(mpiid == 0) //only write one copy of this error message
-        cerror << startl << "Cannot produce DIFX format data with a time series - setting output format for phased array to VDIF!" << endl;
-      configs[configindex].paoutputformat = VDIFOUT;
-    }
-    else {
-      configs[configindex].paoutputformat = DIFX;
-    }
-  }
-  else if (line == "VDIF") {
-    if(configs[configindex].padomain == FREQUENCY) {
-      if(mpiid == 0) //only write one copy of this warning
-        cerror << startl << "Cannot produce VDIF format data with a filterbank - setting output format for phased array to DIFX!" << endl;
-      configs[configindex].paoutputformat = DIFX;
-    }
-    else {
-      configs[configindex].paoutputformat = VDIFOUT;
-    }
-  }
-  else {
-    if(configs[configindex].padomain == FREQUENCY) {
-      if(mpiid == 0) //only write one copy of this error message
-        cerror << startl << "Unknown phased array output format " << line << " - setting to DIFX" << endl;
-      configs[configindex].paoutputformat = DIFX;
-    }
-    else {
-      if(mpiid == 0) //only write one copy of this error message
-        cerror << startl << "Unknown phased array output format " << line << " - setting to VDIF" << endl;
-      configs[configindex].paoutputformat = VDIFOUT;
-    }
-  }
-  getinputline(&phasedarrayinput, &line, "ACC TIME (NS)");
-  configs[configindex].paaccumulationns = atoi(line.c_str());
-  getinputline(&phasedarrayinput, &line, "COMPLEX OUTPUT");
-  if(line == "TRUE" || line == "true" || line == "True")
-    configs[configindex].pacomplexoutput = true;
-  else
-    configs[configindex].pacomplexoutput = false;
-  getinputline(&phasedarrayinput, &line, "OUTPUT BITS");
-  configs[configindex].pabits = atoi(line.c_str());
-  configs[configindex].paweights = new double*[freqtablelength];
-  configs[configindex].numpafreqpols = new int[freqtablelength];
-  configs[configindex].papols = new char*[freqtablelength];
-  for(int i=0;i<freqtablelength;i++)
-  {
-    getinputline(&phasedarrayinput, &line, "NUM FREQ");
-    configs[configindex].numpafreqpols[i] = atoi(line.c_str());
-    if(configs[configindex].numpafreqpols[i] > 0)
-    {
-      configs[configindex].paweights[i] = new double[numdatastreams];
-      configs[configindex].papols[i] = new char[configs[configindex].numpafreqpols[i]];
-      for(int j=0;j<configs[configindex].numpafreqpols[i];j++)
-      {
-        getinputline(&phasedarrayinput, &line, "FREQ");
-        configs[configindex].papols[i][j] = line.c_str()[0];
-      }
-      for(int j=0;j<numdatastreams;j++)
-      {
-        getinputline(&phasedarrayinput, &line, "FREQ");
-        configs[configindex].paweights[i][j] = atof(line.c_str());
-        if(configs[configindex].paweights[i][j] < 0.0)
-        {
-          if(mpiid == 0)
-            cfatal << startl << "All phased array weights must be >= 0 - aborting!!!" << endl;
-          return false;
-        }
-      }
-    }
-  }
-  phasedarrayinput.close();
   return true;
 }
 
@@ -2202,13 +1214,11 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
   char psrline[128];
   ifstream temppsrinput;
 
-  if(mpiid == 0) //only write one copy of this info message
-    cinfo << startl << "About to process pulsar file " << filename << endl;
+  cinfo << startl << "About to process pulsar file " << filename << endl;
   ifstream pulsarinput(filename.c_str(), ios::in);
   if(!pulsarinput.is_open() || pulsarinput.bad())
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Could not open pulsar config file " << line << " - aborting!!!" << endl;
+    cfatal << startl << "Cannot open pulsar config file " << line << " - aborting!!!" << endl;
     return false;
   }
   getinputline(&pulsarinput, &line, "NUM POLYCO FILES");
@@ -2257,12 +1267,11 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
     for(int j=0;j<numsubpolycos[i];j++)
     {
       //cinfo << startl << "About to create polyco file " << polycocount << " from filename " << polycofilenames[i] << ", subcount " << j << endl;
-      configs[configindex].polycos[polycocount] = new Polyco(polycofilenames[i], j, configindex, configs[configindex].numbins, getMaxNumChannels(), binphaseends, binweights, double(configs[configindex].subintns)/60000000000.0);
+      configs[configindex].polycos[polycocount] = new Polyco(polycofilenames[i], j, configindex, configs[configindex].numbins, configs[configindex].numchannels, binphaseends, binweights, double(2*configs[configindex].numchannels*configs[configindex].blockspersend)/(60.0*2000000.0*getDBandwidth(configindex,0,0)));
       if (!configs[configindex].polycos[polycocount]->initialisedOK()) {
 	delete [] numsubpolycos;
-        return false;
+	return false;
       }
-      estimatedbytes += configs[configindex].polycos[polycocount]->getEstimatedBytes();
       polycocount++;
     } 
   }
@@ -2280,83 +1289,19 @@ bool Configuration::setPolycoFreqInfo(int configindex)
   bool ok = true;
   datastreamdata d = datastreamtable[getMaxNumFreqDatastreamIndex(configindex)];
   double * frequencies = new double[freqtablelength];
-  double * bandwidths = new double[freqtablelength];
-  int * numchannels = new int[freqtablelength];
-  bool * used = new bool[freqtablelength];
+  double bandwidth = freqtable[d.freqtableindices[0]].bandwidth;
   for(int i=0;i<freqtablelength;i++)
   {
     frequencies[i] = freqtable[i].bandedgefreq;
     if(freqtable[i].lowersideband)
-      frequencies[i] -= ((double)(freqtable[i].numchannels-1))*freqtable[i].bandwidth/((double)freqtable[i].numchannels);
-    bandwidths[i] = freqtable[i].bandwidth;
-    numchannels[i] = freqtable[i].numchannels;
-    used[i] = configs[configindex].frequsedbybaseline[i];
+      frequencies[i] -= freqtable[i].bandwidth;
   }
   for(int i=0;i<configs[configindex].numpolycos;i++)
   {
-    ok = ok && configs[configindex].polycos[i]->setFrequencyValues(freqtablelength, frequencies, bandwidths, numchannels, used);
+    ok = ok && configs[configindex].polycos[i]->setFrequencyValues(freqtablelength, frequencies, bandwidth);
   }
   delete [] frequencies;
-  delete [] bandwidths;
-  delete [] numchannels;
-  delete [] used;
   return ok;
-}
-
-bool Configuration::fillHeaderData(ifstream * input, int & baselinenum, int & mjd, double & seconds, int & configindex, int & sourceindex, int & freqindex, char polpair[3], int & pulsarbin, double & dataweight, double uvw[3])
-{
-  int sync, version;
-  string line;
-
-  input->read((char*)(&sync), 4);
-  if(sync != Visibility::SYNC_WORD)
-  {
-    if(sync != 'BASE')
-      return false;
-
-    //if we get here, must be an old style ascii file
-    getinputline(input, &line, "LINE NUM");
-    baselinenum = atoi(line.c_str());
-    getinputline(input, &line, "MJD");
-    mjd = atoi(line.c_str());
-    getinputline(input, &line, "SECONDS");
-    seconds = atof(line.c_str());
-    getinputline(input, &line, "CONFIG INDEX");
-    configindex = atoi(line.c_str());
-    getinputline(input, &line, "SOURCE INDEX");
-    sourceindex = atoi(line.c_str());
-    getinputline(input, &line, "FREQ INDEX");
-    freqindex = atoi(line.c_str());
-    getinputline(input, &line, "POLARISATION PAIR");
-    polpair[0] = line.at(0);
-    polpair[1] = line.at(1);
-    getinputline(input, &line, "PULSAR BIN");
-    pulsarbin = atoi(line.c_str());
-    getinputline(input, &line, "FLAGGED");
-    getinputline(input, &line, "DATA WEIGHT");
-    dataweight = atof(line.c_str());
-    getinputline(input, &line, "U (METRES)");
-    uvw[0] = atof(line.c_str());
-    getinputline(input, &line, "V (METRES)");
-    uvw[1] = atof(line.c_str());
-    getinputline(input, &line, "W (METRES)");
-    uvw[2] = atof(line.c_str());
-    return true;
-  }
-  input->read((char*)(&version), 4);
-  if(version != Visibility::BINARY_HEADER_VERSION)
-    return false;
-  input->read((char*)(&baselinenum), 4);
-  input->read((char*)(&mjd), 4);
-  input->read((char*)(&seconds), 8);
-  input->read((char*)(&configindex), 4);
-  input->read((char*)(&sourceindex), 4);
-  input->read((char*)(&freqindex), 4);
-  input->read(polpair, 2);
-  input->read((char*)(&pulsarbin), 4);
-  input->read((char*)(&dataweight), 8);
-  input->read((char*)(uvw), 3*8);
-  return true;
 }
 
 void Configuration::makeFortranString(string line, int length, char * destination)
@@ -2376,31 +1321,13 @@ void Configuration::makeFortranString(string line, int length, char * destinatio
   }
 }
 
-void Configuration::getinputkeyval(ifstream * input, std::string * key, std::string * val)
-{
-  if(input->eof())
-    cerror << startl << "Trying to read past the end of file!" << endl;
-  getline(*input, *key);
-  while(key->length() > 0 && key->at(0) == COMMENT_CHAR) { // a comment
-    //if(mpiid == 0) //only write one copy of this error message
-    //  cverbose << startl << "Skipping comment " << key << endl;
-    getline(*input, *key);
-  }
-  int keylength = key->find_first_of(':') + 1;
-  if(keylength < DEFAULT_KEY_LENGTH)
-    keylength = DEFAULT_KEY_LENGTH;
-  *val = key->substr(keylength);
-  *key = key->substr(0, key->find_first_of(':'));
-}
-
 void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader)
 {
   if(input->eof())
-    cerror << startl << "Trying to read past the end of file!" << endl;
+    cerror << startl << "Trying to read past the end of file!!!" << endl;
   getline(*input,*line);
   while(line->length() > 0 && line->at(0) == COMMENT_CHAR) { // a comment
-    //if(mpiid == 0) //only write one copy of this error message
-    //  cverbose << startl << "Skipping comment " << line << endl;
+    cinfo << startl << "Skipping comment " << line << endl;
     getline(*input, *line);
   }
   int keylength = line->find_first_of(':') + 1;
