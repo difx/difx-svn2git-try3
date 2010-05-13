@@ -1,6 +1,7 @@
 Version 1.0.4
 ~~~~~~~~~~~~~
 * Post DiFX-1.5.3
+* Fix problem with job generation convergence
 
 Version 1.0.3
 ~~~~~~~~~~~~~
