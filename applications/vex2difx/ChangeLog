@@ -3,6 +3,7 @@ Version 1.0.4
 * Post DiFX-1.5.3
 * Fix problem with job generation convergence
 * Force v2d file to start with a letter
+* oms2v2d: warn if both .skd and .vex are found; default to .vex
 
 Version 1.0.3
 ~~~~~~~~~~~~~
