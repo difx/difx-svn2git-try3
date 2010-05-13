@@ -657,9 +657,9 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	{
 		// If offset is small, just nudge it 
 		// Data will be invalid this time through, but should be OK next time
-		if(abs(sec-sec2) < 2)
+		if(abs(sec-sec2) < 5)
 		{
-			readseconds -= (sec-sec2);
+			readseconds += (sec-sec2);
 			readnanoseconds = (int)(ns + 0.4);
 			cwarn << startl << "Nudged time just a bit" << endl;
 		}
