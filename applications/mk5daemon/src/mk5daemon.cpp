@@ -460,10 +460,16 @@ int main(int argc, char **argv)
 			{
 				Mk5Daemon_loadMon(D, mjd);
 			}
-
-			if(t % D->loadMonInterval == halfInterval)
+			else if( (t % D->loadMonInterval) == halfInterval)
 			{
-				Mk5Daemon_getModules(D);
+				if(D->skipGetModule)
+				{
+					D->skipGetModule = 0;
+				}
+				else
+				{
+					Mk5Daemon_getModules(D);
+				}
 			}
 
 			if(t - firstTime > 15 && D->isMk5 &&
@@ -479,7 +485,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		usleep(200000);
+		usleep(100000);
 	}
 
 	snprintf(message, MAX_MESSAGE_SIZE, "Stopping %s ver. %s\n", 

@@ -194,6 +194,9 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		returnValue = 0;
 	}
 
+	/* All recipients of this message should skip the next directory read just in case */
+	D->skipGetModule = 1;
+
 	if(strcmp(G->to[0], D->hostName) != 0)
 	{
 		return;
@@ -469,6 +472,17 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	if(childPid == 0)
 	{
 		const char *user;
+
+		// Avoid the period when modules are being checked
+		int tm = time(0) % D->loadMonInterval;
+		if(tm == D->loadMonInterval/2-1)
+		{
+			sleep(2);
+		}
+		else if(tm == D->loadMonInterval/2)
+		{
+			sleep(1);
+		}
 
 		user = getenv("DIFX_USER_ID");
 		if(!user)

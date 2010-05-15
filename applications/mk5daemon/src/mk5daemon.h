@@ -76,6 +76,7 @@ typedef struct
 	int idleCount;
 	int nXLROpen;
 	EventManager eventManager;	/* for tracking transient events */
+	int skipGetModule;
 } Mk5Daemon;
 
 int Mk5Daemon_loadMon(Mk5Daemon *D, double mjd);
