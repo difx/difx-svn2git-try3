@@ -605,6 +605,33 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	}
 	else /* Read-only test here */
 	{
+		WATCHDOG( dirLen = XLRGetUserDirLength(xlrDevice) );
+		if(dirLen > 8)
+		{
+			buffer = (char *)malloc(dirLen);
+			WATCHDOG( xlrRC = XLRGetUserDir(xlrDevice, dirLen, 0, buffer) );
+			if(xlrRC != XLR_SUCCESS)
+			{
+				fprintf(stderr, "XLRGetUserDir Failed\n");
+				free(buffer);
+				return -1;
+			}
+
+			if(dirFile)
+			{
+				n = 0;
+				out = fopen(dirFile, "w");
+				if(out)
+				{
+					n = fwrite(buffer, dirLen, 1, out);
+					fclose(out);
+				}
+				if(n != 1)
+				{
+					fprintf(stderr, "Cannot write module directory to file %s\n", dirFile);
+				}
+			}
+		}
 		for(n = 0; n < nWrite; n++)
 		{
 			mk5status.position = (long long)bufferSize*nRep*n + ptr;
