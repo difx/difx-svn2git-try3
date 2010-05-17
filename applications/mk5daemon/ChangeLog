@@ -6,6 +6,7 @@ Version 1.4
 * Support for Streamstor SDK 9.0
 * Support for difxVersion in difxStartMessage
 * Don't launch a job near time(0)%10 = 5 to avoid getModules clash
+* Add "recover" Mark5 utility
 
 Version 1.3
 ~~~~~~~~~~~

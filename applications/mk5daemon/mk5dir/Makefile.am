@@ -2,7 +2,8 @@ bin_PROGRAMS = \
 	mk5cp \
 	mk5dir \
 	testmod \
-	vsn
+	vsn \
+	recover
 
 dist_bin_SCRIPTS = \
 	checkdir
@@ -33,4 +34,9 @@ vsn_SOURCES = \
 	watchdog.cpp \
 	watchdog.h \
 	vsn.cpp
+
+recover_SOURCES = \
+	watchdog.cpp \
+	watchdog.h \
+	recover.cpp
 	
