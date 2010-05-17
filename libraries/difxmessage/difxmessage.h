@@ -17,6 +17,7 @@ extern "C" {
 
 #define DIFX_MESSAGE_IDENTIFIER_LENGTH	32
 #define DIFX_MESSAGE_PARAM_LENGTH	32
+#define DIFX_MESSAGE_VERSION_LENGTH	32
 #define DIFX_MESSAGE_FILENAME_LENGTH	128
 #define DIFX_MESSAGE_COMMENT_LENGTH	512
 #define DIFX_MESSAGE_MAX_TARGETS	128
@@ -239,6 +240,7 @@ typedef struct
 	char mpiOptions[DIFX_MESSAGE_FILENAME_LENGTH];
 	char difxProgram[DIFX_MESSAGE_FILENAME_LENGTH];
 	int force;
+	char difxVersion[DIFX_MESSAGE_VERSION_LENGTH];
 } DifxMessageStart;
 
 typedef struct
