@@ -176,7 +176,7 @@ int main(int argc, char **argv)
 	char message[DIFX_MESSAGE_LENGTH];
 	char modules[100] = "";
 	char vsn[16] = "";
-	int a, v;
+	int v;
 	float replacedFrac;
 	int force=0;
 
@@ -185,7 +185,7 @@ int main(int argc, char **argv)
 		return usage(argv[0]);
 	}
 
-	for(a = 1; a < argc; a++)
+	for(int a = 1; a < argc; a++)
 	{
 		if(strcmp(argv[a], "-h") == 0 ||
 		   strcmp(argv[a], "--help") == 0)

@@ -40,6 +40,12 @@ extern "C" {
 #endif
 
 
+enum Mark5ReadMode
+{
+	MARK5_READ_MODE_NORMAL = 0,
+	MARK5_READ_MODE_RT
+};
+
 // Test for SDK 9+
 #ifdef XLR_MAX_IP_ADDR
 typedef unsigned int streamstordatatype;
@@ -47,7 +53,7 @@ typedef unsigned int streamstordatatype;
 typedef unsigned long streamstordatatype;
 #endif
 
-/* as implemented in Mark5 */
+/* as implemented in Mark5A */
 struct Mark5Directory
 {
 	int nscans; /* Number of scans herein */
@@ -60,6 +66,44 @@ struct Mark5Directory
 	double playRate; /* Playback clock rate, MHz */
 };
 
+/* first updated version as defined by Hastack Mark5 Memo #081 */
+struct Mark5DirectoryHeaderVer1
+{
+	int version;		/* should be 1 */
+	int status;		/* bit field -- not documented yet! */
+	char vsn[32];
+	char vsnPrev[32];	/* "continued from" VSN */
+	char vsnNext[32];	/* "continued to" VSN */
+	char zeros[24];
+};
+
+struct Mark5DirectoryScanHeaderVer1
+{
+	unsigned int typeNumber;	/* 0 to 10; see memo 81 */
+	unsigned short frameLength;
+	char station[2];
+	char scanName[32];
+	char expName[8];
+	long long startByte;
+	long long stopByte;
+};
+
+struct Mark5DirectoryLegacyBodyVer1
+{
+	unsigned char timeBCD[8];	/* version dependent time code. */
+	int firstFrame;
+	int byteOffset;
+	int trackRate;
+	int nTrack;
+	char zeros[40];
+};
+
+struct Mark5DirectoryVDIFBodyVer1
+{
+	unsigned short data[8][4];	/* packed bit fields for up to 8 thread groups */
+};
+
+/* Internal representation of .dir files */
 struct Mark5Scan
 {
 	char name[MAXLENGTH];
@@ -82,6 +126,8 @@ struct Mark5Module
 	int nscans;
 	Mark5Scan scans[MAXSCANS];
 	unsigned int signature;
+	enum Mark5ReadMode mode;
+	int dirVersion;		/* directory version = 0 for pre memo 81 */
 };
 
 enum Mark5DirStatus
@@ -96,6 +142,7 @@ enum Mark5DirStatus
 };
 
 extern char Mark5DirDescription[][20];
+extern char Mark5ReadModeName[][10];
 
 /* returns active bank: 0 or 1 for bank A or B, or -1 if none */
 int Mark5BankGet(SSHANDLE *xlrDevice);

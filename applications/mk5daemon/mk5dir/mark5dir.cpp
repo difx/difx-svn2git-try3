@@ -46,8 +46,17 @@
 #define MARK5_FILL_WORD64 0x1122334411223344ULL
 #endif
 
+/* Warning!  Endianness not corrected for in decoding of
+ * module directories!
+ */
 
 using namespace std;
+
+char Mark5ReadModeName[][10] =
+{
+	"NORMAL",
+	"RT"
+};
 
 char Mark5DirDescription[][20] =
 {
@@ -366,9 +375,10 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	int (*callback)(int, int, int, void *), void *data, float *replacedFrac)
 {
 	XLR_RETURN_CODE xlrRC;
-	Mark5Directory m5dir;
-	int len, i, n;
-	unsigned int j;
+	Mark5Directory *m5dir;
+	unsigned char *dirData;
+	int len, n;
+	int j;
 	struct mark5_format *mf;
 	Mark5Scan *scan;
 	char label[XLR_LABEL_LENGTH];
@@ -379,6 +389,9 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	int die = 0;
 	long long wGood=0, wBad=0;
 	long long wGoodSum=0, wBadSum=0;
+	int dirVersion;		/* == 0 for old style (pre-mark5-memo 81) */
+				/* == version number for mark5-memo 81 */
+	int oldLen1, oldLen2, oldLen3;
 
 	streamstordatatype *buffer;
 
@@ -394,28 +407,63 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	xlrRC = XLRGetLabel(*xlrDevice, label);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		return -1;
+		return -2;
 	}
 	label[8] = 0;
 
 	len = XLRGetUserDirLength(*xlrDevice);
-	if(len < (signed int)sizeof(struct Mark5Directory))
+	/* The historic directories written by Mark5A could come in three sizes.
+	 * See readdir() in Mark5A.c.  If one of these matches the actual dir size,
+	 * then assume it is old style, which we declare to be directory version
+	 * 0.  Otherwise check for divisibility by 128.  If so, then it is considered 
+	 * new style, and the version number can be extracted from the header.
+	 */
+	oldLen1 = (int)sizeof(struct Mark5Directory);
+	oldLen2 = oldLen1 + 64 + 8*88;	/* 88 = sizeof(S_DRIVEINFO) */
+	oldLen3 = oldLen1 + 64 + 16*88;
+	if(len == oldLen1 || len == oldLen2 || len == oldLen3)
 	{
-		return -1;
+		dirVersion = 0;
+	}
+	else if(len % 128 == 0)
+	{
+		dirVersion = -1;  /* signal to get version number later */
+	}
+	else
+	{
+		printf("size=%d  len=%d\n", sizeof(struct Mark5Directory), len);
+
+		return -3;
 	}
 
-	xlrRC = XLRGetUserDir(*xlrDevice, sizeof(struct Mark5Directory), 
-		0, &m5dir);
+	dirData = (unsigned char *)calloc(len, sizeof(int));
+	if(dirData == 0)
+	{
+		return -4;
+	}
+	m5dir = (struct Mark5Directory *)dirData;
+
+	xlrRC = XLRGetUserDir(*xlrDevice, len, 0, dirData);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		return -1;
+		free(dirData);
+		return -5;
+	}
+	if(dirVersion == -1)
+	{
+		dirVersion = ((int *)dirData)[0];
+	}
+	
+	if(dirVersion < 0 || dirVersion > 1)
+	{
+		return -6;
 	}
 
 	/* the adventurous would use md5 here */
 	signature = 1;
-	for(j = 0; j < sizeof(struct Mark5Directory)/4; j++)
+	for(j = 0; j < len/4; j++)
 	{
-		x = ((unsigned int *)(&m5dir))[j] + 1;
+		x = ((unsigned int *)dirData)[j] + 1;
 		signature = signature ^ x;
 	}
 
@@ -428,26 +476,47 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	if(module->signature == signature && module->nscans > 0)
 	{
 		module->bank = bank;
+		free(dirData);
 		return 0;
 	}
 
 	buffer = (streamstordatatype *)malloc(bufferlen);
 	
 	memset(module, 0, sizeof(struct Mark5Module));
-	module->nscans = m5dir.nscans;
+	if(dirVersion == 0)
+	{
+		module->nscans = m5dir->nscans;
+	}
+	else
+	{
+		module->nscans = len/128 - 1;
+	}
 	module->bank = bank;
 	strcpy(module->label, label);
 	module->signature = signature;
+	module->mode = MARK5_READ_MODE_NORMAL;
 
-	for(i = 0; i < module->nscans; i++)
+	for(int i = 0; i < module->nscans; i++)
 	{
 		wGood = wBad = 0;
 		scan = module->scans + i;
 
-		strncpy(scan->name, m5dir.scanName[i], MAXLENGTH);
-		scan->start  = m5dir.start[i];
-		scan->length = m5dir.length[i];
-		if(scan->length < bufferlen*10)
+		if(dirVersion == 0)
+		{
+			strncpy(scan->name, m5dir->scanName[i], MAXLENGTH);
+			scan->start  = m5dir->start[i];
+			scan->length = m5dir->length[i];
+		}
+		else if(dirVersion == 1)
+		{
+			const struct Mark5DirectoryScanHeaderVer1 *sh;
+			sh = (struct Mark5DirectoryScanHeaderVer1 *)(dirData + 128*(i+1));
+			strncpy(scan->name, sh->scanName, 32);
+			scan->name[31] = 0;
+			scan->start  = sh->startByte;
+			scan->length = sh->stopByte - sh->startByte;
+		}
+		if(scan->length < bufferlen)
 		{
 			if(callback)
 			{
@@ -562,6 +631,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	}
 
 	free(buffer);
+	free(dirData);
 
 	uniquifyScanNames(module);
 
@@ -582,9 +652,10 @@ void printMark5Module(const struct Mark5Module *module)
 		return;
 	}
 	
-	printf("Module Name = %s   Nscans = %d   Bank = %c  Sig = %u\n", 
+	printf("VSN=%s  nScan=%d  bank=%c  sig=%u  dirVer=%d  mode=%s\n", 
 		module->label, module->nscans, module->bank+'A', 
-		module->signature);
+		module->signature, module->dirVersion, 
+		Mark5ReadModeName[module->mode]);
 
 	n = module->nscans;
 	for(i = 0; i < n; i++)
@@ -617,6 +688,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	char bank;
 	char label[XLR_LABEL_LENGTH];
 	unsigned int signature;
+	char extra1[12], extra2[12];
 
 	if(!module)
 	{
@@ -626,6 +698,8 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	module->label[0] = 0;
 	module->nscans = 0;
 	module->bank = -1;
+	module->mode = MARK5_READ_MODE_NORMAL;
+	module->dirVersion = 0;
 
 	in = fopen(filename, "r");
 	if(!in)
@@ -640,7 +714,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 		return -1;
 	}
 
-	n = sscanf(line, "%8s %d %c %u", label, &nscans, &bank, &signature);
+	n = sscanf(line, "%8s %d %c %u %11s %11s", label, &nscans, &bank, &signature, extra1, extra2);
 	if(n < 3)
 	{
 		fclose(in);
@@ -649,6 +723,24 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	if(n == 3)
 	{
 		signature = ~0;
+	}
+	else if(n == 5)
+	{
+		if(strcmp(extra1, "RT") == 0)
+		{
+			module->mode = MARK5_READ_MODE_RT;
+		}
+	}
+	else if(n == 6)
+	{
+		if(strcmp(extra1, "RT") == 0)
+		{
+			module->mode = MARK5_READ_MODE_RT;
+		}
+		if(sscanf(extra2, "%d", &i) == 1)
+		{
+			module->dirVersion = i;
+		}
 	}
 
 	if(nscans > MAXSCANS || nscans < 0)
@@ -711,11 +803,13 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 		return -1;
 	}
 
-	fprintf(out, "%8s %d %c %u\n",
+	fprintf(out, "%8s %d %c %u %d %s\n",
 		module->label,
 		module->nscans,
 		module->bank+'A',
-		module->signature);
+		module->signature,
+		module->dirVersion,
+		Mark5ReadModeName[module->mode]);
 	for(i = 0; i < module->nscans; i++)
 	{
 		scan = module->scans + i;
