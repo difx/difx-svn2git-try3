@@ -494,6 +494,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	module->bank = bank;
 	strcpy(module->label, label);
 	module->signature = signature;
+	module->dirVersion = dirVersion;
 	module->mode = MARK5_READ_MODE_NORMAL;
 
 	for(int i = 0; i < module->nscans; i++)
