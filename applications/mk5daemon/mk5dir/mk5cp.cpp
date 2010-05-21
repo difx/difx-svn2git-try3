@@ -683,7 +683,7 @@ int main(int argc, char **argv)
 		}
 		if(v < 0)
 		{
-			fprintf(stderr, "Unsuccessful\n");
+			fprintf(stderr, "Unsuccessful dir read.  Return value = %d\n", v);
 			mk5status.activeBank = ' ';
 			bail = 1;
 		}

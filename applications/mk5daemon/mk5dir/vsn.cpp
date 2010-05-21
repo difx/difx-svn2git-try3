@@ -119,6 +119,8 @@ int setvsn(int bank, const char *newVSN, int force)
 	char oldLabel[XLR_LABEL_LENGTH+1];
 	int size, capacity;
 	int ndisk, rate;
+	long long isz;
+	int icnt;
 	int i, d;
 	int nSlash=0, nDash=0, nSep=0;
 	char drivename[XLR_MAX_DRIVENAME+1];
@@ -203,6 +205,8 @@ int setvsn(int bank, const char *newVSN, int force)
 
 	capacity = 0;
 	ndisk = 0;
+	isz = 0LL;
+	icnt = 0;
 	for(d = 0; d < 8; d++)
 	{
 		WATCHDOG( xlrRC = XLRGetDriveInfo(xlrDevice, d/2, d%2, &dinfo) );
@@ -219,6 +223,14 @@ int setvsn(int bank, const char *newVSN, int force)
 			printf(" %d  MISSING\n", d);
 			continue;
 		}
+		if(dinfo.Capacity > 0)
+		{
+			icnt++;
+		}
+		if(isz == 0 || (dinfo.Capacity > 0 && dinfo.Capacity * 512LL < isz))
+		{
+			isz = dinfo.Capacity * 512LL;
+		}
 		size = roundsize(dinfo.Capacity);
 		printf(" %d  %s (%s) %s  %d %d %d", d, drivename, driveserial, driverev, 
 			size, dinfo.SMARTCapable, dinfo.SMARTState);
@@ -233,6 +245,8 @@ int setvsn(int bank, const char *newVSN, int force)
 		capacity += size;
 		ndisk++;
 	}
+
+	capacity = (icnt*isz/10000000000LL)*10;
 
 	if(newVSN[0])
 	{
