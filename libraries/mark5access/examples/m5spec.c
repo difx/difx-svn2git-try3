@@ -36,7 +36,7 @@
 const char program[] = "m5spec";
 const char author[]  = "Walter Brisken";
 const char version[] = "1.0";
-const char verdate[] = "2010 Mar 8";
+const char verdate[] = "2010 May 24";
 
 int usage(const char *pgm)
 {
@@ -232,9 +232,21 @@ int main(int argc, char **argv)
 		char *buffer;
 		FILE *in;
 
+		if(strcmp(argv[1], "-h") == 0 ||
+		   strcmp(argv[1], "--help") == 0)
+		{
+			return usage(argv[0]);
+		}
+
+		in = fopen(argv[1], "r");
+		if(!in)
+		{
+			fprintf(stderr, "Error: cannot open file '%s'\n", argv[1]);
+			return 0;
+		}
+
 		buffer = malloc(bufferlen);
 		
-		in = fopen(argv[1], "r");
 		v = fread(buffer, bufferlen, 1, in);
 		if(v == 0)
 		{
