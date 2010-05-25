@@ -734,11 +734,11 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	}
 	else if(n == 6)
 	{
-		if(strcmp(extra1, "RT") == 0)
+		if(strcmp(extra2, "RT") == 0)
 		{
 			module->mode = MARK5_READ_MODE_RT;
 		}
-		if(sscanf(extra2, "%d", &i) == 1)
+		if(sscanf(extra1, "%d", &i) == 1)
 		{
 			module->dirVersion = i;
 		}
