@@ -99,10 +99,8 @@ void trim(char *out, const char *in)
 	}
 }
 
-int roundSize(long long s)
+int roundSize(long long a)
 {
-	long long a;
-
 	a /= 1000000000;
 	a = (a+2)/5;
 
@@ -251,6 +249,7 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 		/* here doing the full condition */
 
 		long long len, lenLast=0;
+		long long lenFirst=0;
 		struct timeb time1, time2;
 		double dt;
 
@@ -267,7 +266,7 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 			WATCHDOG( len = XLRGetLength(xlrDevice) );
 			if(lenLast == 0)
 			{
-				lenLast = len;
+				lenFirst = lenLast = len;
 			}
 			WATCHDOGTEST( XLRGetDeviceStatus(xlrDevice, &devStatus) );
 			if(!devStatus.Recording)
@@ -279,16 +278,21 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 				snprintf(message, DIFX_MESSAGE_LENGTH, "Conditioning aborted.");
 				fprintf(stderr, "%s\n", message);
 				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+
+				break;
 			}
 			if(n == printInterval)
 			{
 				long long bytes;
+				double done;
 
 				n = 0;
 
 				bytes = -(len-lenLast);	// It is counting down
+				done = 100.0*(double)(lenFirst-len)/(double)len;
 				mk5status.position = devInfo.NumBuses*len;
 				mk5status.rate = 8*devInfo.NumBuses*bytes/(printInterval*1000000.0);
+				sprintf(mk5status.scanName, "[%4.2f%%]", done);
 				if(mk5status.rate < lowestRate)
 				{
 					lowestRate = mk5status.rate;
@@ -307,8 +311,8 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 				}
 				difxMessageSendMark5Status(&mk5status);
 
-				printf(". Time = %7.2f  Position = %Ld  Rate = %f\n",
-					dt, mk5status.position, mk5status.rate);
+				printf(". Time = %7.2f  Position = %Ld  Rate = %f  Done = %5.2f %%\n",
+					dt, mk5status.position, mk5status.rate, done);
 
 				lenLast = len;
 			}
@@ -319,7 +323,14 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 		dt = time2.time + time2.millitm/1000.0 
 		   - time1.time - time1.millitm/1000.0;
 
-		if(!die)
+		if(die)
+		{
+			WATCHDOG( XLRClose(xlrDevice) );
+			printf("! Conditioning cancelled.  Reopening device\n");
+			WATCHDOGTEST( XLROpen(1, &xlrDevice) );
+			WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
+		}
+		else
 		{
 			printf("> Conditioning %s took %7.2f seconds", vsn, dt);
 
@@ -395,8 +406,9 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 	free(dirData);
 
 	/* reset the label */
-	snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%cErased", 
-		vsn, totalCapacity, rate, RecordSeparator);
+	snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%c%s", 
+		vsn, totalCapacity, rate, RecordSeparator,
+		die ? "Erased" : "Error");
 	printf("> New label = %s\n", label);
 	WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
 
