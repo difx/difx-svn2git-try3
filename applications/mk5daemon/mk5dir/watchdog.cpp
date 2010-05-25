@@ -96,6 +96,8 @@ int initWatchdog()
 {
 	int perr;
 
+	watchdogStatement[0] = 0;
+	watchdogXLRError[0] = 0;
 	watchdogTime = 0;
 	perr = pthread_create(&watchdogThread, NULL, watchdogFunction, 0);
 

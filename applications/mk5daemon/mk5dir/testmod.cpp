@@ -289,7 +289,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
-	S_DRIVESTATS dstats[XLR_MAXBINS];
+	S_DRIVESTATS driveStats[XLR_MAXBINS];
 	S_DRIVEINFO dinfo;
 	S_BANKSTATUS bankStat;
 	S_DIR dir;
@@ -318,7 +318,12 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	buffer2 = (char *)malloc(bufferSize);
 	memset(&mk5status, 0, sizeof(mk5status));
 
-	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
+	WATCHDOGTEST( xlrRC = XLROpen(1, &xlrDevice) );
+	if(xlrRC != XLR_SUCCESS)
+	{
+		fprintf(stderr, "Error: Cannot open streamstor device\n");
+		return -1;
+	}
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 	WATCHDOGTEST( XLRSetOption(xlrDevice, options) );
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, bank, &bankStat) );
@@ -566,21 +571,21 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 
 			for(d = 0; d < 8; d++)
 			{
-				WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, dstats) );
+				WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, driveStats) );
 				if(xlrRC != XLR_SUCCESS)
 				{
 					fprintf(stderr, "XLRGetDriveStats failed for drive %d\n", d);
 					continue;
 				}
 				printf("Stats[%d] = %u %u %u %u %u %u %u %u\n", d,
-					(unsigned int)(dstats[0].count), 
-					(unsigned int)(dstats[1].count),
-					(unsigned int)(dstats[2].count), 
-					(unsigned int)(dstats[3].count),
-					(unsigned int)(dstats[4].count), 
-					(unsigned int)(dstats[5].count),
-					(unsigned int)(dstats[6].count), 
-					(unsigned int)(dstats[7].count));
+					(unsigned int)(driveStats[0].count), 
+					(unsigned int)(driveStats[1].count),
+					(unsigned int)(driveStats[2].count), 
+					(unsigned int)(driveStats[3].count),
+					(unsigned int)(driveStats[4].count), 
+					(unsigned int)(driveStats[5].count),
+					(unsigned int)(driveStats[6].count), 
+					(unsigned int)(driveStats[7].count));
 			}
 
 			if(die)
@@ -669,21 +674,21 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 
 		for(d = 0; d < 8; d++)
 		{
-			WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, dstats) );
+			WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, driveStats) );
 			if(xlrRC != XLR_SUCCESS)
 			{
 				fprintf(stderr, "XLRGetDriveStats failed for drive %d\n", d);
 				continue;
 			}
 			printf("Stats[%d] = %u %u %u %u %u %u %u %u\n", d,
-				(unsigned int)(dstats[0].count), 
-				(unsigned int)(dstats[1].count),
-				(unsigned int)(dstats[2].count), 
-				(unsigned int)(dstats[3].count),
-				(unsigned int)(dstats[4].count), 
-				(unsigned int)(dstats[5].count),
-				(unsigned int)(dstats[6].count), 
-				(unsigned int)(dstats[7].count));
+				(unsigned int)(driveStats[0].count), 
+				(unsigned int)(driveStats[1].count),
+				(unsigned int)(driveStats[2].count), 
+				(unsigned int)(driveStats[3].count),
+				(unsigned int)(driveStats[4].count), 
+				(unsigned int)(driveStats[5].count),
+				(unsigned int)(driveStats[6].count), 
+				(unsigned int)(driveStats[7].count));
 		}
 
 		if(die)

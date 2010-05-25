@@ -32,7 +32,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <difxmessage.h>
-#include <signal.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/time.h>
@@ -112,7 +111,7 @@ int setvsn(int bank, const char *newVSN, int force)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
-	S_DRIVEINFO dinfo;
+	S_DRIVEINFO driveInfo;
 	S_BANKSTATUS bankStat;
 	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
@@ -209,32 +208,32 @@ int setvsn(int bank, const char *newVSN, int force)
 	icnt = 0;
 	for(d = 0; d < 8; d++)
 	{
-		WATCHDOG( xlrRC = XLRGetDriveInfo(xlrDevice, d/2, d%2, &dinfo) );
+		WATCHDOG( xlrRC = XLRGetDriveInfo(xlrDevice, d/2, d%2, &driveInfo) );
 		if(xlrRC != XLR_SUCCESS)
 		{
 			fprintf(stderr, "XLRGetDriveInfo failed for disk %d\n", d);
 			continue;
 		}
-		trim(drivename, dinfo.Model);
-		trim(driveserial, dinfo.Serial);
-		trim(driverev, dinfo.Revision);
+		trim(drivename, driveInfo.Model);
+		trim(driveserial, driveInfo.Serial);
+		trim(driverev, driveInfo.Revision);
 		if(drivename[0] == 0)
 		{
 			printf(" %d  MISSING\n", d);
 			continue;
 		}
-		if(dinfo.Capacity > 0)
+		if(driveInfo.Capacity > 0)
 		{
 			icnt++;
 		}
-		if(isz == 0 || (dinfo.Capacity > 0 && dinfo.Capacity * 512LL < isz))
+		if(isz == 0 || (driveInfo.Capacity > 0 && driveInfo.Capacity * 512LL < isz))
 		{
-			isz = dinfo.Capacity * 512LL;
+			isz = driveInfo.Capacity * 512LL;
 		}
-		size = roundsize(dinfo.Capacity);
+		size = roundsize(driveInfo.Capacity);
 		printf(" %d  %s (%s) %s  %d %d %d", d, drivename, driveserial, driverev, 
-			size, dinfo.SMARTCapable, dinfo.SMARTState);
-		if(dinfo.SMARTCapable && !dinfo.SMARTState)
+			size, driveInfo.SMARTCapable, driveInfo.SMARTState);
+		if(driveInfo.SMARTCapable && !driveInfo.SMARTState)
 		{
 			printf("  FAILED\n");
 		}
