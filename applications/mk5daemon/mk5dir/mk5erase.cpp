@@ -372,6 +372,7 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 						}
 					}
 					printf("\n");
+					difxMessageSendCondition(&condMessage);
 				}
 				else
 				{
@@ -408,7 +409,7 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 	/* reset the label */
 	snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%c%s", 
 		vsn, totalCapacity, rate, RecordSeparator,
-		die ? "Erased" : "Error");
+		die ? "Error" : "Erased");
 	printf("> New label = %s\n", label);
 	WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
 
