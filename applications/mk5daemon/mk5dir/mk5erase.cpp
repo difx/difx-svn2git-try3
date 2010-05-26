@@ -37,6 +37,7 @@
 #include "xlrapi.h"
 #include "watchdog.h"
 #include "difxmessage.h"
+#include "mark5dir.h"
 
 /* Note: this program is largely based on Haystack's SSErase.  Thanks
  * to John Ball and Dan Smythe for providing a nice template.
@@ -44,17 +45,23 @@
  *  1. Integration to the difxmessage system
  *  2. Watchdog around all XLR function calls
  *  3. The module rate is based on lowest performance portion of test
+ *  4. Fast mode (SS_OVERWRITE_RANDOM_PATTERN) possible
  *
  * Other differences:
  *  1. Can only operate on one module at a time
  *  2. Options to influence the directory structure that is left on the module
  *  3. Reported progress considers 2 passes
+ *  4. Increased computer friendliness of text output
+ */
+
+/* TODO
+ *  Find a way to save the hostname to the condition database
  */
 
 const char program[] = "mk5erase";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100525";
+const char verdate[] = "20100526";
 
 
 #define MJD_UNIX0       40587.0
@@ -64,6 +71,7 @@ const char verdate[] = "20100525";
 
 int die = 0;
 const char RecordSeparator = 30;
+const int statsRange[] = { 75000, 150000, 300000, 600000, 1200000, 2400000, 4800000, -1 };
 
 typedef void (*sighandler_t)(int);
 
@@ -79,8 +87,9 @@ int usage(const char *pgm)
 	printf("  -h             Print this help message\n\n");
 	printf("  --verbose\n");
 	printf("  -v             Be more verbose\n\n");
-	printf("  --force\n");
-	printf("  -f             Don't ask to continue\n\n");
+	printf("  --fast\n");
+	printf("  -f             Use fast mode (twice as fast for conditioning\n\n");
+	printf("  --force        Don't ask to continue\n\n");
 	printf("  --condition\n");
 	printf("  -c             Do full conditioning, not just erasing\n\n");
 	printf("  --getdata\n");
@@ -141,7 +150,7 @@ int roundSize(long long a)
 	return a*5;
 }
 
-int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData)
+int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData, int fast)
 {
 	const int printInterval = 10;
 	SSHANDLE xlrDevice;
@@ -160,13 +169,13 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 	long long driveCapacity[8];	/* in bytes */
 	long long minCapacity;		/* in bytes */
 	int totalCapacity;		/* in GB (approx) */
-	double lowestRate;
 	int rate = 1024;		/* Mbps, for label */
 	DifxMessageCondition condMessage;
 	DifxMessageMk5Status mk5status;
 	int dirLength;
 	char *dirData;
 	char message[DIFX_MESSAGE_LENGTH];
+	struct Mark5DirectoryHeaderVer1 *dirHeader;
 
 	memset((char *)(&mk5status), 0, sizeof(mk5status));
 
@@ -203,12 +212,40 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 		
 	}
 
+	if(strlen(label) > 10)
+	{
+		int c, r, n;
+
+		n = sscanf(label+9, "%d/%d", &c, &r);
+		if(n == 2 && c > 0 && r > 0 && r < 100000)
+		{
+			rate = r;
+		}
+		else
+		{
+			snprintf(message, DIFX_MESSAGE_LENGTH,
+				"Extended VSN is corrupt.  Assuming rate = 1024 Mbps.");
+			fprintf(stderr,  "Warning: %s\n", message);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			rate = 1024;
+		}
+	}
+	else
+	{
+		snprintf(message, DIFX_MESSAGE_LENGTH,
+			"No extended VSN found.  Assuming rate = 1024 Mbps.");
+		fprintf(stderr,  "Warning: %s\n", message);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		rate = 1024;
+	}
+
 	WATCHDOGTEST( XLRSetMode(xlrDevice, SS_MODE_PCI) );
 	WATCHDOGTEST( XLRGetDeviceInfo(xlrDevice, &devInfo) );
 	WATCHDOGTEST( XLRGetDeviceStatus(xlrDevice, &devStatus) );
 	WATCHDOGTEST( XLRClearOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
 	WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
 
+	/* Get drive info */
 	nDrive = 0;
 	minCapacity = 0LL;
 	for(int d = 0; d < 8; d++)
@@ -273,6 +310,13 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 
 	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
 
+	for(int b = 0; b < XLR_MAXBINS; b++)
+	{
+		driveStats[b].range = statsRange[b];
+		driveStats[b].count = 0;
+	}
+	WATCHDOGTEST( XLRSetDriveStats(xlrDevice, driveStats) );
+
 	if(cond == 0)
 	{
 		/* here just erasing */
@@ -286,15 +330,27 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 		long long lenFirst=0;
 		struct timeb time1, time2;
 		double dt;
-		int pass = 0;
+		int nPass, pass = 0;
 		FILE *out=0;
+		double lowestRate = 1e9;	/* Unphysically fast! */
+		double highestRate = 0.0;
+		double averageRate = 0.0;
+		int nRate = 0;
 
-		lowestRate = 1e9;	/* Unphysically fast! */
 		mk5status.state = MARK5_STATE_CONDITION;
 		difxMessageSendMark5Status(&mk5status);
 		
-		WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_RW_PATTERN) );
-	
+		if(fast == 1)
+		{
+			WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_RANDOM_PATTERN) );
+			nPass = 1;
+		}
+		else
+		{
+			WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_RW_PATTERN) );
+			nPass = 2;
+		}
+
 		ftime(&time1);
 
 		if(getData)
@@ -344,13 +400,22 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 					bytes += lenFirst;
 				}
 				done = 100.0*(double)(lenFirst-len)/(double)lenFirst;
-				done = done/2.0 + 50.0*pass;
+				done = done/nPass + 50.0*pass;
 				mk5status.position = devInfo.NumBuses*len;
 				mk5status.rate = 8*devInfo.NumBuses*bytes/(printInterval*1000000.0);
 				sprintf(mk5status.scanName, "[%4.2f%%]", done);
-				if(mk5status.rate < lowestRate && bytes > 0)
+				if(bytes > 0)
 				{
-					lowestRate = mk5status.rate;
+					if(mk5status.rate < lowestRate)
+					{
+						lowestRate = mk5status.rate;
+					}
+					if(mk5status.rate > highestRate)
+					{
+						highestRate = mk5status.rate;
+					}
+					nRate++;
+					averageRate += mk5status.rate;
 				}
 				ftime(&time2);
 				dt = time2.time + time2.millitm/1000.0 
@@ -388,6 +453,8 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 		ftime(&time2);
 		dt = time2.time + time2.millitm/1000.0 
 		   - time1.time - time1.millitm/1000.0;
+
+		printf("\n");
 
 		if(die)
 		{
@@ -445,16 +512,34 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 					printf("! Disk %d stats : Not found!\n", d);
 				}
 			}
+			printf("> Rates (Mpbs): Lowest = %7.2f  Average = %7.2f  Highest = %7.2f\n",
+				lowestRate, averageRate, highestRate);
 		}
 	}
 
 	/* clear the user directory */
+	WATCHDOG( dirLength = XLRGetUserDirLength(xlrDevice) );
+	dirData = 0;
 	if(dirVersion < 0)
 	{
-		WATCHDOG( dirLength = XLRGetUserDirLength(xlrDevice) );
 		if(dirLength < 80000 || dirLength % 128 == 0)
 		{
 			dirLength = 128;
+			dirData = (char *)calloc(dirLength, 1);
+			WATCHDOGTEST( XLRGetUserDir(xlrDevice, dirLength, 0, dirData) );
+			dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
+			dirVersion = dirHeader->version;
+			if(dirVersion < 0 || dirVersion > 100)
+			{
+				dirVersion = 1;
+			}
+			memset(dirData, 0, 128);
+			dirHeader->version = dirVersion;
+			sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
+		}
+		else
+		{
+			dirVersion = 0;
 		}
 	}
 	else if(dirVersion == 0)
@@ -463,12 +548,19 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 	}
 	else
 	{
+		dirData = (char *)calloc(dirLength, 1);
 		dirLength = 128;
+		dirHeader->version = dirVersion;
+		sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
 	}
 
-	printf("> Dir Size = %d\n", dirLength);
+	if(dirData == 0)
+	{
+		dirData = (char *)calloc(dirLength, 1);
+	}
 
-	dirData = (char *)calloc(dirLength, 1);
+	printf("> Dir Size = %d  Dir Version = %d\n", dirLength, dirVersion);
+
 	WATCHDOGTEST( XLRSetUserDir(xlrDevice, dirData, dirLength) );
 	free(dirData);
 
@@ -497,6 +589,7 @@ int main(int argc, char **argv)
 	int force = 0;
 	int cond = 0;
 	int getData = 0;
+	int fast = 0;
 	char vsn[10] = "";
 	char resp[12] = " ";
 	char *rv;
@@ -526,10 +619,14 @@ int main(int argc, char **argv)
 		{
 			cond = 1;
 		}
-		else if(strcmp(argv[a], "-f") == 0 ||
-		        strcmp(argv[a], "--force") == 0)
+		else if(strcmp(argv[a], "--force") == 0)
 		{
 			force = 1;
+		}
+		else if(strcmp(argv[a], "-f") == 0 ||
+		        strcmp(argv[a], "--fast") == 0)
+		{
+			fast = 1;
 		}
 		else if(strcmp(argv[a], "-l") == 0 ||
 		        strcmp(argv[a], "--legacydir") == 0)
@@ -567,6 +664,12 @@ int main(int argc, char **argv)
 				return 0;
 			}
 		}
+	}
+
+	if(fast & !cond)
+	{
+		fprintf(stderr, "Error: fast mode but not conditioning requested\n");
+		return 0;
 	}
 
 	if(vsn[0] == 0)
@@ -632,7 +735,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = mk5erase(vsn, cond, verbose, dirVersion, getData);
+	v = mk5erase(vsn, cond, verbose, dirVersion, getData, fast);
 	if(v < 0)
 	{
 		if(watchdogXLRError[0] != 0)
