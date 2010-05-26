@@ -44,7 +44,7 @@
 const char program[] = "testmod";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100127";
+const char verdate[] = "20100525";
 
 int die = 0;
 typedef void (*sighandler_t)(int);
@@ -840,7 +840,18 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	testModule(bank, readOnly, nRep, blockSize, nBlock, options, force, dirFile, ptr);
+	v = testModule(bank, readOnly, nRep, blockSize, nBlock, options, force, dirFile, ptr);
+	if(v < 0)
+	{
+		if(watchdogXLRError[0] != 0)
+		{
+			char message[DIFX_MESSAGE_LENGTH];
+			snprintf(message, DIFX_MESSAGE_LENGTH, 
+				"Streamstor error executing: %s : %s",
+				watchdogStatement, watchdogXLRError);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		}
+	}
 
 	/* *********** */
 

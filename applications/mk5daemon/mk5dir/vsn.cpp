@@ -43,7 +43,7 @@
 const char program[] = "vsn";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100127";
+const char verdate[] = "20100525";
 
 int usage(const char *pgm)
 {
@@ -384,7 +384,18 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	setvsn(bank, newVSN, force);
+	v = setvsn(bank, newVSN, force);
+	if(v < 0)
+	{
+		if(watchdogXLRError[0] != 0)
+		{
+			char message[DIFX_MESSAGE_LENGTH];
+			snprintf(message, DIFX_MESSAGE_LENGTH, 
+				"Streamstor error executing: %s : %s",
+				watchdogStatement, watchdogXLRError);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		}
+	}
 
 	/* *********** */
 

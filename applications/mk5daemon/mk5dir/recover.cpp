@@ -33,7 +33,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <difxmessage.h>
-#include <signal.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/time.h>
@@ -45,7 +44,7 @@
 const char program[] = "recover";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100517";
+const char verdate[] = "20100525";
 
 int usage(const char *pgm)
 {
@@ -295,7 +294,18 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	recoverModule(type, bank, force);
+	v = recoverModule(type, bank, force);
+	if(v < 0)
+	{
+		if(watchdogXLRError[0] != 0)
+		{
+			char message[DIFX_MESSAGE_LENGTH];
+			snprintf(message, DIFX_MESSAGE_LENGTH, 
+				"Streamstor error executing: %s : %s",
+				watchdogStatement, watchdogXLRError);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		}
+	}
 
 	/* *********** */
 

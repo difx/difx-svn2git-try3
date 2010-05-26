@@ -43,6 +43,12 @@
  * Improvements to the original include:
  *  1. Integration to the difxmessage system
  *  2. Watchdog around all XLR function calls
+ *  3. The module rate is based on lowest performance portion of test
+ *
+ * Other differences:
+ *  1. Can only operate on one module at a time
+ *  2. Options to influence the directory structure that is left on the module
+ *  3. Reported progress considers 2 passes
  */
 
 const char program[] = "mk5erase";
@@ -62,6 +68,34 @@ const char RecordSeparator = 30;
 typedef void (*sighandler_t)(int);
 
 sighandler_t oldsiginthand;
+
+int usage(const char *pgm)
+{
+	printf("\n%s ver. %s   %s %s\n\n", program, version, author, verdate);
+	printf("A program to erase or condition a Mark5 module.\n");
+	printf("\nUsage : %s [<options>] <vsn>\n\n", pgm);
+	printf("options can include:\n");
+	printf("  --help\n");
+	printf("  -h             Print this help message\n\n");
+	printf("  --verbose\n");
+	printf("  -v             Be more verbose\n\n");
+	printf("  --force\n");
+	printf("  -f             Don't ask to continue\n\n");
+	printf("  --condition\n");
+	printf("  -c             Do full conditioning, not just erasing\n\n");
+	printf("  --getdata\n");
+	printf("  -d             Save time domain performance data\n\n");
+	printf("  --legacydir\n");
+	printf("  -l             Force a legacy directory on the module\n\n");
+	printf("  --newdir\n");
+	printf("  -n             Force a new directory structure on the module\n\n");
+	printf("<vsn> is a valid module VSN (8 characters)\n\n");
+	printf("Note: A single Mark5 unit needs to be installed in bank A for\n");
+	printf("proper operation.  If the VSN is not set, use the  vsn  utility\n");
+	printf("To assign it prior to erasure or conditioning.\n\n");
+
+	return 0;
+}
 
 void siginthand(int j)
 {
@@ -107,7 +141,7 @@ int roundSize(long long a)
 	return a*5;
 }
 
-int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
+int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData)
 {
 	const int printInterval = 10;
 	SSHANDLE xlrDevice;
@@ -248,10 +282,12 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 	{
 		/* here doing the full condition */
 
-		long long len, lenLast=0;
+		long long len, lenLast=-1;
 		long long lenFirst=0;
 		struct timeb time1, time2;
 		double dt;
+		int pass = 0;
+		FILE *out=0;
 
 		lowestRate = 1e9;	/* Unphysically fast! */
 		mk5status.state = MARK5_STATE_CONDITION;
@@ -261,10 +297,23 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 	
 		ftime(&time1);
 
+		if(getData)
+		{
+			char fileName[128];
+			sprintf(fileName, "%s.timedata", vsn);
+			printf("Opening %s for output...\n", fileName);
+			out = fopen(fileName, "w");
+			if(!out)
+			{
+				fprintf(stderr, "Warning: cannot open %s for output.\nContuniung anyway.\n",
+					fileName);
+			}
+		}
+
 		for(int n = 0; ; n++)
 		{
 			WATCHDOG( len = XLRGetLength(xlrDevice) );
-			if(lenLast == 0)
+			if(lenLast < 0)
 			{
 				lenFirst = lenLast = len;
 			}
@@ -289,11 +338,17 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 				n = 0;
 
 				bytes = -(len-lenLast);	// It is counting down
-				done = 100.0*(double)(lenFirst-len)/(double)len;
+				if(lenLast < len)
+				{
+					pass++;
+					bytes += lenFirst;
+				}
+				done = 100.0*(double)(lenFirst-len)/(double)lenFirst;
+				done = done/2.0 + 50.0*pass;
 				mk5status.position = devInfo.NumBuses*len;
 				mk5status.rate = 8*devInfo.NumBuses*bytes/(printInterval*1000000.0);
 				sprintf(mk5status.scanName, "[%4.2f%%]", done);
-				if(mk5status.rate < lowestRate)
+				if(mk5status.rate < lowestRate && bytes > 0)
 				{
 					lowestRate = mk5status.rate;
 				}
@@ -311,12 +366,23 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 				}
 				difxMessageSendMark5Status(&mk5status);
 
-				printf(". Time = %7.2f  Position = %Ld  Rate = %f  Done = %5.2f %%\n",
+				sprintf(message, ". Time = %7.2f  Position = %Ld  Rate = %f  Done = %5.2f %%\n",
 					dt, mk5status.position, mk5status.rate, done);
+				printf(message);
+				if(out)
+				{
+					fprintf(out, message);
+					fflush(out);
+				}
 
 				lenLast = len;
 			}
 			sleep(1);
+		}
+
+		if(out)
+		{
+			fclose(out);
 		}
 
 		ftime(&time2);
@@ -332,7 +398,7 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 		}
 		else
 		{
-			printf("> Conditioning %s took %7.2f seconds", vsn, dt);
+			printf("> Conditioning %s took %7.2f seconds\n", vsn, dt);
 
 			rate = 128*(int)(lowestRate/128.0);
 
@@ -425,33 +491,12 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion)
 	return 0;
 }
 
-int usage(const char *pgm)
-{
-	printf("\n%s ver. %s   %s %s\n\n", program, version, author, verdate);
-	printf("A program to erase or condition a Mark5 module.\n");
-	printf("\nUsage : %s [<options>] <vsn>\n\n", pgm);
-	printf("options can include:\n");
-	printf("  --help\n");
-	printf("  -h             Print this help message\n\n");
-	printf("  --verbose\n");
-	printf("  -v             Be more verbose\n\n");
-	printf("  --force\n");
-	printf("  -f             Don't ask to continue\n\n");
-	printf("  --condition\n");
-	printf("  -c             Do full conditioning, not just erasing\n");
-	printf("<vsn> is a valid module VSN (8 characters)\n\n");
-	printf("Note: A single Mark5 unit needs to be installed in bank A for\n");
-	printf("proper operation.  If the VSN is not set, use the  vsn  utility\n");
-	printf("To assign it prior to erasure or conditioning.\n\n");
-
-	return 0;
-}
-
 int main(int argc, char **argv)
 {
 	int verbose = 0;
 	int force = 0;
 	int cond = 0;
+	int getData = 0;
 	char vsn[10] = "";
 	char resp[12] = " ";
 	char *rv;
@@ -494,7 +539,12 @@ int main(int argc, char **argv)
 		else if(strcmp(argv[a], "-n") == 0 ||
 		        strcmp(argv[a], "--newdir") == 0)
 		{
-			dirVersion = 0;
+			dirVersion = 1;
+		}
+		else if(strcmp(argv[a], "-d") == 0 ||
+		        strcmp(argv[a], "--getdata") == 0)
+		{
+			getData = 1;
 		}
 		else if(argv[a][0] == '-')
 		{
@@ -582,7 +632,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = mk5erase(vsn, cond, verbose, dirVersion);
+	v = mk5erase(vsn, cond, verbose, dirVersion, getData);
 	if(v < 0)
 	{
 		if(watchdogXLRError[0] != 0)
