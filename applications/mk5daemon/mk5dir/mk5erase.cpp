@@ -70,12 +70,29 @@ const char verdate[] = "20100526";
 
 
 int die = 0;
-const char RecordSeparator = 30;
 const int statsRange[] = { 75000, 150000, 300000, 600000, 1200000, 2400000, 4800000, -1 };
 
 typedef void (*sighandler_t)(int);
 
 sighandler_t oldsiginthand;
+
+
+enum ConditionMode
+{
+	CONDITION_ERASE_ONLY = 0,
+	CONDITION_READ_WRITE,
+	CONDITION_READ_ONLY,
+	CONDITION_WRITE_ONLY
+};
+
+struct DriveInformation
+{
+	char model[XLR_MAX_DRIVENAME+1];
+	char serial[XLR_MAX_DRIVESERIAL+1];
+	char rev[XLR_MAX_DRIVEREV+1];
+	int failed;
+	long long capacity;	/* in bytes */
+};
 
 int usage(const char *pgm)
 {
@@ -87,11 +104,14 @@ int usage(const char *pgm)
 	printf("  -h             Print this help message\n\n");
 	printf("  --verbose\n");
 	printf("  -v             Be more verbose\n\n");
-	printf("  --fast\n");
-	printf("  -f             Use fast mode (twice as fast for conditioning\n\n");
-	printf("  --force        Don't ask to continue\n\n");
 	printf("  --condition\n");
 	printf("  -c             Do full conditioning, not just erasing\n\n");
+	printf("  --readonly\n");
+	printf("  -r             Perform read-only conditioning mode\n\n");
+	printf("  --writeonly\n");
+	printf("  -w             Perform write-only conditioning mode\n\n");
+	printf("  --force\n");
+	printf("  -f             Don't ask to continue\n\n");
 	printf("  --getdata\n");
 	printf("  -d             Save time domain performance data\n\n");
 	printf("  --legacydir\n");
@@ -150,32 +170,387 @@ int roundSize(long long a)
 	return a*5;
 }
 
-int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData, int fast)
+int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int dirVersion, int totalCapacity, int rate)
 {
-	const int printInterval = 10;
-	SSHANDLE xlrDevice;
-	XLR_RETURN_CODE xlrRC;
-	S_BANKSTATUS bankStatus;
-	S_DEVINFO devInfo;
-	S_DRIVESTATS driveStats[XLR_MAXBINS];
-	S_DRIVEINFO driveInfo;
-	S_DEVSTATUS devStatus;
-	char label[XLR_LABEL_LENGTH+1];
-	char driveModel[8][XLR_MAX_DRIVENAME+1];
-	char driveSerial[8][XLR_MAX_DRIVESERIAL+1];
-	char driveRev[8][XLR_MAX_DRIVEREV+1];
-	int driveFailed[8];
-	int nDrive;
-	long long driveCapacity[8];	/* in bytes */
-	long long minCapacity;		/* in bytes */
-	int totalCapacity;		/* in GB (approx) */
-	int rate = 1024;		/* Mbps, for label */
-	DifxMessageCondition condMessage;
-	DifxMessageMk5Status mk5status;
 	int dirLength;
 	char *dirData;
-	char message[DIFX_MESSAGE_LENGTH];
 	struct Mark5DirectoryHeaderVer1 *dirHeader;
+
+	/* clear the user directory */
+	WATCHDOG( dirLength = XLRGetUserDirLength(*xlrDevice) );
+	
+	dirData = 0;
+	if(dirVersion < 0)
+	{
+		if(dirLength < 80000 || dirLength % 128 == 0)
+		{
+			dirLength = 128;
+			dirData = (char *)calloc(dirLength, 1);
+			WATCHDOGTEST( XLRGetUserDir(*xlrDevice, dirLength, 0, dirData) );
+			dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
+			dirVersion = dirHeader->version;
+			if(dirVersion < 0 || dirVersion > 100)
+			{
+				dirVersion = 1;
+			}
+			memset(dirData, 0, 128);
+			dirHeader->version = dirVersion;
+			sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
+		}
+		else
+		{
+			dirVersion = 0;
+		}
+	}
+	else if(dirVersion == 0)
+	{
+		dirLength = 83424;
+	}
+	else
+	{
+		dirLength = 128;
+		dirData = (char *)calloc(dirLength, 1);
+		dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
+		dirHeader->version = dirVersion;
+		sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
+	}
+
+	if(dirData == 0)
+	{
+		dirData = (char *)calloc(dirLength, 1);
+	}
+
+	printf("> Dir Size = %d  Dir Version = %d\n", dirLength, dirVersion);
+
+	WATCHDOGTEST( XLRSetUserDir(*xlrDevice, dirData, dirLength) );
+	free(dirData);
+
+	return 0;
+}
+
+int resetLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int rate, const char *moduleState)
+{
+	const char RecordSeparator = 30;
+	char label[XLR_LABEL_LENGTH+1];
+
+	/* reset the label */
+	snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%c%s", 
+		vsn, totalCapacity, rate, RecordSeparator,
+		moduleState);
+	printf("> New label = %s\n", label);
+	WATCHDOGTEST( XLRSetLabel(*xlrDevice, label, strlen(label)) );
+
+	return 0;
+}
+
+int erase(SSHANDLE *xlrDevice)
+{
+	WATCHDOGTEST( XLRErase(*xlrDevice, SS_OVERWRITE_NONE) );
+
+	return 0;
+}
+
+int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, DifxMessageMk5Status *mk5status, int verbose, int getData, const struct DriveInformation drive[8], int *rate)
+{
+	XLR_RETURN_CODE xlrRC;
+	S_DEVSTATUS devStatus;
+	S_DRIVESTATS driveStats[XLR_MAXBINS];
+	S_DEVINFO devInfo;
+	S_DRIVEINFO driveInfo;
+	long long len, lenLast=-1;
+	long long lenFirst=0;
+	struct timeb time1, time2;
+	double dt;
+	int nPass, pass = 0;
+	FILE *out=0;
+	double lowestRate = 1e9;	/* Unphysically fast! */
+	double highestRate = 0.0;
+	double averageRate = 0.0;
+	int nRate = 0;
+	char message[DIFX_MESSAGE_LENGTH];
+	DifxMessageCondition condMessage;
+	const int printInterval = 10;
+
+	mk5status->state = MARK5_STATE_CONDITION;
+	difxMessageSendMark5Status(mk5status);
+	
+	WATCHDOGTEST( XLRGetDeviceInfo(*xlrDevice, &devInfo) );
+
+	/* configure collection of drive statistics */
+	WATCHDOGTEST( XLRSetOption(*xlrDevice, SS_OPT_DRVSTATS) );
+	for(int b = 0; b < XLR_MAXBINS; b++)
+	{
+		driveStats[b].range = statsRange[b];
+		driveStats[b].count = 0;
+	}
+	WATCHDOGTEST( XLRSetDriveStats(*xlrDevice, driveStats) );
+
+	if(mode == CONDITION_WRITE_ONLY)
+	{
+		WATCHDOGTEST( XLRErase(*xlrDevice, SS_OVERWRITE_RANDOM_PATTERN) );
+		nPass = 1;
+	}
+	else if(mode == CONDITION_READ_ONLY)
+	{
+		WATCHDOGTEST( XLRErase(*xlrDevice, SS_OVERWRITE_RW_PATTERN) );
+		nPass = 1;
+	}
+	else
+	{
+		WATCHDOGTEST( XLRErase(*xlrDevice, SS_OVERWRITE_RW_PATTERN) );
+		nPass = 2;
+	}
+
+	ftime(&time1);
+
+	if(getData)
+	{
+		char fileName[128];
+		sprintf(fileName, "%s.timedata", vsn);
+		printf("Opening %s for output...\n", fileName);
+		out = fopen(fileName, "w");
+		if(!out)
+		{
+			fprintf(stderr, "Warning: cannot open %s for output.\nContuniung anyway.\n",
+				fileName);
+		}
+	}
+
+	for(int n = 0; ; n++)
+	{
+		WATCHDOG( len = XLRGetLength(*xlrDevice) );
+		if(lenLast < 0)
+		{
+			lenFirst = lenLast = len;
+		}
+		WATCHDOGTEST( XLRGetDeviceStatus(*xlrDevice, &devStatus) );
+		if(!devStatus.Recording)
+		{
+			break;	/* must be done */
+		}
+		if(die)
+		{
+			snprintf(message, DIFX_MESSAGE_LENGTH, "Conditioning aborted.");
+			fprintf(stderr, "%s\n", message);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+
+			break;
+		}
+		if(n == printInterval)
+		{
+			long long bytes;
+			double done;
+
+			n = 0;
+
+			bytes = -(len-lenLast);	// It is counting down
+			if(lenLast < len)
+			{
+				pass++;
+				if(pass >= nPass)
+				{
+					break;
+				}
+				bytes += lenFirst;
+			}
+			done = 100.0*(double)(lenFirst-len)/(double)lenFirst;
+			done = done/nPass + 50.0*pass;
+			mk5status->position = devInfo.NumBuses*len;
+			mk5status->rate = 8*devInfo.NumBuses*bytes/(printInterval*1000000.0);
+			sprintf(mk5status->scanName, "[%4.2f%%]", done);
+			if(bytes > 0)
+			{
+				if(mk5status->rate < lowestRate)
+				{
+					lowestRate = mk5status->rate;
+				}
+				if(mk5status->rate > highestRate)
+				{
+					highestRate = mk5status->rate;
+				}
+				nRate++;
+				averageRate += mk5status->rate;
+			}
+			ftime(&time2);
+			dt = time2.time + time2.millitm/1000.0 
+			   - time1.time - time1.millitm/1000.0;
+			
+			if(len != lenLast)
+			{
+				mk5status->state = MARK5_STATE_CONDITION;
+			}
+			else
+			{
+				mk5status->state = MARK5_STATE_COND_ERROR;
+			}
+			difxMessageSendMark5Status(mk5status);
+
+			sprintf(message, ". Time = %8.3f  Pos = %14Ld  Rate = %7.2f  Done = %5.2f %%\n",
+				dt, mk5status->position, mk5status->rate, done);
+			printf(message);
+			if(out)
+			{
+				fprintf(out, message);
+				fflush(out);
+			}
+
+			lenLast = len;
+		}
+		sleep(1);
+	}
+
+	if(nRate > 0)
+	{
+		averageRate /= nRate;
+	}
+
+	if(out)
+	{
+		fclose(out);
+	}
+
+	ftime(&time2);
+	dt = time2.time + time2.millitm/1000.0 
+	   - time1.time - time1.millitm/1000.0;
+
+	printf("\n");
+
+	if(!die && verbose)
+	{
+		printf("! Closing and reopening streamstor device\n");
+	}
+	if(die)
+	{
+		printf("! Conditioning cancelled.  Reopening device\n");
+	}
+	WATCHDOG( XLRClose(*xlrDevice) );
+	WATCHDOGTEST( XLROpen(1, xlrDevice) );
+	WATCHDOGTEST( XLRSetBankMode(*xlrDevice, SS_BANKMODE_NORMAL) );
+
+	if(!die)
+	{
+		printf("> Conditioning %s took %7.2f seconds\n", vsn, dt);
+
+		*rate = 128*(int)(lowestRate/128.0);
+
+		condMessage.startMJD = MJD_UNIX0 + time1.time/SEC_DAY + time1.millitm/MSEC_DAY;
+		condMessage.stopMJD = MJD_UNIX0 + time2.time/SEC_DAY + time2.millitm/MSEC_DAY;
+		strncpy(condMessage.moduleVSN, vsn, DIFX_MESSAGE_MARK5_VSN_LENGTH);
+		condMessage.moduleVSN[DIFX_MESSAGE_MARK5_VSN_LENGTH] = 0;
+
+		for(int d = 0; d < 8; d++)
+		{
+			WATCHDOG( xlrRC = XLRGetDriveInfo(*xlrDevice, d/2, d%2, &driveInfo) );
+			if(xlrRC == XLR_SUCCESS)
+			{
+				condMessage.moduleSlot = d;
+				strncpy(condMessage.serialNumber, 
+					drive[d].serial, 
+					DIFX_MESSAGE_DISC_SERIAL_LENGTH);
+				strncpy(condMessage.modelNumber,
+					drive[d].model,
+					DIFX_MESSAGE_DISC_MODEL_LENGTH);
+				condMessage.diskSize = drive[d].capacity/1000000000LL;
+				printf("> Disk %d stats : %s", d, drive[d].serial);
+				for(int i = 0; i < DIFX_MESSAGE_N_CONDITION_BINS; i++)
+				{
+					condMessage.bin[i] = -1;
+				}
+				WATCHDOG( xlrRC = XLRGetDriveStats(*xlrDevice, d/2, d%2, driveStats) );
+				if(xlrRC == XLR_SUCCESS)
+				{
+					for(int i = 0; i < XLR_MAXBINS; i++)
+					{
+						if(i < DIFX_MESSAGE_N_CONDITION_BINS)
+						{
+							condMessage.bin[i] = driveStats[i].count;
+							printf(" : %d", condMessage.bin[i]);
+						}
+					}
+				}
+				printf("\n");
+				difxMessageSendCondition(&condMessage);
+			}
+			else
+			{
+				printf("! Disk %d stats : Not found!\n", d);
+			}
+		}
+		printf("> Rates (Mpbs): Lowest = %7.2f  Average = %7.2f  Highest = %7.2f\n",
+			lowestRate, averageRate, highestRate);
+	}
+
+	return 0;
+}
+
+int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], int *totalCapacity)
+{
+	XLR_RETURN_CODE xlrRC;
+	S_DRIVEINFO driveInfo;
+	int nDrive = 0;
+	long long minCapacity = 0;
+	char message[DIFX_MESSAGE_LENGTH];
+
+	for(int d = 0; d < 8; d++)
+	{
+		WATCHDOG( xlrRC = XLRGetDriveInfo(*xlrDevice, d/2, d%2, &driveInfo) );
+		if(xlrRC != XLR_SUCCESS)
+		{
+			snprintf(message, DIFX_MESSAGE_LENGTH,
+				"XLRGetDriveInfo failed for disk %d", d);
+			printf("message\n");
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+
+			drive[d].model[0] = 0;
+			drive[d].serial[0] = 0;
+			drive[d].rev[0] = 0;
+			drive[d].failed = 0;
+		
+			continue;
+		}
+
+		trim(drive[d].model, driveInfo.Model);
+		trim(drive[d].serial, driveInfo.Serial);
+		trim(drive[d].rev, driveInfo.Revision);
+		drive[d].capacity = driveInfo.Capacity * 512LL;
+
+		if(driveInfo.SMARTCapable && !driveInfo.SMARTState)
+		{
+			drive[d].failed = 1;
+		}
+		else
+		{
+			drive[d].failed = 0;
+		}
+		if(drive[d].capacity > 0)
+		{
+			nDrive++;
+		}
+		if(minCapacity == 0 || 
+		   (drive[d].capacity > 0 && drive[d].capacity < minCapacity))
+		{
+			minCapacity = drive[d].capacity;
+		}
+	}
+
+	*totalCapacity = (nDrive*minCapacity/10000000000LL)*10;
+
+	return nDrive;
+}
+
+int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersion, int getData)
+{
+	SSHANDLE xlrDevice;
+	S_BANKSTATUS bankStatus;
+	S_DEVSTATUS devStatus;
+	char label[XLR_LABEL_LENGTH+1];
+	struct DriveInformation drive[8];
+	int nDrive;
+	int totalCapacity;		/* in GB (approx) */
+	int rate = 1024;		/* Mbps, for label */
+	int v;
+	DifxMessageMk5Status mk5status;
+	char message[DIFX_MESSAGE_LENGTH];
 
 	memset((char *)(&mk5status), 0, sizeof(mk5status));
 
@@ -200,6 +575,7 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 		return -1;
 	}
 	
+	/* get label */
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 	if(strncasecmp(label, vsn, 8) != 0)
 	{
@@ -239,338 +615,67 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 		rate = 1024;
 	}
 
+	/* set operational mode */
 	WATCHDOGTEST( XLRSetMode(xlrDevice, SS_MODE_PCI) );
-	WATCHDOGTEST( XLRGetDeviceInfo(xlrDevice, &devInfo) );
 	WATCHDOGTEST( XLRGetDeviceStatus(xlrDevice, &devStatus) );
 	WATCHDOGTEST( XLRClearOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
 	WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
 
 	/* Get drive info */
-	nDrive = 0;
-	minCapacity = 0LL;
-	for(int d = 0; d < 8; d++)
-	{
-		WATCHDOG( xlrRC = XLRGetDriveInfo(xlrDevice, d/2, d%2, &driveInfo) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			snprintf(message, DIFX_MESSAGE_LENGTH,
-				"XLRGetDriveInfo failed for disk %d", d);
-			printf("message\n");
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
-
-			driveModel[d][0] = 0;
-			driveSerial[d][0] = 0;
-			driveRev[d][0] = 0;
-			driveFailed[d] = 0;
-		
-			continue;
-		}
-
-		trim(driveModel[d], driveInfo.Model);
-		trim(driveSerial[d], driveInfo.Serial);
-		trim(driveRev[d], driveInfo.Revision);
-		driveCapacity[d] = driveInfo.Capacity * 512LL;
-		if(driveCapacity[d] > 0)
-		{
-			nDrive++;
-		}
-		if(minCapacity == 0 || 
-		   (driveCapacity[d] > 0 && driveCapacity[d] < minCapacity))
-		{
-			minCapacity = driveCapacity[d];
-		}
-		if(driveInfo.SMARTCapable && !driveInfo.SMARTState)
-		{
-			driveFailed[d] = 1;
-		}
-		else
-		{
-			driveFailed[d] = 0;
-		}
-	}
-	totalCapacity = (nDrive*minCapacity/10000000000LL)*10;
+	nDrive = getDriveInformation(&xlrDevice, drive, &totalCapacity);
 
 	printf("> Module %s consists of %d drives totalling about %d GB:\n",
 		vsn, nDrive, totalCapacity);
 	for(int d = 0; d < 8; d++)
 	{
-		if(driveModel[d][0] == 0)
+		if(drive[d].model[0] == 0)
 		{
 			continue;
 		}
 		printf("> Disk %d info : %s : %s : %s : %d : %s\n",
-			d, driveModel[d], driveSerial[d], driveRev[d], 
-			roundSize(driveCapacity[d]),
-			driveFailed[d] ? "FAILED" : "OK");
+			d, drive[d].model, drive[d].serial, drive[d].rev, 
+			roundSize(drive[d].capacity),
+			drive[d].failed ? "FAILED" : "OK");
 	}
 
 	strcpy(mk5status.vsnA, vsn);
 	mk5status.activeBank = 'A';
 	/* note: there is no module in bank B */
 
-	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
-
-	for(int b = 0; b < XLR_MAXBINS; b++)
-	{
-		driveStats[b].range = statsRange[b];
-		driveStats[b].count = 0;
-	}
-	WATCHDOGTEST( XLRSetDriveStats(xlrDevice, driveStats) );
-
-	if(cond == 0)
+	if(mode == CONDITION_ERASE_ONLY)
 	{
 		/* here just erasing */
-		WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
+		v = erase(&xlrDevice);
+		if(v < 0)
+		{
+			/* Something bad happened.  Bail! */
+			return v;
+		}
 	}
 	else
 	{
 		/* here doing the full condition */
-
-		long long len, lenLast=-1;
-		long long lenFirst=0;
-		struct timeb time1, time2;
-		double dt;
-		int nPass, pass = 0;
-		FILE *out=0;
-		double lowestRate = 1e9;	/* Unphysically fast! */
-		double highestRate = 0.0;
-		double averageRate = 0.0;
-		int nRate = 0;
-
-		mk5status.state = MARK5_STATE_CONDITION;
-		difxMessageSendMark5Status(&mk5status);
-		
-		if(fast == 1)
+		v = condition(&xlrDevice, vsn, mode, &mk5status, verbose, getData, drive, &rate);
+		if(v < 0)
 		{
-			WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_RANDOM_PATTERN) );
-			nPass = 1;
-		}
-		else
-		{
-			WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_RW_PATTERN) );
-			nPass = 2;
-		}
-
-		ftime(&time1);
-
-		if(getData)
-		{
-			char fileName[128];
-			sprintf(fileName, "%s.timedata", vsn);
-			printf("Opening %s for output...\n", fileName);
-			out = fopen(fileName, "w");
-			if(!out)
-			{
-				fprintf(stderr, "Warning: cannot open %s for output.\nContuniung anyway.\n",
-					fileName);
-			}
-		}
-
-		for(int n = 0; ; n++)
-		{
-			WATCHDOG( len = XLRGetLength(xlrDevice) );
-			if(lenLast < 0)
-			{
-				lenFirst = lenLast = len;
-			}
-			WATCHDOGTEST( XLRGetDeviceStatus(xlrDevice, &devStatus) );
-			if(!devStatus.Recording)
-			{
-				break;	/* must be done */
-			}
-			if(die)
-			{
-				snprintf(message, DIFX_MESSAGE_LENGTH, "Conditioning aborted.");
-				fprintf(stderr, "%s\n", message);
-				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
-
-				break;
-			}
-			if(n == printInterval)
-			{
-				long long bytes;
-				double done;
-
-				n = 0;
-
-				bytes = -(len-lenLast);	// It is counting down
-				if(lenLast < len)
-				{
-					pass++;
-					bytes += lenFirst;
-				}
-				done = 100.0*(double)(lenFirst-len)/(double)lenFirst;
-				done = done/nPass + 50.0*pass;
-				mk5status.position = devInfo.NumBuses*len;
-				mk5status.rate = 8*devInfo.NumBuses*bytes/(printInterval*1000000.0);
-				sprintf(mk5status.scanName, "[%4.2f%%]", done);
-				if(bytes > 0)
-				{
-					if(mk5status.rate < lowestRate)
-					{
-						lowestRate = mk5status.rate;
-					}
-					if(mk5status.rate > highestRate)
-					{
-						highestRate = mk5status.rate;
-					}
-					nRate++;
-					averageRate += mk5status.rate;
-				}
-				ftime(&time2);
-				dt = time2.time + time2.millitm/1000.0 
-				   - time1.time - time1.millitm/1000.0;
-				
-				if(len != lenLast)
-				{
-					mk5status.state = MARK5_STATE_CONDITION;
-				}
-				else
-				{
-					mk5status.state = MARK5_STATE_COND_ERROR;
-				}
-				difxMessageSendMark5Status(&mk5status);
-
-				sprintf(message, ". Time = %7.2f  Position = %Ld  Rate = %f  Done = %5.2f %%\n",
-					dt, mk5status.position, mk5status.rate, done);
-				printf(message);
-				if(out)
-				{
-					fprintf(out, message);
-					fflush(out);
-				}
-
-				lenLast = len;
-			}
-			sleep(1);
-		}
-
-		if(out)
-		{
-			fclose(out);
-		}
-
-		ftime(&time2);
-		dt = time2.time + time2.millitm/1000.0 
-		   - time1.time - time1.millitm/1000.0;
-
-		printf("\n");
-
-		if(die)
-		{
-			WATCHDOG( XLRClose(xlrDevice) );
-			printf("! Conditioning cancelled.  Reopening device\n");
-			WATCHDOGTEST( XLROpen(1, &xlrDevice) );
-			WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-		}
-		else
-		{
-			printf("> Conditioning %s took %7.2f seconds\n", vsn, dt);
-
-			rate = 128*(int)(lowestRate/128.0);
-
-			condMessage.startMJD = MJD_UNIX0 + time1.time/SEC_DAY + time1.millitm/MSEC_DAY;
-			condMessage.stopMJD = MJD_UNIX0 + time2.time/SEC_DAY + time2.millitm/MSEC_DAY;
-			strncpy(condMessage.moduleVSN, vsn, DIFX_MESSAGE_MARK5_VSN_LENGTH);
-			condMessage.moduleVSN[DIFX_MESSAGE_MARK5_VSN_LENGTH] = 0;
-
-			for(int d = 0; d < 8; d++)
-			{
-				WATCHDOG( xlrRC = XLRGetDriveInfo(xlrDevice, d/2, d%2, &driveInfo) );
-				if(xlrRC == XLR_SUCCESS)
-				{
-					condMessage.moduleSlot = d;
-					strncpy(condMessage.serialNumber, 
-						driveSerial[d], 
-						DIFX_MESSAGE_DISC_SERIAL_LENGTH);
-					strncpy(condMessage.modelNumber,
-						driveModel[d],
-						DIFX_MESSAGE_DISC_MODEL_LENGTH);
-					condMessage.diskSize = driveCapacity[d]/1000000000LL;
-					printf("> Disk %d stats : %s", d, driveSerial[d]);
-					for(int i = 0; i < DIFX_MESSAGE_N_CONDITION_BINS; i++)
-					{
-						condMessage.bin[i] = -1;
-					}
-					WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, driveStats) );
-					if(xlrRC == XLR_SUCCESS)
-					{
-						for(int i = 0; i < XLR_MAXBINS; i++)
-						{
-							if(i < DIFX_MESSAGE_N_CONDITION_BINS)
-							{
-								condMessage.bin[i] = driveStats[i].count;
-								printf(" : %d", condMessage.bin[i]);
-							}
-						}
-					}
-					printf("\n");
-					difxMessageSendCondition(&condMessage);
-				}
-				else
-				{
-					printf("! Disk %d stats : Not found!\n", d);
-				}
-			}
-			printf("> Rates (Mpbs): Lowest = %7.2f  Average = %7.2f  Highest = %7.2f\n",
-				lowestRate, averageRate, highestRate);
+			/* Something bad happened.  Bail! */
+			return v;
 		}
 	}
 
-	/* clear the user directory */
-	WATCHDOG( dirLength = XLRGetUserDirLength(xlrDevice) );
-	dirData = 0;
-	if(dirVersion < 0)
+	v = resetDirectory(&xlrDevice, vsn, dirVersion, totalCapacity, rate);
+
+	if(v < 0)
 	{
-		if(dirLength < 80000 || dirLength % 128 == 0)
-		{
-			dirLength = 128;
-			dirData = (char *)calloc(dirLength, 1);
-			WATCHDOGTEST( XLRGetUserDir(xlrDevice, dirLength, 0, dirData) );
-			dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
-			dirVersion = dirHeader->version;
-			if(dirVersion < 0 || dirVersion > 100)
-			{
-				dirVersion = 1;
-			}
-			memset(dirData, 0, 128);
-			dirHeader->version = dirVersion;
-			sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
-		}
-		else
-		{
-			dirVersion = 0;
-		}
+		/* Something bad happened to the XLR device.  Bail! */
+		return v;
 	}
-	else if(dirVersion == 0)
+	v = resetLabel(&xlrDevice, vsn, totalCapacity, rate, (die ? "Error" : "Erased") );
+	if(v < 0)
 	{
-		dirLength = 83424;
+		/* Something bad happened to the XLR device.  Bail! */
+		return v;
 	}
-	else
-	{
-		dirData = (char *)calloc(dirLength, 1);
-		dirLength = 128;
-		dirHeader->version = dirVersion;
-		sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
-	}
-
-	if(dirData == 0)
-	{
-		dirData = (char *)calloc(dirLength, 1);
-	}
-
-	printf("> Dir Size = %d  Dir Version = %d\n", dirLength, dirVersion);
-
-	WATCHDOGTEST( XLRSetUserDir(xlrDevice, dirData, dirLength) );
-	free(dirData);
-
-	/* reset the label */
-	snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%c%s", 
-		vsn, totalCapacity, rate, RecordSeparator,
-		die ? "Error" : "Erased");
-	printf("> New label = %s\n", label);
-	WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
-
 
 	/* finally close the device */
 	WATCHDOG( XLRClose(xlrDevice) );
@@ -585,11 +690,10 @@ int mk5erase(const char *vsn, int cond, int verbose, int dirVersion, int getData
 
 int main(int argc, char **argv)
 {
+	enum ConditionMode mode = CONDITION_ERASE_ONLY;
 	int verbose = 0;
 	int force = 0;
-	int cond = 0;
 	int getData = 0;
-	int fast = 0;
 	char vsn[10] = "";
 	char resp[12] = " ";
 	char *rv;
@@ -617,16 +721,22 @@ int main(int argc, char **argv)
 		else if(strcmp(argv[a], "-c") == 0 ||
 		        strcmp(argv[a], "--condition") == 0)
 		{
-			cond = 1;
+			mode = CONDITION_READ_WRITE;
 		}
-		else if(strcmp(argv[a], "--force") == 0)
+		else if(strcmp(argv[a], "-r") == 0 ||
+		        strcmp(argv[a], "--readonly") == 0)
 		{
-			force = 1;
+			mode = CONDITION_READ_ONLY;
+		}
+		else if(strcmp(argv[a], "-w") == 0 ||
+		        strcmp(argv[a], "--writeonly") == 0)
+		{
+			mode = CONDITION_WRITE_ONLY;
 		}
 		else if(strcmp(argv[a], "-f") == 0 ||
-		        strcmp(argv[a], "--fast") == 0)
+		        strcmp(argv[a], "--force") == 0)
 		{
-			fast = 1;
+			force = 1;
 		}
 		else if(strcmp(argv[a], "-l") == 0 ||
 		        strcmp(argv[a], "--legacydir") == 0)
@@ -666,24 +776,18 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if(fast & !cond)
-	{
-		fprintf(stderr, "Error: fast mode but not conditioning requested\n");
-		return 0;
-	}
-
 	if(vsn[0] == 0)
 	{
 		printf("Error: no VSN provided!\n");
 		return 0;
 	}
 
-	printf("About to proceed.  verbose=%d cond=%d force=%d vsn=%s\n",
-		verbose, cond, force, vsn);
+	printf("About to proceed.  verbose=%d mode=%d force=%d vsn=%s\n",
+		verbose, mode, force, vsn);
 
 	if(!force)
 	{
-		if(cond)
+		if(mode != CONDITION_ERASE_ONLY)
 		{
 			printf("\nAbout to condition module %s.  This will destroy all\n", vsn);
 			printf("contents of the module and will take a long time.  Are\n");
@@ -735,7 +839,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = mk5erase(vsn, cond, verbose, dirVersion, getData, fast);
+	v = mk5erase(vsn, mode, verbose, dirVersion, getData);
 	if(v < 0)
 	{
 		if(watchdogXLRError[0] != 0)
