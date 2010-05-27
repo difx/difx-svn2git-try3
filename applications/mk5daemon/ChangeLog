@@ -7,6 +7,7 @@ Version 1.4
 * Support for difxVersion in difxStartMessage
 * Don't launch a job near time(0)%10 = 5 to avoid getModules clash
 * Add "recover" Mark5 utility
+* Add mk5erase (similar to SSErase from Haystack) 
 
 Version 1.3
 ~~~~~~~~~~~

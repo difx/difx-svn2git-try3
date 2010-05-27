@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h> 
 #include <unistd.h>
+#include <ctype.h>
 #include <sys/timeb.h>
 #include <signal.h>
 #include "xlrapi.h"
@@ -45,7 +46,7 @@
  *  1. Integration to the difxmessage system
  *  2. Watchdog around all XLR function calls
  *  3. The module rate is based on lowest performance portion of test
- *  4. Fast mode (SS_OVERWRITE_RANDOM_PATTERN) possible
+ *  4. Fast modes (read-only or write-only) possible
  *
  * Other differences:
  *  1. Can only operate on one module at a time
@@ -262,6 +263,7 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 	struct timeb time1, time2;
 	double dt;
 	int nPass, pass = 0;
+	char opName[10] = "";
 	FILE *out=0;
 	double lowestRate = 1e9;	/* Unphysically fast! */
 	double highestRate = 0.0;
@@ -289,16 +291,19 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 	{
 		WATCHDOGTEST( XLRErase(*xlrDevice, SS_OVERWRITE_RANDOM_PATTERN) );
 		nPass = 1;
+		strcpy(opName, "W");
 	}
 	else if(mode == CONDITION_READ_ONLY)
 	{
 		WATCHDOGTEST( XLRErase(*xlrDevice, SS_OVERWRITE_RW_PATTERN) );
 		nPass = 1;
+		strcpy(opName, "R");
 	}
 	else
 	{
 		WATCHDOGTEST( XLRErase(*xlrDevice, SS_OVERWRITE_RW_PATTERN) );
 		nPass = 2;
+		strcpy(opName, "RW");
 	}
 
 	ftime(&time1);
@@ -357,7 +362,7 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 			done = done/nPass + 50.0*pass;
 			mk5status->position = devInfo.NumBuses*len;
 			mk5status->rate = 8*devInfo.NumBuses*bytes/(printInterval*1000000.0);
-			sprintf(mk5status->scanName, "[%4.2f%%]", done);
+			sprintf(mk5status->scanName, "%s[%4.2f%%]", opName, done);
 			if(bytes > 0)
 			{
 				if(mk5status->rate < lowestRate)
@@ -383,6 +388,7 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 			{
 				mk5status->state = MARK5_STATE_COND_ERROR;
 			}
+			mk5status->dataMJD = dt/SEC_DAY;
 			difxMessageSendMark5Status(mk5status);
 
 			sprintf(message, ". Time = %8.3f  Pos = %14Ld  Rate = %7.2f  Done = %5.2f %%\n",
@@ -415,21 +421,19 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 
 	printf("\n");
 
-	if(!die && verbose)
+	if(devStatus.Recording)
 	{
-		printf("! Closing and reopening streamstor device\n");
+		WATCHDOG( xlrRC = XLRStop(*xlrDevice) );
 	}
-	if(die)
-	{
-		printf("! Conditioning cancelled.  Reopening device\n");
-	}
-	WATCHDOG( XLRClose(*xlrDevice) );
-	WATCHDOGTEST( XLROpen(1, xlrDevice) );
-	WATCHDOGTEST( XLRSetBankMode(*xlrDevice, SS_BANKMODE_NORMAL) );
 
 	if(!die)
 	{
-		printf("> Conditioning %s took %7.2f seconds\n", vsn, dt);
+		char hostname[32];
+
+		printf("> %s Conditioning %s took %7.2f seconds\n", opName, vsn, dt);
+
+		gethostname(hostname, 32);
+		printf("> Hostname %s\n", hostname);
 
 		*rate = 128*(int)(lowestRate/128.0);
 
@@ -467,6 +471,11 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 							printf(" : %d", condMessage.bin[i]);
 						}
 					}
+				}
+				else
+				{
+					XLRGetErrorMessage(message, XLRGetLastError( ));
+					printf(" : %s", message);
 				}
 				printf("\n");
 				difxMessageSendCondition(&condMessage);
@@ -680,6 +689,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	/* finally close the device */
 	WATCHDOG( XLRClose(xlrDevice) );
 
+	mk5status.scanName[0] = 0;
 	mk5status.state = MARK5_STATE_IDLE;
 	mk5status.rate = 0;
 	mk5status.position = 0;
@@ -772,6 +782,10 @@ int main(int argc, char **argv)
 			{
 				fprintf(stderr, "Error: VSN %s not 8 chars long!\n", argv[a]);
 				return 0;
+			}
+			for(int i = 0; i < 8; i++)
+			{
+				vsn[i] = toupper(vsn[i]);
 			}
 		}
 	}

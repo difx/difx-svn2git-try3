@@ -455,15 +455,26 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	if(S->difxProgram[0])
 	{
 		difxProgram = S->difxProgram;
+
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"Using specified Difx Program: %s", difxProgram);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 	}
 	else if(strcmp(S->difxVersion, "unknown") != 0)
 	{
 		snprintf(altDifxProgram, 63, "runmpifxcorr.%s", S->difxVersion);
 		difxProgram = altDifxProgram;
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"Using Difx Program wrapper: %s", difxProgram);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 	}
 	else
 	{
 		difxProgram = defaultDifxProgram;
+
+		snprintf(message, MAX_MESSAGE_SIZE, 
+			"Warning: using default Difx Program: %s", difxProgram);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 	}
 
 	childPid = fork();
@@ -495,12 +506,13 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 			snprintf(command, MAX_COMMAND_SIZE, 
 				"/bin/rm -rf %s.difx/", filebase);
 
+			snprintf(message, MAX_MESSAGE_SIZE, "Executing: %s", command);
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 		
 			Mk5Daemon_system(D, command, 1);
 		}
 
-		difxMessageSendDifxAlert("mpifxcorr spawning process", DIFX_ALERT_LEVEL_INFO);
+		difxMessageSendDifxAlert("mk5daemon spawning mpifxcorr process", DIFX_ALERT_LEVEL_INFO);
 
 		snprintf(command, MAX_COMMAND_SIZE, "su - %s -c 'ssh -x %s \"%s -np %d --bynode --hostfile %s.machines %s %s %s\"'", 
 			user,

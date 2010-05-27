@@ -82,6 +82,9 @@ int usage(const char *pgm)
 	fprintf(stderr, "  --log-path <path>\n");
 	fprintf(stderr, "  -l <path>      Put log files in <path>\n"); 
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --startMark5A");
+	fprintf(stderr, "  -m             Automatically start Mark5A\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "Note: This program responds to the following "
 			"environment variables:\n");
 	fprintf(stderr, "  DIFX_LOG_DIR : change log path from default [%s]\n",
@@ -342,6 +345,7 @@ int main(int argc, char **argv)
 	int i, ok=0;
 	int justStarted = 1;
 	int halfInterval;
+	int startMark5A = 0;
 	char logPath[256];
 	const char *p;
 	double mjd;
@@ -384,6 +388,11 @@ int main(int argc, char **argv)
 		{
 			setenv("DIFX_MESSAGE_PORT", "-1", 1);
 		}
+		else if(strcmp(argv[i], "-m") == 0 ||
+		   strcmp(argv[i], "--startMark5A") == 0)
+		{
+			startMark5A = 1;
+		}
 		else if(i < argc-1)
 		{
 			if(strcmp(argv[i], "-l") == 0 ||
@@ -405,7 +414,7 @@ int main(int argc, char **argv)
 
 	if(setuid(0) != 0)
 	{
-		fprintf(stderr, "Need suid root permission.  Bailing.\n");
+		fprintf(stderr, "Needs to run with root permission.  Bailing.\n");
 		return 0;
 	}
 
@@ -480,6 +489,11 @@ int main(int argc, char **argv)
 					Mk5Daemon_getStreamstorVersions(D);
 					logStreamstorVersions(D);
 					Mk5Daemon_getModules(D);
+				}
+				if(startMark5A)
+				{
+					Mk5Daemon_startMark5A(D);
+					startMark5A = 0;
 				}
 				justStarted = 0;
 			}
