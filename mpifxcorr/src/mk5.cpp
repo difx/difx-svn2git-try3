@@ -223,7 +223,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   input.seekg(offset);
 }
 
-void Mk5DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
+void Mk5DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
 
   if (udp_offset>readbytes) {
@@ -591,7 +591,7 @@ double tim(void) {
   return t;
 }
 
-int Mk5DataStream::openframe()
+uint64_t Mk5DataStream::openframe()
 {
   // The number of segments per "frame" is arbitrary. Just set it to ~ 5sec
   int nsegment;

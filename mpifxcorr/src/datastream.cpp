@@ -91,7 +91,7 @@ void DataStream::initialise()
     if(config->getDataBytes(i, streamnum) < mindatabytes)
       mindatabytes = config->getDataBytes(i, streamnum);
   }
-  maxsendspersegment = 3*bufferbytes/(mindatabytes*numdatasegments); //overkill, can get more sends than you would expect with MkV data
+  maxsendspersegment = bufferbytes/mindatabytes/numdatasegments*3; //overkill, can get more sends than you would expect with MkV data
 
   stationname = config->getDStationName(0, streamnum);
   clockoffset = config->getDClockOffset(0, streamnum);
@@ -687,7 +687,8 @@ void DataStream::loopfileread()
 
 void DataStream::loopnetworkread()
 {
-  int perr, framebytesremaining, lastvalidsegment;
+  int perr, lastvalidsegment;
+  uint64_t framebytesremaining;
 
   //lock the outstanding send lock
   perr = pthread_mutex_lock(&outstandingsendlock);
@@ -857,7 +858,7 @@ void DataStream::closestream()
     cerror << startl << "Error closing socket" << endl;
 }
 
-int DataStream::openframe()
+uint64_t DataStream::openframe()
 {
   char *buf;
   short fnamesize;
@@ -890,7 +891,7 @@ int DataStream::openframe()
   
   framesize = framesize - LBA_HEADER_LENGTH;
 
-  if (framesize>INT_MAX) {
+  if (framesize>ULLONG_MAX) {
     keepreading=false;
     cerror << startl << "Network stream trying to send too large frame - aborting!" << endl;
     return(0);
@@ -1000,7 +1001,7 @@ int DataStream::initialiseFrame(char * frameheader)
   return 0;
 }
 
-void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
+void DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
   char *ptr;
   int bytestoread, nread, status;
