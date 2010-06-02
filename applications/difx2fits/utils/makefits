@@ -40,7 +40,7 @@ from time import gmtime, time
 program = 'makefits'
 version = '0.5'
 author  = 'Walter Brisken'
-verdate = '20100329'
+verdate = '20100601'
 
 calFiles = ['flag', 'pcal', 'tsys', 'weather']
 
@@ -216,7 +216,7 @@ class JobList:
 			if override:
 				print 'Overriding version mismatch: %s != %s' % \
 					(difxVersion, self.kv['DiFX'])
-				difxVersion = 'unknwown'
+				difxVersion = 'unknown'
 			else:
 				print 'Error: file DiFX version = %s' % self.kv['DiFX']
 				print 'and current DiFX version = %s' % difxVersion
