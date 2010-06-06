@@ -56,9 +56,9 @@ static void *mk5cpRun(void *ptr)
 
 	params->D->processDone = 1;
 
-	pthread_exit(0);
-
 	free(params);
+
+	pthread_exit(0);
 
 	return 0;
 }
@@ -97,8 +97,6 @@ void Mk5Daemon_startMk5Copy(Mk5Daemon *D, const char *options)
 {
 	struct mk5cpParams *P;
 
-	P = (struct mk5cpParams *)calloc(1, sizeof(struct mk5cpParams));
-
 	if(!D->isMk5)
 	{
 		return;
@@ -106,6 +104,8 @@ void Mk5Daemon_startMk5Copy(Mk5Daemon *D, const char *options)
 
 	/* Make sure output directory exists and has permissions */
 	makedir(D, options);
+
+	P = (struct mk5cpParams *)calloc(1, sizeof(struct mk5cpParams));
 
 	pthread_mutex_lock(&D->processLock);
 

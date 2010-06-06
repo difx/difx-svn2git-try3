@@ -297,6 +297,41 @@ static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 			Mk5Daemon_stopMk5Dir(D);
 		}
 	}
+	else if(strcasecmp(cmd, "erase") == 0)
+	{
+		if(D->isMk5)
+		{
+			Mk5Daemon_startCondition(D, "");
+		}
+	}
+	else if(strcasecmp(cmd, "condition") == 0)
+	{
+		if(D->isMk5)
+		{
+			Mk5Daemon_startCondition(D, "-c");
+		}
+	}
+	else if(strcasecmp(cmd, "conditionR") == 0)
+	{
+		if(D->isMk5)
+		{
+			Mk5Daemon_startCondition(D, "-c");
+		}
+	}
+	else if(strcasecmp(cmd, "conditionW") == 0)
+	{
+		if(D->isMk5)
+		{
+			Mk5Daemon_startCondition(D, "-c");
+		}
+	}
+	else if(strcasecmp(cmd, "stopcondition") == 0)
+	{
+		if(D->isMk5)
+		{
+			Mk5Daemon_stopCondition(D);
+		}
+	}
 	else if(strcasecmp(cmd, "discon") == 0)
 	{
 		if(D->isMk5)

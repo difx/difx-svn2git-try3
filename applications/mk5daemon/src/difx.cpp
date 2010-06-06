@@ -486,13 +486,32 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 
 		// Avoid the period when modules are being checked
 		int tm = time(0) % D->loadMonInterval;
-		if(tm == D->loadMonInterval/2-1)
+		if(tm == D->loadMonInterval/2 - 2)
 		{
+			snprintf(message, MAX_MESSAGE_SIZE, 
+				"Time=%d  sleeping 3 seconds to avoid collision", (int)time(0));
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
+			sleep(3);
+		}
+		else if(tm == D->loadMonInterval/2 - 1)
+		{
+			snprintf(message, MAX_MESSAGE_SIZE, 
+				"Time=%d  sleeping 2 seconds to avoid collision", (int)time(0));
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 			sleep(2);
 		}
 		else if(tm == D->loadMonInterval/2)
 		{
+			snprintf(message, MAX_MESSAGE_SIZE, 
+				"Time=%d  sleeping 1 second to avoid collision", (int)time(0));
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 			sleep(1);
+		}
+		else
+		{
+			snprintf(message, MAX_MESSAGE_SIZE,
+				"Time=%d  no sleeping to be done", (int)time(0));
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 		}
 
 		user = getenv("DIFX_USER_ID");

@@ -6,9 +6,9 @@ from os import getenv
 import socket
 
 program = 'mk5command'
-version = '0.3'
+version = '0.4'
 author  = 'Walter Brisken <wbrisken@nrao.edu>'
-verdate = '20100309'
+verdate = '20100527'
 
 defaultDifxMessagePort = 50200
 defaultDifxMessageGroup = '224.2.2.1'
@@ -31,6 +31,8 @@ def usage(pgm):
 	print '  getdirA, getdirB -- get directory of module in A or B'
 	print '  getdir -- get directory of all loaded modules'
 	print '  stopdir -- stop a getdir in progress'
+	print '  condition, conditionR, conditionW -- condition module A'
+	print '  stopcondition -- stop a conditioning process'
 	print '  copy -- copy data from module to file; see below'
 	print '  stopcopy -- stop a copy in progress'
 	print '  getver -- tell machine to report its version info'

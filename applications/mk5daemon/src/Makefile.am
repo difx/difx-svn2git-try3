@@ -14,6 +14,7 @@ mk5daemon_SOURCES = \
 	modules.cpp \
 	getdir.cpp \
 	datacopy.cpp \
+	condition.cpp \
 	proc.cpp \
 	proc.h \
 	versions.cpp \

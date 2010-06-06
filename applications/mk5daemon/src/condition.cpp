@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *   Copyright (C) 2010 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -33,26 +33,42 @@
 #include <unistd.h>
 #include "mk5daemon.h"
 
-struct mk5dirParams
+struct conditionParams
 {
 	Mk5Daemon *D;
-	char bank[10];
+	const char *options;
 };
 
-static void *mk5dirRun(void *ptr)
+static void *conditionRun(void *ptr)
 {
-	struct mk5dirParams *params;
+	struct conditionParams *params;
 	char command[MAX_COMMAND_SIZE];
+	char message[MAX_MESSAGE_SIZE];
+	FILE *pin;
 
-	params = (struct mk5dirParams *)ptr;
+	params = (struct conditionParams *)ptr;
 
-	Logger_logData(params->D->log, "mk5dir starting\n");
+	Logger_logData(params->D->log, "mk5erase starting\n");
 
-	snprintf(command, MAX_COMMAND_SIZE, "su -l difx -c 'mk5dir %s'", 
-		params->bank);
-	Mk5Daemon_system(params->D, command, 1);
+	snprintf(command, MAX_COMMAND_SIZE, "mk5erase --force %s %s", params->options, params->D->vsnA);
 
-	Logger_logData(params->D->log, "mk5dir done\n");
+	pin = popen(command, "r");
+	for(;;)
+	{
+		fgets(message, MAX_MESSAGE_SIZE, pin);
+		message[MAX_MESSAGE_SIZE-1] = 0;
+		if(feof(pin))
+		{
+			break;
+		}
+		if(message[0] == '>')
+		{
+			Logger_logData(params->D->log, message);
+		}
+	}
+	fclose(pin);
+
+	Logger_logData(params->D->log, "mk5erase done\n");
 
 	params->D->processDone = 1;
 
@@ -63,34 +79,33 @@ static void *mk5dirRun(void *ptr)
 	return 0;
 }
 
-void Mk5Daemon_startMk5Dir(Mk5Daemon *D, const char *bank)
+void Mk5Daemon_startCondition(Mk5Daemon *D, const char *options)
 {
-	struct mk5dirParams *P;
+	struct conditionParams *P;
 
 	if(!D->isMk5)
 	{
 		return;
 	}
 
-	P = (struct mk5dirParams *)calloc(1, sizeof(struct mk5dirParams));
+	P = (struct conditionParams *)calloc(1, sizeof(struct conditionParams));
 
 	pthread_mutex_lock(&D->processLock);
 
 	if(D->process == PROCESS_NONE)
 	{
 		D->processDone = 0;
-		D->process = PROCESS_MK5DIR;
+		D->process = PROCESS_CONDITION;
 
 		P->D = D;
-		strncpy(P->bank, bank, 9);
-		P->bank[9] = 0;
-		pthread_create(&D->processThread, 0, &mk5dirRun, P);
+		P->options = options;
+		pthread_create(&D->processThread, 0, &conditionRun, P);
 	}
 
 	pthread_mutex_unlock(&D->processLock);
 }
 
-void Mk5Daemon_stopMk5Dir(Mk5Daemon *D)
+void Mk5Daemon_stopCondition(Mk5Daemon *D)
 {
-	Mk5Daemon_system(D, "killall -INT mk5dir", 1);
+	system("killall -s SIGINT mk5erase");
 }

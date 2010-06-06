@@ -56,7 +56,8 @@
  */
 
 /* TODO
- *  Find a way to save the hostname to the condition database
+ *  1. Find a way to save the hostname to the condition database
+ *  2. Allow erasing and VSN setting on drives last used with newer SKD version
  */
 
 const char program[] = "mk5erase";
@@ -72,10 +73,6 @@ const char verdate[] = "20100526";
 
 int die = 0;
 const int statsRange[] = { 75000, 150000, 300000, 600000, 1200000, 2400000, 4800000, -1 };
-
-typedef void (*sighandler_t)(int);
-
-sighandler_t oldsiginthand;
 
 
 enum ConditionMode
@@ -123,13 +120,15 @@ int usage(const char *pgm)
 	printf("Note: A single Mark5 unit needs to be installed in bank A for\n");
 	printf("proper operation.  If the VSN is not set, use the  vsn  utility\n");
 	printf("To assign it prior to erasure or conditioning.\n\n");
+	printf("Ctrl-C can be used to safely abort.  The module will be left in\n");
+	printf("the Error state afterwards.\n\n");
 
 	return 0;
 }
 
 void siginthand(int j)
 {
-	printf("Being killed\n");
+	printf("SIGINT caught; aborting operation.\n");
 	die = 1;
 }
 
@@ -693,6 +692,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	mk5status.state = MARK5_STATE_IDLE;
 	mk5status.rate = 0;
 	mk5status.position = 0;
+	mk5status.activeBank = ' ';
 	difxMessageSendMark5Status(&mk5status);
 
 	return 0;
@@ -700,6 +700,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 
 int main(int argc, char **argv)
 {
+	void (*oldsiginthand)(int);
 	enum ConditionMode mode = CONDITION_ERASE_ONLY;
 	int verbose = 0;
 	int force = 0;

@@ -50,6 +50,7 @@ enum ProcessType
 	PROCESS_MK5DIR,
 	PROCESS_MK5COPY,
 	PROCESS_SSERASE,
+	PROCESS_CONDITION,
 	PROCESS_UNKNOWN
 };
 
@@ -97,6 +98,8 @@ void Mk5Daemon_startMk5Dir(Mk5Daemon *D, const char *bank);
 void Mk5Daemon_stopMk5Dir(Mk5Daemon *D);
 void Mk5Daemon_startMk5Copy(Mk5Daemon *D, const char *bank);
 void Mk5Daemon_stopMk5Copy(Mk5Daemon *D);
+void Mk5Daemon_startCondition(Mk5Daemon *D, const char *options);
+void Mk5Daemon_stopCondition(Mk5Daemon *D);
 void Mk5Daemon_diskOn(Mk5Daemon *D, const char *banks);
 void Mk5Daemon_diskOff(Mk5Daemon *D, const char *banks);
 void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G);
