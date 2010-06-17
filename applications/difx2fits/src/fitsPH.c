@@ -29,10 +29,15 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <strings.h>
+#include <glob.h>
 #include "config.h"
 #include "difx2fits.h"
 #include "other.h"
 
+//FIXME replace with difxio
+const int nBandTone = 2;
+const int bandTone[] = {1, -1};
+const int pcalIntTime = 10.0;
 
 /* go through pcal file, determine maximum number of tones.
  */
@@ -78,7 +83,8 @@ static int getNTone(const char *filename, double t1, double t2)
 }
 
 static int parsePulseCal(const char *line, 
-	int *antId, int *sourceId,
+	int antId,
+	int *sourceId,
 	double *time, float *timeInt, double *cableCal,
 	double freqs[2][array_MAX_TONES], 
 	float pulseCalRe[2][array_MAX_TONES], 
@@ -126,13 +132,7 @@ static int parsePulseCal(const char *line,
 		return -1;
 	}
 
-	*antId = DifxInputGetAntennaId(D, antName);
-	if(*antId < 0)
-	{
-		return -2;
-	}
-
-	scanId = DifxInputGetScanIdByAntennaId(D, mjd, *antId);
+	scanId = DifxInputGetScanIdByAntennaId(D, mjd, antId);
 	if(scanId < 0)
 	{	
 		return -3;
@@ -183,7 +183,7 @@ static int parsePulseCal(const char *line,
 					continue;
 				}
 				v = DifxConfigRecChan2IFPol(D, *configId,
-					*antId, recChan, &bandId, &polId);
+					antId, recChan, &bandId, &polId);
 				if(v >= 0)
 				{
 					if(bandId < 0 || polId < 0)
@@ -226,7 +226,7 @@ static int parsePulseCal(const char *line,
 				n = sscanf(line, "%d%n", &recChan, &p);
 				line += p;
 				v = DifxConfigRecChan2IFPol(D, *configId,
-					*antId, recChan, &bandId, &polId);
+					antId, recChan, &bandId, &polId);
 				for(state = 0; state < 4; state++)
 				{
 					if(state < ns)
@@ -286,7 +286,9 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	char *fitsbuf, *p_fitsbuf;
 	const int MaxLineLength=1000;
 	char line[MaxLineLength+1];
-	int nBand, nTone, nPol;
+	int nBand, nPol;
+	int nTone=0;
+	int *antnTone;
 	double time;
 	float timeInt;
 	double cableCal;
@@ -298,12 +300,36 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	int configId;
 	int antId, sourceId;
 	int refDay;
-	int i, v;
+	int i, j, k, n, p, v, t;
+	int nPcalDatastreams=0;
 	double start, stop;
 	FILE *in;
 	char *rv;
 	/* The following are 1-based indices for FITS format */
 	int32_t antId1, arrayId1, sourceId1, freqId1;
+	int outTones;
+	char antName[20];
+
+	//members of pcalinfo should be moved into difxio datastream
+	typedef struct
+	{
+		/*Describes the pcals extracted by DiFX. Calculated as with corresponding values in mpifxcorr configuration.cpp*/
+		int *nRecFreqPcal;    /*num of recorded pcals in each sub-band*/
+		int **recFreqPcalFreq;/*frequency of each pcal indexed by subband and number within subband*/
+		//int *recFreqPcalOffsetHz; // shouldn't be needed for difx2fits
+		int maxRecPcal;/*maximum number of pcals in a single subband*/
+
+		/*The following describe the pcals which are to be output*/
+		int **freqPcalOut;/*list of tones which will be written out. VEX (1-based) convention*/
+		int *nFreqPcalOut;/*length of above list*/
+		int nPcalOut;
+
+		/*bool which says whether each recorded tone will be written out to FITS*/
+		int **recFreqPcalOut;
+		/*total number of pcals out across all subbands*/
+	} pcalinfostruct;
+
+	pcalinfostruct *pcalinfo;
 
 	if(D == 0)
 	{
@@ -315,27 +341,140 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 
 	mjd2dayno((int)(D->mjdStart), &refDay);
 
-	/* get the maximum dimensions possibly needed */
 	start = D->mjdStart - (int)(D->mjdStart);
 	stop  = D->mjdStop  - (int)(D->mjdStart);
-	nTone = getNTone("pcal", refDay + start, refDay + stop);
 
-	if(nTone < 0)
+	/*Is DiFX phase cal extraction switched on?*/
+	//first check all datastreams and all configs for pcal
+	antnTone = calloc(sizeof(int)*D->nAntenna, 1);
+	nTone = 0;
+
+	for(i = 0; i < D->nDatastream; i++)
 	{
-		return D;
+		if(D->datastream[i].phaseCalIntervalMHz != 0)
+		{
+			nPcalDatastreams++;
+			antnTone[D->datastream[i].antennaId] += nBandTone*D->datastream[i].nRecBand;
+			if(antnTone[D->datastream[i].antennaId] > nTone)
+			{
+				nTone += antnTone[D->datastream[i].antennaId];
+			}
+		}
 	}
 
-	in = fopen("pcal", "r");
-	if(!in)
+	if(nPcalDatastreams == 0)
 	{
-		return D;
+		/* No difx-extracted pcals */
+		/* get the maximum dimensions possibly needed */
+		nTone = getNTone("pcal", refDay + start, refDay + stop);
+		if(nTone < 0)
+		{
+			/* neither difx no observation pcals */
+			return D;
+		}
+
+		in = fopen("pcal", "r");
+		if(!in)
+		{
+			return D;
+		}
+		
+		rv = fgets(line, MaxLineLength, in);
+		if(!rv)
+		{
+			fclose(in);
+			return D;
+		}
 	}
-	
-	rv = fgets(line, MaxLineLength, in);
-	if(!rv)
+	else
 	{
-	        fclose(in);
-		return D;
+		//open first pcal file
+		//FIXME cut and paste job from mpifxcorr configuration.cpp
+		pcalinfo = (pcalinfostruct *)calloc(D->nDatastream, sizeof(pcalinfo));
+		int freqindex, lofreq, tonefreq;
+		for(i = 0; i < D->nDatastream; i++)
+		{
+			pcalinfo[i].nRecFreqPcal = (int *)calloc(D->datastream[i].nRecFreq, sizeof(int));
+			pcalinfo[i].recFreqPcalFreq = (int **)calloc(D->datastream[i].nRecFreq, sizeof(int*));
+			pcalinfo[i].maxRecPcal = 0;
+			pcalinfo[i].freqPcalOut = (int **)calloc(D->datastream[i].nRecFreq, sizeof(int*));
+			pcalinfo[i].nFreqPcalOut = (int *)calloc(D->datastream[i].nRecFreq, sizeof(int));
+			pcalinfo[i].nPcalOut = 0;
+
+			for(j=0; D->datastream[i].nRecFreq; j++)
+			{
+				/*FIXME replace with values from vex file/.v2d override*/
+				pcalinfo[i].nFreqPcalOut[j] = nBandTone;
+				pcalinfo[i].recFreqPcalOut[j] = (int *)calloc(pcalinfo[i].nFreqPcalOut[j], sizeof(int));
+				for(t = 0; t < pcalinfo[i].nFreqPcalOut[j]; t++)
+				{
+					pcalinfo[i].freqPcalOut[j][t] = bandTone[t];
+					//FIXME die or ignore if 0? According to vex definition this means state counts rather than pcals(??)
+				}
+
+				pcalinfo[i].nRecFreqPcal[j] = 0;
+				freqindex = D->datastream[i].recFreqId[j];
+				lofreq = D->freq[freqindex].freq;
+
+				if(D->freq[freqindex].sideband == 'L')
+				{
+					lofreq -= D->freq[freqindex].bw;
+				}
+				tonefreq = ((int) lofreq/D->datastream[i].phaseCalIntervalMHz)*D->datastream[i].phaseCalIntervalMHz;
+
+				if(tonefreq <= lofreq)
+				{
+					tonefreq += D->datastream[i].phaseCalIntervalMHz;
+				}
+
+				while(tonefreq + pcalinfo[i].nRecFreqPcal[j]*D->datastream[i].phaseCalIntervalMHz < lofreq + D->freq[freqindex].bw)
+				{
+					pcalinfo[i].nRecFreqPcal[j]++;
+				}
+				if(pcalinfo[i].nRecFreqPcal[j] > pcalinfo[i].maxRecPcal)
+				{
+					pcalinfo[i].maxRecPcal = pcalinfo[i].nRecFreqPcal[j];
+				}
+				pcalinfo[i].recFreqPcalFreq[j] = (int *)calloc(pcalinfo[i].nRecFreqPcal[j], sizeof(int));
+				tonefreq = ((int) lofreq / D->datastream[i].phaseCalIntervalMHz) * D->datastream[i].phaseCalIntervalMHz;
+				if(tonefreq < lofreq)
+				{
+					tonefreq += D->datastream[i].phaseCalIntervalMHz;
+				}
+				for(k = 0; k < pcalinfo[i].nRecFreqPcal[j]; k++)
+				{
+					pcalinfo[i].recFreqPcalFreq[j][k] = tonefreq + k * D->datastream[i].phaseCalIntervalMHz;
+					for(t = 0; t < pcalinfo[i].nFreqPcalOut[j]; t++)
+					{
+						if(pcalinfo[i].freqPcalOut[j][t] > 0)
+						{
+							if(pcalinfo[i].freqPcalOut[j][t] == k + 1)
+							{
+								if(!pcalinfo[i].recFreqPcalOut[j][k])
+								{
+									pcalinfo[i].nPcalOut++;
+								}
+								pcalinfo[i].recFreqPcalOut[j][k] = 1;
+								break;
+							}
+						}
+						if(pcalinfo[i].freqPcalOut[j][t] < 0)
+						{
+							if(pcalinfo[i].freqPcalOut[j][t] + pcalinfo[i].nRecFreqPcal[j] == k)
+							{
+								if(!pcalinfo[i].recFreqPcalOut[j][k])
+								{
+									pcalinfo[i].nPcalOut++;
+								}
+								pcalinfo[i].recFreqPcalOut[j][k] = 1;
+								break;
+							}
+						}
+					}
+				}
+				//pcalinfo[i].recFreqPcalOffsetHz[j] = long(1e6*pcalinfo[i].recFreqPcalFreq[j][0]) - long(1e6*lofreq);
+			}
+		}
 	}
 
 	sprintf(stateFormFloat, "%dE", 4*nBand);
@@ -380,12 +519,19 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	antId = 0;
 	arrayId1 = 1;
 
-	for(;;)
+	for(i = 0; i < D->nDatastream; i++)
 	{
 		rv = fgets(line, MaxLineLength, in);
 		if(!rv)
 		{
-			break;
+			if(nPcalDatastreams != 0)
+			{
+				//FIXME move onto next file
+			}
+			else
+			{
+				break;
+			}
 		}
 			
 		/* ignore possible comment lines */
@@ -395,9 +541,17 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		}
 		else 
 		{
-			v = parsePulseCal(line, &antId, &sourceId, &time, &timeInt, 
-				&cableCal, freqs, pulseCalRe, pulseCalIm,
-				stateCount, refDay, D, &configId, phasecentre);
+			if(nPcalDatastreams != 0)
+			{
+				n = sscanf(line, "%s%n", antName, &p);
+				if(n != 1 || !strcmp(antName, D->antenna[i].name))
+				{
+					continue;	
+				}
+				v = parsePulseCal(line, i, &sourceId, &time, &timeInt, 
+					&cableCal, freqs, pulseCalRe, pulseCalIm,
+					stateCount, refDay, D, &configId, phasecentre);
+			}
 			if(v < 0)
 			{
 				continue;
@@ -443,9 +597,15 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		}
 	}
 
-	/* close the file, free memory, and return */
-	fclose(in);
+	if(nPcalDatastreams == 0)
+	{
+		/* close the file, free memory, and return */
+		fclose(in);
+	}
+
+
 	free(fitsbuf);
+	//FIXME free pcalinfo
 
 	return D;
 }
