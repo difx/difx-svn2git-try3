@@ -23,8 +23,8 @@ import curses
 
 program = 'mk5mon'
 author  = 'Walter Brisken'
-version = '0.1'
-verdate = '20080501'
+version = '0.2'
+verdate = '20100526'
 
 def usage():
 	exit(1)
@@ -55,9 +55,13 @@ class Mk5state:
 				b1 = '*'
 			elif self.bank == 'B':
 				b2 = '*'
-			str = '%10s %c%8s %c%8s %14s %7.2f %11d %3d %15s %12.6f ' % \
+			if self.date > 0.0 and self.date < 1.0:
+				dateStr = '%10.4f s' % (self.date*86400.0)
+			else:
+				dateStr = '%12.6f' % self.date
+			str = '%10s %c%8s %c%8s %14s %7.2f %13d %3d %15s %12s' % \
 				(self.mk5, b1, self.vsnA, b2, self.vsnB, self.state, \
-				 self.rate, self.pos, self.scan, self.name, self.date)
+				 self.rate, self.pos, self.scan, self.name, dateStr)
 		else:
 			str = ''
 		return str
