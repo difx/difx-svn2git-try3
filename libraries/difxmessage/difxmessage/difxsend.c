@@ -308,11 +308,10 @@ int difxMessageSendMark5Status(const DifxMessageMk5Status *mk5status)
 {
 	char message[DIFX_MESSAGE_LENGTH];
 	char body[DIFX_MESSAGE_LENGTH];
+	char scanName[DIFX_MESSAGE_MAX_SCANNAME_LEN];
 	char vsnA[10], vsnB[10];
-	char scanName[64];
 	char bank;
 	int i, v;
-	
 
 	if(strlen(mk5status->vsnA) != 8)
 	{
@@ -344,8 +343,16 @@ int difxMessageSendMark5Status(const DifxMessageMk5Status *mk5status)
 	{
 		bank = toupper(mk5status->activeBank);
 	}
-	strncpy(scanName, mk5status->scanName, 63);
-	scanName[63] = 0;
+
+	v = snprintf(scanName, DIFX_MESSAGE_MAX_SCANNAME_LEN,
+		"%s", mk5status->scanName);
+	if(v >= DIFX_MESSAGE_MAX_SCANNAME_LEN)
+	{
+		fprintf(stderr, "difxMessageSendMark5Status: scanName too long (%d >= %d)\n",
+			v, DIFX_MESSAGE_MAX_SCANNAME_LEN);
+		return -1;
+	}
+
 	v = snprintf(body, DIFX_MESSAGE_LENGTH, 
 	
 		"<mark5Status>"
@@ -644,7 +651,7 @@ int difxMessageSendDifxCommand(const char *command)
 	
 	if(v >= DIFX_MESSAGE_LENGTH)
 	{
-		fprintf(stderr, "difxMessageSendCommand: message body overflow (%d >= %d)\n",
+		fprintf(stderr, "difxMessageSendDifxCommand: message body overflow (%d >= %d)\n",
 			v, DIFX_MESSAGE_LENGTH);
 		return -1;
 	}
@@ -656,7 +663,7 @@ int difxMessageSendDifxCommand(const char *command)
 	
 	if(v >= DIFX_MESSAGE_LENGTH)
 	{
-		fprintf(stderr, "difxMessageSendCommand: message overflow (%d >= %d)\n",
+		fprintf(stderr, "difxMessageSendDifxCommand: message overflow (%d >= %d)\n",
 			v, DIFX_MESSAGE_LENGTH);
 		return -1;
 	}
@@ -691,7 +698,7 @@ int difxMessageSendDifxParameter(const char *name,
 
 	if(v >= DIFX_MESSAGE_LENGTH)
 	{
-		fprintf(stderr, "difxMessageSendParameter: message body overflow (%d >= %d)\n",
+		fprintf(stderr, "difxMessageSendDifxParameter: message body overflow (%d >= %d)\n",
 			v, DIFX_MESSAGE_LENGTH);
 		return -1;
 	}
@@ -703,7 +710,7 @@ int difxMessageSendDifxParameter(const char *name,
 
 	if(v >= DIFX_MESSAGE_LENGTH)
 	{
-		fprintf(stderr, "difxMessageSendParameter: message overflow (%d >= %d)\n",
+		fprintf(stderr, "difxMessageSendDifxParameter: message overflow (%d >= %d)\n",
 			v, DIFX_MESSAGE_LENGTH);
 		return -1;
 	}
