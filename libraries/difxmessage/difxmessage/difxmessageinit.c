@@ -16,18 +16,19 @@
 #include "../difxmessage.h"
 #include "difxmessageinternal.h"
 
+#define MAX_GROUP_SIZE			16
 #define DIFX_MESSAGE_FORMAT_LENGTH	256
 
-char difxMessageGroup[16] = "";
+char difxMessageGroup[MAX_GROUP_SIZE] = "";
 int difxMessagePort = -1; 
 char difxMessageIdentifier[DIFX_MESSAGE_IDENTIFIER_LENGTH] = "";
 char difxMessageHostname[DIFX_MESSAGE_PARAM_LENGTH] = "";
 int difxMessageMpiProcessId = -1;
 char difxMessageXMLFormat[DIFX_MESSAGE_FORMAT_LENGTH] = "";
 int difxMessageSequenceNumber = 0;
-char difxBinarySTAGroup[16] = "";
+char difxBinarySTAGroup[MAX_GROUP_SIZE] = "";
 int difxBinarySTAPort = -1;
-char difxBinaryLTAGroup[16] = "";
+char difxBinaryLTAGroup[MAX_GROUP_SIZE] = "";
 int difxBinaryLTAPort = -1;
 int difxMessageInUse = 0;
 
@@ -55,8 +56,12 @@ int difxMessageInit(int mpiId, const char *identifier)
 	envstr = getenv("DIFX_MESSAGE_GROUP");
 	if(envstr != 0)
 	{
-		strncpy(difxMessageGroup, envstr, 16);
-		difxMessageGroup[15] = 0;
+		v = snprintf(difxMessageGroup, MAX_GROUP_SIZE, "%s", envstr);
+		if(v >= MAX_GROUP_SIZE)
+		{
+			fprintf(stderr, "Error: difxMessageInit: env var DIFX_MESSAGE_GROUP too long\n");
+			return -1;
+		}
 	}
 	else
 	{
@@ -105,12 +110,17 @@ int difxMessageInit(int mpiId, const char *identifier)
 int difxMessageInitBinary()
 {
 	const char *envstr;
+	int v;
 
 	envstr = getenv("DIFX_BINARY_GROUP");
 	if(envstr != 0)
 	{
-		strncpy(difxBinarySTAGroup, envstr, 16);
-		difxBinarySTAGroup[15] = 0;
+		v = snprintf(difxBinarySTAGroup, MAX_GROUP_SIZE, "%s", envstr);
+		if(v >= MAX_GROUP_SIZE)
+		{
+			fprintf(stderr, "Error: difxMessageInitBinary: env var DIFX_BINARY_GROUP too long\n");
+			return -1;
+		}
 	}
 
 	envstr = getenv("DIFX_BINARY_PORT");
