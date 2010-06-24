@@ -302,10 +302,17 @@ void DataStream::initialiseFile(int configindex, int fileindex)
   if(inputline.length() != 15 || inputline.c_str()[8] != ':') //must be a new style header, find the time keyword
   {
     bytes = inputline.length() + 1;
-    while(inputline.substr(0,4) != "TIME")
+    while(inputline.substr(0,4) != "TIME" && bytes < LBA_HEADER_LENGTH)
     {
       getline(input, inputline);
       bytes += inputline.length() + 1;
+    }
+    if (bytes >= LBA_HEADER_LENGTH) 
+    {
+        //bad header, skip the rest of the file
+        cerror << startl << "Bad header in data file " << datafilenames[configindex][fileindex] << endl;
+        dataremaining = false;
+        return;
     }
     inputline = inputline.substr(5,15);
   }
