@@ -36,19 +36,22 @@ typedef struct
 	/*info taken directly from difxio*/
 	int dsId, nRecFreq;
 	/*Describes the pcals extracted by DiFX. Calculated as with corresponding values in mpifxcorr configuration.cpp*/
-	int *nRecFreqPcal;    /*num of recorded pcals in each sub-band*/
-	int **recFreqPcalFreq;/*frequency of each pcal indexed by subband and number within subband*/
+	int *nRecFreqPcal;    /*[nRecFreq] num of recorded pcals in each sub-band*/
+	int **recFreqPcalFreq;/*[nRecFreq][nRecFreqPcal[]] frequency of each pcal indexed by subband and number within subband*/
 	//int *recFreqPcalOffsetHz; // shouldn't be needed for difx2fits
 	int maxRecPcal;
 
 	/*The following describe the pcals which are to be output*/
-	int **freqPcalOut;/*list of tones which will be written out. vex convention*/
-	int *nFreqPcalOut;/*length of above list*/
+	int **freqPcalOut;/*[nRecFreq][nFreqPcalOut[]] list of tones which will be written out. vex convention*/
+	int *nFreqPcalOut;/*[nRecFreq] length of above list*/
 	int maxPcalOut;/*maximum number of pcals in a single subband, maximum over all datastreams used for FITS header*/
+	int tIntPcal;
 
 	/*bool which says whether each recorded tone will be written out*/
-	int **recFreqPcalOut;
+	int **recFreqPcalOut;/*[nRecFreq][nRecFreqPcal[]]*/
 } DifxPCal;
 
 DifxPCal *newDifxPCal(const DifxInput *D, int antId);
+void printDifxPCal(DifxPCal *pc);
+void deleteDifxPCal(DifxPCal *pc);
 #endif
