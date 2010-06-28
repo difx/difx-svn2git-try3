@@ -65,7 +65,7 @@ bool areScansCompatible(const VexScan *A, const VexScan *B, const CorrParams *P)
 	{
 		return false;
 	}
-	if(P->singleSetup && A->modeName != B->modeName)
+	if(P->singleSetup && A->modeDefName != B->modeDefName)
 	{
 		return false;
 	}
@@ -83,15 +83,15 @@ void genJobGroups(vector<VexJobGroup> &JGs, const VexData *V, const CorrParams *
 		JGs.push_back(VexJobGroup());
 		VexJobGroup &JG = JGs.back();
 		JG.scans.push_back(scans.front());
-		JG.setTimeRange( *(V->getScan(scans.front())) );
+		JG.setTimeRange( *(V->getScanByDefName(scans.front())) );
 		scans.pop_front();
 
-		const VexScan *scan1 = V->getScan(JG.scans.back());
+		const VexScan *scan1 = V->getScanByDefName(JG.scans.back());
 		const CorrSetup *corrSetup1 = P->getCorrSetup(scan1->corrSetupName);
 
 		for(list<string>::iterator it = scans.begin(); it != scans.end();)
 		{
-			const VexScan *scan2 = V->getScan(*it);
+			const VexScan *scan2 = V->getScanByDefName(*it);
 			const CorrSetup *corrSetup2 = P->getCorrSetup(scan2->corrSetupName);
 
 			// Skip any scans that don't overlap with .v2d mjdStart and mjdStop
@@ -672,7 +672,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, const VexMode 
 	}
 	else
 	{
-		cerr << "Error: setFormat: format " << format.format << " not currently supported.  Mode=" << mode->name << ", ant=" << antName << "." << endl;
+		cerr << "Error: setFormat: format " << format.format << " not currently supported.  Mode=" << mode->defName << ", ant=" << antName << "." << endl;
 		return 0;
 	}
 
@@ -1164,26 +1164,26 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		exit(0);
 	}
 
-	mode = V->getMode(S->modeName);
+	mode = V->getModeByDefName(S->modeDefName);
 	if(mode == 0)
 	{
-		cerr << "Error: mode[" << S->modeName << "] == 0" << endl;
+		cerr << "Error: mode[" << S->modeDefName << "] == 0" << endl;
 		exit(0);
 	}
 
 	for(unsigned int i = 0; i < configs.size(); i++)
 	{
-		if(configs[i].first  == S->modeName &&
+		if(configs[i].first  == S->modeDefName &&
 		   configs[i].second == S->corrSetupName)
 		{
 			return i;
 		}
 	}
 
-	configName = S->modeName + string("_") + S->corrSetupName;
+	configName = S->modeDefName + string("_") + S->corrSetupName;
 
 	c = configs.size();
-	configs.push_back(pair<string,string>(S->modeName, S->corrSetupName));
+	configs.push_back(pair<string,string>(S->modeDefName, S->corrSetupName));
 	config = D->config + c;
 	strcpy(config->name, configName.c_str());
 	config->tInt = corrSetup->tInt;
@@ -1292,7 +1292,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 		exit(0);
 	}
 	
-	S = V->getScan(J.scans.front());
+	S = V->getScanByDefName(J.scans.front());
 	if(!S)
 	{
 		cerr << "Developer error: writeJob() top: scan[" << J.scans.front() << "] = 0" << endl;
@@ -1311,13 +1311,13 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 	{
 		string configName;
 
-		S = V->getScan(*si);
+		S = V->getScanByDefName(*si);
 		if(!S)
 		{
 			cerr << "Developer error: writeJob() loop: scan[" << *si << "] = 0" << endl;
 			exit(0);
 		}
-		configName = S->modeName + string("_") + S->corrSetupName;
+		configName = S->modeDefName + string("_") + S->corrSetupName;
 		configSet.insert(configName);
 	}
 
@@ -1349,14 +1349,14 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 	scan = D->scan;
 	for(vector<string>::const_iterator si = J.scans.begin(); si != J.scans.end(); si++, scan++)
 	{
-		S = V->getScan(*si);
+		S = V->getScanByDefName(*si);
 		if(!S)
 		{
 			cerr << "Developer error: source[" << *si << "] not found!  This cannot be!" << endl;
 			exit(0);
 		}
 
-		const VexSource *src = V->getSourceByDefName(S->sourceName);
+		const VexSource *src = V->getSourceByDefName(S->sourceDefName);
 
 		// Determine interval where scan and job overlap
 		VexInterval scanInterval(*S);
@@ -1397,7 +1397,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 			}
 			if(sourceSetup->ephemFile.size() > 0)
 			{
-				spacecraftSet.insert(S->sourceName);
+				spacecraftSet.insert(S->sourceDefName);
 			}
 		}
 	}
@@ -1420,7 +1420,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 	D->nDatastream = 0;
 	for(int c = 0; c < D->nConfig; c++)
 	{
-		mode = V->getMode(configs[c].first);
+		mode = V->getModeByDefName(configs[c].first);
 		if(mode == 0)
 		{
 			cerr << "Error: mode[" << configs[c].first << "] is null" << endl;
@@ -1521,7 +1521,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 	}
 
 	// Make frequency table
-	mode = V->getMode(configs[0].first);
+	mode = V->getModeByDefName(configs[0].first);
 	double bw = mode->sampRate/(2.0*overSamp);
 	populateFreqTable(D, freqs, bw);
 
@@ -1690,7 +1690,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 	{
 		for(l = r->scanName.begin(); l != r->scanName.end(); l++)
 		{
-			if(V->getScan(*l) == 0)
+			if(V->getScanByDefName(*l) == 0)
 			{
 				cerr << "Warning: scan " << *l << " referenced in RULE " << r->ruleName << " in .v2d file but is not in vex file" << endl;
 				nWarn++;
@@ -1706,7 +1706,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 		}
 		for(l = r->modeName.begin(); l != r->modeName.end(); l++)
 		{
-			if(V->getMode(*l) == 0)
+			if(V->getModeByDefName(*l) == 0)
 			{
 				cerr << "Warning: mode " << *l << " referenced in RULE " << r->ruleName << " in .v2d file but is not in vex file" << endl;
 				nWarn++;
@@ -1721,13 +1721,13 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 
 		if(S->sourceNames.size() == 0)
 		{
-			cout << "Warning: vex source def block " << S->name << " has no source names!" << endl;
+			cout << "Warning: vex source def block " << S->defName << " has no source names!" << endl;
 			nWarn++;
 			continue;
 		}
 		else if(S->sourceNames.size() > 1)
 		{
-			cout << "Warning: vex source def block " << S->name << " has more than 1 source names.  Only the first is being considered!" << endl;
+			cout << "Warning: vex source def block " << S->defName << " has more than 1 source names.  Only the first is being considered!" << endl;
 			nWarn++;
 		}
 
@@ -1736,7 +1736,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 		{
 			if(illegalSourceName(sourceSetup->difxName))
 			{
-				cerr << "Warning: illegal source name (" << sourceSetup->difxName << ") provided in SOURCE section for source " << S->name << endl;
+				cerr << "Warning: illegal source name (" << sourceSetup->difxName << ") provided in SOURCE section for source " << S->defName << endl;
 				nWarn++;
 			}
 		}
@@ -1766,8 +1766,8 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 						if(S1->sourceNames[n1] == S2->sourceNames[n2])
 						{
 							cerr << "Warning: two sources with the same name:" << endl;
-							cerr << "  " << S1->name << "[" << n1 << "] = " << S1->sourceNames[n1] << endl;
-							cerr << "  " << S2->name << "[" << n2 << "] = " << S2->sourceNames[n2] << endl;
+							cerr << "  " << S1->defName << "[" << n1 << "] = " << S1->sourceNames[n1] << endl;
+							cerr << "  " << S2->defName << "[" << n2 << "] = " << S2->sourceNames[n2] << endl;
 							nWarn++;
 						}
 					}
@@ -2030,8 +2030,8 @@ int main(int argc, char **argv)
 		{
 			cout << *j;
 		}
-		const VexScan *S = V->getScan(j->scans[0]);
-		const VexMode *M = V->getMode(S->modeName);
+		const VexScan *S = V->getScanByDefName(j->scans[0]);
+		const VexMode *M = V->getModeByDefName(S->modeDefName);
 		int n = 0;
 		for(list<int>::const_iterator k = M->overSamp.begin(); k != M->overSamp.end(); k++)
 		{

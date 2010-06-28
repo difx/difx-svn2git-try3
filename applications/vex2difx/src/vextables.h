@@ -112,8 +112,8 @@ class VexScan : public VexInterval
 public:
 	string name;		// name of this scan
 
-	string modeName;
-	string sourceName;
+	string modeDefName;
+	string sourceDefName;
 	map<string,VexInterval> stations;
 	string corrSetupName;	// points to CorrSetup entry
 	double size;		// [bytes] approx. correlated size
@@ -124,7 +124,7 @@ class VexSource
 public:
 	VexSource() : calCode(' '), qualifier(0), ra(0.0), dec(0.0) {}
 
-	string name;
+	string defName;		// reference name assigned to this source in the "def" statement
 	
 	vector<string> sourceNames;
 	char calCode;
@@ -180,7 +180,7 @@ public:
 	int getBits() const;
 	const VexFormat &getFormat(const string antName) const;
 
-	string name;
+	string defName;			// reference name assigned to this mode in the "def" statement
 
 	double sampRate;		// (Hz)
 	vector<VexSubband> subbands;
@@ -220,7 +220,7 @@ public:
 	bool getClock(double mjd, double &offset, double &rate) const;
 
 	string name;
-	string nameInVex;	// Sometimes names get changed
+	string defName;		
 
 	double x, y, z;		// (m) antenna position
 	double dx, dy, dz;	// (m/?) antenna position	//FIXME
@@ -344,7 +344,7 @@ public:
 
 	unsigned int nScan() const { return scans.size(); }
 	const VexScan *getScan(unsigned int num) const;
-	const VexScan *getScan(const string &name) const;
+	const VexScan *getScanByDefName(const string &name) const;
 	void setScanSize(unsigned int num, double size);
 	void getScanList(list<string> &scans) const;
 
@@ -354,14 +354,14 @@ public:
 
 	unsigned int nMode() const { return modes.size(); }
 	const VexMode *getMode(unsigned int num) const;
-	const VexMode *getMode(const string &name) const;
+	const VexMode *getModeByDefName(const string &name) const;
 
 	unsigned int nEOP() const { return eops.size(); }
 	const VexEOP *getEOP(unsigned int num) const;
 	const vector<VexEOP> &getEOPs() const { return eops; }
 
 	bool usesAntenna(const string &antennaName) const;
-	bool usesMode(const string &modeName) const;
+	bool usesMode(const string &modeDefName) const;
 
 	void addVSN(const string &antName, const string &vsn, const VexInterval &timeRange);
 	string getVSN(const string &antName, const VexInterval &timeRange) const;

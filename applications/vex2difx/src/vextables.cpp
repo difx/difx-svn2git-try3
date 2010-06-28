@@ -316,7 +316,7 @@ const VexSource *VexData::getSourceByDefName(const string &name) const
 {
 	for(unsigned int i = 0; i < nSource(); i++)
 	{
-		if(sources[i].name == name)
+		if(sources[i].defName == name)
 			return &sources[i];
 	}
 
@@ -350,7 +350,7 @@ void VexJob::assignVSNs(const VexData &V)
 
 	for(s = scans.begin(); s != scans.end(); s++)
 	{
-		const VexScan* S = V.getScan(*s);
+		const VexScan* S = V.getScanByDefName(*s);
 		for(a = S->stations.begin(); a != S->stations.end(); a++)
 		{
 			if(find(antennas.begin(), antennas.end(), a->first) == antennas.end())
@@ -397,8 +397,8 @@ double VexJob::calcOps(const VexData *V, int fftSize, bool doPolar) const
 
 	for(si = scans.begin(); si != scans.end(); si++)
 	{
-		const VexScan *S = V->getScan(*si);
-		M = V->getMode(S->modeName);
+		const VexScan *S = V->getScanByDefName(*si);
+		M = V->getModeByDefName(S->modeDefName);
 		if(!M)
 		{
 			return 0.0;
@@ -437,7 +437,7 @@ double VexJob::calcSize(const VexData *V) const
 
 	for(int i = 0; i < nScan; i++)
 	{
-		size += V->getScan(scans[i])->size;
+		size += V->getScanByDefName(scans[i])->size;
 	}
 
 	return size;
@@ -639,7 +639,7 @@ int VexJob::generateFlagFile(const VexData &V, const string &fileName, unsigned 
 		{
 			if(hasScan(e->scan))
 			{
-				const VexScan *scan = V.getScan(e->scan);
+				const VexScan *scan = V.getScanByDefName(e->scan);
 
 				if(!scan)
 				{
@@ -660,7 +660,7 @@ int VexJob::generateFlagFile(const VexData &V, const string &fileName, unsigned 
 		{
 			if(hasScan(e->scan))
 			{
-				const VexScan *scan = V.getScan(e->scan);
+				const VexScan *scan = V.getScanByDefName(e->scan);
 
 				if(!scan)
 				{
@@ -805,7 +805,7 @@ void VexJobGroup::createJobs(vector<VexJob> &jobs, VexInterval &jobTimeRange, co
 				scanTime += scanTimeRange.duration();
 
 				// Work in progress: calculate correlated size of scan
-				size += V->getScan(id)->size;
+				size += V->getScanByDefName(id)->size;
 
 				/* start a new job at scan boundary if maxLength exceeded */
 				if(J->duration() > maxLength || size > maxSize)
@@ -836,17 +836,6 @@ void VexJobGroup::createJobs(vector<VexJob> &jobs, VexInterval &jobTimeRange, co
 	}
 }
 
-const VexScan *VexData::getScan(const string &name) const
-{
-	for(unsigned int i = 0; i < nScan(); i++)
-	{
-		if(scans[i].name == name)
-			return &scans[i];
-	}
-
-	return 0;
-}
-
 const VexScan *VexData::getScan(unsigned int num) const
 {
 	if(num >= nScan())
@@ -855,6 +844,17 @@ const VexScan *VexData::getScan(unsigned int num) const
 	}
 
 	return &scans[num];
+}
+
+const VexScan *VexData::getScanByDefName(const string &name) const
+{
+	for(unsigned int i = 0; i < nScan(); i++)
+	{
+		if(scans[i].name == name)
+			return &scans[i];
+	}
+
+	return 0;
 }
 
 void VexData::setScanSize(unsigned int num, double size)
@@ -944,19 +944,6 @@ VexMode *VexData::newMode()
 	return &modes.back();
 }
 
-const VexMode *VexData::getMode(const string &name) const
-{
-	for(unsigned int i = 0; i < nMode(); i++)
-	{
-		if(modes[i].name == name)
-		{
-			return &modes[i];
-		}
-	}
-
-	return 0;
-}
-
 const VexMode *VexData::getMode(unsigned int num) const
 {
 	if(num >= nMode())
@@ -965,6 +952,19 @@ const VexMode *VexData::getMode(unsigned int num) const
 	}
 
 	return &modes[num];
+}
+
+const VexMode *VexData::getModeByDefName(const string &name) const
+{
+	for(unsigned int i = 0; i < nMode(); i++)
+	{
+		if(modes[i].defName == name)
+		{
+			return &modes[i];
+		}
+	}
+
+	return 0;
 }
 
 VexEOP *VexData::newEOP()
@@ -998,13 +998,13 @@ bool VexData::usesAntenna(const string &antennaName) const
 	return false;
 }
 
-bool VexData::usesMode(const string &modeName) const
+bool VexData::usesMode(const string &modeDefName) const
 {
 	unsigned int n = nScan();
 
 	for(unsigned int i = 0; i < n; i++)
 	{
-		if(getScan(i)->modeName == modeName)
+		if(getScan(i)->modeDefName == modeDefName)
 		{
 			return true;
 		}
@@ -1163,7 +1163,7 @@ ostream& operator << (ostream &os, const VexInterval &x)
 
 ostream& operator << (ostream &os, const VexSource &x)
 {
-	os << "Source " << x.name << endl;
+	os << "Source " << x.defName << endl;
 	unsigned int n = x.sourceNames.size();
 	for(unsigned int i = 0; i < n; i++)
 	{
@@ -1183,8 +1183,8 @@ ostream& operator << (ostream &os, const VexScan &x)
 
 	os << "Scan " << x.name << 
 		"\n  timeRange=" << (const VexInterval&)x <<
-		"\n  mode=" << x.modeName <<
-		"\n  source=" << x.sourceName << 
+		"\n  mode=" << x.modeDefName <<
+		"\n  source=" << x.sourceDefName << 
 		"\n  size=" << x.size << " bytes \n";
 
 	for(iter = x.stations.begin(); iter != x.stations.end(); iter++)
@@ -1257,7 +1257,7 @@ ostream& operator << (ostream &os, const VexMode &x)
 {
 	map<string,VexFormat>::const_iterator it;
 
-	os << "Mode " << x.name << endl;
+	os << "Mode " << x.defName << endl;
 	for(unsigned int i = 0; i < x.subbands.size(); i++)
 	{
 		os << "  subband=" << x.subbands[i] << endl;
