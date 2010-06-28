@@ -42,8 +42,8 @@
 #include "vexload.h"
 
 const string program("vex2difx");
-const string version("1.0.3");
-const string verdate("20100330");
+const string version("1.0.4");		// FIXME -- link to configure.ac
+const string verdate("20100627");
 const string author("Walter Brisken");
 
 double current_mjd()
@@ -1715,7 +1715,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 	}
 
 	// Verify that final source names are legal
-	for(int s = 0; s < V->nSource(); s++)
+	for(unsigned int s = 0; s < V->nSource(); s++)
 	{
 		const VexSource *S = V->getSource(s);
 
@@ -1753,15 +1753,15 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 	// warn on two VexSources with the same sourceNames[] entries
 	if(V->nSource() > 1)
 	{
-		for(int s2 = 1; s2 < V->nSource(); s2++) 
+		for(unsigned int s2 = 1; s2 < V->nSource(); s2++) 
 		{
 			const VexSource *S2 = V->getSource(s2);
-			for(int s1 = 0; s1 < s2; s1++)
+			for(unsigned int s1 = 0; s1 < s2; s1++)
 			{
 				const VexSource *S1 = V->getSource(s1);
-				for(int n2 = 0; n2 < S2->sourceNames.size(); n2++)
+				for(unsigned int n2 = 0; n2 < S2->sourceNames.size(); n2++)
 				{
-					for(int n1 = 0; n1 < S1->sourceNames.size(); n1++)
+					for(unsigned int n1 = 0; n1 < S1->sourceNames.size(); n1++)
 					{
 						if(S1->sourceNames[n1] == S2->sourceNames[n2])
 						{

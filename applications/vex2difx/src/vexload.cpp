@@ -295,7 +295,6 @@ static int getSources(VexData *V, Vex *v, const CorrParams& params)
 		    p = (char *)get_source_lowl_next())
 		{
 			S->sourceNames.push_back(string(p));
-			cout << "ADDING:" << p << endl;
 		}
 
 		p = (char *)get_source_lowl(src, T_RA, v);
@@ -571,7 +570,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams& params)
 		M->name = modeId;
 
 		// get FREQ info
-		for(int a = 0; a < V->nAntenna(); a++)
+		for(unsigned int a = 0; a < V->nAntenna(); a++)
 		{
 			const string& antName = V->getAntenna(a)->nameInVex;
 			string antName2 = V->getAntenna(a)->nameInVex;

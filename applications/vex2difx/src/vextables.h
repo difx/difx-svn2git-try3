@@ -337,27 +337,27 @@ public:
 	void setDirectory(const string &dir) { directory = dir; }
 
 
-	int nSource() const { return sources.size(); }
-	const VexSource *getSource(int num) const;
+	unsigned int nSource() const { return sources.size(); }
+	const VexSource *getSource(unsigned int num) const;
 	const VexSource *getSourceByDefName(const string &name) const;
 	const VexSource *getSourceBySourceName(const string &name) const;
 
-	int nScan() const { return scans.size(); }
+	unsigned int nScan() const { return scans.size(); }
+	const VexScan *getScan(unsigned int num) const;
 	const VexScan *getScan(const string &name) const;
-	const VexScan *getScan(int num) const;
-	void setScanSize(int num, double size);
+	void setScanSize(unsigned int num, double size);
 	void getScanList(list<string> &scans) const;
 
-	int nAntenna() const { return antennas.size(); }
+	unsigned int nAntenna() const { return antennas.size(); }
+	const VexAntenna *getAntenna(unsigned int num) const;
 	const VexAntenna *getAntenna(const string &name) const;
-	const VexAntenna *getAntenna(int num) const;
 
-	int nMode() const { return modes.size(); }
+	unsigned int nMode() const { return modes.size(); }
+	const VexMode *getMode(unsigned int num) const;
 	const VexMode *getMode(const string &name) const;
-	const VexMode *getMode(int num) const;
 
-	int nEOP() const { return eops.size(); }
-	const VexEOP *getEOP(int num) const;
+	unsigned int nEOP() const { return eops.size(); }
+	const VexEOP *getEOP(unsigned int num) const;
 	const vector<VexEOP> &getEOPs() const { return eops; }
 
 	bool usesAntenna(const string &antennaName) const;
@@ -366,7 +366,7 @@ public:
 	void addVSN(const string &antName, const string &vsn, const VexInterval &timeRange);
 	string getVSN(const string &antName, const VexInterval &timeRange) const;
 
-	int nEvent() const { return events.size(); }
+	unsigned int nEvent() const { return events.size(); }
 	const list<VexEvent> *getEvents() const;
 	void addEvent(double mjd, VexEvent::EventType eventType, const string &name);
 	void addEvent(double mjd, VexEvent::EventType eventType, const string &name, const string &scanName);

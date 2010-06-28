@@ -155,13 +155,13 @@ class CorrParams : public VexInterval
 {
 public:
 	CorrParams();
-	CorrParams(const string& fileName);
+	CorrParams(const string &fileName);
 
-	int loadShelves(const string& fileName);
-	const char *getShelf(const string& vsn) const;
+	int loadShelves(const string &fileName);
+	const char *getShelf(const string &vsn) const;
 
 	int setkv(const string &key, const string &value);
-	int load(const string& fileName);
+	int load(const string &fileName);
 	void defaults();
 	void defaultSetup();
 	void example();
@@ -226,14 +226,14 @@ public:
 	enum V2D_Mode v2dMode;
 
 private:
-	void addAntenna(const string& antName);
-	void addBaseline(const string& baselineName);
+	void addAntenna(const string &antName);
+	void addBaseline(const string &baselineName);
 	map<string,string> shelves;
 };
 
-ostream& operator << (ostream& os, const CorrSetup& x);
-ostream& operator << (ostream& os, const CorrRule& x);
-ostream& operator << (ostream& os, const CorrParams& x);
+ostream& operator << (ostream &os, const CorrSetup &x);
+ostream& operator << (ostream &os, const CorrRule &x);
+ostream& operator << (ostream &os, const CorrParams &x);
 
 bool areCorrSetupsCompatible(const CorrSetup *A, const CorrSetup *B, const CorrParams *C);
 

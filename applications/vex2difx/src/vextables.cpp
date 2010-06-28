@@ -302,9 +302,9 @@ bool VexAntenna::getClock(double mjd, double &offset, double &rate) const
 	return hasValue;
 }
 
-const VexSource *VexData::getSource(int num) const
+const VexSource *VexData::getSource(unsigned int num) const
 {
-	if(num < 0 || num >= nSource())
+	if(num >= nSource())
 	{
 		return 0;
 	}
@@ -314,7 +314,7 @@ const VexSource *VexData::getSource(int num) const
 
 const VexSource *VexData::getSourceByDefName(const string &name) const
 {
-	for(int i = 0; i < nSource(); i++)
+	for(unsigned int i = 0; i < nSource(); i++)
 	{
 		if(sources[i].name == name)
 			return &sources[i];
@@ -325,9 +325,9 @@ const VexSource *VexData::getSourceByDefName(const string &name) const
 
 const VexSource *VexData::getSourceBySourceName(const string &name) const
 {
-	for(int i = 0; i < nSource(); i++)
+	for(unsigned int i = 0; i < nSource(); i++)
 	{
-		for(int j = 0; j < sources[i].sourceNames.size(); j++)
+		for(unsigned int j = 0; j < sources[i].sourceNames.size(); j++)
 		if(sources[i].sourceNames[j] == name)
 			return &sources[i];
 	}
@@ -838,7 +838,7 @@ void VexJobGroup::createJobs(vector<VexJob> &jobs, VexInterval &jobTimeRange, co
 
 const VexScan *VexData::getScan(const string &name) const
 {
-	for(int i = 0; i < nScan(); i++)
+	for(unsigned int i = 0; i < nScan(); i++)
 	{
 		if(scans[i].name == name)
 			return &scans[i];
@@ -847,9 +847,9 @@ const VexScan *VexData::getScan(const string &name) const
 	return 0;
 }
 
-const VexScan *VexData::getScan(int num) const
+const VexScan *VexData::getScan(unsigned int num) const
 {
-	if(num < 0 || num >= nScan())
+	if(num >= nScan())
 	{
 		return 0;
 	}
@@ -857,9 +857,9 @@ const VexScan *VexData::getScan(int num) const
 	return &scans[num];
 }
 
-void VexData::setScanSize(int num, double size)
+void VexData::setScanSize(unsigned int num, double size)
 {
-	if(num < 0 || num >= nScan())
+	if(num >= nScan())
 	{
 		return;
 	}
@@ -919,7 +919,7 @@ VexAntenna *VexData::newAntenna()
 
 const VexAntenna *VexData::getAntenna(const string &name) const
 {
-	for(int i = 0; i < nAntenna(); i++)
+	for(unsigned int i = 0; i < nAntenna(); i++)
 	{
 		if(antennas[i].name == name)
 			return &antennas[i];
@@ -928,9 +928,9 @@ const VexAntenna *VexData::getAntenna(const string &name) const
 	return 0;
 }
 
-const VexAntenna *VexData::getAntenna(int num) const
+const VexAntenna *VexData::getAntenna(unsigned int num) const
 {
-	if(num < 0 || num >= nAntenna())
+	if(num >= nAntenna())
 	{
 		return 0;
 	}
@@ -946,7 +946,7 @@ VexMode *VexData::newMode()
 
 const VexMode *VexData::getMode(const string &name) const
 {
-	for(int i = 0; i < nMode(); i++)
+	for(unsigned int i = 0; i < nMode(); i++)
 	{
 		if(modes[i].name == name)
 		{
@@ -957,9 +957,9 @@ const VexMode *VexData::getMode(const string &name) const
 	return 0;
 }
 
-const VexMode *VexData::getMode(int num) const
+const VexMode *VexData::getMode(unsigned int num) const
 {
-	if(num < 0 || num >= nMode())
+	if(num >= nMode())
 	{
 		return 0;
 	}
@@ -973,9 +973,9 @@ VexEOP *VexData::newEOP()
 	return &eops.back();
 }
 
-const VexEOP *VexData::getEOP(int num) const
+const VexEOP *VexData::getEOP(unsigned int num) const
 {
-	if(num < 0 || num > nEOP())
+	if(num >= nEOP())
 	{
 		return 0;
 	}
@@ -985,9 +985,9 @@ const VexEOP *VexData::getEOP(int num) const
 
 bool VexData::usesAntenna(const string &antennaName) const
 {
-	int n = nAntenna();
+	unsigned int n = nAntenna();
 
-	for(int i = 0; i < n; i++)
+	for(unsigned int i = 0; i < n; i++)
 	{
 		if(getAntenna(i)->name == antennaName)
 		{
@@ -1000,9 +1000,9 @@ bool VexData::usesAntenna(const string &antennaName) const
 
 bool VexData::usesMode(const string &modeName) const
 {
-	int n = nScan();
+	unsigned int n = nScan();
 
-	for(int i = 0; i < n; i++)
+	for(unsigned int i = 0; i < n; i++)
 	{
 		if(getScan(i)->modeName == modeName)
 		{
@@ -1015,9 +1015,9 @@ bool VexData::usesMode(const string &modeName) const
 
 void VexData::addVSN(const string &antName, const string &vsn, const VexInterval &timeRange)
 {
-	int n = nAntenna();
+	unsigned int n = nAntenna();
 
-	for(int i = 0; i < n; i++)
+	for(unsigned int i = 0; i < n; i++)
 	{
 		if(antennas[i].name == antName)
 		{
@@ -1114,14 +1114,14 @@ void VexData::sortEvents()
 
 void VexData::findLeapSeconds()
 {
-	int n = eops.size();
+	unsigned int n = eops.size();
 
 	if(n < 2)
 	{
 		return;
 	}
 
-	for(int i = 1; i < n; i++)
+	for(unsigned int i = 1; i < n; i++)
 	{
 		if(eops[i-1].tai_utc != eops[i].tai_utc)
 		{
@@ -1133,14 +1133,14 @@ void VexData::findLeapSeconds()
 
 void VexData::addBreaks(const vector<double> &breaks)
 {
-	int n = breaks.size();
+	unsigned int n = breaks.size();
 
 	if(n < 1)
 	{
 		return;
 	}
 
-	for(int i = 0; i < n; i++)
+	for(unsigned int i = 0; i < n; i++)
 	{
 		double mjd = breaks[i];
 
@@ -1164,8 +1164,8 @@ ostream& operator << (ostream &os, const VexInterval &x)
 ostream& operator << (ostream &os, const VexSource &x)
 {
 	os << "Source " << x.name << endl;
-	int n = x.sourceNames.size();
-	for(int i = 0; i < n; i++)
+	unsigned int n = x.sourceNames.size();
+	for(unsigned int i = 0; i < n; i++)
 	{
 		os << "  name=" << x.sourceNames[i] << endl;
 	}
