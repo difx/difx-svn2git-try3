@@ -43,7 +43,7 @@
 
 const string program("vex2difx");
 const string version("1.0.4");		// FIXME -- link to configure.ac
-const string verdate("20100627");
+const string verdate("20100628");
 const string author("Walter Brisken");
 
 double current_mjd()

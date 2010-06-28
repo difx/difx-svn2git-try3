@@ -850,7 +850,7 @@ const VexScan *VexData::getScanByDefName(const string &name) const
 {
 	for(unsigned int i = 0; i < nScan(); i++)
 	{
-		if(scans[i].name == name)
+		if(scans[i].defName == name)
 			return &scans[i];
 	}
 
@@ -873,7 +873,7 @@ void VexData::getScanList(list<string> &scanList) const
 
 	for(it = scans.begin(); it != scans.end(); it++)
 	{
-		scanList.push_back(it->name);
+		scanList.push_back(it->defName);
 	}
 }
 
@@ -1181,7 +1181,7 @@ ostream& operator << (ostream &os, const VexScan &x)
 {
 	map<string,VexInterval>::const_iterator iter;
 
-	os << "Scan " << x.name << 
+	os << "Scan " << x.defName << 
 		"\n  timeRange=" << (const VexInterval&)x <<
 		"\n  mode=" << x.modeDefName <<
 		"\n  source=" << x.sourceDefName << 

@@ -110,7 +110,7 @@ class VexBasebandFile : public VexInterval
 class VexScan : public VexInterval
 {
 public:
-	string name;		// name of this scan
+	string defName;		// name of this scan
 
 	string modeDefName;
 	string sourceDefName;

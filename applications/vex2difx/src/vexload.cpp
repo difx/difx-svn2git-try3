@@ -466,7 +466,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 			continue;
 		}
 
-		string scanName(scanId);
+		string scanDefName(scanId);
 		string sourceDefName((char *)get_scan_source(L));
 		string modeDefName((char *)get_scan_mode(L));
 
@@ -477,7 +477,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 			exit(0);
 		}
 
-		string corrSetupName = params.findSetup(scanName, sourceDefName, modeDefName, src->calCode, 0);
+		string corrSetupName = params.findSetup(scanDefName, sourceDefName, modeDefName, src->calCode, 0);
 
 		if(corrSetupName == "" || corrSetupName == "SKIP")
 		{
@@ -508,7 +508,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 		// Make scan
 		S = V->newScan();
 		S->setTimeRange(timeRange);
-		S->name = scanName;
+		S->defName = scanDefName;
 		S->stations = stations;
 		S->modeDefName = modeDefName;
 		S->sourceDefName = sourceDefName;
