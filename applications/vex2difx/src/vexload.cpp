@@ -295,6 +295,7 @@ static int getSources(VexData *V, Vex *v, const CorrParams& params)
 		    p = (char *)get_source_lowl_next())
 		{
 			S->sourceNames.push_back(string(p));
+			cout << "ADDING:" << p << endl;
 		}
 
 		p = (char *)get_source_lowl(src, T_RA, v);
@@ -470,7 +471,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams& params)
 		string sourceName((char *)get_scan_source(L));
 		string modeName((char *)get_scan_mode(L));
 
-		const VexSource *src = V->getSource(sourceName);
+		const VexSource *src = V->getSourceByDefName(sourceName);
 		if(src == 0)
 		{
 			cerr << "Developer error! src == 0" << endl;

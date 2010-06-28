@@ -17,6 +17,7 @@ x. guardblocks, blocks per send
 x. support baselines=
 x. implement maxLength
 x. use antennas, not modules, in antenna count
+16. rectify antenna names as was done for source names in ver 1.0.4
 
 Concerns outside vex2difx proper
 

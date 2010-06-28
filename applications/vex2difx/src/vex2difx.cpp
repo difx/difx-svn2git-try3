@@ -46,7 +46,6 @@ const string version("1.0.3");
 const string verdate("20100330");
 const string author("Walter Brisken");
 
-
 double current_mjd()
 {
 	struct timeval t;
@@ -1353,18 +1352,18 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 		S = V->getScan(*si);
 		if(!S)
 		{
-			cerr << "Error: source[" << *si << "] not found!  This cannot be!" << endl;
+			cerr << "Developer error: source[" << *si << "] not found!  This cannot be!" << endl;
 			exit(0);
 		}
 
-		const VexSource *src = V->getSource(S->sourceName);
+		const VexSource *src = V->getSourceByDefName(S->sourceName);
 
 		// Determine interval where scan and job overlap
 		VexInterval scanInterval(*S);
 		scanInterval.logicalAnd(J);
 
 		corrSetup = P->getCorrSetup(S->corrSetupName);
-		sourceSetup = P->getSourceSetup(S->sourceName);
+		sourceSetup = P->getSourceSetup(src->sourceNames[0]);
 
 		scan->mjdStart = scanInterval.mjdStart;
 		scan->mjdEnd = scanInterval.mjdStop;
@@ -1379,7 +1378,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 			scan->calCode[0] = src->calCode;
 			scan->calCode[1] = 0;
 		}
-		strcpy(scan->name, S->sourceName.c_str());
+		strcpy(scan->name, src->sourceNames[0].c_str());
 		// FIXME qual and calcode
 
 		if(sourceSetup)
@@ -1640,6 +1639,26 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 	}
 }
 
+static bool illegalSourceName(const string &name)
+{
+	if(name.size() > VexSource::MAX_SRCNAME_LENGTH)
+	{
+		return true;
+	}
+	else if(name.find_first_of("/") != string::npos)
+	{
+		return true;
+	}
+	else if(name.find_first_of("_") != string::npos)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
 static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 {
 	vector<SourceSetup>::const_iterator s;
@@ -1651,7 +1670,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 
 	for(s = P->sourceSetups.begin(); s != P->sourceSetups.end(); s++)
 	{
-		if(V->getSource(s->vexName) == 0)
+		if(V->getSourceBySourceName(s->vexName) == 0)
 		{
 			cerr << "Warning: source " << s->vexName << " referenced in .v2d file but is not in vex file" << endl;
 			nWarn++;
@@ -1679,7 +1698,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 		}
 		for(l = r->sourceName.begin(); l != r->sourceName.end(); l++)
 		{
-			if(V->getSource(*l) == 0)
+			if(V->getSourceBySourceName(*l) == 0)
 			{
 				cerr << "Warning: source " << *l << " referenced in RULE " << r->ruleName << " in .v2d file but is not in vex file" << endl;
 				nWarn++;
@@ -1691,6 +1710,68 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 			{
 				cerr << "Warning: mode " << *l << " referenced in RULE " << r->ruleName << " in .v2d file but is not in vex file" << endl;
 				nWarn++;
+			}
+		}
+	}
+
+	// Verify that final source names are legal
+	for(int s = 0; s < V->nSource(); s++)
+	{
+		const VexSource *S = V->getSource(s);
+
+		if(S->sourceNames.size() == 0)
+		{
+			cout << "Warning: vex source def block " << S->name << " has no source names!" << endl;
+			nWarn++;
+			continue;
+		}
+		else if(S->sourceNames.size() > 1)
+		{
+			cout << "Warning: vex source def block " << S->name << " has more than 1 source names.  Only the first is being considered!" << endl;
+			nWarn++;
+		}
+
+		const SourceSetup *sourceSetup=P->getSourceSetup(S->sourceNames[0]);
+		if(sourceSetup && sourceSetup->difxName.size() > 0)
+		{
+			if(illegalSourceName(sourceSetup->difxName))
+			{
+				cerr << "Warning: illegal source name (" << sourceSetup->difxName << ") provided in SOURCE section for source " << S->name << endl;
+				nWarn++;
+			}
+		}
+		else
+		{
+			if(illegalSourceName(S->sourceNames[0]))
+			{
+				cerr << "Warning: illegal source name (" << S->sourceNames[0] << ") in vex file.  Please correct by renaming in the SOURCE section of the .v2d file" << endl;
+				nWarn++;
+			}
+		}
+	}
+
+	// warn on two VexSources with the same sourceNames[] entries
+	if(V->nSource() > 1)
+	{
+		for(int s2 = 1; s2 < V->nSource(); s2++) 
+		{
+			const VexSource *S2 = V->getSource(s2);
+			for(int s1 = 0; s1 < s2; s1++)
+			{
+				const VexSource *S1 = V->getSource(s1);
+				for(int n2 = 0; n2 < S2->sourceNames.size(); n2++)
+				{
+					for(int n1 = 0; n1 < S1->sourceNames.size(); n1++)
+					{
+						if(S1->sourceNames[n1] == S2->sourceNames[n2])
+						{
+							cerr << "Warning: two sources with the same name:" << endl;
+							cerr << "  " << S1->name << "[" << n1 << "] = " << S1->sourceNames[n1] << endl;
+							cerr << "  " << S2->name << "[" << n2 << "] = " << S2->sourceNames[n2] << endl;
+							nWarn++;
+						}
+					}
+				}
 			}
 		}
 	}

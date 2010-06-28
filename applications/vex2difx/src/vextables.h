@@ -71,8 +71,8 @@ public:
 	string scan;
 
 	VexEvent() : mjd(0.0), eventType(NO_EVENT), name("") {}
-	VexEvent(double m, enum EventType e, const string& a) : mjd(m), eventType(e), name(a), scan("") {}
-	VexEvent(double m, enum EventType e, const string& a, const string& b) : mjd(m), eventType(e), name(a), scan(b) {}
+	VexEvent(double m, enum EventType e, const string &a) : mjd(m), eventType(e), name(a), scan("") {}
+	VexEvent(double m, enum EventType e, const string &a, const string &b) : mjd(m), eventType(e), name(a), scan(b) {}
 };
 
 class VexInterval
@@ -131,6 +131,8 @@ public:
 	int qualifier;
 	double ra;		// (rad)
 	double dec;		// (rad)
+
+	static const unsigned int MAX_SRCNAME_LENGTH = 12;
 };
 
 class VexSubband	// Mode-specific frequency details
@@ -191,7 +193,7 @@ class VexVSN : public VexInterval
 public:
 	string name;
 	VexVSN() {}
-	VexVSN(const string &c_name, const VexInterval& timeRange) : VexInterval(timeRange), name(c_name) {} 
+	VexVSN(const string &c_name, const VexInterval &timeRange) : VexInterval(timeRange), name(c_name) {} 
 };
 
 class VexClock
@@ -256,10 +258,10 @@ class VexJob : public VexInterval
 public:
 	VexJob() : VexInterval(0.0, 1000000.0), jobSeries("Bogus"), jobId(-1), dataSize(0.0) {}
 
-	void assignVSNs(const VexData& V);
+	void assignVSNs(const VexData &V);
 	string getVSN(const string &antName) const;
 	bool hasScan(const string &scanName) const;
-	int generateFlagFile(const VexData& V, const string &fileName, unsigned int invalidMask=0xFFFFFFFF) const;
+	int generateFlagFile(const VexData &V, const string &fileName, unsigned int invalidMask=0xFFFFFFFF) const;
 
 	// return the approximate number of Operations required to compute this scan
 	double calcOps(const VexData *V, int fftSize, bool doPolar) const;
@@ -292,9 +294,9 @@ public:
 	vector<string> scans;
 	list<VexEvent> events;
 
-	bool hasScan(const string& scanName) const;
-	void genEvents(const list<VexEvent>& eventList);
-	void createJobs(vector<VexJob>& jobs, VexInterval& jobTimeRange, const VexData *V, double maxLength, double maxSize) const;
+	bool hasScan(const string &scanName) const;
+	void genEvents(const list<VexEvent> &eventList);
+	void createJobs(vector<VexJob> &jobs, VexInterval &jobTimeRange, const VexData *V, double maxLength, double maxSize) const;
 };
 
 class VexData
@@ -336,32 +338,33 @@ public:
 
 
 	int nSource() const { return sources.size(); }
-	const VexSource *getSource(const string name) const;
 	const VexSource *getSource(int num) const;
+	const VexSource *getSourceByDefName(const string &name) const;
+	const VexSource *getSourceBySourceName(const string &name) const;
 
 	int nScan() const { return scans.size(); }
-	const VexScan *getScan(const string name) const;
+	const VexScan *getScan(const string &name) const;
 	const VexScan *getScan(int num) const;
 	void setScanSize(int num, double size);
 	void getScanList(list<string> &scans) const;
 
 	int nAntenna() const { return antennas.size(); }
-	const VexAntenna *getAntenna(const string name) const;
+	const VexAntenna *getAntenna(const string &name) const;
 	const VexAntenna *getAntenna(int num) const;
 
 	int nMode() const { return modes.size(); }
-	const VexMode *getMode(const string name) const;
+	const VexMode *getMode(const string &name) const;
 	const VexMode *getMode(int num) const;
 
 	int nEOP() const { return eops.size(); }
 	const VexEOP *getEOP(int num) const;
 	const vector<VexEOP> &getEOPs() const { return eops; }
 
-	bool usesAntenna(const string& antennaName) const;
-	bool usesMode(const string& modeName) const;
+	bool usesAntenna(const string &antennaName) const;
+	bool usesMode(const string &modeName) const;
 
-	void addVSN(const string& antName, const string& vsn, const VexInterval& timeRange);
-	string getVSN(const string& antName, const VexInterval& timeRange) const;
+	void addVSN(const string &antName, const string &vsn, const VexInterval &timeRange);
+	string getVSN(const string &antName, const VexInterval &timeRange) const;
 
 	int nEvent() const { return events.size(); }
 	const list<VexEvent> *getEvents() const;
@@ -370,27 +373,27 @@ public:
 	void sortEvents();
 
 	const VexExper *getExper() const { return &exper; }
-	void setExper(const string& name, const VexInterval& experTimeRange);
+	void setExper(const string &name, const VexInterval &experTimeRange);
 };
 
 bool operator<(const VexEvent &a, const VexEvent &b);
-ostream& operator << (ostream& os, const VexInterval& x);
-ostream& operator << (ostream& os, const VexSource& x);
-ostream& operator << (ostream& os, const VexScan& x);
-ostream& operator << (ostream& os, const VexAntenna& x);
-ostream& operator << (ostream& os, const VexSubband& x);
-ostream& operator << (ostream& os, const VexIF& x);
-ostream& operator << (ostream& os, const VexFormat& x);
-ostream& operator << (ostream& os, const VexMode& x);
-ostream& operator << (ostream& os, const VexEOP& x);
-ostream& operator << (ostream& os, const VexBasebandFile& x);
-ostream& operator << (ostream& os, const VexVSN& x);
-ostream& operator << (ostream& os, const VexClock& x);
-ostream& operator << (ostream& os, const VexJob& x);
-ostream& operator << (ostream& os, const VexJobGroup& x);
-ostream& operator << (ostream& os, const VexEvent& x);
-ostream& operator << (ostream& os, const VexJobFlag& x);
-ostream& operator << (ostream& os, const VexData& x);
-bool operator == (VexSubband& s1, VexSubband& s2);
+ostream& operator << (ostream &os, const VexInterval &x);
+ostream& operator << (ostream &os, const VexSource &x);
+ostream& operator << (ostream &os, const VexScan &x);
+ostream& operator << (ostream &os, const VexAntenna &x);
+ostream& operator << (ostream &os, const VexSubband &x);
+ostream& operator << (ostream &os, const VexIF &x);
+ostream& operator << (ostream &os, const VexFormat &x);
+ostream& operator << (ostream &os, const VexMode &x);
+ostream& operator << (ostream &os, const VexEOP &x);
+ostream& operator << (ostream &os, const VexBasebandFile &x);
+ostream& operator << (ostream &os, const VexVSN &x);
+ostream& operator << (ostream &os, const VexClock &x);
+ostream& operator << (ostream &os, const VexJob &x);
+ostream& operator << (ostream &os, const VexJobGroup &x);
+ostream& operator << (ostream &os, const VexEvent &x);
+ostream& operator << (ostream &os, const VexJobFlag &x);
+ostream& operator << (ostream &os, const VexData &x);
+bool operator == (VexSubband &s1, VexSubband &s2);
 
 #endif
