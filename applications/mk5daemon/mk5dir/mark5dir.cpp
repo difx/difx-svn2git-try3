@@ -910,7 +910,7 @@ int getByteRange(const struct Mark5Scan *scan, long long *byteStart, long long *
 	}
 	else
 	{
-		*byteStart = (int)(scan->start + R*(mjdStart - scanStart));
+		*byteStart = (long long)(scan->start + R*(mjdStart - scanStart));
 	}
 
 	if(mjdStop >= scanStop)
@@ -919,7 +919,7 @@ int getByteRange(const struct Mark5Scan *scan, long long *byteStart, long long *
 	}
 	else
 	{
-		*byteStop = (int)(scan->start + R*(mjdStop - scanStart));
+		*byteStop = (long long)(scan->start + R*(mjdStop - scanStart));
 	}
 
 	/* make sure read is aligned with data frames */

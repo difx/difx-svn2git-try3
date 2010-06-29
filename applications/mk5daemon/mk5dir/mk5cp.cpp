@@ -41,8 +41,8 @@
 
 const char program[] = "mk5cp";
 const char author[]  = "Walter Brisken";
-const char version[] = "0.6";
-const char verdate[] = "20100131";
+const char version[] = "0.7";
+const char verdate[] = "20100628";
 
 int verbose = 0;
 int die = 0;
@@ -74,7 +74,8 @@ int usage(const char *pgm)
 	printf("<vsn> is a valid module VSN (8 characters)\n\n");
 	printf("<scans> is a string containing a list of scans to copy.  No whitespace\n    "
 		"is allowed.  Ranges are allowed.  Examples:  1  or  3,5  or  1,3,6-9\n");
-	printf("The <scans> string can also be an MJD range to copy.\nExample: 54321.112_54321_113\n");
+	printf("The <scans> string can also be an MJD range to copy.\n  Example: 54321.112_54321_113\n");
+	printf("The <scans> string can also be a byte range to copy.\n  Example: 38612201536_38619201536\n");
 	printf("<output path> is a directory where files will be dumped\n");
 	printf("Environment variable MARK5_DIR_PATH should point to the location of\n");
 	printf("the directory to be written.  The output filename will be:\n");
@@ -488,7 +489,22 @@ static int parseMjdRange(double *mjdStart, double *mjdStop, const char *scanlist
 	{
 		return 0;
 	}
-	if(*mjdStart >= *mjdStop)
+	if( (*mjdStart >= *mjdStop) && (*mjdStop - *mjdStart < 3) )
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+static int parseByteRange(long long *start, long long *stop, const char *scanlist)
+{
+	if(sscanf(scanlist, "%Ld_%Ld", start, stop) != 2)
+	{
+		return 0;
+	}
+
+	if(*start >= *stop)
 	{
 		return 0;
 	}
@@ -788,6 +804,27 @@ int main(int argc, char **argv)
 				fprintf(stderr, "Warning: %s\n", message);
 			}
 			
+		}
+		/* next look for byte range */
+		else if(parseByteRange(&byteStart, &byteStop, scanlist))
+		{
+			snprintf(outname, DIFX_MESSAGE_FILENAME_LENGTH, "%8s_%s", module.label, scanlist);
+			v = copyByteRange(xlrDevice, outpath, outname, -1, byteStart, byteStop, &mk5status);
+
+			if(v == 0)
+			{
+				nGood++;
+			}
+			else
+			{
+				nBad++;
+			}
+			if(nGood == 0)
+			{
+				snprintf(message, DIFX_MESSAGE_LENGTH, "Byte range %Ld to %Ld not in any scan", byteStart, byteStop);
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+				fprintf(stderr, "Warning: %s\n", message);
+			}
 		}
 		/* next look for scan range */
 		else if(isdigit(scanlist[0])) for(;;)
