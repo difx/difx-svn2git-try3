@@ -263,6 +263,15 @@ NativeMk5DataStream::~NativeMk5DataStream()
 {
 	if(mark5stream)
 	{
+		if(mark5stream->nvalidatefail > mark5stream->nvalidatepass/49)
+		{
+			cerror << startl << "There were " << mark5stream->nvalidatefail << "/" << (mark5stream->nvalidatefail + mark5stream->nvalidatepass) << " data validation failures.  This number is high and might indicate a problem with the formatter at the station.  This is unlikely to be a playback problem." << endl;
+		}
+		else if(mark5stream->nvalidatefail > 0)
+		{
+			cwarn << startl << "There were " << mark5stream->nvalidatefail << "/" << (mark5stream->nvalidatefail + mark5stream->nvalidatepass) << " data validation failures." << endl;
+		}
+
 		delete_mark5_stream(mark5stream);
 	}
 
@@ -274,7 +283,7 @@ NativeMk5DataStream::~NativeMk5DataStream()
 	}
 	else if(ninvalid + nfill > ngood)
 	{
-		cerror << startl << "Most of ithe data from this module was discarded: ninvalid=" << ninvalid << " nfill=" << nfill << " ngood=" << ngood << ".  Please consider reading the module directory again and investigating the module health" << endl;
+		cerror << startl << "Most of the data from this module was discarded: ninvalid=" << ninvalid << " nfill=" << nfill << " ngood=" << ngood << ".  Please consider reading the module directory again and investigating the module health" << endl;
 		sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
 		nError++;
 	}

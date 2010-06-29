@@ -493,7 +493,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	char bank;
 	char label[XLR_LABEL_LENGTH];
 	unsigned int signature;
-	char mode[12];
+	char extra1[12], extra2[12];
 
 	if(!module)
 	{
@@ -518,7 +518,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 		return -1;
 	}
 
-	n = sscanf(line, "%8s %d %c %u %2s", label, &nscans, &bank, &signature, mode);
+	n = sscanf(line, "%8s %d %c %u %10s %10s", label, &nscans, &bank, &signature, extra1, extra2);
 	if(n < 3)
 	{
 		fclose(in);
@@ -528,9 +528,16 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	{
 		signature = ~0;
 	}
-	if(n > 4)
+	if(n == 5)
 	{
-		if(strcmp(mode, "RT") == 0)
+		if(strcmp(extra1, "RT") == 0)
+		{
+			module->needRealtimeMode = true;
+		}
+	}
+	else if(n == 6)
+	{
+		if(strcmp(extra2, "RT") == 0)
 		{
 			module->needRealtimeMode = true;
 		}
