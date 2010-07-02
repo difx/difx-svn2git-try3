@@ -43,8 +43,8 @@
 
 const char program[] = "vsn";
 const char author[]  = "Walter Brisken";
-const char version[] = "0.1";
-const char verdate[] = "20100525";
+const char version[] = "0.2";
+const char verdate[] = "20100702";
 
 int usage(const char *pgm)
 {
@@ -58,6 +58,10 @@ int usage(const char *pgm)
 	printf("  -v         Be more verbose in execution\n\n");
 	printf("  --force\n");
 	printf("  -f         Don't ask before continuing\n\n");
+	printf("  --played\n");
+	printf("  -p         Don't ask before continuing\n\n");
+	printf("  --recorded\n");
+	printf("  -r         Don't ask before continuing\n\n");
 	printf("<bank> should be either A or B.\n\n");
 	printf("<vsn> is the new module VSN (must be 8 characters long).\n");
 	printf("  If not provided, the existing VSN will be returned.\n\n");
@@ -108,7 +112,7 @@ int roundsize(int s)
 	return a*5;
 }
 
-int setvsn(int bank, const char *newVSN, int force)
+int setvsn(int bank, char *newVSN, int newStatus, int force)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
@@ -117,6 +121,7 @@ int setvsn(int bank, const char *newVSN, int force)
 	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
 	char oldLabel[XLR_LABEL_LENGTH+1];
+	int dirVersion = -1;
 	int size, capacity;
 	int ndisk, rate;
 	long long isz;
@@ -129,7 +134,7 @@ int setvsn(int bank, const char *newVSN, int force)
 	char oldVSN[10];
 	char resp[12]="";
 	char *v;
-	const char *moduleStatus;
+	int moduleStatus;
 	int dirLength;
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
@@ -157,7 +162,7 @@ int setvsn(int bank, const char *newVSN, int force)
 
 	if(dirLength == 0)
 	{
-		moduleStatus = "Unknown";
+		moduleStatus = MODULE_STATUS_UNKNOWN;
 
 		fprintf(stderr, "Warning: there is no directory on this module.\n");
 	}
@@ -165,22 +170,25 @@ int setvsn(int bank, const char *newVSN, int force)
 	{
 		if(strstr(label, "Erased") != 0)
 		{
-			moduleStatus = "Erased";
+			moduleStatus = MODULE_STATUS_ERASED;
 		}
 		else if(strstr(label, "Recorded") != 0)
 		{
-			moduleStatus = "Recorded";
+			moduleStatus = MODULE_STATUS_RECORDED;
 		}
 		else
 		{
-			moduleStatus = "Played";
+			moduleStatus = MODULE_STATUS_PLAYED;
 		}
+
+		dirVersion = 0;
 	}
 	else
 	{
 		struct Mark5DirectoryHeaderVer1 dirHeader;
 		WATCHDOGTEST( XLRGetUserDir(xlrDevice, sizeof(struct Mark5DirectoryHeaderVer1), 0, &dirHeader) );
-		moduleStatus = moduleStatusName(dirHeader.status);
+		dirVersion = dirHeader.version;
+		moduleStatus = dirHeader.status;
 	}
 
 	strcpy(oldLabel, label);
@@ -204,7 +212,8 @@ int setvsn(int bank, const char *newVSN, int force)
 	if(nSlash == 2 && nDash == 1)
 	{
 		printf("\nCurrent extended VSN is %s\n", oldLabel);
-		printf("Current disk module state is %s\n", moduleStatus);
+		printf("Current disk module state is %s\n", moduleStatusName(moduleStatus) );
+		printf("Module directory version is %d\n", dirVersion);
 	}
 	else
 	{
@@ -260,18 +269,35 @@ int setvsn(int bank, const char *newVSN, int force)
 
 	capacity = (icnt*isz/10000000000LL)*10;
 
-	if(newVSN[0])
+	if(newVSN[0] || newStatus)
 	{
-		if(nSlash == 2 && nDash == 1)
+		printf("\n");
+
+		if(newVSN[0] == 0)
 		{
-			strncpy(oldVSN, oldLabel, 8);
-			oldVSN[8] = 0;
-			printf("\nAbout to change the module VSN from %s to %s\n", oldVSN, newVSN);
+			strncpy(newVSN, oldLabel, 8);
+			newVSN[8] = 0;
 		}
 		else
 		{
-			printf("\nAbout to set the module VSN to %s\n", newVSN);
+			if(nSlash == 2 && nDash == 1)
+			{
+				strncpy(oldVSN, oldLabel, 8);
+				oldVSN[8] = 0;
+				printf("About to change the module VSN from %s to %s\n", oldVSN, newVSN);
+			}
+			else
+			{
+				printf("About to set the module VSN to %s\n", newVSN);
+			}
 		}
+
+		if(newStatus != 0)
+		{
+			moduleStatus = newStatus;
+			printf("About to change status to %s\n", moduleStatusName(moduleStatus) );
+		}
+
 		if(force == 0)
 		{
 			printf("Is this OK? [y|n]\n");
@@ -282,11 +308,32 @@ int setvsn(int bank, const char *newVSN, int force)
 			WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
 
 			rate = ndisk*128;
-			sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, moduleStatus);	/* ASCII "RS" == 30 */
+			if(dirVersion == 0)
+			{
+				sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, moduleStatusName(moduleStatus) );	/* ASCII "RS" == 30 */
+				printf("--> %s\n", moduleStatusName(moduleStatus) );
+			}
+			else
+			{
+				sprintf(label, "%8s/%d/%d", newVSN, capacity, rate);
+
+				/* also change the status in the directory header */
+				char *data;
+				struct Mark5DirectoryHeaderVer1 *dirHeader;
+
+				data = (char *)malloc(dirLength);
+				dirHeader = (struct Mark5DirectoryHeaderVer1 *)data;
+
+				WATCHDOGTEST( XLRGetUserDir(xlrDevice, dirLength, 0, data) );
+				dirHeader->status = moduleStatus;
+				WATCHDOGTEST( XLRSetUserDir(xlrDevice, data, dirLength) );
+
+				free(data);
+			}
 
 			WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
 
-			printf("Done.\n");
+			printf("Done.  Label = %s\n", label);
 		}
 		else
 		{
@@ -310,6 +357,7 @@ int main(int argc, char **argv)
 	int bank = -1;
 	int verbose = 0;
 	int force = 0;
+	int newStatus = 0;
 
 	for(a = 1; a < argc; a++)
 	{
@@ -329,6 +377,26 @@ int main(int argc, char **argv)
 			   strcmp(argv[a], "--help") == 0)
 			{
 				return usage(argv[0]);
+			}
+			else if(strcmp(argv[a], "-p") == 0 ||
+			   strcmp(argv[a], "--played") == 0)
+			{
+				if(newStatus != 0 && newStatus != MODULE_STATUS_PLAYED)
+				{
+					fprintf(stderr, "Multiple new states provided!\n");
+					return -1;
+				}
+				newStatus = MODULE_STATUS_PLAYED;
+			}
+			else if(strcmp(argv[a], "-r") == 0 ||
+			   strcmp(argv[a], "--recorded") == 0)
+			{
+				if(newStatus != 0 && newStatus != MODULE_STATUS_RECORDED)
+				{
+					fprintf(stderr, "Multiple new states provided!\n");
+					return -1;
+				}
+				newStatus = MODULE_STATUS_RECORDED;
 			}
 			else
 			{
@@ -397,7 +465,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = setvsn(bank, newVSN, force);
+	v = setvsn(bank, newVSN, newStatus, force);
 	if(v < 0)
 	{
 		if(watchdogXLRError[0] != 0)

@@ -15,6 +15,9 @@ mk5cp_LDADD = \
 mk5dir_LDADD = \
 	${M5ACCESS_LIBS}
 
+mk5erase_LDADD = \
+	${M5ACCESS_LIBS}
+
 vsn_LDADD = \
 	${M5ACCESS_LIBS}
 
@@ -48,4 +51,6 @@ recover_SOURCES = \
 mk5erase_SOURCES = \
 	watchdog.cpp \
 	watchdog.h \
+	mark5dir.cpp \
+	mark5dir.h \
 	mk5erase.cpp

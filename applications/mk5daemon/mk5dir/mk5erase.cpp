@@ -62,8 +62,8 @@
 
 const char program[] = "mk5erase";
 const char author[]  = "Walter Brisken";
-const char version[] = "0.1";
-const char verdate[] = "20100526";
+const char version[] = "0.2";
+const char verdate[] = "20100702";
 
 
 #define MJD_UNIX0       40587.0
@@ -170,7 +170,7 @@ int roundSize(long long a)
 	return a*5;
 }
 
-int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int dirVersion, int totalCapacity, int rate)
+int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirVersion, int totalCapacity, int rate)
 {
 	int dirLength;
 	char *dirData;
@@ -189,13 +189,13 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int dirVersion, int tot
 			WATCHDOGTEST( XLRGetUserDir(*xlrDevice, dirLength, 0, dirData) );
 			dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
 			dirVersion = dirHeader->version;
-			if(dirVersion < 0 || dirVersion > 100)
+			if(dirVersion < 2 || dirVersion > 100)
 			{
 				dirVersion = 1;
 			}
 			memset(dirData, 0, 128);
-			dirHeader->version = dirVersion;
 			sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
+			dirHeader->status = newStatus;
 		}
 		else
 		{
@@ -212,8 +212,10 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int dirVersion, int tot
 		dirData = (char *)calloc(dirLength, 1);
 		dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
 		dirHeader->version = dirVersion;
-		dirHeader->status = MODULE_STATUS_ERASED;
+		dirHeader->status = newStatus;
 		sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
+		strcpy(dirHeader->vsnPrev, "NA");
+		strcpy(dirHeader->vsnNext, "NA");
 	}
 
 	if(dirData == 0)
@@ -221,7 +223,8 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int dirVersion, int tot
 		dirData = (char *)calloc(dirLength, 1);
 	}
 
-	printf("> Dir Size = %d  Dir Version = %d\n", dirLength, dirVersion);
+	printf("> Dir Size = %d  Dir Version = %d  Status = %d\n", 
+		dirLength, dirVersion, newStatus);
 
 	WATCHDOGTEST( XLRSetUserDir(*xlrDevice, dirData, dirLength) );
 	free(dirData);
@@ -229,17 +232,26 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int dirVersion, int tot
 	return 0;
 }
 
-int resetLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int rate, const char *moduleState)
+int resetLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int rate, int newStatus, int dirVersion)
 {
 	const char RecordSeparator = 30;
 	char label[XLR_LABEL_LENGTH+1];
 
 	/* reset the label */
-	snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%c%s", 
-		vsn, totalCapacity, rate, RecordSeparator,
-		moduleState);
+	if(dirVersion == 0)
+	{
+		snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%c%s", 
+			vsn, totalCapacity, rate, RecordSeparator,
+			moduleStatusName(newStatus) );
+	}
+	else
+	{
+		snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d", 
+			vsn, totalCapacity, rate);
+	}
 	printf("> New label = %s\n", label);
 	WATCHDOGTEST( XLRSetLabel(*xlrDevice, label, strlen(label)) );
+
 
 	return 0;
 }
@@ -557,8 +569,10 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	struct DriveInformation drive[8];
 	int nDrive;
 	int totalCapacity;		/* in GB (approx) */
+	int dirLength;
 	int rate = 1024;		/* Mbps, for label */
 	int v;
+	int newStatus = MODULE_STATUS_ERASED;
 	DifxMessageMk5Status mk5status;
 	char message[DIFX_MESSAGE_LENGTH];
 
@@ -676,14 +690,19 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 		}
 	}
 
-	v = resetDirectory(&xlrDevice, vsn, dirVersion, totalCapacity, rate);
+	v = resetDirectory(&xlrDevice, vsn, newStatus, dirVersion, totalCapacity, rate);
 
 	if(v < 0)
 	{
 		/* Something bad happened to the XLR device.  Bail! */
 		return v;
 	}
-	v = resetLabel(&xlrDevice, vsn, totalCapacity, rate, (die ? "Error" : "Erased") );
+	if(die)
+	{
+		newStatus = MODULE_STATUS_UNKNOWN;
+	}
+
+	v = resetLabel(&xlrDevice, vsn, totalCapacity, rate, newStatus, dirVersion);
 	if(v < 0)
 	{
 		/* Something bad happened to the XLR device.  Bail! */
