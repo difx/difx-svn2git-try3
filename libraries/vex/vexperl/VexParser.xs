@@ -1,9 +1,10 @@
 
-#define YYSTYPE PERLSTYPE
+/* If this does not compile, enable the define YYSTYPE and the corresponding undef in the next couple of lines */
+/*#define YYSTYPE PERLSTYPE*/
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#undef YYSTYPE
+/*#undef YYSTYPE*/
 
 #define block vexblock
 #include <vex.h>
