@@ -37,6 +37,7 @@
 #include <sys/time.h>
 #include <xlrapi.h>
 #include "config.h"
+#include "mark5dir.h"
 #include "watchdog.h"
 #include "../config.h"
 
@@ -121,14 +122,15 @@ int setvsn(int bank, const char *newVSN, int force)
 	long long isz;
 	int icnt;
 	int i, d;
-	int nSlash=0, nDash=0, nSep=0;
+	int nSlash=0, nDash=0;
 	char drivename[XLR_MAX_DRIVENAME+1];
 	char driveserial[XLR_MAX_DRIVESERIAL+1];
 	char driverev[XLR_MAX_DRIVEREV+1];
 	char oldVSN[10];
 	char resp[12]="";
 	char *v;
-	const char *newState;
+	const char *moduleStatus;
+	int dirLength;
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
@@ -150,17 +152,35 @@ int setvsn(int bank, const char *newVSN, int force)
 
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 	label[XLR_LABEL_LENGTH] = 0;
-	if(strstr(label, "Erased") != 0)
+
+	WATCHDOG( dirLength = XLRGetUserDirLength(xlrDevice) );
+
+	if(dirLength == 0)
 	{
-		newState = "Erased";
+		moduleStatus = "Unknown";
+
+		fprintf(stderr, "Warning: there is no directory on this module.\n");
 	}
-	else if(strstr(label, "Recorded") != 0)
+	else if(dirLength % 128 != 0)
 	{
-		newState = "Recorded";
+		if(strstr(label, "Erased") != 0)
+		{
+			moduleStatus = "Erased";
+		}
+		else if(strstr(label, "Recorded") != 0)
+		{
+			moduleStatus = "Recorded";
+		}
+		else
+		{
+			moduleStatus = "Played";
+		}
 	}
 	else
 	{
-		newState = "Played";
+		struct Mark5DirectoryHeaderVer1 dirHeader;
+		WATCHDOGTEST( XLRGetUserDir(xlrDevice, sizeof(struct Mark5DirectoryHeaderVer1), 0, &dirHeader) );
+		moduleStatus = moduleStatusName(dirHeader.status);
 	}
 
 	strcpy(oldLabel, label);
@@ -174,10 +194,6 @@ int setvsn(int bank, const char *newVSN, int force)
 		{
 			nDash++;
 		}
-		if(oldLabel[i] == 30)
-		{
-			nSep++;
-		}
 		if(oldLabel[i] < ' ')
 		{
 		
@@ -188,10 +204,7 @@ int setvsn(int bank, const char *newVSN, int force)
 	if(nSlash == 2 && nDash == 1)
 	{
 		printf("\nCurrent extended VSN is %s\n", oldLabel);
-		if(nSep == 1)
-		{
-			printf("Current disk module state is %s\n", oldLabel+1+i);
-		}
+		printf("Current disk module state is %s\n", moduleStatus);
 	}
 	else
 	{
@@ -269,7 +282,7 @@ int setvsn(int bank, const char *newVSN, int force)
 			WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
 
 			rate = ndisk*128;
-			sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, newState);	/* ASCII "RS" == 30 */
+			sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, moduleStatus);	/* ASCII "RS" == 30 */
 
 			WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
 

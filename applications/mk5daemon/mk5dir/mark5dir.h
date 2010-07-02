@@ -39,6 +39,11 @@
 extern "C" {
 #endif
 
+#define MODULE_STATUS_UNKNOWN	0x00
+#define MODULE_STATUS_ERASED	0x01
+#define MODULE_STATUS_PLAYED	0x02
+#define MODULE_STATUS_RECORDED	0x04
+#define MODULE_STATUS_BANK_MODE	0x08
 
 enum Mark5ReadMode
 {
@@ -70,7 +75,7 @@ struct Mark5Directory
 struct Mark5DirectoryHeaderVer1
 {
 	int version;		/* should be 1 */
-	int status;		/* bit field -- not documented yet! */
+	int status;		/* bit field: see MODULE_STATE_xxx above */
 	char vsn[32];
 	char vsnPrev[32];	/* "continued from" VSN */
 	char vsnNext[32];	/* "continued to" VSN */
@@ -143,6 +148,8 @@ enum Mark5DirStatus
 
 extern char Mark5DirDescription[][20];
 extern char Mark5ReadModeName[][10];
+
+const char *moduleStatusName(int status);
 
 /* returns active bank: 0 or 1 for bank A or B, or -1 if none */
 int Mark5BankGet(SSHANDLE *xlrDevice);

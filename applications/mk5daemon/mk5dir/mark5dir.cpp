@@ -46,6 +46,26 @@
 #define MARK5_FILL_WORD64 0x1122334411223344ULL
 #endif
 
+
+const char *moduleStatusName(int status)
+{
+	if(status & MODULE_STATUS_RECORDED)
+	{
+		return "Recorded";
+	}
+	else if(status & MODULE_STATUS_PLAYED)
+	{
+		return "Played";
+	}
+	else if(status & MODULE_STATUS_ERASED)
+	{
+		return "Erased";
+	}
+
+	return "Unknown";
+}
+
+
 /* Warning!  Endianness not corrected for in decoding of
  * module directories!
  */

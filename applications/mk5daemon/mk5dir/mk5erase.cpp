@@ -212,6 +212,7 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int dirVersion, int tot
 		dirData = (char *)calloc(dirLength, 1);
 		dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
 		dirHeader->version = dirVersion;
+		dirHeader->status = MODULE_STATUS_ERASED;
 		sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
 	}
 
@@ -551,6 +552,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	SSHANDLE xlrDevice;
 	S_BANKSTATUS bankStatus;
 	S_DEVSTATUS devStatus;
+	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
 	struct DriveInformation drive[8];
 	int nDrive;
@@ -649,6 +651,9 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	strcpy(mk5status.vsnA, vsn);
 	mk5status.activeBank = 'A';
 	/* note: there is no module in bank B */
+
+	/* Possibly needed to work around a bug */
+	WATCHDOGTEST( XLRGetDirectory(xlrDevice, &dir) );
 
 	if(mode == CONDITION_ERASE_ONLY)
 	{

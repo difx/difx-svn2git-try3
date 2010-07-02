@@ -15,6 +15,8 @@ mk5cp_LDADD = \
 mk5dir_LDADD = \
 	${M5ACCESS_LIBS}
 
+vsn_LDADD = \
+	${M5ACCESS_LIBS}
 
 mk5cp_SOURCES = \
 	mark5dir.cpp \
@@ -34,6 +36,8 @@ testmod_SOURCES = \
 vsn_SOURCES = \
 	watchdog.cpp \
 	watchdog.h \
+	mark5dir.cpp \
+	mark5dir.h \
 	vsn.cpp
 
 recover_SOURCES = \
