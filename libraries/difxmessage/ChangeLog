@@ -2,6 +2,7 @@ Version 7.3
 ~~~~~~~~~~~
 Post DiFX-1.5.3
 Add difxVersion to difxStartMessage
+cpumon and mk5mon: catch exceptions and prevent terminal infection
 
 Version 7.2
 ~~~~~~~~~~~
