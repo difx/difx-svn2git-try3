@@ -139,7 +139,6 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, bank, &bankStat) );
 	if(bankStat.State != STATE_READY)
 	{
@@ -154,6 +153,8 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 
 	/* the following line is essential to work around an apparent streamstor bug */
 	WATCHDOGTEST( XLRGetDirectory(xlrDevice, &dir) );
+
+	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
 
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 	label[XLR_LABEL_LENGTH] = 0;
@@ -311,7 +312,6 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 			if(dirVersion == 0)
 			{
 				sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, moduleStatusName(moduleStatus) );	/* ASCII "RS" == 30 */
-				printf("--> %s\n", moduleStatusName(moduleStatus) );
 			}
 			else
 			{

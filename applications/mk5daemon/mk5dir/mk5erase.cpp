@@ -229,7 +229,7 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirV
 	WATCHDOGTEST( XLRSetUserDir(*xlrDevice, dirData, dirLength) );
 	free(dirData);
 
-	return 0;
+	return dirVersion;
 }
 
 int resetLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int rate, int newStatus, int dirVersion)
@@ -558,13 +558,38 @@ int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], i
 
 	return nDrive;
 }
+	
+int getLabel(SSHANDLE *xlrDevice, int bank, char label[XLR_LABEL_LENGTH+1])
+{
+	S_BANKSTATUS bankStatus;
+	S_DIR dir;
+
+	label[0] = 0;
+
+	WATCHDOGTEST( XLRGetBankStatus(*xlrDevice, bank, &bankStatus) );
+	if(bankStatus.State != STATE_READY)
+	{
+		return -1;
+	}
+	
+	/* get label */
+	
+	WATCHDOGTEST( XLRSelectBank(*xlrDevice, bank) );
+
+	/* the following line is essential to work around an apparent streamstor bug */
+	WATCHDOGTEST( XLRGetDirectory(*xlrDevice, &dir) );
+
+	WATCHDOGTEST( XLRGetLabel(*xlrDevice, label) );
+
+	label[XLR_LABEL_LENGTH] = 0;
+
+	return 0;
+}
 
 int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersion, int getData)
 {
 	SSHANDLE xlrDevice;
-	S_BANKSTATUS bankStatus;
 	S_DEVSTATUS devStatus;
-	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
 	struct DriveInformation drive[8];
 	int nDrive;
@@ -580,36 +605,48 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, BANK_A, &bankStatus) );
-	if(bankStatus.State != STATE_READY)
+
+	getLabel(&xlrDevice, BANK_A, label);
+	strncpy(mk5status.vsnA, label, 8);
+	getLabel(&xlrDevice, BANK_B, label);
+
+	if(mode != CONDITION_ERASE_ONLY)
 	{
-		snprintf(message, DIFX_MESSAGE_LENGTH, "Bank A is not ready");
-		fprintf(stderr,  "%s\n", message);
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-		WATCHDOG( XLRClose(xlrDevice) );
-		return -1;
+		if(label[0])
+		{
+			snprintf(message, DIFX_MESSAGE_LENGTH,
+				"Conditioning requires module %s to be alone in bank A.", vsn);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			fprintf(stderr,  "%s\n", message);
+			WATCHDOG( XLRClose(xlrDevice) );
+
+			return -1;
+		}
 	}
-	if(!bankStatus.Selected)
+
+	if(strncmp(vsn, label, 8) != 0)
 	{
-		snprintf(message, DIFX_MESSAGE_LENGTH, 
-			"To continue, the target module needs to be alone in bank A.");
-		fprintf(stderr,  "%s\n", message);
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-		WATCHDOG( XLRClose(xlrDevice) );
-		return -1;
+		getLabel(&xlrDevice, BANK_A, label);
+		if(strncmp(vsn, label, 8) != 0)
+		{
+			snprintf(message, DIFX_MESSAGE_LENGTH, 
+				"Module %s not found", vsn);
+			fprintf(stderr,  "%s\n", message);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			WATCHDOG( XLRClose(xlrDevice) );
+
+			return -1;
+		}
+		else
+		{
+			strncpy(mk5status.vsnA, label, 8);
+			mk5status.activeBank = 'A';
+		}
 	}
-	
-	/* get label */
-	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
-	if(strncasecmp(label, vsn, 8) != 0)
+	else
 	{
-		snprintf(message, DIFX_MESSAGE_LENGTH, 
-			"VSN mismatch: %s is not %s", vsn, label);
-		fprintf(stderr,  "%s\n", message);
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-		WATCHDOG( XLRClose(xlrDevice) );
-		return -1;
-		
+		strncpy(mk5status.vsnB, label, 8);
+		mk5status.activeBank = 'B';
 	}
 
 	if(strlen(label) > 10)
@@ -662,13 +699,6 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 			drive[d].failed ? "FAILED" : "OK");
 	}
 
-	strcpy(mk5status.vsnA, vsn);
-	mk5status.activeBank = 'A';
-	/* note: there is no module in bank B */
-
-	/* Possibly needed to work around a bug */
-	WATCHDOGTEST( XLRGetDirectory(xlrDevice, &dir) );
-
 	if(mode == CONDITION_ERASE_ONLY)
 	{
 		/* here just erasing */
@@ -701,6 +731,8 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	{
 		newStatus = MODULE_STATUS_UNKNOWN;
 	}
+
+	dirVersion = v;
 
 	v = resetLabel(&xlrDevice, vsn, totalCapacity, rate, newStatus, dirVersion);
 	if(v < 0)
