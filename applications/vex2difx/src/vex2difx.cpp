@@ -1566,7 +1566,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 		D->specAvg = corrSetup->specAvg;
 	}
 
-	if(D->nBaseline > 0)
+	if(D->nBaseline > 0 || P->minSubarraySize == 1)
 	{
 		// write input file
 		ostringstream inputName;
@@ -1625,15 +1625,13 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int overSam
 		cerr << "This is often due to media not being specified or all frequency Ids being unselected." << endl;
 	}
 
-	if(D->nBaseline > 0)
+	if(D->nBaseline > 0 || P->minSubarraySize == 1)
 	{
-		// clean up and return that job was created
 		deleteDifxInput(D);
 		return 1;
 	}
 	else
 	{
-		// clean up and return that job was not created
 		deleteDifxInput(D);
 		return 0;
 	}
@@ -1960,6 +1958,10 @@ int main(int argc, char **argv)
 		cerr << "Quitting since " << nWarn << 
 			" warnings were found and strict mode was enabled." << endl;
 		exit(0);
+	}
+	else if(nWarn > 0)
+	{
+		cout << "FYI: Proceeding even though there were " << nWarn << " warnings." << endl;
 	}
 
 	makeJobs(J, V, P, verbose);

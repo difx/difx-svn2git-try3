@@ -1261,7 +1261,15 @@ void CorrParams::example()
 
 int CorrParams::sanityCheck()
 {
-	return 0;
+	int nWarn=0;
+
+	if(minSubarraySize > antennaList.size() && antennaList.size() > 0)
+	{
+		cerr << "Warning: the antenna list has fewer than minSubarray antennas.  No jobs will be made." << endl;
+		nWarn++;
+	}
+
+	return nWarn;
 }
 
 bool antennaMatch(const string &a1, const string &a2)
