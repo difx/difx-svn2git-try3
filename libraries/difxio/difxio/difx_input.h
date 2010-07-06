@@ -58,8 +58,7 @@ extern "C" {
  * and combining of multiple jobs.
  *
  * Some arrays take as indicies the original antenna index as found in .input
- * files.  These are:  DifxConfig.baselineFreq2IF[][][] and
- * DifxConfig.ant2dsId[][]
+ * files.  The only remaining one is: DifxConfig.ant2dsId[][]
  */
 
 enum AberCorr

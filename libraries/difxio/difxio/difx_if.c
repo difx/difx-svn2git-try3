@@ -84,6 +84,10 @@ void deleteDifxIFArray(DifxIF *di)
 void fprintDifxIF(FILE *fp, const DifxIF *di)
 {
 	fprintf(fp, "    Difx IF : %p\n", di);
+	if(!di)
+	{
+		return;
+	}
 	fprintf(fp, "      Freq = %f MHz\n", di->freq);
 	fprintf(fp, "      Bandwidth = %f MHz\n", di->bw);
 	fprintf(fp, "      Sideband = %c\n", di->sideband);
@@ -108,19 +112,25 @@ void printDifxIF(const DifxIF *di)
 
 void fprintDifxIFSummary(FILE *fp, const DifxIF *di)
 {
-	char pols[8];
+	const int PolStringLength = 8;
+	char pols[PolStringLength];
+
+	if(!di)
+	{
+		return;
+	}
 
 	if(di->nPol == 1)
 	{
-		sprintf(pols, "(%c)", di->pol[0]);
+		snprintf(pols, PolStringLength, "(%c)", di->pol[0]);
 	}
 	else if(di->nPol == 2)
 	{
-		sprintf(pols, "(%c,%c)", di->pol[0], di->pol[1]);
+		snprintf(pols, PolStringLength, "(%c,%c)", di->pol[0], di->pol[1]);
 	}
 	else
 	{
-		sprintf(pols, "(%d)", di->nPol);
+		snprintf(pols, PolStringLength, "(%d)", di->nPol);
 	}
 
 	fprintf(fp, "    Freq=%f MHz  BW=%f MHz Sideband=%c Pols=%s\n",

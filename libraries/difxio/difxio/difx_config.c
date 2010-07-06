@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -515,7 +515,7 @@ void moveDifxConfig(DifxConfig *dest, DifxConfig *src)
 {
 	memcpy(dest, src, sizeof(DifxConfig));
 
-	/* unlink some pointers to prevent doubel freeing */
+	/* unlink some pointers to prevent double freeing */
 	src->datastreamId = 0;
 	src->baselineId = 0;
 	src->IF = 0;

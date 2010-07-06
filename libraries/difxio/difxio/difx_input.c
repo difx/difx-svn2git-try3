@@ -3066,7 +3066,7 @@ static int calcFreqIds(DifxInput *D)
 	
 	if(D->nConfig < 2)
 	{
-		return 0;
+		return 1;
 	}
 
 	for(c = 1; c < D->nConfig; c++)
