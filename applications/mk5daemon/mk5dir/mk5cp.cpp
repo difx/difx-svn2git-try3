@@ -42,7 +42,7 @@
 const char program[] = "mk5cp";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.7";
-const char verdate[] = "20100628";
+const char verdate[] = "20100708";
 
 int verbose = 0;
 int die = 0;
@@ -70,6 +70,8 @@ int usage(const char *pgm)
 	printf("  -h             Print this help message\n\n");
 	printf("  --verbose\n");
 	printf("  -v             Be more verbose\n\n");
+	printf("  --force\n");
+	printf("  -f             Continue even if dir is screwy\n\n");
 	printf("<bank> is either A or B or Active\n\n");
 	printf("<vsn> is a valid module VSN (8 characters)\n\n");
 	printf("<scans> is a string containing a list of scans to copy.  No whitespace\n    "
@@ -528,6 +530,7 @@ int main(int argc, char **argv)
 	int v;
 	int b, s, l, nGood, nBad;
 	int bank = -1;
+	int force = 0;
 	float replacedFrac;
 	int bail = 0;
 	double mjdStart, mjdStop;
@@ -552,6 +555,11 @@ int main(int argc, char **argv)
 		        strcmp(argv[a], "--verbose") == 0)
 		{
 			verbose++;
+		}
+		else if(strcmp(argv[a], "-f") == 0 ||
+			strcmp(argv[a], "--force") == 0)
+		{
+			force = 1;
 		}
 		else if(vsn[0] == 0)
 		{
@@ -712,10 +720,24 @@ int main(int argc, char **argv)
 		if(v < 0)
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH, "Module %s directory contains undecoded scans!", vsn);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_SEVERE);
-			mk5status.activeBank = ' ';
-			bail = 1;
+			fprintf(stderr, "%s\n", message);
+			if(!force)
+			{
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_SEVERE);
+				mk5status.activeBank = ' ';
+				bail = 1;
+			}
+			else
+			{
+				fprintf(stderr, "Force is set, so continuing anyway\n");
+			}
 		}
+	}
+
+	if(bail)
+	{
+		fprintf(stderr, "Bailing!\n");
+		return -1;
 	}
 
 	if(strcasecmp(vsn, "A") == 0 && mk5status.vsnA[0] != 0)

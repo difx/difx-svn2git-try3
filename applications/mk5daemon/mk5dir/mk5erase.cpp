@@ -47,12 +47,12 @@
  *  2. Watchdog around all XLR function calls
  *  3. The module rate is based on lowest performance portion of test
  *  4. Fast modes (read-only or write-only) possible
+ *  5. Both new and legacy directory formats supported
  *
  * Other differences:
  *  1. Can only operate on one module at a time
- *  2. Options to influence the directory structure that is left on the module
- *  3. Reported progress considers 2 passes
- *  4. Increased computer friendliness of text output
+ *  2. Reported progress considers 2 passes
+ *  3. Increased computer friendliness of text output
  */
 
 /* TODO
@@ -175,6 +175,8 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirV
 	int dirLength;
 	char *dirData;
 	struct Mark5DirectoryHeaderVer1 *dirHeader;
+
+	die = 0;
 
 	/* clear the user directory */
 	WATCHDOG( dirLength = XLRGetUserDirLength(*xlrDevice) );
@@ -595,7 +597,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	int nDrive;
 	int totalCapacity;		/* in GB (approx) */
 	int dirLength;
-	int rate = 1024;		/* Mbps, for label */
+	int rate = 1024;		/* default Mbps, for label */
 	int v;
 	int newStatus = MODULE_STATUS_ERASED;
 	DifxMessageMk5Status mk5status;
@@ -720,16 +722,17 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 		}
 	}
 
+	if(die)
+	{
+		newStatus = MODULE_STATUS_UNKNOWN;
+	}
+
 	v = resetDirectory(&xlrDevice, vsn, newStatus, dirVersion, totalCapacity, rate);
 
 	if(v < 0)
 	{
 		/* Something bad happened to the XLR device.  Bail! */
 		return v;
-	}
-	if(die)
-	{
-		newStatus = MODULE_STATUS_UNKNOWN;
 	}
 
 	dirVersion = v;
