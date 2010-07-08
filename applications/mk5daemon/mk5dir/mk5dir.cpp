@@ -37,12 +37,13 @@
 #include <sys/time.h>
 #include <difxmessage.h>
 #include "mark5dir.h"
+#include "watchdog.h"
 #include "config.h"
 
 const char program[] = "mk5dir";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.6";
-const char verdate[] = "20100325";
+const char verdate[] = "20100708";
 
 int verbose = 0;
 int die = 0;
@@ -86,21 +87,11 @@ int usage(const char *pgm)
 static int getBankInfo(SSHANDLE xlrDevice, DifxMessageMk5Status * mk5status, char bank)
 {
 	S_BANKSTATUS bank_stat;
-	XLR_RETURN_CODE xlrRC;
-	char message[DIFX_MESSAGE_LENGTH];
 
 	if(bank == 'A' || bank == 'a' || bank == ' ')
 	{
-		xlrRC = XLRGetBankStatus(xlrDevice, BANK_A, &bank_stat);
-		if(xlrRC != XLR_SUCCESS)
-		{
-			snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot get bank A status");
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-			fprintf(stderr, "Error: %s\n", message);
-			
-			return -1;
-		}
-		else if(bank_stat.Label[8] == '/')
+		WATCHDOGTEST( XLRGetBankStatus(xlrDevice, BANK_A, &bank_stat) );
+		if(bank_stat.Label[8] == '/')
 		{
 			strncpy(mk5status->vsnA, bank_stat.Label, 8);
 			mk5status->vsnA[8] = 0;
@@ -112,16 +103,8 @@ static int getBankInfo(SSHANDLE xlrDevice, DifxMessageMk5Status * mk5status, cha
 	}
 	if(bank == 'B' || bank == 'b' || bank == ' ')
 	{
-		xlrRC = XLRGetBankStatus(xlrDevice, BANK_B, &bank_stat);
-		if(xlrRC != XLR_SUCCESS)
-		{
-			snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot get bank B status");
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-			fprintf(stderr, "Error: %s\n", message);
-			
-			return -2;
-		}
-		else if(bank_stat.Label[8] == '/')
+		WATCHDOGTEST( XLRGetBankStatus(xlrDevice, BANK_B, &bank_stat) );
+		if(bank_stat.Label[8] == '/')
 		{
 			strncpy(mk5status->vsnB, bank_stat.Label, 8);
 			mk5status->vsnB[8] = 0;
@@ -140,6 +123,7 @@ int dirCallback(int scan, int nscan, int status, void *data)
 	static long long seconds=0;
 	struct timeval t;
 	DifxMessageMk5Status *mk5status;
+	int v;
 
 	mk5status = (DifxMessageMk5Status *)data;
 	mk5status->scanNumber = scan;
@@ -160,105 +144,32 @@ int dirCallback(int scan, int nscan, int status, void *data)
 	if(t.tv_sec - seconds > 10)
 	{
 		seconds = t.tv_sec;
-		getBankInfo(xlrDevice, mk5status, mk5status->activeBank == 'B' ? 'A' : 'B');
+		v = getBankInfo(xlrDevice, mk5status, mk5status->activeBank == 'B' ? 'A' : 'B');
+		if(v < 0)
+		{
+			die = 1;
+		}
 	}
 
 	return die;
 }
 
-int main(int argc, char **argv)
+static int mk5dir(char *vsn, int force)
 {
 	int mjdnow;
 	const char *mk5dirpath;
 	struct Mark5Module module;
-	XLR_RETURN_CODE xlrRC;
 	DifxMessageMk5Status mk5status;
 	char message[DIFX_MESSAGE_LENGTH];
 	char modules[100] = "";
-	char vsn[16] = "";
 	int v;
 	float replacedFrac;
-	int force=0;
-
-	if(argc < 2)
-	{
-		return usage(argv[0]);
-	}
-
-	for(int a = 1; a < argc; a++)
-	{
-		if(strcmp(argv[a], "-h") == 0 ||
-		   strcmp(argv[a], "--help") == 0)
-		{
-			return usage(argv[0]);
-		}
-		else if(strcmp(argv[a], "-v") == 0 ||
-		        strcmp(argv[a], "--verbose") == 0)
-		{
-			verbose++;
-		}
-		else if(strcmp(argv[a], "-f") == 0 ||
-			strcmp(argv[a], "--force") == 0)
-		{
-			force = 1;
-		}
-		else if(vsn[0] == 0)
-		{
-			strncpy(vsn, argv[a], 8);
-			vsn[8] = 0;
-		}
-		else
-		{
-			return usage(argv[0]);
-		}
-	}
-
-	difxMessageInit(-1, "mk5dir");
 	memset(&mk5status, 0, sizeof(mk5status));
 
-	xlrRC = XLROpen(1, &xlrDevice);
-	if(xlrRC != XLR_SUCCESS)
-	{
-		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot open XLR");
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-		fprintf(stderr, "Error: %s\n", message);
-
-		return 0;
-	}
-
-	xlrRC = XLRSetFillData(xlrDevice, 0x11223344UL);
-	if(xlrRC != XLR_SUCCESS)
-	{
-		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot set XLR fill pattern");
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-		fprintf(stderr, "Error: %s\n", message);
-
-		return 0;
-	}
-
-	xlrRC = XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR);
-	if(xlrRC != XLR_SUCCESS)
-	{
-		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot set SkipCheckDir");
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-		fprintf(stderr, "Error: %s\n", message);
-
-		XLRClose(xlrDevice);
-		
-		return 0;
-	}
-
-	xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL);
-	if(xlrRC != XLR_SUCCESS)
-	{
-		snprintf(message, DIFX_MESSAGE_LENGTH, "Cannot set BankMode");
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-		fprintf(stderr, "Error: %s\n", message);
-
-		XLRClose(xlrDevice);
-		
-		return 0;
-	}
+	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
+	WATCHDOGTEST( XLRSetFillData(xlrDevice, 0x11223344UL) );
+	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
+	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 
 	v = getBankInfo(xlrDevice, &mk5status, ' ');
 	if(v < 0)
@@ -434,7 +345,7 @@ int main(int argc, char **argv)
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_VERBOSE);
 	}
 
-	XLRClose(xlrDevice);
+	WATCHDOG( XLRClose(xlrDevice) );
 
 	mk5status.state = MARK5_STATE_IDLE;
 	mk5status.scanNumber = module.nscans;
@@ -442,6 +353,80 @@ int main(int argc, char **argv)
 	mk5status.position = 0;
 	mk5status.activeBank = ' ';
 	difxMessageSendMark5Status(&mk5status);
+
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	char vsn[16] = "";
+	int force=0;
+	int v;
+
+	difxMessageInit(-1, "mk5dir");
+
+	if(argc < 2)
+	{
+		return usage(argv[0]);
+	}
+
+	for(int a = 1; a < argc; a++)
+	{
+		if(strcmp(argv[a], "-h") == 0 ||
+		   strcmp(argv[a], "--help") == 0)
+		{
+			return usage(argv[0]);
+		}
+		else if(strcmp(argv[a], "-v") == 0 ||
+		        strcmp(argv[a], "--verbose") == 0)
+		{
+			verbose++;
+		}
+		else if(strcmp(argv[a], "-f") == 0 ||
+			strcmp(argv[a], "--force") == 0)
+		{
+			force = 1;
+		}
+		else if(vsn[0] == 0)
+		{
+			strncpy(vsn, argv[a], 8);
+			vsn[8] = 0;
+		}
+		else
+		{
+			return usage(argv[0]);
+		}
+	}
+
+	v = initWatchdog();
+	if(v < 0)
+	{
+		return 0;
+	}
+
+	/* 60 seconds should be enough to complete any XLR command */
+	setWatchdogTimeout(60);
+
+	setWatchdogVerbosity(verbose);
+
+	/* *********** */
+
+	v = mk5dir(vsn, force);
+	if(v < 0)
+	{
+		if(watchdogXLRError[0] != 0)
+		{
+			char message[DIFX_MESSAGE_LENGTH];
+			snprintf(message, DIFX_MESSAGE_LENGTH, 
+				"Streamstor error executing: %s : %s",
+				watchdogStatement, watchdogXLRError);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+		}
+	}
+
+	/* *********** */
+
+	stopWatchdog();
 
 	return 0;
 }

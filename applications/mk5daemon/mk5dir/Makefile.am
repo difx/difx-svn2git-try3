@@ -22,11 +22,15 @@ vsn_LDADD = \
 	${M5ACCESS_LIBS}
 
 mk5cp_SOURCES = \
+	watchdog.cpp \
+	watchdog.h \
 	mark5dir.cpp \
 	mark5dir.h \
 	mk5cp.cpp
 
 mk5dir_SOURCES = \
+	watchdog.cpp \
+	watchdog.h \
 	mark5dir.cpp \
 	mark5dir.h \
 	mk5dir.cpp
