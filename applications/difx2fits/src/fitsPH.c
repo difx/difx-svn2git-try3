@@ -35,6 +35,7 @@
 
 //phase values from mpifxcorr currently have to be inverted to match FITS conversion
 #define PCAL_INVERT
+
 //FIXME replace with difxio
 const int nBandTone = 2;
 const int bandTone[] = {1, -1};
@@ -61,7 +62,8 @@ int nextfile(const DifxInput *D, int antId, int *jobId, FILE **file)
 			//printf("Job %d nJob %d\n", *jobId, D->nJob);
 			return 1;
 		}
-		//FIXME check if antenna is present in this job
+		//FIXME add check to see if antenna is present in this job
+		
 		sprintf(filename, "%s%s%s", D->job[*jobId].fileBase,
 				 suffix, D->antenna[antId].name);
 		//printf("Opening File %s\n", filename);
@@ -281,6 +283,7 @@ static int getNTone(const char *filename, double t1, double t2, const char *antN
 	char *rv;
 	char antName1[20];
 
+
 	//FIXME also check that nBand and nPol don't exceed D->nIF and D->nPol
 	in = fopen(filename, "r");
 	if(!in)
@@ -489,12 +492,14 @@ static int parseDifxPulseCal(const char *line,
 	double freqs[2][array_MAX_TONES], 
 	float pulseCalRe[2][array_MAX_TONES], 
 	float pulseCalIm[2][array_MAX_TONES], 
+	float stateCount[2][array_MAX_TONES],
+	float pulseCalRate[2][array_MAX_TONES],
 	int refDay, const DifxInput *D, int *configId, 
 	int phasecentre)
 {
 	int np, nb, nt, ns;
 	int nRecChan, recChan;
-	int n, p, i, j;
+	int n, p, i, j, k;
 	int polId, bandId, tone;
 	int pol, band;
 	int scanId;
@@ -504,8 +509,8 @@ static int parseDifxPulseCal(const char *line,
 	char antName[20];
 	double cableCal;
 	float timeInt;
-	/* This is the same as parsePulseCal except that timeInt
-	 * is taken from D, and cable cal */
+	/* This is the same as parsePulseCal except that parameters 
+	 * are taken from D where possible, and cable cal is 0*/
 	union
 	{
 		int32_t i32;
@@ -517,7 +522,7 @@ static int parseDifxPulseCal(const char *line,
 		&cableCal, &np, &nb, &nt, &ns, &nRecChan, &p);
 	if(n != 9)
 	{
-		printf("Error scanning header\n");
+		fprintf(stderr, "Error scanning header\n");
 		return -1;
 	}
 	line += p;
@@ -552,12 +557,17 @@ static int parseDifxPulseCal(const char *line,
 	
 	for(pol = 0; pol < 2; pol++)
 	{
-		for(i = 0; i < pcal->nRecFreq; i++)
+		for(i = 0; i < nBand*nTone; i++)
 		{
 			//FIXME should these be set to nan instead?
 			freqs[pol][i] = 0.0;
 			pulseCalRe[pol][i] = 0.0;
 			pulseCalIm[pol][i] = 0.0;
+			pulseCalRate[pol][i] = 0.0;
+		}
+		for(i = 0; i < nBand*4; i++)
+		{
+			stateCount[pol][i] = 0.0;
 		}
 	}
 
@@ -567,16 +577,23 @@ static int parseDifxPulseCal(const char *line,
 	for(pol = 0; pol < D->nPol; pol++)
 	{
 		//FIXME double-check there's no possibility of pols getting swapped
-		j = 0;
+		j = 0;/*band index within freqs, pulseCalRe and pulseCalIm*/
 		for(band = 0; band < pcal->nRecFreq; band++)
 		{
+			if(j >= nBand)
+			{
+				printf("Warning: trying to too many bands in pol %d band %d\n", pol, band);
+				break;
+			}
+			k = 0;/*tone index within freqs, pulseCalRe and pulseCalIm*/
 			for(tone = 0; tone < pcal->nRecFreqPcal[band]; tone++)
 			{
+
 				n = sscanf(line, "%d%lf%f%f%n", 
 					&recChan, &A, &B, &C, &p);
 				if(n < 4)
 				{
-					printf("Error scanning line\n");
+					printf("Warning: Error scanning line\n");
 					return -4;
 				}
 				line += p;
@@ -586,26 +603,41 @@ static int parseDifxPulseCal(const char *line,
 					continue;
 				}
 
+				if(k >= nTone)
+				{
+					printf("Warning: trying to extract too many tones in pol %d band %d\n", pol, band);
+					break;
+				}
 				
-				freqs[pol][j] = (double) pcal->recFreqPcalFreq[band][tone]*1.0e6;
+				freqs[pol][j*nTone + k] = (double) pcal->recFreqPcalFreq[band][tone]*1.0e6;
 				if(B < pcaltiny && B > -pcaltiny && C < pcaltiny && C > -pcaltiny)
 				{
-				  pulseCalRe[pol][j] = 
+				  pulseCalRe[pol][j*nTone + k] = 
 					nan.f;
-				  pulseCalIm[pol][j] = 
+				  pulseCalIm[pol][j*nTone + k] = 
 					nan.f;
 				}
 				else
 				{
-					pulseCalRe[pol][j] = B;
+					pulseCalRe[pol][j*nTone + k] = B;
 #ifdef PCAL_INVERT
 					C *= -1;
 #endif
-					pulseCalIm[pol][j] = C;
+					pulseCalIm[pol][j*nTone + k] = C;
 				}
-				j++;
+				k++;
 			}
+			while(k < nTone)
+			{
+				pulseCalRe[pol][j*nTone + k] = 
+				nan.f;
+				pulseCalIm[pol][j*nTone + k] = 
+				nan.f;
+				k++;
+			}
+			j++;
 		}
+		//n.b. unused bands at the end will be set to zero rather than NaN
 	}
 	return 0;
 }
@@ -687,6 +719,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	in = fopen("pcal", "r");
 	if(in)
 	{
+		printf("Station-extracted pcals available\n");
 		stationpcal = 1;
 		fclose(in);
 	}
@@ -717,6 +750,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		else if(stationpcal)
 		{
 			nStationTone = getNTone("pcal", refDay + start, refDay + stop, D->antenna[i].name);
+			printf("Using Station-extracted pcals for antenna %s\n", D->antenna[i].name, nStationTone);
 			if(nStationTone > nTone)
 			{
 				nTone = nStationTone;
@@ -733,7 +767,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	}
 	if(nTone < 2)
 	{
-		/* neither difx nor observation pcals */
 		printf("    Warning, less than 2 tones per sub-band\n");
 	}
 
@@ -762,7 +795,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		exit(0);
 	}
 
-
 	fitsWriteBinTable(out, nColumn, columns, nRowBytes, "PHASE-CAL");
 	arrayWriteKeys (p_fits_keys, out);
 	fitsWriteInteger(out, "NO_POL", nPol, "");
@@ -770,12 +802,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	fitsWriteInteger(out, "TABREV", 2, "");
 	fitsWriteEnd(out);
 
-	/* set defaults */
-	for(i = 0; i < array_MAX_TONES; i++)
-	{
-		pulseCalRate[0][i] = 0.0;
-		pulseCalRate[1][i] = 0.0;
-	}
 	antId = 0;
 	arrayId1 = 1;
 
@@ -783,9 +809,12 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 
 	for(i = 0; i < D->nAntenna; i++)
 	{
+		printf("Processing %s\n", D->antenna[i].name);
+		/* set defaults */
+
 		jobId = -1;
 		in2 = 0;
-		printf("Processing %s\n", D->antenna[i].name);
+		/*rewind(in) below this loop*/
 		while(1)
 		{
 			if(!pcalinfo[i])/*try reading pcal file*/
@@ -825,10 +854,8 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					v = nextfile(D, i, &jobId, &in2);
 					if(v == 0)
 					{
-					//	printf("file loaded\n");
 						continue;
 					}
-					//printf("no more files\n");
 					break;/*to next antenna*/
 				}
 				rv = fgets(line, MaxLineLength, in2);
@@ -838,14 +865,10 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					v = nextfile(D, i, &jobId, &in2);
 					if(v == 0)
 					{
-						//printf("file loaded2\n");
 						continue;
 					}
-					//printf("no more files2 %d %d\n", v, jobId);
 					break;/*to next antenna*/
 				}
-				//printf("%s\n", line);
-				//printf(".", line);
 					
 				/* ignore possible comment lines */
 				if(line[0] == '#')
@@ -855,16 +878,14 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 				else 
 				{
 					v = parseDifxPulseCal(line, i, nBand, nTone, pcalinfo[i], &sourceId, &time,
-							      freqs, pulseCalRe, pulseCalIm, refDay, D, &configId,
-							      phasecentre);
+							      freqs, pulseCalRe, pulseCalIm, stateCount, pulseCalRate,
+							      refDay, D, &configId, phasecentre);
 					if(v < 0)
 					{
-						//fprintf(stderr, "Error %d: bad line in file %d\n", v, antId);
-						//fprintf(stderr, "Error %d: bad line in file %d\n%s\n", v, antId, line);
 						continue;/*to next line in file*/
 					}
+					cableCal = 0.0;//FIXME delete once cableCal from pcal file is supported
 					timeInt = D->config[configId].tInt/86400;
-					//FIXME cableCal stateCount left at zero here. NaN better?
 				}
 			}
 
