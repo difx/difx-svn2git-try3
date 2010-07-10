@@ -36,6 +36,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <difxmessage.h>
+#include <mark5ipc.h>
 #include "mark5dir.h"
 #include "watchdog.h"
 #include "config.h"
@@ -43,7 +44,7 @@
 const char program[] = "mk5dir";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.6";
-const char verdate[] = "20100708";
+const char verdate[] = "20100710";
 
 int verbose = 0;
 int die = 0;
@@ -411,18 +412,29 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = mk5dir(vsn, force);
+	v = lockMark5(MARK5_LOCK_DONT_WAIT);
+
 	if(v < 0)
 	{
-		if(watchdogXLRError[0] != 0)
+		fprintf(stderr, "Another process (pid=%d) has a lock on this Mark5 unit\n", getMark5LockPID());
+	}
+	else
+	{
+		v = mk5dir(vsn, force);
+		if(v < 0)
 		{
-			char message[DIFX_MESSAGE_LENGTH];
-			snprintf(message, DIFX_MESSAGE_LENGTH, 
-				"Streamstor error executing: %s : %s",
-				watchdogStatement, watchdogXLRError);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			if(watchdogXLRError[0] != 0)
+			{
+				char message[DIFX_MESSAGE_LENGTH];
+				snprintf(message, DIFX_MESSAGE_LENGTH, 
+					"Streamstor error executing: %s : %s",
+					watchdogStatement, watchdogXLRError);
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			}
 		}
 	}
+
+	unlockMark5();
 
 	/* *********** */
 

@@ -114,6 +114,8 @@ int usage(const char *pgm)
 	printf("  -d             Save time domain performance data\n\n");
 	printf("  --legacydir\n");
 	printf("  -l             Force a legacy directory on the module\n\n");
+	printf("  --nodir\n");
+	printf("  -0             Put a zero length directory on the module\n\n");
 	printf("  --newdir\n");
 	printf("  -n             Force a new directory structure on the module\n\n");
 	printf("<vsn> is a valid module VSN (8 characters)\n\n");
@@ -182,7 +184,13 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirV
 	WATCHDOG( dirLength = XLRGetUserDirLength(*xlrDevice) );
 	
 	dirData = 0;
-	if(dirVersion < 0)
+	if(dirVersion == -2)
+	{
+		dirLength = 0;
+		dirVersion = 0;
+		dirData = 0;
+	}
+	else if(dirVersion == -1)
 	{
 		if(dirLength < 80000 || dirLength % 128 == 0)
 		{
@@ -229,7 +237,10 @@ int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirV
 		dirLength, dirVersion, newStatus);
 
 	WATCHDOGTEST( XLRSetUserDir(*xlrDevice, dirData, dirLength) );
-	free(dirData);
+	if(dirData)
+	{
+		free(dirData);
+	}
 
 	return dirVersion;
 }
@@ -596,7 +607,6 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	struct DriveInformation drive[8];
 	int nDrive;
 	int totalCapacity;		/* in GB (approx) */
-	int dirLength;
 	int rate = 1024;		/* default Mbps, for label */
 	int v;
 	int newStatus = MODULE_STATUS_ERASED;
@@ -817,6 +827,11 @@ int main(int argc, char **argv)
 		        strcmp(argv[a], "--newdir") == 0)
 		{
 			dirVersion = 1;
+		}
+		else if(strcmp(argv[a], "-0") == 0 ||
+		        strcmp(argv[a], "--nodir") == 0)
+		{
+			dirVersion = -2;
 		}
 		else if(strcmp(argv[a], "-d") == 0 ||
 		        strcmp(argv[a], "--getdata") == 0)

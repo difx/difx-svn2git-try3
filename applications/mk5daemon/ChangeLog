@@ -9,6 +9,9 @@ Version 1.4
 * Add "recover" Mark5 utility
 * Add mk5erase (similar to SSErase from Haystack) 
 * Fix timerange mk5cp and add byterange copy
+* Use mark5ipc to lock out access to /dev/windrvr6 
+* Remove compatibility with Mark5A program
+* Add very nascent mk5lock utility
 
 Version 1.3
 ~~~~~~~~~~~

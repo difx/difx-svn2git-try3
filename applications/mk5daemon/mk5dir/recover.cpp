@@ -32,10 +32,11 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <difxmessage.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/time.h>
+#include <difxmessage.h>
+#include <mark5ipc.h>
 #include <xlrapi.h>
 #include "config.h"
 #include "watchdog.h"
@@ -44,7 +45,7 @@
 const char program[] = "recover";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100525";
+const char verdate[] = "20100710";
 
 int usage(const char *pgm)
 {
@@ -294,18 +295,29 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = recoverModule(type, bank, force);
+	v = lockMark5(MARK5_LOCK_DONT_WAIT);
+
 	if(v < 0)
 	{
-		if(watchdogXLRError[0] != 0)
+		fprintf(stderr, "Another process (pid=%d) has a lock on this Mark5 unit\n", getMark5LockPID());
+	}
+	else
+	{
+		v = recoverModule(type, bank, force);
+		if(v < 0)
 		{
-			char message[DIFX_MESSAGE_LENGTH];
-			snprintf(message, DIFX_MESSAGE_LENGTH, 
-				"Streamstor error executing: %s : %s",
-				watchdogStatement, watchdogXLRError);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			if(watchdogXLRError[0] != 0)
+			{
+				char message[DIFX_MESSAGE_LENGTH];
+				snprintf(message, DIFX_MESSAGE_LENGTH, 
+					"Streamstor error executing: %s : %s",
+					watchdogStatement, watchdogXLRError);
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			}
 		}
 	}
+
+	unlockMark5();
 
 	/* *********** */
 

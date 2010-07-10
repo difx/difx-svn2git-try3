@@ -45,7 +45,6 @@ enum ProcessType
 	PROCESS_NONE = 0,
 	PROCESS_RESET,
 	PROCESS_SSOPEN,
-	PROCESS_MARK5A,
 	PROCESS_DATASTREAM,
 	PROCESS_MK5DIR,
 	PROCESS_MK5COPY,
@@ -78,6 +77,7 @@ typedef struct
 	int nXLROpen;
 	EventManager eventManager;	/* for tracking transient events */
 	int skipGetModule;
+	char streamstorLockIdentifer[DIFX_MESSAGE_IDENTIFIER_LENGTH];
 } Mk5Daemon;
 
 int Mk5Daemon_loadMon(Mk5Daemon *D, double mjd);
@@ -87,9 +87,9 @@ int logStreamstorVersions(Mk5Daemon *D);
 void Mk5Daemon_getModules(Mk5Daemon *D);
 void Mk5Daemon_startMonitor(Mk5Daemon *D);
 void Mk5Daemon_stopMonitor(Mk5Daemon *D);
-void Mk5Daemon_startMark5A(Mk5Daemon *D);
-void Mk5Daemon_stopMark5A(Mk5Daemon *D);
-void Mk5Daemon_resetMark5A(Mk5Daemon *D);
+int lockStreamstor(Mk5Daemon *D, const char *identifier, int wait);
+int unlockStreamstor(Mk5Daemon *D, const char *identifier);
+void Mk5Daemon_resetStreamstor(Mk5Daemon *D);
 int mark5command(const char *outstr, char *instr, int maxlen);
 int Mk5Daemon_system(const Mk5Daemon *D, const char *command, int verbose);
 void Mk5Daemon_reboot(Mk5Daemon *D);

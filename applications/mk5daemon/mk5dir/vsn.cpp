@@ -31,11 +31,12 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <difxmessage.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/time.h>
 #include <xlrapi.h>
+#include <difxmessage.h>
+#include <mark5ipc.h>
 #include "config.h"
 #include "mark5dir.h"
 #include "watchdog.h"
@@ -44,7 +45,7 @@
 const char program[] = "vsn";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.2";
-const char verdate[] = "20100702";
+const char verdate[] = "20100710";
 
 int usage(const char *pgm)
 {
@@ -112,7 +113,7 @@ int roundsize(int s)
 	return a*5;
 }
 
-int setvsn(int bank, char *newVSN, int newStatus, int force)
+int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
@@ -134,8 +135,9 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 	char oldVSN[10];
 	char resp[12]="";
 	char *v;
-	int moduleStatus;
+	int moduleStatus = MODULE_STATUS_UNKNOWN;
 	int dirLength;
+	bool needsNewDir = false;
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
@@ -159,15 +161,14 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 	label[XLR_LABEL_LENGTH] = 0;
 
+	if(verbose)
+	{
+		printf("Raw label = %s\n", label);
+	}
+
 	WATCHDOG( dirLength = XLRGetUserDirLength(xlrDevice) );
 
-	if(dirLength == 0)
-	{
-		moduleStatus = MODULE_STATUS_UNKNOWN;
-
-		fprintf(stderr, "Warning: there is no directory on this module.\n");
-	}
-	else if(dirLength % 128 != 0)
+	if(dirLength % 128 != 0 || dirLength == 0)
 	{
 		if(strstr(label, "Erased") != 0)
 		{
@@ -177,12 +178,33 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 		{
 			moduleStatus = MODULE_STATUS_RECORDED;
 		}
-		else
+		else if(strstr(label, "Played") != 0)
 		{
 			moduleStatus = MODULE_STATUS_PLAYED;
 		}
 
-		dirVersion = 0;
+		if(dirLength == 0)
+		{
+			fprintf(stderr, "Warning: there is no directory on this module.\n");
+			if(moduleStatus == MODULE_STATUS_UNKNOWN)
+			{
+				dirVersion = 1;
+				moduleStatus = MODULE_STATUS_ERASED;
+			}
+			else
+			{
+				dirVersion = 0;
+				needsNewDir = true;
+				if(verbose)
+				{
+					fprintf(stderr, "Will have new directory set if a change is made.\n");
+				}
+			}
+		}
+		else
+		{
+			dirVersion = 0;
+		}
 	}
 	else
 	{
@@ -306,12 +328,43 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 		}
 		if(force || resp[0] == 'Y' || resp[0] == 'y')
 		{
-			WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
+			WATCHDOG( xlrRC = XLRClearWriteProtect(xlrDevice) );
+			if(xlrRC != XLR_SUCCESS)
+			{
+				printf("Need to do full erase; final directory format will be legacy.\n");
+				printf("This is probably due to inserting an SDK9 module into an SDK8 unit.\n");
+				printf("Is it OK to proceed? [y|n]\n");
+				v = fgets(resp, 10, stdin);
+				if(resp[0] != 'Y' && resp[0] != 'y')
+				{
+					return -1;
+				}
+				WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
+				dirVersion = 0;
+				newStatus = MODULE_STATUS_ERASED;
+				moduleStatus = newStatus;
+
+				WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
+
+				needsNewDir = true;
+			}
 
 			rate = ndisk*128;
 			if(dirVersion == 0)
 			{
 				sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, moduleStatusName(moduleStatus) );	/* ASCII "RS" == 30 */
+
+				if(needsNewDir)
+				{
+					char *data;
+
+					printf("Putting new empty directory on the disk\n");
+
+					dirLength = 83424;
+					data = (char *)calloc(dirLength, 1);
+					WATCHDOGTEST( XLRSetUserDir(xlrDevice, data, dirLength) );
+					free(data);
+				}
 			}
 			else
 			{
@@ -324,7 +377,7 @@ int setvsn(int bank, char *newVSN, int newStatus, int force)
 				data = (char *)malloc(dirLength);
 				dirHeader = (struct Mark5DirectoryHeaderVer1 *)data;
 
-				WATCHDOGTEST( XLRGetUserDir(xlrDevice, dirLength, 0, data) );
+				WATCHDOG( xlrRC = XLRGetUserDir(xlrDevice, dirLength, 0, data) );
 				dirHeader->status = moduleStatus;
 				WATCHDOGTEST( XLRSetUserDir(xlrDevice, data, dirLength) );
 
@@ -377,6 +430,16 @@ int main(int argc, char **argv)
 			   strcmp(argv[a], "--help") == 0)
 			{
 				return usage(argv[0]);
+			}
+			else if(strcmp(argv[a], "-e") == 0 ||
+			   strcmp(argv[a], "--erased") == 0)
+			{
+				if(newStatus != 0 && newStatus != MODULE_STATUS_ERASED)
+				{
+					fprintf(stderr, "Multiple new states provided!\n");
+					return -1;
+				}
+				newStatus = MODULE_STATUS_ERASED;
 			}
 			else if(strcmp(argv[a], "-p") == 0 ||
 			   strcmp(argv[a], "--played") == 0)
@@ -465,18 +528,29 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = setvsn(bank, newVSN, newStatus, force);
+	v = lockMark5(MARK5_LOCK_DONT_WAIT);
+
 	if(v < 0)
 	{
-		if(watchdogXLRError[0] != 0)
+		fprintf(stderr, "Another process (pid=%d) has a lock on this Mark5 unit\n", getMark5LockPID());
+	}
+	else
+	{
+		v = setvsn(bank, newVSN, newStatus, force, verbose);
+		if(v < 0)
 		{
-			char message[DIFX_MESSAGE_LENGTH];
-			snprintf(message, DIFX_MESSAGE_LENGTH, 
-				"Streamstor error executing: %s : %s",
-				watchdogStatement, watchdogXLRError);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			if(watchdogXLRError[0] != 0)
+			{
+				char message[DIFX_MESSAGE_LENGTH];
+				snprintf(message, DIFX_MESSAGE_LENGTH, 
+					"Streamstor error executing: %s : %s",
+					watchdogStatement, watchdogXLRError);
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			}
 		}
 	}
+	
+	unlockMark5();
 
 	/* *********** */
 

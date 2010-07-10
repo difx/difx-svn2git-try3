@@ -34,6 +34,7 @@
 #include <ctype.h>
 #include <xlrapi.h>
 #include <difxmessage.h>
+#include <mark5ipc.h>
 #include "mk5daemon.h"
 
 
@@ -87,6 +88,14 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 	unsigned int xlrError;
 	char message[MAX_MESSAGE_SIZE];
 	char xlrErrorStr[XLR_ERROR_LENGTH];
+	const char id[] = "GetModules";
+	int v;
+
+	v = lockStreamstor(D, id, MARK5_LOCK_DONT_WAIT);
+	if(v < 0)
+	{
+		return 0;
+	}
 	
 	xlrRC = XLROpen(1, &xlrDevice);
 	D->nXLROpen++;
@@ -102,6 +111,8 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 			xlrError,
 			xlrErrorStr);
 		Logger_logData(D->log, message);
+
+		unlockStreamstor(D, id);
 
 		return 1;
 	}
@@ -131,6 +142,9 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 		}
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
+
+		unlockStreamstor(D, id);
+		
 		return 0;
 	}
 	
@@ -188,81 +202,11 @@ static int XLR_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
 
 	XLRClose(xlrDevice);
 
+	unlockStreamstor(D, id);
+
 	snprintf(message, MAX_MESSAGE_SIZE, "XLR VSNs: <%s> <%s> N=%d\n",
 		vsna, vsnb, D->nXLROpen);
 	Logger_logData(D->log, message);
-
-	return 0;
-}
-
-static int Mark5A_get_modules(char *vsna, char *vsnb, Mk5Daemon *D)
-{
-	char message[MAX_MESSAGE_SIZE];
-	int n;
-	char *ptr[8];
-	int nptr = 0;
-
-	vsna[0] = vsnb[0] = 0;
-
-	n = mark5command("bank_set?\n", message, MAX_MESSAGE_SIZE-1);
-
-	if(n < 0)
-	{
-		switch(n)
-		{
-		case -1:
-			Logger_logData(D->log, "cannot make socket");	
-			break;
-		case -2:
-			Logger_logData(D->log, "cannot connect to Mark5A");	
-			break;
-		case -3:
-			Logger_logData(D->log, "error sending bank_set? to Mark5A");
-			break;
-		case -4:
-			Logger_logData(D->log, "error recving from Mark5A");
-			break;
-		}
-		return 1;
-	}
-
-	for(int i = 0; message[i] && nptr < 8; i++)
-	{
-		if(message[i] == ':')
-		{
-			ptr[nptr] = message+i+2;
-			message[i] = 0;
-			nptr++;
-		}
-	}
-
-	if(nptr >= 2)
-	{
-		if(ptr[0][0] == 'A' && ptr[0][1] <= ' ' && ptr[1][0] != '-')
-		{
-			strncpy(vsna, ptr[1], 8);
-			vsna[8] = 0;
-		}
-		if(ptr[0][0] == 'B' && ptr[0][1] <= ' ' && ptr[1][0] != '-')
-		{
-			strncpy(vsnb, ptr[1], 8);
-			vsnb[8] = 0;
-		}
-	}
-
-	if(nptr >= 4)
-	{
-		if(ptr[2][0] == 'A' && ptr[2][1] <= ' ' && ptr[3][0] != '-')
-		{
-			strncpy(vsna, ptr[3], 8);
-			vsna[8] = 0;
-		}
-		if(ptr[2][0] == 'B' && ptr[2][1] <= ' ' && ptr[3][0] != '-')
-		{
-			strncpy(vsnb, ptr[3], 8);
-			vsnb[8] = 0;
-		}
-	}
 
 	return 0;
 }
@@ -293,17 +237,6 @@ void Mk5Daemon_getModules(Mk5Daemon *D)
 		if(n == 0)
 		{
 			dm.state = MARK5_STATE_IDLE;
-		}
-		else
-		{
-			dm.state = MARK5_STATE_ERROR;
-		}
-		break;
-	case PROCESS_MARK5A:
-		n = Mark5A_get_modules(vsnA, vsnB, D);
-		if(n == 0)
-		{
-			dm.state = MARK5_STATE_BUSY;
 		}
 		else
 		{
@@ -393,6 +326,14 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 	char message[MAX_MESSAGE_SIZE];
 	char xlrErrorStr[XLR_ERROR_LENGTH];
 	int bank;
+	const char id[] = "BankPower";
+	int v;
+
+	v = lockStreamstor(D, id, MARK5_LOCK_DONT_WAIT);
+	if(v != 0)
+	{
+		return 0;
+	}
 	
 	xlrRC = XLROpen(1, &xlrDevice);
 	D->nXLROpen++;
@@ -408,6 +349,9 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 			xlrError,
 			xlrErrorStr);
 		Logger_logData(D->log, message);
+
+		unlockStreamstor(D, id);
+
 		return 1;
 	}
 
@@ -450,6 +394,8 @@ static int XLR_disc_power(Mk5Daemon *D, const char *banks, int on)
 	}
 
 	XLRClose(xlrDevice);
+
+	unlockStreamstor(D, id);
 
 	return 0;
 }

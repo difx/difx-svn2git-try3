@@ -227,21 +227,7 @@ static void handleCommand(Mk5Daemon *D, const DifxMessageGeneric *G)
 	{
 		if(D->isMk5)
 		{
-			Mk5Daemon_resetMark5A(D);
-		}
-	}
-	else if(strcasecmp(cmd, "StartMark5A") == 0)
-	{
-		if(D->isMk5)
-		{
-			Mk5Daemon_startMark5A(D);
-		}
-	}
-	else if(strcasecmp(cmd, "StopMark5A") == 0)
-	{
-		if(D->isMk5)
-		{
-			Mk5Daemon_stopMark5A(D);
+			Mk5Daemon_resetStreamstor(D);
 		}
 	}
 	else if(strcasecmp(cmd, "Reboot") == 0)

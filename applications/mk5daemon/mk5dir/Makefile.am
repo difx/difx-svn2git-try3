@@ -4,7 +4,8 @@ bin_PROGRAMS = \
 	testmod \
 	vsn \
 	recover \
-	mk5erase
+	mk5erase \
+	mk5lock
 
 dist_bin_SCRIPTS = \
 	checkdir
@@ -20,6 +21,9 @@ mk5erase_LDADD = \
 
 vsn_LDADD = \
 	${M5ACCESS_LIBS}
+
+mk5lock_SOURCES = \
+	mk5lock.cpp
 
 mk5cp_SOURCES = \
 	watchdog.cpp \

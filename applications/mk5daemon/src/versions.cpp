@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <difxmessage.h>
+#include <mark5ipc.h>
 #include "mk5daemon.h"
 
 int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
@@ -46,6 +47,14 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 	unsigned int xlrError;
 	char message[MAX_MESSAGE_SIZE];
 	char xlrErrorStr[XLR_ERROR_LENGTH];
+	const char id[]="GetStreamstorVersions";
+	int v;
+
+	v = lockStreamstor(D, id, MARK5_LOCK_DONT_WAIT);
+	if(v < 0)
+	{
+		return 0;
+	}
 	
 	xlrRC = XLROpen(1, &xlrDevice);
 	D->nXLROpen++;
@@ -62,6 +71,9 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 			xlrErrorStr);
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
+
+		unlockStreamstor(D, id);
+
 		return 1;
 	}
 
@@ -78,6 +90,9 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 			xlrErrorStr);
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
+
+		unlockStreamstor(D, id);
+
 		return 2;
 	}
 
@@ -104,6 +119,9 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 			xlrErrorStr);
 		Logger_logData(D->log, message);
 		XLRClose(xlrDevice);
+
+		unlockStreamstor(D, id);
+
 		return 2;
 	}
 
@@ -125,6 +143,9 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 				xlrErrorStr);
 			Logger_logData(D->log, message);
 			XLRClose(xlrDevice);
+
+			unlockStreamstor(D, id);
+
 			return 2;
 		}
 		strcpy(D->mk5ver.DB_PCBVersion, dbInfo.PCBVersion);
@@ -135,6 +156,8 @@ int Mk5Daemon_getStreamstorVersions(Mk5Daemon *D)
 	}
 
 	XLRClose(xlrDevice);
+
+	unlockStreamstor(D, id);
 
 	return 0;
 }
