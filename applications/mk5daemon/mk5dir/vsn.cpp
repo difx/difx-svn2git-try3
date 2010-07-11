@@ -45,7 +45,7 @@
 const char program[] = "vsn";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.2";
-const char verdate[] = "20100710";
+const char verdate[] = "20100711";
 
 int usage(const char *pgm)
 {
@@ -60,9 +60,11 @@ int usage(const char *pgm)
 	printf("  --force\n");
 	printf("  -f         Don't ask before continuing\n\n");
 	printf("  --played\n");
-	printf("  -p         Don't ask before continuing\n\n");
+	printf("  -p         Set module state to 'Played'\n\n");
 	printf("  --recorded\n");
-	printf("  -r         Don't ask before continuing\n\n");
+	printf("  -r         Set module state to 'Recorded'\n\n");
+	printf("  --erased\n");
+	printf("  -e         Set module state to 'Erased'\n\n");
 	printf("<bank> should be either A or B.\n\n");
 	printf("<vsn> is the new module VSN (must be 8 characters long).\n");
 	printf("  If not provided, the existing VSN will be returned.\n\n");
@@ -411,6 +413,7 @@ int main(int argc, char **argv)
 	int verbose = 0;
 	int force = 0;
 	int newStatus = 0;
+	int lockWait = MARK5_LOCK_DONT_WAIT;
 
 	for(a = 1; a < argc; a++)
 	{
@@ -430,6 +433,10 @@ int main(int argc, char **argv)
 			   strcmp(argv[a], "--help") == 0)
 			{
 				return usage(argv[0]);
+			}
+			else if(strcmp(argv[a], "--wait-forever") == 0)
+			{
+				lockWait = MARK5_LOCK_WAIT_FOREVER;
 			}
 			else if(strcmp(argv[a], "-e") == 0 ||
 			   strcmp(argv[a], "--erased") == 0)
@@ -528,7 +535,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = lockMark5(MARK5_LOCK_DONT_WAIT);
+	v = lockMark5(lockWait);
 
 	if(v < 0)
 	{

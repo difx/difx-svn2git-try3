@@ -45,6 +45,7 @@ static void *conditionRun(void *ptr)
 	char command[MAX_COMMAND_SIZE];
 	char message[MAX_MESSAGE_SIZE];
 	FILE *pin;
+	char *rv;
 
 	params = (struct conditionParams *)ptr;
 
@@ -55,12 +56,12 @@ static void *conditionRun(void *ptr)
 	pin = popen(command, "r");
 	for(;;)
 	{
-		fgets(message, MAX_MESSAGE_SIZE, pin);
-		message[MAX_MESSAGE_SIZE-1] = 0;
-		if(feof(pin))
+		rv = fgets(message, MAX_MESSAGE_SIZE, pin);
+		if(tv == 0)
 		{
 			break;
 		}
+		message[MAX_MESSAGE_SIZE-1] = 0;
 		if(message[0] == '>')
 		{
 			Logger_logData(params->D->log, message);
@@ -107,5 +108,7 @@ void Mk5Daemon_startCondition(Mk5Daemon *D, const char *options)
 
 void Mk5Daemon_stopCondition(Mk5Daemon *D)
 {
-	system("killall -s SIGINT mk5erase");
+	int v;
+	
+	v = system("killall -s SIGINT mk5erase");
 }

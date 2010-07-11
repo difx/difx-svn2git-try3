@@ -1,4 +1,3 @@
-
 /***************************************************************************
  *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
@@ -208,7 +207,7 @@ int doy2mjd(int yr, int doy)
 
 int addDecades(int mjd, int nDecade)
 {
-	int y, m, d;
+	int y=0, m=0, d=0;
 	int doy;
 
 	mjd2ymd(mjd, &y, &m, &d);
