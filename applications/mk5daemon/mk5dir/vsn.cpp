@@ -72,38 +72,6 @@ int usage(const char *pgm)
 	return 0;
 }
 
-int trim(char *out, const char *in)
-{
-	int i, s=-1, e=0;
-
-	for(i = 0; in[i]; i++)
-	{
-		if(in[i] > ' ')
-		{
-			if(s == -1) 
-			{
-				s = e = i;
-			}
-			else
-			{
-				e = i;
-			}
-		}
-	}
-
-	if(s == -1)
-	{
-		out[0] = 0;
-	}
-	else
-	{
-		strncpy(out, in+s, e-s+1);
-		out[e-s+1] = 0;
-	}
-
-	return 0;
-}
-
 int roundsize(int s)
 {
 	long long a;
@@ -119,26 +87,21 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 {
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
-	S_DRIVEINFO driveInfo;
 	S_BANKSTATUS bankStat;
 	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
 	char oldLabel[XLR_LABEL_LENGTH+1];
 	int dirVersion = -1;
-	int size, capacity;
-	int ndisk, rate;
-	long long isz;
-	int icnt;
-	int i, d;
-	int nSlash=0, nDash=0;
-	char drivename[XLR_MAX_DRIVENAME+1];
-	char driveserial[XLR_MAX_DRIVESERIAL+1];
-	char driverev[XLR_MAX_DRIVEREV+1];
+	int capacity;
+	int nDrive, rate;
+	int d;
 	char oldVSN[10];
 	char resp[12]="";
-	char *v;
+	char *rv;
+	int v;
 	int moduleStatus = MODULE_STATUS_UNKNOWN;
 	int dirLength;
+	struct DriveInformation drive[8];
 	bool needsNewDir = false;
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
@@ -162,6 +125,7 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 	label[XLR_LABEL_LENGTH] = 0;
+	strcpy(oldLabel, label);
 
 	if(verbose)
 	{
@@ -172,19 +136,6 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 
 	if(dirLength % 128 != 0 || dirLength == 0)
 	{
-		if(strstr(label, "Erased") != 0)
-		{
-			moduleStatus = MODULE_STATUS_ERASED;
-		}
-		else if(strstr(label, "Recorded") != 0)
-		{
-			moduleStatus = MODULE_STATUS_RECORDED;
-		}
-		else if(strstr(label, "Played") != 0)
-		{
-			moduleStatus = MODULE_STATUS_PLAYED;
-		}
-
 		if(dirLength == 0)
 		{
 			fprintf(stderr, "Warning: there is no directory on this module.\n");
@@ -205,36 +156,20 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 		}
 		else
 		{
+			parseModuleLabel(label, 0, 0, 0, &moduleStatus);
 			dirVersion = 0;
 		}
 	}
 	else
 	{
-		struct Mark5DirectoryHeaderVer1 dirHeader;
-		WATCHDOGTEST( XLRGetUserDir(xlrDevice, sizeof(struct Mark5DirectoryHeaderVer1), 0, &dirHeader) );
-		dirVersion = dirHeader.version;
-		moduleStatus = dirHeader.status;
+		v = getModuleDirectoryVersion(&xlrDevice, &dirVersion, 0, &moduleStatus);
+		if(v < 0)
+		{
+			return v;
+		}
 	}
 
-	strcpy(oldLabel, label);
-	for(i = 0; oldLabel[i]; i++)
-	{
-		if(oldLabel[i] == '/')
-		{
-			nSlash++;
-		}
-		if(oldLabel[i] == '+' || oldLabel[i] == '-')
-		{
-			nDash++;
-		}
-		if(oldLabel[i] < ' ')
-		{
-		
-			oldLabel[i] = 0;
-			break;
-		}
-	}
-	if(nSlash == 2 && nDash == 1)
+	if(isLegalModuleLabel(oldLabel))
 	{
 		printf("\nCurrent extended VSN is %s\n", oldLabel);
 		printf("Current disk module state is %s\n", moduleStatusName(moduleStatus) );
@@ -249,50 +184,21 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 
 	printf("\n");
 
-	capacity = 0;
-	ndisk = 0;
-	isz = 0LL;
-	icnt = 0;
+	nDrive = getDriveInformation(&xlrDevice, drive, &capacity);
+
+	printf("This module consists of %d drives totalling about %d GB:\n",
+		nDrive, capacity);
 	for(d = 0; d < 8; d++)
 	{
-		WATCHDOG( xlrRC = XLRGetDriveInfo(xlrDevice, d/2, d%2, &driveInfo) );
-		if(xlrRC != XLR_SUCCESS)
+		if(drive[d].model[0] == 0)
 		{
-			fprintf(stderr, "XLRGetDriveInfo failed for disk %d\n", d);
 			continue;
 		}
-		trim(drivename, driveInfo.Model);
-		trim(driveserial, driveInfo.Serial);
-		trim(driverev, driveInfo.Revision);
-		if(drivename[0] == 0)
-		{
-			printf(" %d  MISSING\n", d);
-			continue;
-		}
-		if(driveInfo.Capacity > 0)
-		{
-			icnt++;
-		}
-		if(isz == 0 || (driveInfo.Capacity > 0 && driveInfo.Capacity * 512LL < isz))
-		{
-			isz = driveInfo.Capacity * 512LL;
-		}
-		size = roundsize(driveInfo.Capacity);
-		printf(" %d  %s (%s) %s  %d %d %d", d, drivename, driveserial, driverev, 
-			size, driveInfo.SMARTCapable, driveInfo.SMARTState);
-		if(driveInfo.SMARTCapable && !driveInfo.SMARTState)
-		{
-			printf("  FAILED\n");
-		}
-		else
-		{
-			printf("\n");
-		}
-		capacity += size;
-		ndisk++;
+		printf("Disk %d info : %s : %s : %s : %d : %s\n",
+			d, drive[d].model, drive[d].serial, drive[d].rev,
+			roundModuleSize(drive[d].capacity),
+			drive[d].failed ? "FAILED" : "OK");
 	}
-
-	capacity = (icnt*isz/10000000000LL)*10;
 
 	if(newVSN[0] || newStatus)
 	{
@@ -305,7 +211,7 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 		}
 		else
 		{
-			if(nSlash == 2 && nDash == 1)
+			if(isLegalModuleLabel(oldLabel))
 			{
 				strncpy(oldVSN, oldLabel, 8);
 				oldVSN[8] = 0;
@@ -326,7 +232,7 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 		if(force == 0)
 		{
 			printf("Is this OK? [y|n]\n");
-			v = fgets(resp, 10, stdin);
+			rv = fgets(resp, 10, stdin);
 		}
 		if(force || resp[0] == 'Y' || resp[0] == 'y')
 		{
@@ -336,7 +242,7 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 				printf("Need to do full erase; final directory format will be legacy.\n");
 				printf("This is probably due to inserting an SDK9 module into an SDK8 unit.\n");
 				printf("Is it OK to proceed? [y|n]\n");
-				v = fgets(resp, 10, stdin);
+				rv = fgets(resp, 10, stdin);
 				if(resp[0] != 'Y' && resp[0] != 'y')
 				{
 					return -1;
@@ -351,7 +257,14 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 				needsNewDir = true;
 			}
 
-			rate = ndisk*128;
+			if(dirVersion > 0)
+			{
+				rate = nDrive*256;
+			}
+			else
+			{
+				rate = nDrive*128;
+			}
 			if(dirVersion == 0)
 			{
 				sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, moduleStatusName(moduleStatus) );	/* ASCII "RS" == 30 */

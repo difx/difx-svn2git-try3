@@ -57,7 +57,7 @@ static void *conditionRun(void *ptr)
 	for(;;)
 	{
 		rv = fgets(message, MAX_MESSAGE_SIZE, pin);
-		if(tv == 0)
+		if(rv == 0)
 		{
 			break;
 		}

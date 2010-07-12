@@ -33,8 +33,10 @@
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
+#include <difxmessage.h>
 #include <mark5access.h>
 #include "mark5dir.h"
+#include "watchdog.h"
 #include "../config.h"
 
 #ifdef WORDS_BIGENDIAN
@@ -450,7 +452,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	}
 	else
 	{
-		printf("size=%d  len=%d\n", sizeof(struct Mark5Directory), len);
+		printf("size=%d  len=%d\n", static_cast<int>(sizeof(struct Mark5Directory)), len);
 
 		return -3;
 	}
@@ -954,3 +956,339 @@ int getByteRange(const struct Mark5Scan *scan, long long *byteStart, long long *
 
 	return 1;
 }
+
+int isLegalModuleLabel(const char *label)
+{
+	int i;
+	int ns=0, nd=0;
+
+	for(i = 0; label[i] > ' '; i++)
+	{
+		if(label[i] == '-' || label[i] == '+')
+		{
+			if(i > 7)
+			{
+				return 0;
+			}
+			nd++;
+		}
+		else if(label[i] == '/')
+		{
+			ns++;
+		}
+		else if(nd == 0 && !isalpha(label[i]))
+		{
+			return 0;
+		}
+		else if(nd == 1 && ns == 0 && !isdigit(label[i]))
+		{
+			return 0;
+		}
+	}
+
+	if(ns != 2 || nd != 1)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+int parseModuleLabel(const char *label, char *vsn, int *totalCapacity, int *rate, int *moduleStatus)
+{
+	int n;
+	int i;
+
+	if(!isLegalModuleLabel(label))
+	{
+		return -1;
+	}
+
+	if(vsn)
+	{
+		strncpy(vsn, label, 8);
+		vsn[8] = 0;
+	}
+
+	if(totalCapacity && rate)
+	{
+		n = sscanf(label+9, "%d/%d", totalCapacity, rate);
+		if(n != 2)
+		{
+			return -1;
+		}
+	}
+
+	if(moduleStatus)
+	{
+		*moduleStatus = MODULE_STATUS_UNKNOWN;
+		for(i = 0; label[i]; i++)
+		{
+			if(label[i] == 30)	/* Record separator */
+			{
+				break;
+			}
+		}
+		if(label[i])
+		{
+			if(strstr(label+i, "Erased") != 0)
+			{
+				*moduleStatus = MODULE_STATUS_ERASED;
+			}
+			else if(strstr(label+i, "Recorded") != 0)
+			{
+				*moduleStatus = MODULE_STATUS_RECORDED;
+			}
+			else if(strstr(label, "Played") != 0)
+			{
+				*moduleStatus = MODULE_STATUS_PLAYED;
+			}
+		}
+	}
+	
+	return 0;
+}
+
+int setModuleLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int rate, int newStatus, int dirVersion)
+{
+	const char RecordSeparator = 30;
+	char label[XLR_LABEL_LENGTH+1];
+	int v;
+
+	/* reset the label */
+	if(dirVersion == 0)
+	{
+		v = snprintf(label, XLR_LABEL_LENGTH+1, "%8s/%d/%d%c%s", 
+			vsn, totalCapacity, rate, RecordSeparator,
+			moduleStatusName(newStatus) );
+	}
+	else
+	{
+		v = snprintf(label, XLR_LABEL_LENGTH+1, "%8s/%d/%d", 
+			vsn, totalCapacity, rate);
+	}
+	printf("> New label = %s\n", label);
+	
+	if(v > XLR_LABEL_LENGTH)
+	{
+		fprintf(stderr, "Error: label too long! Truncating!\n");
+	}
+
+	WATCHDOGTEST( XLRSetLabel(*xlrDevice, label, strlen(label)) );
+
+	return 0;
+}
+
+int getModuleDirectoryVersion(SSHANDLE *xlrDevice, int *dirVersion, int *dirLength, int *moduleStatus)
+{
+	int len;
+	int ver = 0;
+	struct Mark5DirectoryHeaderVer1 *dirHeader;
+	
+	if(moduleStatus)
+	{
+		*moduleStatus = MODULE_STATUS_UNKNOWN;
+	}
+
+	WATCHDOG( len = XLRGetUserDirLength(*xlrDevice) );
+
+	if(dirLength)
+	{
+		*dirLength = len;
+	}
+
+	if(len == 0)
+	{
+		ver = -1;
+	}
+	if(len % 128 == 0)
+	{
+		char *dirData;
+		
+		dirData = (char *)calloc(len, 1);
+		WATCHDOGTEST( XLRGetUserDir(*xlrDevice, len, 0, dirData) );
+		dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
+		ver = dirHeader->version;
+		if(moduleStatus)
+		{
+			*moduleStatus = dirHeader->status;
+		}
+		if(ver < 2 || ver > 1000)
+		{
+			ver = 1;
+		}
+		free(dirData);
+	}
+
+	if(dirVersion)
+	{
+		*dirVersion = ver;
+	}
+
+	return 0;
+}
+
+int resetModuleDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirVersion, int totalCapacity, int rate)
+{
+	int dirLength;
+	char *dirData;
+	struct Mark5DirectoryHeaderVer1 *dirHeader;
+
+	WATCHDOG( dirLength = XLRGetUserDirLength(*xlrDevice) );
+	
+	dirData = 0;
+	if(dirVersion == -2)
+	{
+		dirLength = 0;
+		dirVersion = 0;
+		dirData = 0;
+	}
+	else if(dirVersion == -1)
+	{
+		if(dirLength < 80000 || dirLength % 128 == 0)
+		{
+			dirLength = 128;
+			dirData = (char *)calloc(dirLength, 1);
+			WATCHDOGTEST( XLRGetUserDir(*xlrDevice, dirLength, 0, dirData) );
+			dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
+			dirVersion = dirHeader->version;
+			if(dirVersion < 2 || dirVersion > 100)
+			{
+				dirVersion = 1;
+			}
+			memset(dirData, 0, 128);
+			sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
+			dirHeader->status = newStatus;
+		}
+		else
+		{
+			dirVersion = 0;
+		}
+	}
+	else if(dirVersion == 0)
+	{
+		dirLength = 83424;
+	}
+	else
+	{
+		dirLength = 128;
+		dirData = (char *)calloc(dirLength, 1);
+		dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
+		dirHeader->version = dirVersion;
+		dirHeader->status = newStatus;
+		sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
+		strcpy(dirHeader->vsnPrev, "NA");
+		strcpy(dirHeader->vsnNext, "NA");
+	}
+
+	if(dirData == 0)
+	{
+		dirData = (char *)calloc(dirLength, 1);
+	}
+
+	printf("> Dir Size = %d  Dir Version = %d  Status = %d\n", 
+		dirLength, dirVersion, newStatus);
+
+	WATCHDOGTEST( XLRSetUserDir(*xlrDevice, dirData, dirLength) );
+	if(dirData)
+	{
+		free(dirData);
+	}
+
+	return dirVersion;
+}
+
+static void trim(char *out, const char *in)
+{
+	int i, s=-1, e=0;
+
+	for(i = 0; in[i]; i++)
+	{
+		if(in[i] > ' ')
+		{
+			if(s == -1) 
+			{
+				s = e = i;
+			}
+			else
+			{
+				e = i;
+			}
+		}
+	}
+
+	if(s == -1)
+	{
+		out[0] = 0;
+	}
+	else
+	{
+		strncpy(out, in+s, e-s+1);
+		out[e-s+1] = 0;
+	}
+}
+
+
+int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], int *totalCapacity)
+{
+	XLR_RETURN_CODE xlrRC;
+	S_DRIVEINFO driveInfo;
+	int nDrive = 0;
+	long long minCapacity = 0;
+	char message[DIFX_MESSAGE_LENGTH];
+
+	for(int d = 0; d < 8; d++)
+	{
+		WATCHDOG( xlrRC = XLRGetDriveInfo(*xlrDevice, d/2, d%2, &driveInfo) );
+		if(xlrRC != XLR_SUCCESS)
+		{
+			snprintf(message, DIFX_MESSAGE_LENGTH,
+				"XLRGetDriveInfo failed for disk %d", d);
+			printf("message\n");
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+
+			drive[d].model[0] = 0;
+			drive[d].serial[0] = 0;
+			drive[d].rev[0] = 0;
+			drive[d].failed = 0;
+		
+			continue;
+		}
+
+		trim(drive[d].model, driveInfo.Model);
+		trim(drive[d].serial, driveInfo.Serial);
+		trim(drive[d].rev, driveInfo.Revision);
+		drive[d].capacity = driveInfo.Capacity * 512LL;
+
+		if(driveInfo.SMARTCapable && !driveInfo.SMARTState)
+		{
+			drive[d].failed = 1;
+		}
+		else
+		{
+			drive[d].failed = 0;
+		}
+		if(drive[d].capacity > 0)
+		{
+			nDrive++;
+		}
+		if(minCapacity == 0 || 
+		   (drive[d].capacity > 0 && drive[d].capacity < minCapacity))
+		{
+			minCapacity = drive[d].capacity;
+		}
+	}
+
+	*totalCapacity = (nDrive*minCapacity/10000000000LL)*10;
+
+	return nDrive;
+}
+
+int roundModuleSize(long long a)
+{
+	a /= 1000000000;
+	a = (a+2)/5;
+
+	return a*5;
+}
+

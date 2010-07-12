@@ -91,49 +91,6 @@ int usage(const char *pgm)
 	return 0;
 }
 
-int roundsize(int s)
-{
-	long long a;
-
-	a = (long long)s*512LL;
-	a /= 1000000000;
-	a = (a+2)/5;
-
-	return a*5;
-}
-
-int trim(char *out, const char *in)
-{
-	int i, s=-1, e=0;
-
-	for(i = 0; in[i]; i++)
-	{
-		if(in[i] > ' ')
-		{
-			if(s == -1) 
-			{
-				s = e = i;
-			}
-			else
-			{
-				e = i;
-			}
-		}
-	}
-
-	if(s == -1)
-	{
-		out[0] = 0;
-	}
-	else
-	{
-		strncpy(out, in+s, e-s+1);
-		out[e-s+1] = 0;
-	}
-
-	return 0;
-}
-
 void setbuffer(int num, char *buffer, int size)
 {
 	int i;
@@ -219,35 +176,6 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 	return L;
 }
 
-int isLegalVSN(const char *vsn)
-{
-	int i;
-	int ns=0, nd=0;
-
-	for(i = 0; vsn[i] > ' '; i++)
-	{
-		if(vsn[i] == '-' || vsn[i] == '+')
-		{
-			if(i > 7)
-			{
-				return 0;
-			}
-			nd++;
-		}
-		if(vsn[i] == '/')
-		{
-			ns++;
-		}
-	}
-
-	if(ns != 2 || nd != 1)
-	{
-		return 0;
-	}
-
-	return 1;
-}
-
 int getLabels(SSHANDLE xlrDevice, DifxMessageMk5Status *mk5status)
 {
 	S_BANKSTATUS bankStat;
@@ -255,7 +183,7 @@ int getLabels(SSHANDLE xlrDevice, DifxMessageMk5Status *mk5status)
 	mk5status->activeBank = ' ';
 
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, BANK_A, &bankStat) );
-	if(isLegalVSN(bankStat.Label))
+	if(isLegalModuleLabel(bankStat.Label))
 	{
 		strncpy(mk5status->vsnA, bankStat.Label, 8);
 		mk5status->vsnA[8] = 0;
@@ -269,7 +197,7 @@ int getLabels(SSHANDLE xlrDevice, DifxMessageMk5Status *mk5status)
 		mk5status->activeBank = 'A';
 	}
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, BANK_B, &bankStat) );
-	if(isLegalVSN(bankStat.Label))
+	if(isLegalModuleLabel(bankStat.Label))
 	{
 		strncpy(mk5status->vsnB, bankStat.Label, 8);
 		mk5status->vsnB[8] = 0;
@@ -291,7 +219,6 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	SSHANDLE xlrDevice;
 	XLR_RETURN_CODE xlrRC;
 	S_DRIVESTATS driveStats[XLR_MAXBINS];
-	S_DRIVEINFO dinfo;
 	S_BANKSTATUS bankStat;
 	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
@@ -299,21 +226,21 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	int labelLength = 0, rs = 0;
 	int badLabel = 0;
 	int dirLen;
-	int nSlash=0, nDash=0, nSep=0;
-	int size;
-	int ndisk;
+	int nDrive;
 	int n, d, v, i;
 	long long L, totalError=0, totalBytes=0;
-	char drivename[XLR_MAX_DRIVENAME+1];
-	char driveserial[XLR_MAX_DRIVESERIAL+1];
-	char driverev[XLR_MAX_DRIVEREV+1];
 	char *buffer1, *buffer2;
+	int dirVersion = 0;
 	DifxMessageMk5Status mk5status;
-	char label8[10], message[1000];
-	char resp[12] = "Y";
+	char vsn[10], message[DIFX_MESSAGE_LENGTH];
+	char resp[8] = "Y";
 	char *rv;
 	char *buffer;
 	FILE *out;
+	int capacity = 0;
+	int rate = 0;
+	struct DriveInformation drive[8];
+	int moduleStatus = 0;
 
 	buffer1 = (char *)malloc(bufferSize);
 	buffer2 = (char *)malloc(bufferSize);
@@ -361,71 +288,49 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	}
 
 	strcpy(oldLabel, label);
-	for(i = 0; oldLabel[i]; i++)
+	v = parseModuleLabel(label, vsn, &capacity, &rate, &moduleStatus);
+	if(v < 0)
 	{
-		if(oldLabel[i] == '/')
-		{
-			nSlash++;
-		}
-		if(oldLabel[i] == '+' || oldLabel[i] == '-')
-		{
-			nDash++;
-		}
-		if(oldLabel[i] == 30)
-		{
-			nSep++;
-		}
-		if(oldLabel[i] < ' ')
-		{
-		
-			oldLabel[i] = 0;
-			break;
-		}
+		fprintf(stderr, "Warning: this module has an illegal label: %s\n", label);
 	}
-	if(nSlash == 2 && nDash == 1 && nSep == 1)
+
+	printf("\nCurrent extended VSN is %s/%d/%d\n", vsn, capacity, rate);
+	if(moduleStatus > 0)
 	{
-		printf("\nCurrent extended VSN is %s\n", oldLabel);
-		if(nSep == 1)
-		{
-			printf("Current disk module state is %s\n", oldLabel+1+i);
-		}
+		printf("Current module status is %s\n", moduleStatusName(moduleStatus));
+	}
+
+	v = getModuleDirectoryVersion(&xlrDevice, &dirVersion, 0, 0);
+	if(v < 0)
+	{
+		return v;
+	}
+
+	if(dirVersion < 0)
+	{
+		fprintf(stderr, "Warning: cannot determine module directory version\n");
 	}
 	else
 	{
-		printf("\nNo VSN currently set on module\n");
-		badLabel = 1;
+		printf("Module directory version appears to be %d\n", dirVersion);
 	}
 
-	ndisk = 0;
 	printf("\n");
+
+	nDrive = getDriveInformation(&xlrDevice, drive, &capacity);
+
+	printf("This module consists of %d drives totalling about %d GB:\n",
+		nDrive, capacity);
 	for(d = 0; d < 8; d++)
 	{
-		WATCHDOG( xlrRC = XLRGetDriveInfo(xlrDevice, d/2, d%2, &dinfo) );
-		if(xlrRC != XLR_SUCCESS)
+		if(drive[d].model[0] == 0)
 		{
-			fprintf(stderr, "XLRGetDriveInfo failed for disk %d\n", d);
 			continue;
 		}
-		trim(drivename, dinfo.Model);
-		trim(driveserial, dinfo.Serial);
-		trim(driverev, dinfo.Revision);
-		if(drivename[0] == 0)
-		{
-			printf(" %d  MISSING\n", d);
-			continue;
-		}
-		size = roundsize(dinfo.Capacity);
-		printf(" %d  %s %s %s  %d %d %d", d, drivename, driveserial, driverev, 
-			size, dinfo.SMARTCapable, dinfo.SMARTState);
-		if(dinfo.SMARTCapable && !dinfo.SMARTState)
-		{
-			printf("  FAILED\n");
-		}
-		else
-		{
-			printf("\n");
-		}
-		ndisk++;
+		printf("Disk %d info : %s : %s : %s : %d : %s\n",
+			d, drive[d].model, drive[d].serial, drive[d].rev,
+			roundModuleSize(drive[d].capacity),
+			drive[d].failed ? "FAILED" : "OK");
 	}
 
 	if(!readOnly)
@@ -436,7 +341,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			printf("This module contains %lld bytes of recorded data\n", dir.Length);
 			printf("This test will erase all data on this module!\n");
 			printf("Do you wish to continue? [y|n]\n");
-			rv = fgets(resp, 10, stdin);
+			rv = fgets(resp, 8, stdin);
 		}
 		else
 		{
@@ -595,12 +500,29 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			}
 			printf("\nTotal: %Ld/%Ld bytes differ\n", totalError, totalBytes);
 
-			strncpy(label8, label, 8);
-			label8[8] = 0;
-			sprintf(message, "%8s test complete: %Ld/%Ld bytes read incorrectly", label8, totalError, totalBytes);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
+			v = snprintf(message, DIFX_MESSAGE_LENGTH, "%8s test complete: %Ld/%Ld bytes read incorrectly", vsn, totalError, totalBytes);
+			if(v >= DIFX_MESSAGE_LENGTH)
+			{
+				fprintf(stderr, "Error: completion message too long\n");
+			}
+			else
+			{
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
+			}
 
 			WATCHDOGTEST( XLRErase(xlrDevice, SS_OVERWRITE_NONE) );
+
+			v = setModuleLabel(&xlrDevice, vsn, MODULE_STATUS_ERASED, dirVersion, capacity, rate);
+			if(v < 0)
+			{
+				return -1;
+			}
+
+			v = resetModuleDirectory(&xlrDevice, vsn, MODULE_STATUS_ERASED, dirVersion, capacity, rate);
+			if(v < 0)
+			{
+				return -1;
+			}
 
 			mk5status.state = MARK5_STATE_CLOSE;
 			mk5status.activeBank = ' ';
@@ -697,9 +619,9 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			printf("User interrupt: Stopping test early!\n");
 		}
 
-		strncpy(label8, label, 8);
-		label8[8] = 0;
-		sprintf(message, "%8s read test complete", label8);
+		strncpy(vsn, label, 8);
+		vsn[8] = 0;
+		sprintf(message, "%8s read test complete", vsn);
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 
 		mk5status.state = MARK5_STATE_CLOSE;

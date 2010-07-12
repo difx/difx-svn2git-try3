@@ -39,13 +39,14 @@
 #include <mark5ipc.h>
 #include <xlrapi.h>
 #include "config.h"
+#include "mark5dir.h"
 #include "watchdog.h"
 #include "../config.h"
 
 const char program[] = "recover";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100710";
+const char verdate[] = "20100711";
 
 int usage(const char *pgm)
 {
@@ -77,11 +78,12 @@ int recoverModule(int type, int bank, int force)
 	XLR_RETURN_CODE xlrRC;
 	S_BANKSTATUS bankStat;
 	S_DIR dir;
-	int nSlash=0, nDash=0, nSep=0;
 	int go = 1;
-	int i;
 	char label[XLR_LABEL_LENGTH+1];
 	char str[10];
+	char *rv;
+	int moduleStatus = MODULE_STATUS_UNKNOWN;
+	int v;
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
@@ -102,38 +104,19 @@ int recoverModule(int type, int bank, int force)
 
 	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
 	label[XLR_LABEL_LENGTH] = 0;
-	for(i = 0; label[i]; i++)
-	{
-		if(label[i] == '/')
-		{
-			nSlash++;
-		}
-		if(label[i] == '+' || label[i] == '-')
-		{
-			nDash++;
-		}
-		if(label[i] == 30)
-		{
-			nSep++;
-		}
-		if(label[i] < ' ')
-		{
-		
-			label[i] = 0;
-			break;
-		}
-	}
-	if(nSlash == 2 && nDash == 1)
+
+	v = parseModuleLabel(label, 0, 0, 0, &moduleStatus);
+	if(v >= 0)
 	{
 		printf("\nCurrent extended VSN is %s\n", label);
-		if(nSep == 1)
+		if(moduleStatus > 0)
 		{
-			printf("Current disk module state is %s\n", label+1+i);
+			printf("Current disk module status is %s\n", moduleStatusName(moduleStatus));
 		}
 	}
 	else
 	{
-		printf("\nNo VSN currently set on module\n");
+		printf("\nNo valid VSN currently set on module\n");
 	}
 
 	printf("%lld bytes are apparently recorded on this module\n", dir.Length);
@@ -145,7 +128,7 @@ int recoverModule(int type, int bank, int force)
 		do
 		{
 			printf("About to attempt recover=%d on this module.  Continue? [y/n]", type);
-			fgets(str, 9, stdin);
+			rv = fgets(str, 9, stdin);
 			if(strcasecmp(str, "y") == 0)
 			{
 				go = 1;

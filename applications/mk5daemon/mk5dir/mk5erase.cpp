@@ -83,15 +83,6 @@ enum ConditionMode
 	CONDITION_WRITE_ONLY
 };
 
-struct DriveInformation
-{
-	char model[XLR_MAX_DRIVENAME+1];
-	char serial[XLR_MAX_DRIVESERIAL+1];
-	char rev[XLR_MAX_DRIVEREV+1];
-	int failed;
-	long long capacity;	/* in bytes */
-};
-
 int usage(const char *pgm)
 {
 	printf("\n%s ver. %s   %s %s\n\n", program, version, author, verdate);
@@ -134,137 +125,29 @@ void siginthand(int j)
 	die = 1;
 }
 
-void trim(char *out, const char *in)
+int getModuleLabel(SSHANDLE *xlrDevice, int bank, char label[XLR_LABEL_LENGTH+1])
 {
-	int i, s=-1, e=0;
+	S_BANKSTATUS bankStatus;
+	S_DIR dir;
 
-	for(i = 0; in[i]; i++)
+	label[0] = 0;
+
+	WATCHDOGTEST( XLRGetBankStatus(*xlrDevice, bank, &bankStatus) );
+	if(bankStatus.State != STATE_READY)
 	{
-		if(in[i] > ' ')
-		{
-			if(s == -1) 
-			{
-				s = e = i;
-			}
-			else
-			{
-				e = i;
-			}
-		}
+		return -1;
 	}
-
-	if(s == -1)
-	{
-		out[0] = 0;
-	}
-	else
-	{
-		strncpy(out, in+s, e-s+1);
-		out[e-s+1] = 0;
-	}
-}
-
-int roundSize(long long a)
-{
-	a /= 1000000000;
-	a = (a+2)/5;
-
-	return a*5;
-}
-
-int resetDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirVersion, int totalCapacity, int rate)
-{
-	int dirLength;
-	char *dirData;
-	struct Mark5DirectoryHeaderVer1 *dirHeader;
-
-	die = 0;
-
-	/* clear the user directory */
-	WATCHDOG( dirLength = XLRGetUserDirLength(*xlrDevice) );
 	
-	dirData = 0;
-	if(dirVersion == -2)
-	{
-		dirLength = 0;
-		dirVersion = 0;
-		dirData = 0;
-	}
-	else if(dirVersion == -1)
-	{
-		if(dirLength < 80000 || dirLength % 128 == 0)
-		{
-			dirLength = 128;
-			dirData = (char *)calloc(dirLength, 1);
-			WATCHDOGTEST( XLRGetUserDir(*xlrDevice, dirLength, 0, dirData) );
-			dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
-			dirVersion = dirHeader->version;
-			if(dirVersion < 2 || dirVersion > 100)
-			{
-				dirVersion = 1;
-			}
-			memset(dirData, 0, 128);
-			sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
-			dirHeader->status = newStatus;
-		}
-		else
-		{
-			dirVersion = 0;
-		}
-	}
-	else if(dirVersion == 0)
-	{
-		dirLength = 83424;
-	}
-	else
-	{
-		dirLength = 128;
-		dirData = (char *)calloc(dirLength, 1);
-		dirHeader = (struct Mark5DirectoryHeaderVer1 *)dirData;
-		dirHeader->version = dirVersion;
-		dirHeader->status = newStatus;
-		sprintf(dirHeader->vsn, "%s/%d/%d", vsn, totalCapacity, rate);
-		strcpy(dirHeader->vsnPrev, "NA");
-		strcpy(dirHeader->vsnNext, "NA");
-	}
+	/* get label */
+	
+	WATCHDOGTEST( XLRSelectBank(*xlrDevice, bank) );
 
-	if(dirData == 0)
-	{
-		dirData = (char *)calloc(dirLength, 1);
-	}
+	/* the following line is essential to work around an apparent streamstor bug */
+	WATCHDOGTEST( XLRGetDirectory(*xlrDevice, &dir) );
 
-	printf("> Dir Size = %d  Dir Version = %d  Status = %d\n", 
-		dirLength, dirVersion, newStatus);
+	WATCHDOGTEST( XLRGetLabel(*xlrDevice, label) );
 
-	WATCHDOGTEST( XLRSetUserDir(*xlrDevice, dirData, dirLength) );
-	if(dirData)
-	{
-		free(dirData);
-	}
-
-	return dirVersion;
-}
-
-int resetLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int rate, int newStatus, int dirVersion)
-{
-	const char RecordSeparator = 30;
-	char label[XLR_LABEL_LENGTH+1];
-
-	/* reset the label */
-	if(dirVersion == 0)
-	{
-		snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d%c%s", 
-			vsn, totalCapacity, rate, RecordSeparator,
-			moduleStatusName(newStatus) );
-	}
-	else
-	{
-		snprintf(label, XLR_LABEL_LENGTH, "%8s/%d/%d", 
-			vsn, totalCapacity, rate);
-	}
-	printf("> New label = %s\n", label);
-	WATCHDOGTEST( XLRSetLabel(*xlrDevice, label, strlen(label)) );
-
+	label[XLR_LABEL_LENGTH] = 0;
 
 	return 0;
 }
@@ -418,10 +301,10 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 
 			sprintf(message, ". Time = %8.3f  Pos = %14Ld  Rate = %7.2f  Done = %5.2f %%\n",
 				dt, mk5status->position, mk5status->rate, done);
-			printf(message);
+			printf("%s", message);
 			if(out)
 			{
-				fprintf(out, message);
+				fprintf(out, "%s", message);
 				fflush(out);
 			}
 
@@ -516,89 +399,7 @@ int condition(SSHANDLE *xlrDevice, const char *vsn, enum ConditionMode mode, Dif
 
 	return 0;
 }
-
-int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], int *totalCapacity)
-{
-	XLR_RETURN_CODE xlrRC;
-	S_DRIVEINFO driveInfo;
-	int nDrive = 0;
-	long long minCapacity = 0;
-	char message[DIFX_MESSAGE_LENGTH];
-
-	for(int d = 0; d < 8; d++)
-	{
-		WATCHDOG( xlrRC = XLRGetDriveInfo(*xlrDevice, d/2, d%2, &driveInfo) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			snprintf(message, DIFX_MESSAGE_LENGTH,
-				"XLRGetDriveInfo failed for disk %d", d);
-			printf("message\n");
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
-
-			drive[d].model[0] = 0;
-			drive[d].serial[0] = 0;
-			drive[d].rev[0] = 0;
-			drive[d].failed = 0;
-		
-			continue;
-		}
-
-		trim(drive[d].model, driveInfo.Model);
-		trim(drive[d].serial, driveInfo.Serial);
-		trim(drive[d].rev, driveInfo.Revision);
-		drive[d].capacity = driveInfo.Capacity * 512LL;
-
-		if(driveInfo.SMARTCapable && !driveInfo.SMARTState)
-		{
-			drive[d].failed = 1;
-		}
-		else
-		{
-			drive[d].failed = 0;
-		}
-		if(drive[d].capacity > 0)
-		{
-			nDrive++;
-		}
-		if(minCapacity == 0 || 
-		   (drive[d].capacity > 0 && drive[d].capacity < minCapacity))
-		{
-			minCapacity = drive[d].capacity;
-		}
-	}
-
-	*totalCapacity = (nDrive*minCapacity/10000000000LL)*10;
-
-	return nDrive;
-}
 	
-int getLabel(SSHANDLE *xlrDevice, int bank, char label[XLR_LABEL_LENGTH+1])
-{
-	S_BANKSTATUS bankStatus;
-	S_DIR dir;
-
-	label[0] = 0;
-
-	WATCHDOGTEST( XLRGetBankStatus(*xlrDevice, bank, &bankStatus) );
-	if(bankStatus.State != STATE_READY)
-	{
-		return -1;
-	}
-	
-	/* get label */
-	
-	WATCHDOGTEST( XLRSelectBank(*xlrDevice, bank) );
-
-	/* the following line is essential to work around an apparent streamstor bug */
-	WATCHDOGTEST( XLRGetDirectory(*xlrDevice, &dir) );
-
-	WATCHDOGTEST( XLRGetLabel(*xlrDevice, label) );
-
-	label[XLR_LABEL_LENGTH] = 0;
-
-	return 0;
-}
-
 int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersion, int getData)
 {
 	SSHANDLE xlrDevice;
@@ -618,9 +419,9 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 
-	getLabel(&xlrDevice, BANK_A, label);
+	getModuleLabel(&xlrDevice, BANK_A, label);
 	strncpy(mk5status.vsnA, label, 8);
-	getLabel(&xlrDevice, BANK_B, label);
+	getModuleLabel(&xlrDevice, BANK_B, label);
 
 	if(mode != CONDITION_ERASE_ONLY)
 	{
@@ -638,7 +439,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 
 	if(strncmp(vsn, label, 8) != 0)
 	{
-		getLabel(&xlrDevice, BANK_A, label);
+		getModuleLabel(&xlrDevice, BANK_A, label);
 		if(strncmp(vsn, label, 8) != 0)
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH, 
@@ -707,7 +508,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 		}
 		printf("> Disk %d info : %s : %s : %s : %d : %s\n",
 			d, drive[d].model, drive[d].serial, drive[d].rev, 
-			roundSize(drive[d].capacity),
+			roundModuleSize(drive[d].capacity),
 			drive[d].failed ? "FAILED" : "OK");
 	}
 
@@ -737,17 +538,15 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 		newStatus = MODULE_STATUS_UNKNOWN;
 	}
 
-	v = resetDirectory(&xlrDevice, vsn, newStatus, dirVersion, totalCapacity, rate);
-
+	v = resetModuleDirectory(&xlrDevice, vsn, newStatus, dirVersion, totalCapacity, rate);
 	if(v < 0)
 	{
 		/* Something bad happened to the XLR device.  Bail! */
 		return v;
 	}
-
 	dirVersion = v;
 
-	v = resetLabel(&xlrDevice, vsn, totalCapacity, rate, newStatus, dirVersion);
+	v = setModuleLabel(&xlrDevice, vsn, newStatus, dirVersion, totalCapacity, rate);
 	if(v < 0)
 	{
 		/* Something bad happened to the XLR device.  Bail! */

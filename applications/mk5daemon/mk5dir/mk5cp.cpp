@@ -862,6 +862,7 @@ int main(int argc, char **argv)
 	const char *outpath=0;
 	int force = 0;
 	int v;
+	int lockWait = MARK5_LOCK_DONT_WAIT;
 
 	difxMessageInit(-1, "mk5cp");
 
@@ -886,6 +887,10 @@ int main(int argc, char **argv)
 			strcmp(argv[a], "--force") == 0)
 		{
 			force = 1;
+		}
+		else if(strcmp(argv[a], "--wait-forever") == 0)
+		{
+			lockWait = MARK5_LOCK_WAIT_FOREVER;
 		}
 		else if(vsn[0] == 0)
 		{
@@ -924,7 +929,7 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = lockMark5(MARK5_LOCK_DONT_WAIT);
+	v = lockMark5(lockWait);
 
 	if(v < 0)
 	{
