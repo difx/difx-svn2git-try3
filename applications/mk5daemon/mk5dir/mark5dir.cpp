@@ -604,7 +604,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 			n = (mjdref - mf->mjd + 500) / 1000;
 			mf->mjd += n*1000;
 		}
-		else if(mf->format == 1)	/* Mark5B format */
+		else if(mf->format == 1)	/* Mark4 format */
 		{
 			n = (int)((mjdref - mf->mjd + 1826)/3652.4);
 			mf->mjd = addDecades(mf->mjd, n);
@@ -1049,7 +1049,7 @@ int parseModuleLabel(const char *label, char *vsn, int *totalCapacity, int *rate
 	return 0;
 }
 
-int setModuleLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int rate, int newStatus, int dirVersion)
+int setModuleLabel(SSHANDLE *xlrDevice, const char *vsn,  int newStatus, int dirVersion, int totalCapacity, int rate)
 {
 	const char RecordSeparator = 30;
 	char label[XLR_LABEL_LENGTH+1];
@@ -1067,7 +1067,6 @@ int setModuleLabel(SSHANDLE *xlrDevice, const char *vsn, int totalCapacity, int 
 		v = snprintf(label, XLR_LABEL_LENGTH+1, "%8s/%d/%d", 
 			vsn, totalCapacity, rate);
 	}
-	printf("> New label = %s\n", label);
 	
 	if(v > XLR_LABEL_LENGTH)
 	{
@@ -1198,6 +1197,14 @@ int resetModuleDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, in
 	return dirVersion;
 }
 
+int roundModuleSize(long long a)
+{
+	a /= 1000000000;
+	a = (a+2)/5;
+
+	return a*5;
+}
+
 static void trim(char *out, const char *in)
 {
 	int i, s=-1, e=0;
@@ -1282,13 +1289,5 @@ int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], i
 	*totalCapacity = (nDrive*minCapacity/10000000000LL)*10;
 
 	return nDrive;
-}
-
-int roundModuleSize(long long a)
-{
-	a /= 1000000000;
-	a = (a+2)/5;
-
-	return a*5;
 }
 

@@ -92,8 +92,7 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 	char label[XLR_LABEL_LENGTH+1];
 	char oldLabel[XLR_LABEL_LENGTH+1];
 	int dirVersion = -1;
-	int capacity;
-	int nDrive, rate;
+	int nDrive, capacity, rate;
 	int d;
 	char oldVSN[10];
 	char resp[12]="";
@@ -171,9 +170,13 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 
 	if(isLegalModuleLabel(oldLabel))
 	{
-		printf("\nCurrent extended VSN is %s\n", oldLabel);
-		printf("Current disk module state is %s\n", moduleStatusName(moduleStatus) );
-		printf("Module directory version is %d\n", dirVersion);
+		char vsn[10];
+
+		parseModuleLabel(label, vsn, &capacity, &rate, 0);
+
+		printf("\nCurrent extended VSN is %s/%d/%d\n", vsn, capacity, rate);
+		printf("Current disk module status is %s\n", moduleStatusName(moduleStatus) );
+		printf("\nModule directory version is %d\n", dirVersion);
 	}
 	else
 	{
@@ -265,27 +268,26 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 			{
 				rate = nDrive*128;
 			}
+
+			v = setModuleLabel(&xlrDevice, newVSN, moduleStatus, dirVersion, capacity, rate);
+			if(v < 0)
+			{
+				return v;
+			}
+
 			if(dirVersion == 0)
 			{
-				sprintf(label, "%8s/%d/%d%c%s", newVSN, capacity, rate, 30, moduleStatusName(moduleStatus) );	/* ASCII "RS" == 30 */
-
 				if(needsNewDir)
 				{
-					char *data;
-
-					printf("Putting new empty directory on the disk\n");
-
-					dirLength = 83424;
-					data = (char *)calloc(dirLength, 1);
-					WATCHDOGTEST( XLRSetUserDir(xlrDevice, data, dirLength) );
-					free(data);
+					v = resetModuleDirectory(&xlrDevice, newVSN, moduleStatus, dirVersion, capacity, rate);
+					if(v < 0)
+					{
+						return v;
+					}
 				}
 			}
 			else
 			{
-				sprintf(label, "%8s/%d/%d", newVSN, capacity, rate);
-
-				/* also change the status in the directory header */
 				char *data;
 				struct Mark5DirectoryHeaderVer1 *dirHeader;
 
@@ -294,14 +296,14 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 
 				WATCHDOG( xlrRC = XLRGetUserDir(xlrDevice, dirLength, 0, data) );
 				dirHeader->status = moduleStatus;
+				sprintf(dirHeader->vsn, "%s/%d/%d", newVSN, capacity, rate);
 				WATCHDOGTEST( XLRSetUserDir(xlrDevice, data, dirLength) );
 
 				free(data);
 			}
 
-			WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
-
-			printf("Done.  Label = %s\n", label);
+			printf("New extended VSN is %s/%d/%d\n", newVSN, capacity, rate);
+			printf("New disk module status is %s\n", moduleStatusName(moduleStatus));
 		}
 		else
 		{

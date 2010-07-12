@@ -38,6 +38,11 @@
 extern "C" {
 #endif
 
+#ifdef DEBUG
+#define WATCHDOG_PRINT 1
+#else
+#define WATCHDOG_PRINT 0
+#endif
 
 extern time_t watchdogTime;
 extern int watchdogVerbose;
@@ -48,6 +53,7 @@ extern char watchdogXLRError[XLR_ERROR_LENGTH+1];
 /* Macro to run "statement" but set a thread to watch to make sure it doesn't take too long */
 #define WATCHDOG(statement) \
 { \
+	if(WATCHDOG_PRINT) printf("WD[[ %s ]]\n", #statement); \
 	pthread_mutex_lock(&watchdogLock); \
 	watchdogTime = time(0); \
 	strcpy(watchdogStatement, #statement); \
@@ -64,6 +70,7 @@ extern char watchdogXLRError[XLR_ERROR_LENGTH+1];
 /* same as WATCHDOG but performs a return -1 if the return value is not XLR_SUCCESS */
 #define WATCHDOGTEST(statement) \
 { \
+	if(WATCHDOG_PRINT) printf("WD[[ %s ]]\n", #statement); \
 	XLR_RETURN_CODE watchdogRC; \
 	pthread_mutex_lock(&watchdogLock); \
 	watchdogTime = time(0); \

@@ -300,7 +300,8 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 		printf("Current module status is %s\n", moduleStatusName(moduleStatus));
 	}
 
-	v = getModuleDirectoryVersion(&xlrDevice, &dirVersion, 0, 0);
+	v = getModuleDirectoryVersion(&xlrDevice, &dirVersion, 0, 
+		(moduleStatus ? 0 : &moduleStatus) );
 	if(v < 0)
 	{
 		return v;
@@ -313,6 +314,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	else
 	{
 		printf("Module directory version appears to be %d\n", dirVersion);
+		printf("Module status appears to be %s\n", moduleStatusName(moduleStatus) );
 	}
 
 	printf("\n");
@@ -335,7 +337,9 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 
 	if(!readOnly)
 	{
-		if(!force && dir.Length > 0)
+		if(!force && (dir.Length > 0 || 
+			      moduleStatus == MODULE_STATUS_PLAYED ||
+			      moduleStatus == MODULE_STATUS_RECORDED) )
 		{
 			printf("\nAbout to perform destructive write/read test.\n");
 			printf("This module contains %lld bytes of recorded data\n", dir.Length);
@@ -400,36 +404,9 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 
 			printf("\n");
 
-			if(!badLabel)
-			{
-				for(rs = 0; rs < labelLength; rs++)
-				{
-					if(label[rs] == 30)	/* ASCII "RS" == "Record separator" */
-					{
-						break;
-					}
-				}
-				if(rs >= labelLength)
-				{
-					fprintf(stderr, "No record separator found in label\n");
-					badLabel = 1;
-				}
-				else
-				{
-					strcpy(label+rs+1, "Erased");
-				}
-			}
-
-			if(badLabel)
-			{
-				fprintf(stderr, "Warning: Not updating module label.\n");
-				fprintf(stderr, "Please reset the label manually using the vsn program\n\n");
-			}
-			else
-			{
-				WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
-				printf("New disk module state is %s\n", "Erased");
-			}
+			WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
+			printf("New disk module state will be %s\n", 
+				moduleStatusName(MODULE_STATUS_ERASED) );
 
 			for(n = 0; n < nWrite; n++)
 			{
