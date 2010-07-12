@@ -35,9 +35,10 @@
 #include <ctype.h>
 #include <sys/timeb.h>
 #include <signal.h>
-#include "xlrapi.h"
+#include <difxmessage.h>
+#include <mark5ipc.h>
+#include <xlrapi.h>
 #include "watchdog.h"
-#include "difxmessage.h"
 #include "mark5dir.h"
 
 /* Note: this program is largely based on Haystack's SSErase.  Thanks
@@ -63,7 +64,7 @@
 const char program[] = "mk5erase";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.2";
-const char verdate[] = "20100702";
+const char verdate[] = "20100712";
 
 
 #define MJD_UNIX0       40587.0
@@ -578,6 +579,7 @@ int main(int argc, char **argv)
 	char *rv;
 	int v;
 	int dirVersion = -1;
+	int lockWait = MARK5_LOCK_DONT_WAIT;
 
 	if(argc < 2)
 	{
@@ -636,6 +638,10 @@ int main(int argc, char **argv)
 		        strcmp(argv[a], "--getdata") == 0)
 		{
 			getData = 1;
+		}
+		else if(strcmp(argv[a], "--wait-forever") == 0)
+		{
+			lockWait = MARK5_LOCK_WAIT_FOREVER;
 		}
 		else if(argv[a][0] == '-')
 		{
@@ -727,18 +733,29 @@ int main(int argc, char **argv)
 
 	/* *********** */
 
-	v = mk5erase(vsn, mode, verbose, dirVersion, getData);
+	v = lockMark5(lockWait);
+
 	if(v < 0)
 	{
-		if(watchdogXLRError[0] != 0)
+		fprintf(stderr, "Another process (pid=%d) has a lock on this Mark5 unit\n", getMark5LockPID());
+	}
+	else
+	{
+		v = mk5erase(vsn, mode, verbose, dirVersion, getData);
+		if(v < 0)
 		{
-			char message[DIFX_MESSAGE_LENGTH];
-			snprintf(message, DIFX_MESSAGE_LENGTH, 
-				"Streamstor error executing: %s : %s",
-				watchdogStatement, watchdogXLRError);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			if(watchdogXLRError[0] != 0)
+			{
+				char message[DIFX_MESSAGE_LENGTH];
+				snprintf(message, DIFX_MESSAGE_LENGTH, 
+					"Streamstor error executing: %s : %s",
+					watchdogStatement, watchdogXLRError);
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			}
 		}
 	}
+
+	unlockMark5();
 
 	/* *********** */
 
