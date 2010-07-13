@@ -104,7 +104,7 @@ int verify(const char *filename, const char *formatname, long long offset)
 			double ns;
 			mark5_stream_get_frame_time(ms, &mjd, &sec, &ns);
 			printf("frame_num=%lld mjd=%d sec=%d ns=%011.1f n_valid=%d n_invalid=%d\n", 
-				ms->framenum, mjd, sec, ns,
+				(long long int)(ms->framenum), mjd, sec, ns,
 				ms->nvalidatepass, ms->nvalidatefail);
 		}
 
