@@ -42,6 +42,7 @@ const int bandTone[] = {1, -1};
 const int pcalIntTime = 20.0;
 const int pcaltiny = 1e-10; //FIXME review once we've got pcal amplitudes sorted
 
+
 int nextfile(const DifxInput *D, int antId, int *jobId, FILE **file)
 {
 	char filename[50];
@@ -119,7 +120,7 @@ DifxPCal *newDifxPCal(const DifxInput *D, int antId)
 	pc->nRecFreq = D->datastream[dsId].nRecFreq;
 	//FIXME check nRecFreq against D->nIF and act appropriately if they're not the same
 
-	//FIXME check callocs
+	//FIXME check callocs are successful and die if they're not
 	pc->nRecFreqPcal = (int *)calloc(pc->nRecFreq, sizeof(int));
 	pc->recFreqPcalFreq = (int **)calloc(pc->nRecFreq, sizeof(int*));
 	pc->maxRecPcal = 0;
@@ -485,6 +486,73 @@ static int parsePulseCal(const char *line,
 
 	return 0;
 }
+static int parsePulseCalCableCal(const char *line, 
+	int antId,
+	int *sourceId,
+	double *time, float *timeInt, double *cableCal,
+	int refDay, const DifxInput *D, int *configId, 
+	int phasecentre)
+{
+	int np, nb, nt, ns;
+	int nRecChan, recChan;
+	int n, p, i, v;
+	int polId, bandId, tone, state;
+	int pol, band;
+	int scanId;
+	double A;
+	float B, C;
+	double mjd;
+	char antName[20];
+
+	union
+	{
+		int32_t i32;
+		float f;
+	} nan;
+	nan.i32 = -1;
+	
+	n = sscanf(line, "%s%lf%f%lf%n", antName, time, timeInt, 
+		cableCal, &p);
+	printf("\n n%d %f\n", n, *cableCal);
+	if(n != 4)
+	{
+		return -1;
+	}
+
+	if(*cableCal > 999.89 && *cableCal < 999.91)
+	{
+		*cableCal = nan.f;
+	}
+
+	*time -= refDay;
+	mjd = *time + (int)(D->mjdStart);
+
+	if(mjd < D->mjdStart || mjd > D->mjdStop)
+	{
+		return -1;
+	}
+
+	scanId = DifxInputGetScanIdByAntennaId(D, mjd, antId);
+	if(scanId < 0)
+	{	
+		return -3;
+	}
+
+        if(phasecentre >= D->scan[scanId].nPhaseCentres)
+        {
+          printf("Skipping scan %d as the requested phase centre was not used\n", scanId);
+          return -3;
+        }
+
+	*sourceId = D->scan[scanId].phsCentreSrcs[phasecentre];
+	*configId = D->scan[scanId].configId;
+	if(*sourceId < 0 || *configId < 0)	/* not in scan */
+	{
+		return -3;
+	}
+	
+	*cableCal *= 1e-12;
+}
 static int parseDifxPulseCal(const char *line, 
 	int antId, int nBand, int nTone,
 	const DifxPCal *pcal,
@@ -509,14 +577,16 @@ static int parseDifxPulseCal(const char *line,
 	char antName[20];
 	double cableCal;
 	float timeInt;
-	/* This is the same as parsePulseCal except that parameters 
-	 * are taken from D where possible, and cable cal is 0*/
+
 	union
 	{
 		int32_t i32;
 		float f;
 	} nan;
 	nan.i32 = -1;
+
+	/* This is the same as parsePulseCal except that parameters 
+	 * are taken from D where possible, and cable cal is 0*/
 
 	n = sscanf(line, "%s%lf%f%lf%d%d%d%d%d%n", antName, time, &timeInt, 
 		&cableCal, &np, &nb, &nt, &ns, &nRecChan, &p);
@@ -570,8 +640,6 @@ static int parseDifxPulseCal(const char *line,
 			stateCount[pol][i] = 0.0;
 		}
 	}
-
-	cableCal *= 1e-12;
 
 	/* Read in pulse cal information */
 	for(pol = 0; pol < D->nPol; pol++)
@@ -682,7 +750,9 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	int nStationTone = -2;
 	double time;
 	float timeInt;
-	double cableCal;
+	double cableCal, cableCalOut;
+	double cableTime;
+	float cableTimeInt;
 	double freqs[2][array_MAX_TONES];
 	float pulseCalRe[2][array_MAX_TONES];
 	float pulseCalIm[2][array_MAX_TONES];
@@ -697,10 +767,19 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	char *rv;
 	/* The following are 1-based indices for FITS format */
 	int32_t antId1, arrayId1, sourceId1, freqId1;
-	char antName[20];
+
 	int stationpcal = 0;
 	int jobId;
 	DifxPCal **pcalinfo;
+	char antName[20];
+
+	union
+	{
+		int32_t i32;
+		float f;
+	} nan;
+	nan.i32 = -1;
+
 
 	if(D == 0)
 	{
@@ -814,6 +893,9 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 
 		jobId = -1;
 		in2 = 0;
+		cableCal = 0.0;
+		cableTime = 0.0;
+		cableTimeInt = -1.0;
 		/*rewind(in) below this loop*/
 		while(1)
 		{
@@ -884,9 +966,52 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					{
 						continue;/*to next line in file*/
 					}
-					cableCal = 0.0;//FIXME delete once cableCal from pcal file is supported
 					timeInt = D->config[configId].tInt/86400;
 				}
+
+				/*get cable cal from pcal file */
+				while(cableTimeInt < 0 || cableTime + cableTimeInt / 2 < time)
+				{
+					rv = fgets(line, MaxLineLength, in);
+					if(!rv)
+					{
+						break;/*to out of pcal search*/
+					}
+					else
+					{
+						//printf("%s", line);
+					}
+						
+					/* ignore possible comment lines */
+					if(line[0] == '#')
+					{
+						continue;/*to next line in file*/
+					}
+					else 
+					{
+						n = sscanf(line, "%s", antName);
+						if(n != 1 || strcmp(antName, D->antenna[i].name))
+						{
+							continue;/*to next line in file*/	
+						}
+						v = parsePulseCalCableCal(line, i, &sourceId, &cableTime, &cableTimeInt, 
+							&cableCalOut, refDay, D, &configId, phasecentre);
+						printf("\n%f %f %e", cableTime, cableTimeInt, cableCalOut);
+						if(v < 0)
+						{
+							continue;/*to next line in file*/
+						}
+					}
+				}
+				if(cableTimeInt > 0 && cableTime - cableTimeInt/2 < time && cableTime + cableTimeInt/2 > time)
+				{
+					cableCal = cableCalOut;
+				}
+				else
+				{
+					cableCal = nan.f;
+				}
+
 			}
 
 			freqId1 = D->config[configId].freqId + 1;
