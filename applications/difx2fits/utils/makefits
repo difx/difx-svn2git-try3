@@ -38,9 +38,9 @@ from os.path import isfile, isdir, getsize
 from time import gmtime, time
 
 program = 'makefits'
-version = '0.5'
+version = '0.6'
 author  = 'Walter Brisken'
-verdate = '20100601'
+verdate = '20100714'
 
 calFiles = ['flag', 'pcal', 'tsys', 'weather']
 
@@ -56,6 +56,8 @@ def usage(prog):
 	print '             To force operation with mixed DiFX versions\n'
 	print '  --allow-partial'
 	print '             Bypass check for complete set of correlated\n'
+	print '  --bin <bin>'
+	print '  -B <bin>   Generate fits file for pulsar bin <bin>\n'
 	exit(0)
 
 def testgainfiles():
@@ -226,7 +228,7 @@ class JobList:
 
 		return difxVersion
 
-	def makefits(self, queuedir, verbose, sniff, options=''):
+	def makefits(self, queuedir, verbose, sniff, pulsarBin, options=''):
 
 		groupId = getenv('DIFX_GROUP_ID')
 
@@ -291,15 +293,29 @@ class JobList:
 		indices.sort()
 
 		j = 1
-		out = open('%s/%s.fitslist' % (cwd, self.kv['pass']), 'w')
+
+		nDigit = countDigits(indices[-1])
+		if pulsarBin == 0:
+			fitslistFilename = '%s/%s.fitslist' % (cwd, self.kv['pass'])
+			idiFormat = 'VLBA_%%s_%%s_%%0%dd_%%s.idifits' % nDigit
+			jmFormat = 'VLBA_%%s_%%s_%%0%dd_%%s.jobmatrix.txt' % nDigit
+		else:
+			fitslistFilename = '%s/%s.bin%04d.fitslist' % (cwd, self.kv['pass'], pulsarBin)
+			idiFormat = 'VLBA_%%s_%%s_%%0%dd_%%s.bin%04d.idifits' % (nDigit, pulsarBin)
+			jmFormat = 'VLBA_%%s_%%s_%%0%dd_%%s.bin%04d.jobmatrix.txt' % (nDigit, pulsarBin)
+
+		out = open(fitslistFilename, 'w')
 		out.write('exper=%s  pass=%s  jobs=%s  mjd=%9.7f  DiFX=%s  difx2fits=0\n' % \
 			(self.kv['exper'], self.kv['pass'], self.filename, getmjd(t), self.kv['DiFX']))
-		nDigit = countDigits(indices[-1])
-		format = 'VLBA_%%s_%%s_%%0%dd_%%s.idifits' % nDigit
+
 		for i in indices:
-			fn = '%s.%d.FITS' % (expt, i)
+			if pulsarBin == 0:
+				fn = '%s.%d.FITS' % (expt, i)
+			else:
+				fn = '%s.%d.bin%04d.FITS' % (expt, i, pulsarBin)
+				
 			size = getsize(fn)/1000000.0
-			archfile = format % (self.kv['exper'], self.kv['pass'], j, datestr)
+			archfile = idiFormat % (self.kv['exper'], self.kv['pass'], j, datestr)
 			out.write('%s %4.2f %s\n' % (archfile, size, fn))
 			cmd = 'mv %s %s/%s' % (fn, dir, archfile)
 			if verbose:
@@ -315,11 +331,13 @@ class JobList:
 		out.close()
 
 		j = 1
-		format = 'VLBA_%%s_%%s_%%0%dd_%%s.jobmatrix.txt' % nDigit
 		for i in indices:
-			fn = '%s.%d.jobmatrix' % (expt, i)
+			if pulsarBin == 0:
+				fn = '%s.%d.jobmatrix' % (expt, i)
+			else:
+				fn = '%s.%d.bin%04d.jobmatrix' % (expt, i, pulsarBin)
 			if isfile(fn):
-				archfile = format % (self.kv['exper'], self.kv['pass'], j, datestr)
+				archfile = jmFormat % (self.kv['exper'], self.kv['pass'], j, datestr)
 				cmd = 'mv %s %s/%s' % (fn, dir, archfile)
 				if verbose:
 					print 'Executing: %s' % cmd
@@ -333,47 +351,50 @@ class JobList:
 			j = j + 1
 
 		# merge and gzip difxlog files
-		logFile = '%s/%s.difxlog' % (cwd, self.kv['pass'])
-		cmd = 'cat'
-		nLog = 0
-		for j in self.jobs:
-			fn = dir + '/' + j.name + '.difxlog'
-			if isfile(fn):
-				cmd = cmd + ' ' + fn
-				nLog += 1
-		if nLog > 0:
-			cmd = cmd + ' > ' + logFile
-			if verbose:
-				print 'Executing: %s' % cmd
-			system(cmd)
-			cmd = 'gzip -f %s' % logFile
-			if verbose:
-				print 'Executing: %s' % cmd
-			system(cmd)
-			if groupId != None:
-				cmd = 'chown -R :%s %s.gz' % (groupId, logFile)
+		if pulsarBin == 0:
+			logFile = '%s/%s.difxlog' % (cwd, self.kv['pass'])
+			cmd = 'cat'
+			nLog = 0
+			for j in self.jobs:
+				fn = dir + '/' + j.name + '.difxlog'
+				if isfile(fn):
+					cmd = cmd + ' ' + fn
+					nLog += 1
+			if nLog > 0:
+				cmd = cmd + ' > ' + logFile
 				if verbose:
 					print 'Executing: %s' % cmd
 				system(cmd)
-		else:
-			if verbose:
-				print 'No .difxlog files to merge'
+				cmd = 'gzip -f %s' % logFile
+				if verbose:
+					print 'Executing: %s' % cmd
+				system(cmd)
+				if groupId != None:
+					cmd = 'chown -R :%s %s.gz' % (groupId, logFile)
+					if verbose:
+						print 'Executing: %s' % cmd
+					system(cmd)
+			else:
+				if verbose:
+					print 'No .difxlog files to merge'
 
 		# merge sniffer files
-		sniffFiles = ''
-		if sniff:
-			for x in [['acb', False] , ['apd', True], ['apc', True], ['log', False], ['wts', True], ['xcb', False]]:
-				sniffFile = mergesnifferfiles(expt, indices, self.kv['pass'], x[0], cwd, verbose, x[1])
-				if sniffFile != None:
-					sniffFiles += ' ' + sniffFile
+		if pulsarBin == 0:
+			sniffFiles = ''
+			if sniff:
+				for x in [['acb', False] , ['apd', True], ['apc', True], ['log', False], ['wts', True], ['xcb', False]]:
+					sniffFile = mergesnifferfiles(expt, indices, self.kv['pass'], x[0], cwd, verbose, x[1])
+					if sniffFile != None:
+						sniffFiles += ' ' + sniffFile
 
-		if sniffFiles != '':
-			if groupId != None:
-				cmd = 'chown -R :%s %s' % (groupId, sniffFiles)
-				if verbose:
-					print 'Executing: %s' % cmd
-				system(cmd)
+			if sniffFiles != '':
+				if groupId != None:
+					cmd = 'chown -R :%s %s' % (groupId, sniffFiles)
+					if verbose:
+						print 'Executing: %s' % cmd
+					system(cmd)
 
+		# remove residual calibration files
 		if len(calfiles) > 0:
 			cmd = 'rm %s' % calfiles
 			if verbose:
@@ -439,6 +460,7 @@ overrideVersion = False
 allowPartial = False
 verbose = False
 sniff = True
+pulsarBin = 0
 
 opts = ''
 args = []
@@ -452,20 +474,30 @@ for a in argv[1:]:
 		elif a in ('-h', '--help'):
 			usage(argv[0])
 			opts = opts + ' -v'
+		elif a in ('-v', '--verbose'):
+			verbose = True
+		elif a in ('-x', '--dont-sniff'):
+			sniff = False
+		elif a in ('-B', '--bin'):
+			pulsarBin = -1
 		else:
 			opts = opts + ' ' + a
-
-		if a in ('-v', '--verbose'):
-			verbose = True
-		if a in ('-x', '--dont-sniff'):
-			sniff = False
 	else:
-		args.append(a)
+		if pulsarBin == -1:
+			pulsarBin = int(a)
+		else:
+			args.append(a)
 
 if opts == '':
 	opts = '-v'
 
+if pulsarBin > 0:
+	opts = opts + (' --dont-sniff --bin %d' % pulsarBin)
+
 if len(args) < 1:
+	usage(argv[0])
+
+if pulsarBin < 0:
 	usage(argv[0])
 
 gcFilesMissing = testgainfiles()
@@ -495,7 +527,7 @@ for arg in args:
 			print 'Run with --allow-partial to process a subset of data.\n'
 		exit(0)
 
-	OK = jl.makefits(difxQueueBase, verbose, sniff, opts)
+	OK = jl.makefits(difxQueueBase, verbose, sniff, pulsarBin, opts)
 
 if len(gcFilesMissing) > 0:
 	print '\nWarning: some gain curve files were not found:'

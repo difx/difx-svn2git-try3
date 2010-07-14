@@ -238,6 +238,11 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 					i++;
 					opts->jobMatrixDeltaT = atof(argv[i]);
 				}
+				else if(strcmp(argv[i], "--sniff-time") == 0)
+				{
+					i++;
+					opts->sniffTime = atof(argv[i]);
+				}
 				else if(strcmp(argv[i], "--average") == 0 ||
 				        strcmp(argv[i], "-a") == 0)
 				{
