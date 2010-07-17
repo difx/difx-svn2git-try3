@@ -35,8 +35,8 @@
 #include "difxmessage.h"
 
 const char program[] = "difxlog";
-const char version[] = "0.2";
-const char verdate[] = "20090427";
+const char version[] = "0.3";
+const char verdate[] = "20100717";
 const char author[]  = "Walter Brisken";
 
 int usage(const char *prog)
@@ -63,14 +63,23 @@ int usage(const char *prog)
 
 int checkPid(int pid)
 {
-	char cmd[100];
+	const int CommandLength = 128;
+	const int StrLength = 16;
+	char cmd[CommandLength];
 	const char *c;
 	FILE *p;
-	char s[10];
+	char s[StrLength];
+	int v;
 
-	sprintf(cmd, "ps -p %d -o pid --no-headers", pid);
+	v = snprintf(cmd, CommandLength, "ps -p %d -o pid --no-headers", pid);
+	if(v >= CommandLength)
+	{
+		fprintf(stderr, "Developer error: checkPid: CommandLength=%d is too small (%d wanted)\n",
+			CommandLength, v);
+		exit(0);
+	}
 	p = popen(cmd, "r");
-	c = fgets(s, 9, p);
+	c = fgets(s, StrLength-1, p);
 	pclose(p);
 	if(c == 0)
 	{
@@ -86,16 +95,17 @@ int checkPid(int pid)
 
 int main(int argc, char **argv)
 {
-	char identifier[256];
+	const int TimeLength = 32;
+	char identifier[DIFX_MESSAGE_IDENTIFIER_LENGTH];
 	int logLevel = DIFX_ALERT_LEVEL_INFO;
 	int pidWatch = -1;
 	int sock;
-	int i, l;
-	char message[1024], from[32];
+	int i, l, v;
+	char message[DIFX_MESSAGE_LENGTH], from[DIFX_MESSAGE_PARAM_LENGTH];
 	DifxMessageGeneric G;
 	FILE *out;
 	time_t t, lastt;
-	char timestr[32];
+	char timestr[TimeLength];
 	char tag[64+DIFX_MESSAGE_PARAM_LENGTH];
 
 	time(&lastt);
@@ -113,7 +123,12 @@ int main(int argc, char **argv)
 		pidWatch = atoi(argv[4]);
 	}
 
-	strcpy(identifier, argv[1]);
+	v = snprintf(identifier, DIFX_MESSAGE_IDENTIFIER_LENGTH, "%s", argv[1]);
+	if(v >= DIFX_MESSAGE_IDENTIFIER_LENGTH)
+	{
+		fprintf(stderr, "Error: identifier length is too long!\n");
+		return 0;
+	}
 
 	out = fopen(argv[2], "w");
 	if(!out)
@@ -128,7 +143,7 @@ int main(int argc, char **argv)
 	for(;;)
 	{
 		from[0] = 0;
-		l = difxMessageReceive(sock, message, 1023, from);
+		l = difxMessageReceive(sock, message, DIFX_MESSAGE_LENGTH-1, from);
 		if(l < 0)
 		{
 			usleep(10000);
@@ -138,7 +153,12 @@ int main(int argc, char **argv)
 		difxMessageParse(&G, message);
 
 		time(&t);
-		strcpy(timestr, ctime(&t));
+		v = snprintf(timestr, TimeLength, "%s", ctime(&t));
+		if(v >= TimeLength)
+		{
+			fprintf(stderr, "Developer error: TimeLength=%d is too small (%d wanted)\n",
+				TimeLength, v);
+		}
 		timestr[strlen(timestr)-1] = 0;
 
 		if(strcmp(G.identifier, identifier) == 0)
@@ -146,7 +166,7 @@ int main(int argc, char **argv)
 			sprintf(tag, "%s %3d %s", timestr, G.mpiId, G.from);
 			if(G.type == DIFX_MESSAGE_ALERT)
 			{
-				DifxMessageAlert *A;
+				const DifxMessageAlert *A;
 
 				A = &G.body.alert;
 				if(A->severity <= logLevel)
@@ -157,7 +177,7 @@ int main(int argc, char **argv)
 			}
 			else if(G.type == DIFX_MESSAGE_STATUS)
 			{
-				DifxMessageStatus *S;
+				const DifxMessageStatus *S;
 
 				S = &G.body.status;
 				
@@ -172,6 +192,22 @@ int main(int argc, char **argv)
 					}
 					fprintf(out, "\n");
 				}
+				fflush(out);
+			}
+			else if(G.type == DIFX_MESSAGE_TRANSIENT)
+			{
+				const DifxMessageTransient *T;
+
+				T = &G.body.transient;
+
+				fprintf(out, "Transient event received: jobId=%s priority=%f startMJD=%14.8f stopMJD=%14.8f destDir=\"%s\" comment=\"%s\"\n",
+					T->jobId, 
+					T->priority,
+					T->startMJD,
+					T->stopMJD,
+					T->destDir,
+					T->comment);
+				fflush(out);
 			}
 		}
 

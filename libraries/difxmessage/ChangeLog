@@ -4,6 +4,8 @@ Post DiFX-1.5.3
 Add difxVersion to difxStartMessage
 cpumon and mk5mon: catch exceptions and prevent terminal infection
 Add mark5ipc library
+difxlog: Log transient messages
+testdifxmessagereceive: allow selection of one message type, add in-line help
 
 Version 7.2
 ~~~~~~~~~~~

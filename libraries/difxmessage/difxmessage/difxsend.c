@@ -106,13 +106,21 @@ int difxMessageSendProcessState(const char *state)
 {
 	const int MaxSize=200;
 	char message[MaxSize];
+	int v;
 
 	if(difxMessagePort < 0)
 	{
 		return -1;
 	}
 
-	snprintf(message, MaxSize, "%s %s", difxMessageIdentifier, state);
+	v = snprintf(message, MaxSize, "%s %s", difxMessageIdentifier, state);
+
+	if(v >= MaxSize)
+	{
+		fprintf(stderr, "difxMessageSendProcessState: message body overflow (%d >= %d)\n",
+			v, MaxSize);
+		return -1;
+	}
 
 	return difxMessageSend(message);
 }
