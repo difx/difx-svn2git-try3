@@ -49,16 +49,22 @@ int lockStreamstor(Mk5Daemon *D, const char *identifier, int wait)
 	v = lockMark5(wait);
 	if(v)
 	{
-		if(wait > 0)
+		if(D->streamstorLockIdentifer[0])
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH,
 				"Identifier=%s cannot obtain Streamstor lock.  Identifier=%s maintains control.", identifier, D->streamstorLockIdentifer);
-			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 		}
 		else
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH,
-				"Identifier=%s cannot obtain Streamstor lock.  Identifier=%s maintains control.", identifier, D->streamstorLockIdentifer);
+				"Identifier=%s cannot obtain Streamstor lock.  PID=%d maintains control.", identifier, getMark5LockPID());
+		}
+		if(wait > 0)
+		{
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+		}
+		else
+		{
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_VERBOSE);
 		}
 	}
@@ -67,11 +73,6 @@ int lockStreamstor(Mk5Daemon *D, const char *identifier, int wait)
 		strncpy(D->streamstorLockIdentifer, identifier,
 			DIFX_MESSAGE_IDENTIFIER_LENGTH-1);
 		D->streamstorLockIdentifer[DIFX_MESSAGE_IDENTIFIER_LENGTH-1] = 0;
-
-
-		snprintf(message, DIFX_MESSAGE_LENGTH,
-			"Identifier=%s got Streamstor lcok.", identifier);
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_VERBOSE);
 	}
 
 	return v;

@@ -177,13 +177,13 @@ int setvsn(int bank, char *newVSN, int newStatus, int force, int verbose)
 		printf("\nCurrent extended VSN is %s/%d/%d\n", vsn, capacity, rate);
 		printf("Current disk module status is %s\n", moduleStatusName(moduleStatus) );
 		printf("\nModule directory version is %d\n", dirVersion);
+		printf("This module contains %lld bytes of recorded data and is %4.2f%% full.\n", dir.Length,
+			100.0*roundModuleSize(dir.Length)/capacity);
 	}
 	else
 	{
 		printf("\nNo VSN currently set on module\n");
 	}
-
-	printf("%lld bytes recorded on this module\n", dir.Length);
 
 	printf("\n");
 

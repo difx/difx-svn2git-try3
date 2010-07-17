@@ -61,7 +61,7 @@ public:
 	void addMark5Unit(const char *unit);
 	void addEvent(const DifxMessageTransient *dt);
 	void setUser(const char *u);
-	void copy();
+	int copy(double maxDuration);
 	void print() const;
 };
 
@@ -74,7 +74,7 @@ public:
 	EventManager();
 	~EventManager();
 	EventQueue *startJob(const char *jobId);
-	void stopJob(const char *jobId);
+	void stopJob(const char *jobId, double maxDuration);
 	bool addEvent(const DifxMessageTransient *dt);
 	void print();
 };

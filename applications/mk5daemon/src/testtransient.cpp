@@ -69,10 +69,10 @@
 
 	E.print();
 
-	E.stopJob("jobXX");
+	E.stopJob("jobXX", 500);
 
 	E.print();
-	E.stopJob("jobYY");
+	E.stopJob("jobYY", 5000);
 	E.print();
 
  	return 0;

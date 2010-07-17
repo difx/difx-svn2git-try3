@@ -408,7 +408,7 @@ int copyScan(SSHANDLE xlrDevice, const char *vsn, const char *outpath, int scanN
 			v = getBankInfo(xlrDevice, mk5status, mk5status->activeBank == 'B' ? 'A' : 'B');
 			if(v < 0)
 			{
-				return -1;
+				return v;
 			}
 		}
 

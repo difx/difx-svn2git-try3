@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/statvfs.h>
@@ -161,6 +162,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	const char *difxProgram;
 	int returnValue;
 	char altDifxProgram[64];
+	time_t t1, t2;
 
 	if(!G)
 	{
@@ -559,12 +561,15 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 //		}
 //		Q->setUser(user);
 		/* cause mpifxcorr to run! */
+
+		t1 = time(0);
 		returnValue = Mk5Daemon_system(D, command, 1);
+		t2 = time(0);
 
 		/* deregister this job with the Transient Event Monitor after 
 		 * performing any needed data copying
 		 */
-//		D->eventManager.stopJob(jobName);
+//		D->eventManager.stopJob(jobName, (t2-t1)/100.0);
 
 		/* FIXME -- make use of returnValue  */
 		difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");

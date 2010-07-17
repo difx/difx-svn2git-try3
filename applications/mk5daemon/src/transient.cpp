@@ -30,6 +30,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include "transient.h"
 
 bool operator< (Event &t1, Event &t2)
@@ -49,22 +50,26 @@ void EventQueue::addEvent(const DifxMessageTransient *dt)
 	destDir = dt->destDir;
 }
 
-void EventQueue::copy()
+int EventQueue::copy(double maxDuration)
 {
 	const int CommandSize = 512;
 	list<Event>::const_iterator e;
 	list<string>::const_iterator m;
 	char command[CommandSize];
 	int v;
+	int nCopy = 0;
+	time_t tStart;
 
 	if(events.empty())
 	{
-		return;
+		return 0;
 	}
 
 	/* put the events in decreasing priority and generate the copy command */
 	events.sort();
 	events.reverse();
+
+	tStart = time(0);
 
 	// FIXME -- this should be parallelized across units!
 	for(e = events.begin(); e != events.end(); e++)
@@ -80,7 +85,14 @@ void EventQueue::copy()
 
 			v = system(command);
 		}
+		nCopy++;
+		if(time(0)-tStart > maxDuration)
+		{
+			break;
+		}
 	}
+
+	return nCopy;
 }
 
 void EventQueue::addMark5Unit(const char *unit)
@@ -151,7 +163,7 @@ EventQueue *EventManager::startJob(const char *jobId)
 	return &queues.back();
 }
 
-void EventManager::stopJob(const char *jobId)
+void EventManager::stopJob(const char *jobId, double maxDuration)
 {
 	list<EventQueue>::iterator q;
 
@@ -161,7 +173,7 @@ void EventManager::stopJob(const char *jobId)
 	{
 		if(q->jobId == jobId)
 		{
-			q->copy();
+			q->copy(maxDuration);
 			queues.erase(q);
 			break;
 		}

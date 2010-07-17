@@ -32,8 +32,17 @@
 #include <string.h>
 #include <mark5ipc.h>
 
-int usage()
+int usage(const char *cmd)
 {
+	printf("mk5lock\n\n");
+	printf("A utility to manage the IPC semaphore locking access to Mark5\n\n");
+	printf("Usage: %s [options]\n\n", cmd);
+	printf("Options can include:\n\n");
+	printf("  -l   Lock the unit\n\n");
+	printf("  -u   Unlock the unit\n\n");
+	printf("  -5   Lock the unit for 5 seconds\n\n");
+	printf("  -h   Print this useful help information\n\n");
+
 	return 0;
 }
 
@@ -42,9 +51,9 @@ int main(int argc, char **argv)
 	const char *action;
 	int v;
 
-	if(argc < 0)
+	if(argc < 2)
 	{
-		return usage();
+		return usage(argv[0]);
 	}
 	action = argv[1];
 
@@ -53,7 +62,7 @@ int main(int argc, char **argv)
 		v = lockMark5(MARK5_LOCK_DONT_WAIT);
 		if(v < 0)
 		{
-			printf("Sorry, unit is locked\n");
+			printf("Sorry, unit is locked by process ID %d\n", getMark5LockPID());
 		}
 	}
 	else if(strcmp(action, "-u") == 0)
@@ -74,7 +83,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		printf("huh?\n");
+		return usage(argv[0]);
 	}
 
 	return 0;
