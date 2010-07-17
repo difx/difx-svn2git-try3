@@ -413,6 +413,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	int dirVersion;		/* == 0 for old style (pre-mark5-memo 81) */
 				/* == version number for mark5-memo 81 */
 	int oldLen1, oldLen2, oldLen3;
+	int start;
 
 	streamstordatatype *buffer;
 
@@ -481,17 +482,30 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	}
 
 	/* the adventurous would use md5 here */
-	signature = 1;
-	for(j = 0; j < len/4; j++)
+	if(dirVersion == 0)
 	{
-		x = ((unsigned int *)dirData)[j] + 1;
-		signature = signature ^ x;
+		start = 0;
 	}
-
-	/* prevent a zero signature */
-	if(signature == 0)
+	else
 	{
-		signature = 0x55555555;
+		/* Don't base directory on header material as that can change */
+		start = sizeof(struct Mark5DirectoryHeaderVer1);
+	}
+	signature = 1;
+
+	if(start < len)
+	{
+		for(j = start/4; j < len/4; j++)
+		{
+			x = ((unsigned int *)dirData)[j] + 1;
+			signature = signature ^ x;
+		}
+
+		/* prevent a zero signature */
+		if(signature == 0)
+		{
+			signature = 0x55555555;
+		}
 	}
 
 	if(module->signature == signature && module->nscans > 0)
