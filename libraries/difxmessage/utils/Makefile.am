@@ -12,7 +12,6 @@ bin_PROGRAMS = \
 	testdifxmessagereceivecond \
 	testseqnumbers \
 	testm5lock \
-	difxaudio \
 	difxlog
 
 dist_bin_SCRIPTS = \
