@@ -785,11 +785,11 @@ bool Configuration::processBaselineTable(ifstream * input)
       continue; //only need to nadger lower sideband freqs here, and only when they are correlated against USB
     for(int i=0;i<baselinetablelength;i++)
     {
+      bldata = baselinetable[i];
       for(int j=0;j<baselinetable[i].numfreqs;j++)
       {
         if(bldata.freqtableindices[j] == f) //its a match - check the other datastream for USB
         {
-          bldata = baselinetable[i];
           dsdata = datastreamtable[bldata.datastream2index];
           dsband = bldata.datastream2bandindex[j][0];
           if(dsband >= dsdata.numrecordedbands) //it is a zoom band
@@ -806,6 +806,7 @@ bool Configuration::processBaselineTable(ifstream * input)
     }
     if(freqtable[f].correlatedagainstupper) //need to alter all freqindices to be the equivalent USB
     {
+      matchfindex = 0;
       //first find the matching USB freq
       for(int i=0;i<freqtablelength;i++)
       {
@@ -814,6 +815,7 @@ bool Configuration::processBaselineTable(ifstream * input)
       }
       for(int i=0;i<baselinetablelength;i++)
       {
+        bldata = baselinetable[i];
         for(int j=0;j<baselinetable[i].numfreqs;j++)
         {
           if(bldata.freqtableindices[j] == f) //this baseline had referred to the LSB - replace with the USB freqindex
@@ -1055,10 +1057,10 @@ bool Configuration::processDatastreamTable(ifstream * input)
     }
     getinputline(input, &line, "PHASE CAL INT (MHZ)");
     datastreamtable[i].phasecalintervalmhz = atoi(line.c_str());
-    if(datastreamtable[i].phasecalintervalmhz < 0)
+    if(datastreamtable[i].phasecalintervalmhz != 0)
     {
       if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "Error - phase cal interval <0 currently unsupported" << endl;
+        cwarn << startl << "Phase cal extraction requested not yet supported!!!" << endl;
     }
 
     getinputline(input, &line, "NUM RECORDED FREQS");
@@ -1725,7 +1727,7 @@ bool Configuration::populateResultLengths()
 
 bool Configuration::consistencyCheck()
 {
-  int tindex, count, freqindex, freq1index, freq2index;
+  int tindex, count, freqindex, freq1index, freq2index, confindex, timesec, initscan, initsec;
   double bandwidth, sampletimens, ffttime, numffts, f1, f2;
   datastreamdata ds1, ds2;
   baselinedata bl;
@@ -2066,7 +2068,7 @@ bool Configuration::consistencyCheck()
         }
       }
       //catch the case of LSB against LSB where there is a USB somewhere
-      else if(freqtable[freq1index].lowersideband && freqtable[freqindex].correlatedagainstupper)
+      else if(freqtable[freq1index].lowersideband && freqtable[freq2index].correlatedagainstupper)
       {
         baselinetable[i].oddlsbfreqs[j] = 3; //both are lower, but still need to be shifted
       }
@@ -2164,6 +2166,31 @@ bool Configuration::consistencyCheck()
     if(mpiid == 0) //only write one copy of this error message
       cfatal << startl << "There must be an integer number of sends per datasegment.  Presently databufferfactor is " << databufferfactor << ", and numdatasegments is " << numdatasegments << " - aborting!!!" << endl;
     return false;
+  }
+
+  //if there is any pulsar binning, make sure we have polycos
+  initscan = 0;
+  while(model->getScanEndSec(initscan, startmjd, startseconds) < 0)
+    initscan++;
+  initsec = -(model->getScanStartSec(initscan, startmjd, startseconds));
+  if(initsec < 0)
+    initsec = 0;
+  for(int i=initscan;i<model->getNumScans();i++)
+  {
+    confindex =  scanconfigindices[i];
+    if(configs[confindex].pulsarbin)
+    {
+      for(int j=initsec;j<=model->getScanDuration(i);j++)
+      {
+        timesec = model->getScanStartSec(i, startmjd, startseconds) + startseconds + j;
+        if(Polyco::getCurrentPolyco(confindex, startmjd, timesec/86400.0, configs[confindex].polycos, configs[confindex].numpolycos, false) == NULL) {
+          if(mpiid == 0) //only write one copy of this error message
+            cfatal << startl << "Could not find a polyco to cover MJD " << startmjd + timesec/86400 << ", sec " << timesec % 86400 << " - aborting!!!" << endl;
+          return false;
+        }
+      }
+    }
+    initsec = 0;
   }
 
   return true;
@@ -2523,5 +2550,4 @@ void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day)
   month = (m + 2)%12 + 1;
   day = d + 1;
 }
-
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

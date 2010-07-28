@@ -280,4 +280,4 @@ inline int genericCopy_u8(u8 * src, u8 * dest, int length)
 #endif /* Generic Architecture */
 
 #endif /* Defined architecture header */
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

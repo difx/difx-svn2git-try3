@@ -158,7 +158,7 @@ protected:
   Model * model;
   string ** datafilenames;
   ifstream input;
-  
+
   static const int LBA_HEADER_LENGTH = 4096;
  
  /** 
@@ -263,9 +263,10 @@ protected:
   pthread_cond_t readcond;
   pthread_cond_t initcond;
   pthread_mutex_t * bufferlock;
+  pthread_mutex_t outstandingsendlock;
   MPI_Status * datastatuses;
   MPI_Status * controlstatuses;
 };
 
 #endif
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

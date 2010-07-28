@@ -106,4 +106,4 @@ extern Alert cverbose;
 extern Alert cdebug;
 
 #endif
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

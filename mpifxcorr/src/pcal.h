@@ -193,3 +193,4 @@ class PCal {
 };
 
 #endif // _PCAL_H
+// vim: shiftwidth=2:softtabstop=2:expandtab

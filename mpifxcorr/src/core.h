@@ -103,7 +103,6 @@ private:
   typedef struct {
     f32 **** baselineweight; //[freq][pulsarbin][baseline][pol]
     cf32 * threadcrosscorrs;
-    //cf32 * threadresults;
     s32 *** bins; //[fftsubloop][freq][channel]
     cf32* pulsarscratchspace;
     cf32******* pulsaraccumspace; //[freq][stride][baseline][source][polproduct][bin][channel]
@@ -254,4 +253,4 @@ private:
 };
 
 #endif
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

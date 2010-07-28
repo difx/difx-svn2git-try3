@@ -501,7 +501,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 				n = (long long)((
 					( ( (corrstartday - scan->mjd)*86400 
 					+ corrstartseconds - scan->sec) - scanns*1.e-9)
-					*framespersecond) + 0.5);
+					*config->getFramesPerSecond(configindex, streamnum)) + 0.5);
 				readpointer += n*scan->framebytes;
 				readseconds = 0;
 				readnanoseconds = 0;
@@ -812,6 +812,11 @@ void NativeMk5DataStream::loopfileread()
   int perr;
   int numread = 0;
 
+  //lock the outstanding send lock
+  perr = pthread_mutex_lock(&outstandingsendlock);
+  if(perr != 0)
+    csevere << startl << "Error in initial telescope readthread lock of outstandingsendlock!!!" << endl;
+
   //lock the first section to start reading
   openfile(bufferinfo[0].configindex, 0);
   moduleToMemory(numread++);
@@ -886,6 +891,11 @@ void NativeMk5DataStream::loopfileread()
   perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
   if(perr != 0)
     csevere << startl << "Error in telescope readthread unlock of buffer section!!!" << lastvalidsegment << endl;
+
+  //unlock the outstanding send lock
+  perr = pthread_mutex_unlock(&outstandingsendlock);
+  if(perr != 0)
+    csevere << startl << "Error in telescope readthread unlock of outstandingsendlock!!!" << endl;
 
   cinfo << startl << "Readthread is exiting! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
 }
@@ -1052,4 +1062,4 @@ int NativeMk5DataStream::sendMark5Status(enum Mk5State state, int scanNum, long 
 
 	return v;
 }
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

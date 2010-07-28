@@ -200,6 +200,7 @@ class Model{
       f64 **** delay;
       f64 **** wet;
       f64 **** dry;
+      f64 **** adj;
       f64 *** clock;
     } scan;
 
@@ -228,3 +229,4 @@ class Model{
 };
 
 #endif
+// vim: shiftwidth=2:softtabstop=2:expandtab

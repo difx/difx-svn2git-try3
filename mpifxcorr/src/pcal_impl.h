@@ -291,4 +291,4 @@ class PCalExtractorDummy : public PCal {
 
 
 #endif // _PCAL_IMPL_H
-
+// vim: shiftwidth=2:softtabstop=2:expandtab

@@ -618,7 +618,7 @@ private:
     int *  recordedfreqpols;
     int *  recordedfreqtableindices;
     int *  numrecordedfreqpcaltones;
-    int ** recordedfreqpcaltonefreqs;
+    int ** recordedfreqpcaltonefreqs; 
     int * recordedfreqpcaloffsetshz;
     double * recordedfreqclockoffsets;
     double * recordedfreqlooffsets;
@@ -637,7 +637,6 @@ private:
     int portnumber;
     int tcpwindowsizekb;
   } datastreamdata;
-
 
  /**
   * Reads through the input file and locates the next section header
@@ -787,4 +786,4 @@ private:
 };
 
 #endif
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

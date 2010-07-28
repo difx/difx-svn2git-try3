@@ -633,6 +633,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   int freqchannels;
   int xmacstridelength, xmacpasses, xmacstart, destbin, destchan, localfreqindex;
   int outputoffset, input1offset, input2offset, xmacmullength;
+  int dsfreqindex;
+  char papol;
   double offsetmins, blockns;
   f32 bweight;
   Mode * m1, * m2;
@@ -661,8 +663,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     modes[j]->setDumpKurtosis(scratchspace->dumpkurtosis);
     if(scratchspace->dumpkurtosis)
       modes[j]->zeroKurtosis();
-    //reset pcal
     
+    //reset pcal
     if(config->getDPhaseCalIntervalMHz(procslots[index].configindex, j) > 0)
     {
       // Calculate the sample time. Every band has the same bandwidth.
@@ -762,7 +764,56 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     resultindex = 0;
     for(int f=0;f<config->getFreqTableLength();f++)
     {
-      if(config->isFrequencyUsed(procslots[index].configindex, f))
+      if(config->phasedArrayOn(procslots[index].configindex)) //phased array processing
+      {
+        freqchannels = config->getFNumChannels(procslots[index].configindex);
+        for(int j=0;j<config->getFPhasedArrayNumPols(procslots[index].configindex, f);j++)
+        {
+          papol = config->getFPhaseArrayPol(procslots[index].configindex, f, j);
+
+          //weight and add the results for each baseline
+          for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);fftsubloop++)
+          {
+            for(int k=0;k<numdatastreams;k++)
+            {
+              vis1 = 0;
+              for(int l=0;l<config->getDNumRecordedBands(procslots[index].configindex, k);l++)
+              {
+                dsfreqindex = config->getDRecordedFreqIndex(procslots[index].configindex, k, l);
+                if(dsfreqindex == f && config->getDRecordedBandPol(procslots[index].configindex, k, l) == papol) {
+                  vis1 = modes[k]->getFreqs(l, fftsubloop);
+                  break;
+                }
+              }
+              if(vis1 == 0)
+              {
+                for(int l=0;l<config->getDNumZoomBands(procslots[index].configindex, k);l++)
+                {
+                  dsfreqindex = config->getDZoomFreqIndex(procslots[index].configindex, k, l);
+                  if(dsfreqindex == f && config->getDZoomBandPol(procslots[index].configindex, k, l) == papol) {
+                    vis1 = modes[k]->getFreqs(config->getDNumRecordedBands(procslots[index].configindex, k) + l, fftsubloop);
+                    break;
+                  }
+                }
+              }
+              if(vis1 != 0)
+              {
+                //weight the data
+                status = vectorMulC_f32((f32*)vis1, config->getFPhasedArrayDWeight(procslots[index].configindex, f, k), (f32*)scratchspace->rotated, freqchannels*2);
+                if(status != vecNoErr)
+                  cerror << startl << "Error trying to scale phased array results!" << endl;
+
+                //add it to the result
+                status = vectorAdd_cf32_I(scratchspace->rotated, &(scratchspace->threadcrosscorrs[resultindex]), freqchannels);
+                if(status != vecNoErr)
+                  cerror << startl << "Error trying to add phased array results!" << endl;
+              }
+            }
+          }
+          resultindex += freqchannels;
+        }
+      }
+      else if(config->isFrequencyUsed(procslots[index].configindex, f)) //normal processing
       {
         //All baseline freq indices into the freq table are determined by the *first* datastream
         //in the event of correlating USB with LSB data.  Hence all Nyquist offsets/channels etc
@@ -998,7 +1049,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 void Core::copyPCalTones(int index, int threadid, Mode ** modes)
 {
   int resultindex, localfreqindex, perr;
-  
+  cf32 pcal;
+
   //lock the pcal copylock, so we're the only one adding to the result array (pcal section)
   perr = pthread_mutex_lock(&(procslots[index].pcalcopylock));
   if(perr != 0)
@@ -1019,10 +1071,6 @@ void Core::copyPCalTones(int index, int threadid, Mode ** modes)
           procslots[index].results[resultindex].re += modes[i]->getPcal(j,k).re;
           procslots[index].results[resultindex].im += modes[i]->getPcal(j,k).im;
 	  resultindex++;
-	  
-	  //NOTE Print the pcals out to stdout for debugging.
-	  // cout << "PCAL " <<  " " << procslots[index].offsets[1] <<  " " << procslots[index].offsets[2]/1000000 << " secs ms "<<i << " " << j << " " << k << " " << sqrt(pow(modes[i]->getPcal(j,k).re, 2.0) + pow(modes[i]->getPcal(j,k).im, 2.0)) << " " << atan2(modes[i]->getPcal(j,k).im, modes[i]->getPcal(j,k).re)*180.0/M_PI << endl;
-          
         }
       }
     }
@@ -1602,7 +1650,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
     }
     coreindex += corebinloop*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)*freqchannels/channelinc;
   }
-  
+
   //cinfo << startl << "For index " << index << ", thread " << threadid << " is about to finish freqindex " << freqindex << ", baseline " << baseline << endl;
 
   //unlock the mutex for this segment of the copying
@@ -1854,5 +1902,4 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
     //cinfo << startl << "Core " << mpiid << " thread " << threadid << ": polycos created/copied successfully!"  << endl;
   }
 }
-
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

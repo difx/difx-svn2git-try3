@@ -27,8 +27,6 @@
 #include "alert.h"
 #include "pcal.h"
 
-#include <stdlib.h>
-
 //using namespace std;
 const float Mode::TINY = 0.000000001;
 
@@ -125,7 +123,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     lookup = vectorAlloc_s16((MAX_U16+1)*samplesperlookup);
     linearunpacked = vectorAlloc_s16(numlookups*samplesperlookup);
     estimatedbytes += 2*(numlookups*samplesperlookup + (MAX_U16+1)*samplesperlookup);
-    
+
     //initialise the fft info
     order = 0;
     while((twicerecordedbandchannels) >> order != 1)
@@ -510,11 +508,11 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
   {
     nearestsample = 0;
     dataweight = unpack(nearestsample);
-  }  
-  else if(nearestsample < unpackstartsamples || nearestsample > (unpackstartsamples + unpacksamples - twicerecordedbandchannels))
+  }
+  else if(nearestsample < unpackstartsamples || nearestsample > unpackstartsamples + unpacksamples - twicerecordedbandchannels)
     //need to unpack more data
     dataweight = unpack(nearestsample);
-  
+
   if(!(dataweight > 0.0))
     return 0.0;
 

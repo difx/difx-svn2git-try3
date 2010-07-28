@@ -356,7 +356,7 @@ void Visibility::writedata()
       }
     }
   }
-  
+
   for(int i=0;i<numbaselines;i++) //calibrate each baseline
   {
     ds1 = config->getBOrderedDataStream1Index(currentconfigindex, i);
@@ -715,7 +715,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
       }
     }
   }
-  
+
   //write out the autocorrelations, all in one hit
   sprintf(filename, "%s/DIFX_%05d_%06d.s%04d.b%04d", config->getOutputFilename().c_str(), expermjd, experseconds, 0, 0);
   output.open(filename, ios::app);
@@ -743,7 +743,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
               config->getTelescopeName(i).c_str(), pcaldoy,
               config->getIntTime(currentconfigindex)/86400.0, cablecaldelay,
               maxpol, config->getDNumRecordedFreqs(currentconfigindex, i),
-              config->getDMaxRecordedPCalTones(currentconfigindex, i),
+              config->getDMaxRecordedPCalTones(currentconfigindex, i), 
               0/*no state counts*/, config->getDNumRecordedBands(currentconfigindex, i));
       pcaloutput.write(pcalstr, strlen(pcalstr));
       for(int p=0;p<maxpol;p++)
@@ -1029,4 +1029,4 @@ void Visibility::changeConfig(int configindex)
     cverbose << startl << "Finished the pulsar bin initialisation" << endl;
   }
 }
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

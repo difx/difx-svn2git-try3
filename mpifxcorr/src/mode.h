@@ -24,14 +24,10 @@
 
 #include "architecture.h"
 #include "configuration.h"
+#include "pcal.h"
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
-#include "pcal.h"
-
-#include <malloc.h>
-
-#include "alert.h"
 
 using namespace std;
 
@@ -41,7 +37,7 @@ using namespace std;
 
 Possesses all methods necessary for mode functionality but should not be instantiated as it does not build a
 lookup table or handle unpacking - this is particular to each subclass of mode.  Station-based processing
-(FFT, fringe rotation, fraction sample correction etc) is handled via the process method, based on 
+(FFT, fringe rotation, fraction sample correction etc) is handled via the process method, based on
 the provided data and control (delay) arrays
 
 @author Adam Deller
@@ -202,7 +198,7 @@ public:
 
   /** Constant for comparing two floats for equality (for freqs and bandwidths etc) */
   static const float TINY;
-    
+
   /**
    * Returns a single pcal result.
    * @param outpubband The band to get
@@ -216,7 +212,7 @@ public:
   
   ///constant indicating no valid data in a subint
   static const int INVALID_SUBINT = -99999999;
-  
+
 protected:
  /** 
   * Unpacks quantised data to float arrays.  The floating point values filled should
@@ -261,9 +257,8 @@ protected:
   cf32 * complexunpacked;
   cf32 * fracsamprotator;
   cf32 * fftd;
-      
+
   // variables for pcal
-//  cf32 *pcal;
   int * pcalnbins;
   cf32 ** pcalresults;
   PCal ** extractor;
@@ -391,4 +386,4 @@ public:
 };
 
 #endif
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

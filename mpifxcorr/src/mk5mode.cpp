@@ -106,4 +106,4 @@ float Mk5Mode::unpack(int sampleoffset)
 
   return goodsamples/(float)unpacksamples;
 }
-// vim: shiftwidth=2:softtabstop=2:expandtab:
+// vim: shiftwidth=2:softtabstop=2:expandtab

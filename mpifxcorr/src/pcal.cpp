@@ -994,3 +994,4 @@ void compare_32fc_phase(const cf32* v, const size_t len, f32 angle, f32 step) {
 }
 
 #endif
+// vim: shiftwidth=4:softtabstop=4:expandtab
