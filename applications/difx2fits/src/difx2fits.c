@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -113,6 +113,9 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  -k                  Keep antenna order\n");
 	fprintf(stderr, "\n");
 #ifdef HAVE_FFTW
+	fprintf(stderr, "  --sniff-all\n");
+	fprintf(stderr, "  -S                  Sniff all bins and centers\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "  --dont-sniff\n");
 	fprintf(stderr, "  -x                  Don't produce sniffer output\n");
 	fprintf(stderr, "\n");
@@ -194,11 +197,19 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 			{
 				opts->verbose++;
 			}
+#ifdef HAVE_FFTW
 			else if(strcmp(argv[i], "--dont-sniff") == 0 ||
 				strcmp(argv[i], "-x") == 0)
 			{
 				opts->sniffTime = -1.0;
 			}
+			else if(strcmp(argv[i], "--sniff-all") == 0 ||
+				strcmp(argv[i], "-S") == 0)
+			{
+				opts->sniffAllBins = 1;
+				opts->sniffAllPhaseCentres = 1;
+			}
+#endif
 			else if(strcmp(argv[i], "--dont-combine") == 0 ||
 			        strcmp(argv[i], "-1") == 0)
 			{
@@ -288,7 +299,7 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 		{
 			if(opts->nBaseFile >= MAX_INPUT_FILES)
 			{
-				printf("Error -- too many input files!\n");
+				printf("Error: too many input files!\n");
 				printf("Max = %d\n", MAX_INPUT_FILES);
 				deleteCommandLineOptions(opts);
 				return 0;
@@ -319,7 +330,7 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 		glob("*.difx", 0, 0, &globbuf);
 		if(globbuf.gl_pathc > MAX_INPUT_FILES)
 		{
-			printf("Error -- too many input files!\n");
+			printf("Error: too many input files!\n");
 			printf("Max = %d\n", MAX_INPUT_FILES);
 			deleteCommandLineOptions(opts);
 			return 0;
@@ -334,7 +345,7 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 
 	if(opts->nBaseFile > 0 && opts->dontCombine && opts->fitsFile)
 	{
-		printf("Error -- Cannot supply output filename for multiple output files\n");
+		printf("Error: Cannot supply output filename for multiple output files\n");
 		deleteCommandLineOptions(opts);
 		return 0;
 	}
@@ -379,7 +390,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 			keys->stk_1 = -6;
 			break;
 		default:
-			fprintf(stderr, "Error -- unknown polarization (%c)\n", 
+			fprintf(stderr, "Error: unknown polarization (%c)\n", 
 				D->polPair[0]);
 			exit(0);
 	}
@@ -391,7 +402,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 	{
 		for(j=0;j<D->baseline[i].nFreq;j++)
 		{
-			band = D->baseline[i].recChanA[j][0];
+			band = D->baseline[i].recBandA[j][0];
 			dds = &(D->datastream[D->baseline[i].dsA]);
 			if(band >= dds->nRecBand)
 			{
@@ -409,7 +420,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 			}
 			else if(D->freq[fqindex].nChan/D->freq[fqindex].specAvg != keys->no_chan)
 			{
-				fprintf(stderr, "Error - not all used frequencies have the same "
+				fprintf(stderr, "Error: not all used frequencies have the same "
 				"number of output channels - aborting!\n");
 				exit(0);
 			}
@@ -419,7 +430,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 			}
 			else if(keys->chan_bw != 1.0e6*D->freq[fqindex].bw*D->freq[fqindex].specAvg/D->freq[fqindex].nChan)
 			{
-				fprintf(stderr, "Error - not all used frequencies have the same "
+				fprintf(stderr, "Error: not all used frequencies have the same "
 					"final channel bandwidth - aborting!\n");
 				exit(0);
 			}
@@ -429,7 +440,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 			}
 			else if(keys->ref_pixel != 0.5 + 1.0/(2.0*D->freq[fqindex].specAvg*D->specAvg))
 			{
-				fprintf(stderr, "Error - not all used frequencies have the same "
+				fprintf(stderr, "Error: not all used frequencies have the same "
 					"reference pixel - aborting!\n");
 				exit(0);
 			}
@@ -708,7 +719,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	}
 	else if(!D->job->difxVersion[0])
 	{
-		fprintf(stderr, "Warning -- working on unversioned job\n");
+		fprintf(stderr, "Warning: working on unversioned job\n");
 	}
 
 	if(opts->verbose > 1)
@@ -825,7 +836,7 @@ int main(int argc, char **argv)
 
 	if(nConverted != opts->nBaseFile)
 	{
-		printf("\n*** Warning -- not all input files converted!\n");
+		printf("\n*** Warning: not all input files converted!\n");
 	}
 
 	printf("\n");

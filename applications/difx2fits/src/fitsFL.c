@@ -53,13 +53,13 @@ typedef struct
 
 
 static int parseFlag(char *line, int refDay, char *antName, float timeRange[2], 
-	char *reason, int *recChan)
+	char *reason, int *recBand)
 {
 	int l;
 	int n;
 
 	n = sscanf(line, "%s%f%f%d%n", antName, timeRange+0, timeRange+1,
-		recChan, &l);
+		recBand, &l);
 
 	if(n < 4)
 	{
@@ -170,11 +170,11 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 	int refDay;
 	int i, c, d, p, v;
 	int hasData[2][array_MAX_BANDS];
-	int recChan;
+	int recBand;
 	int configId = 0;	/* currently only support 1 config */
 	int antennaId;
 	char polName;
-	int freqNum;
+	int freqId, polId;
 	FILE *in;
 	FlagDatum FL;
 	const DifxConfig *dc;
@@ -238,7 +238,7 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 			continue;
 		}
 		else if(parseFlag(line, refDay, antName, FL.timeRange, 
-			FL.reason, &recChan))
+			FL.reason, &recBand))
 		{
 			if(strncmp(FL.reason, "recorder", 8) == 0)
 			{
@@ -256,10 +256,30 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 			 * polarization index (polId).  Both are zero-based
 			 * numbers, with -1 implying "all values"
 			 */
-			v = DifxConfigRecChan2IFPol(D, configId,
-				antennaId, recChan, &FL.bandId, &FL.polId);
+			v = DifxConfigRecBand2FreqPol(D, configId,
+				antennaId, recBand, &freqId, &polId);
 			if(v < 0)
 			{
+				continue;
+			}
+
+			if(recBand < 0)
+			{
+				FL.bandId = -1;
+			}
+			else if(freqId >= 0 && freqId < D->nFreq)
+			{
+				FL.bandId = D->config[configId].freqId2IF[freqId];
+				if(FL.bandId < 0)
+				{
+					/* This sub-band is not going into the FITS file */
+					 continue;
+				}
+			}
+			else
+			{
+				/* This shouldn't happen -- a recBand not associated with a Freq? */
+				fprintf(stderr, "DifxInput2FitsFL: Developer error: DifxConfigRecChan2FreqPol returned freqId = %d polId = %d\n", freqId, polId);
 				continue;
 			}
 
@@ -300,11 +320,11 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 	    dc = D->config + configId;
 
 	    /* want to loop only over unique freqIds */
-	    if(dc->freqId < FL.freqId1)
+	    if(dc->fitsFreqId < FL.freqId1)
 	    {
 	    	continue;       /* this freqId1 done already */
 	    }
-	    FL.freqId1 = dc->freqId + 1;
+	    FL.freqId1 = dc->fitsFreqId + 1;
 	    for(d = 0; d < dc->nDatastream; d++)
 	    {
 		if(dc->datastreamId[d] < 0)
@@ -332,8 +352,8 @@ const DifxInput *DifxInput2FitsFL(const DifxInput *D,
 				        c, ds->recBandFreqId[c], ds->nRecFreq);
 				continue;
 			}
-			freqNum = ds->recFreqId[ds->recBandFreqId[c]];
-			i = dc->freqId2IF[freqNum];
+			freqId = ds->recFreqId[ds->recBandFreqId[c]];
+			i = dc->freqId2IF[freqId];
 			if(polName == dc->pol[0])
 			{
 				p = 0;

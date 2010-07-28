@@ -78,201 +78,6 @@ int nextfile(const DifxInput *D, int antId, int *jobId, FILE **file)
 	return 0;
 }
 	
-DifxPCal *newDifxPCal(const DifxInput *D, int antId)
-{
-	int i, j, t;
-        int dsId = -1;
-	DifxPCal *pc=0;
-	int freqindex, tonefreq;
-	double lofreq;
-	int nPcalOut;
-
-	//FIXME better way to do this?
-	for(i = 0; i < D->nDatastream; i++)
-	{
-		if(D->datastream[i].antennaId == antId)
-		{
-			dsId = i;
-			break;
-		}
-		//printf("%d", D->datastream[i].antennaId);
-	}
-	if(dsId < 0)
-	{
-		fprintf(stderr, "Error: Can't find matching datastream for antenna %d\n", antId);
-		exit(0);
-	}
-
-	
-	if(D->datastream[dsId].phaseCalIntervalMHz < 1)
-	{
-		return pc;
-	}
-	
-	pc = (DifxPCal *)calloc(1, sizeof(DifxPCal));
-	if(!pc)
-	{
-		fprintf(stderr, "Error: newDifxPCal: pc=calloc failed, size=%d\n",
-			(int)(sizeof(DifxPCal)));
-		//assert(pc);
-		exit(0);
-	}
-	pc->nRecFreq = D->datastream[dsId].nRecFreq;
-	//FIXME check nRecFreq against D->nIF and act appropriately if they're not the same
-
-	//FIXME check callocs are successful and die if they're not
-	pc->nRecFreqPcal = (int *)calloc(pc->nRecFreq, sizeof(int));
-	pc->recFreqPcalFreq = (int **)calloc(pc->nRecFreq, sizeof(int*));
-	pc->maxRecPcal = 0;
-	pc->freqPcalOut = (int **)calloc(pc->nRecFreq, sizeof(int*));
-	pc->nFreqPcalOut = (int *)calloc(pc->nRecFreq, sizeof(int));
-	pc->recFreqPcalOut = (int **)calloc(pc->nRecFreq, sizeof(int*));
-	pc->maxPcalOut = 0;
-
-	for(i = 0; i < pc->nRecFreq; i++)
-	{
-		/*FIXME replace with values from vex file/.v2d override*/
-		pc->nFreqPcalOut[i] = nBandTone;
-		pc->freqPcalOut[i] = (int *)calloc(pc->nFreqPcalOut[i], sizeof(int));
-		pc->tIntPcal = pcalIntTime;
-
-		for(t = 0; t < pc->nFreqPcalOut[i]; t++)
-		{
-			pc->freqPcalOut[i][t] = bandTone[t];
-		}
-
-		/*The following is taken from configuration.cpp and should be kept consistent with it*/
-		pc->nRecFreqPcal[i] = 0;
-		freqindex = D->datastream[dsId].recFreqId[i];
-		lofreq = D->freq[freqindex].freq;
-
-		if(D->freq[freqindex].sideband == 'L')
-		{
-			lofreq -= D->freq[freqindex].bw;
-		}
-		tonefreq = ((int) lofreq/D->datastream[dsId].phaseCalIntervalMHz)*D->datastream[dsId].phaseCalIntervalMHz;
-
-		if(tonefreq <= lofreq)
-		{
-			tonefreq += D->datastream[dsId].phaseCalIntervalMHz;
-		}
-
-		while(tonefreq + pc->nRecFreqPcal[i]*D->datastream[dsId].phaseCalIntervalMHz < lofreq + D->freq[freqindex].bw)
-		{
-			pc->nRecFreqPcal[i]++;
-		}
-		if(pc->nRecFreqPcal[i] > pc->maxRecPcal)
-		{
-			pc->maxRecPcal = pc->nRecFreqPcal[i];
-		}
-		pc->recFreqPcalFreq[i] = (int *)calloc(pc->nRecFreqPcal[i], sizeof(int));
-		pc->recFreqPcalOut[i]  = (int *)calloc(pc->nRecFreqPcal[i], sizeof(int));
-		tonefreq = ((int) lofreq / D->datastream[dsId].phaseCalIntervalMHz) * D->datastream[dsId].phaseCalIntervalMHz;
-		if(tonefreq < lofreq)
-		{
-			tonefreq += D->datastream[dsId].phaseCalIntervalMHz;
-		}
-
-		nPcalOut = 0;
-		for(j = 0; j < pc->nRecFreqPcal[i]; j++)
-		{
-			pc->recFreqPcalFreq[i][j] = tonefreq + j * D->datastream[dsId].phaseCalIntervalMHz;
-			/*probably overkill, but nPcalOut covers the case where two vex entries map onto one tone*/
-			for(t = 0; t < pc->nFreqPcalOut[i]; t++)
-			{
-				if(pc->freqPcalOut[i][t] > 0)
-				{
-					if(pc->freqPcalOut[i][t] == j + 1)
-					{
-						if(!pc->recFreqPcalOut[i][j])
-						{
-							nPcalOut++;
-						}
-						pc->recFreqPcalOut[i][j] = 1;
-						//break;
-					}
-				}
-				else if(pc->freqPcalOut[i][t] < 0)
-				{
-					if(pc->freqPcalOut[i][t] + pc->nRecFreqPcal[i] == j)
-					{
-						if(!pc->recFreqPcalOut[i][j])
-						{
-							nPcalOut++;
-						}
-						pc->recFreqPcalOut[i][j] = 1;
-						//break;
-					}
-				}
-				//FIXME die or ignore if 0? According to vex definition this means state counts rather than pcals
-				if(nPcalOut > pc->maxPcalOut)
-				{
-					pc->maxPcalOut = nPcalOut;
-				}
-			}
-		}
-	}
-	//pc->recFreqPcalOffsetHz[i] = long(1e6*pc->recFreqPcalFreq[i][0]) - long(1e6*lofreq);
-	return pc;
-}
-
-void printDifxPCal(DifxPCal *pc)
-{
-	int i, j;
-
-	if(!pc)
-	{
-		return;
-	}
-
-	//printf("\n%d\n", pc->nRecFreq);
-	for(i=0; i < pc->nRecFreq; i++)
-	{
-		//printf("%d", pc->nRecFreqPcal[i]);
-		printf("|");
-		for(j=0; j < pc->nRecFreqPcal[i]; j++)
-		{
-			printf("%d", pc->recFreqPcalFreq[i][j]);
-			if(pc->recFreqPcalOut[i][j])
-			{
-				printf("* ");
-			}
-			else
-			{
-				printf("  ");
-			}
-		}
-
-	}
-	printf("|\n");
-}
-
-void deleteDifxPCal(DifxPCal *pc)
-{
-	int i;
-
-	if(!pc)
-	{
-		return;
-	}
-
-	for(i=0; i < pc->nRecFreq; i++)
-	{
-		free(pc->recFreqPcalFreq[i]);
-		free(pc->freqPcalOut[i]);
-		free(pc->recFreqPcalOut[i]);
-	}
-
-	free(pc->nRecFreqPcal);
-	free(pc->recFreqPcalFreq);
-	free(pc->freqPcalOut);
-	free(pc->nFreqPcalOut);
-	free(pc->recFreqPcalOut);
-	free(pc);
-}
-
-
-
 /* go through pcal file, determine maximum number of tones.*/
 static int getNTone(const char *filename, double t1, double t2, const char *antName)
 {
@@ -330,9 +135,9 @@ static int parsePulseCal(const char *line,
 	int phasecentre)
 {
 	int np, nb, nt, ns;
-	int nRecChan, recChan;
+	int nRecBand, recBand;
 	int n, p, i, v;
-	int polId, bandId, tone, state;
+	int freqId, polId, bandId, tone, state;
 	int pol, band;
 	int scanId;
 	double A;
@@ -348,7 +153,7 @@ static int parsePulseCal(const char *line,
 	nan.i32 = -1;
 
 	n = sscanf(line, "%s%lf%f%lf%d%d%d%d%d%n", antName, time, timeInt, 
-		cableCal, &np, &nb, &nt, &ns, &nRecChan, &p);
+		cableCal, &np, &nb, &nt, &ns, &nRecBand, &p);
 	if(n != 9)
 	{
 		return -1;
@@ -408,27 +213,39 @@ static int parsePulseCal(const char *line,
 			for(tone = 0; tone < nt; tone++)
 			{
 				n = sscanf(line, "%d%lf%f%f%n", 
-					&recChan, &A, &B, &C, &p);
+					&recBand, &A, &B, &C, &p);
 				if(n < 4)
 				{
 					return -4;
 				}
 				line += p;
-				if(recChan < 0 || recChan >= nRecChan)
+				if(recBand < 0 || recBand >= nRecBand)
 				{
 					continue;
 				}
 				v = DifxConfigRecChan2IFPol(D, *configId,
-					antId, recChan, &bandId, &polId);
+					antId, recBand, &bandId, &polId);
 				if(v >= 0)
 				{
-					if(bandId < 0 || polId < 0)
+					if(freqId < 0 || polId < 0)
 					{
 						fprintf(stderr, "Error: derived "
-							"bandId and polId (%d,%d) are "
+							"freqId and polId (%d,%d) are "
 							"not legit.  From "
-							"recChan=%d.\n",
-							bandId, polId, recChan);
+							"recBand=%d.\n",
+							freqId, polId, recBand);
+						continue;
+					}
+					else if(freqId >= D->nFreq)
+					{
+						fprintf(stderr, "parsePulseCal(1): Developer error: freqId=%d, nFreq=%d\n",
+							freqId, D->nFreq);
+						continue;
+					}
+					bandId = D->config[*configId].freqId2IF[freqId];
+					if(bandId < 0)
+					{
+						/* This sub-band is not to go to the FITS file */
 						continue;
 					}
 					freqs[polId][tone + bandId*nt] = A*1.0e6;
@@ -459,26 +276,50 @@ static int parsePulseCal(const char *line,
 		{
 			for(band = 0; band < nb; band++)
 			{
-				n = sscanf(line, "%d%n", &recChan, &p);
+				n = sscanf(line, "%d%n", &recBand, &p);
 				line += p;
 				v = DifxConfigRecChan2IFPol(D, *configId,
-					antId, recChan, &bandId, &polId);
+					antId, recBand, &bandId, &polId);
 				for(state = 0; state < 4; state++)
 				{
-					if(state < ns)
+					if(freqId < 0 || polId < 0)
 					{
-						n = sscanf(line, "%f%n", &B, &p);
-						if(n < 1)
+						fprintf(stderr, "parsePulseCal(2): Developer error: derived "
+							"freqId and polId (%d,%d) are "
+							"not legit.  From "
+							"recBand=%d.\n",
+							freqId, polId, recBand);
+						continue;
+					}
+					else if(freqId >= D->nFreq)
+					{
+						fprintf(stderr, "parsePulseCal(2): Developer error: freqId=%d, nFreq=%d\n",
+							freqId, D->nFreq);
+						continue;
+					}
+					bandId = D->config[*configId].freqId2IF[freqId];
+					if(bandId < 0)
+					{
+						/* This sub-band is not to go to the FITS file */
+						continue;
+					}
+					for(state = 0; state < 4; state++)
+					{
+						if(state < ns)
 						{
-							return -5;
+							n = sscanf(line, "%f%n", &B, &p);
+							if(n < 1)
+							{
+								return -5;
+							}
+							line += p;
 						}
-						line += p;
+						else
+						{
+							B = 0.0;
+						}
+						stateCount[polId][state + bandId*4] = B;
 					}
-					else
-					{
-						B = 0.0;
-					}
-					stateCount[polId][state + bandId*4] = B;
 				}
 			}
 		}
@@ -804,7 +645,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	}
 	printf("\n");
 
-	pcalinfo = (DifxPCal **)calloc(D->nAntenna, sizeof(DifxPCal *));
 	if(!pcalinfo)
 	{
 		fprintf(stderr, "Error allocating pcalinfo\n");
@@ -1014,7 +854,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 
 			}
 
-			freqId1 = D->config[configId].freqId + 1;
+			freqId1 = D->config[configId].fitsFreqId + 1;
 			sourceId1 = D->source[sourceId].fitsSourceIds[configId] + 1;
 			antId1 = i + 1;
 
