@@ -44,7 +44,7 @@
 const char program[] = "mk5cp";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.7";
-const char verdate[] = "20100710";
+const char verdate[] = "20100728";
 
 int verbose = 0;
 int die = 0;
@@ -109,7 +109,6 @@ int dirCallback(int scan, int nscan, int status, void *data)
 static int getBankInfo(SSHANDLE xlrDevice, DifxMessageMk5Status * mk5status, char bank)
 {
 	S_BANKSTATUS bank_stat;
-	mk5status->activeBank = ' ';
 
 	if(bank == 'A' || bank == 'a' || bank == ' ')
 	{
@@ -600,7 +599,7 @@ static int mk5cp(char *vsn, const char *scanlist, const char *outpath, int force
 			fprintf(stderr, "%s\n", message);
 			if(!force)
 			{
-				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_SEVERE);
+				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 				mk5status.activeBank = ' ';
 				bail = 1;
 			}
