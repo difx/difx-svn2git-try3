@@ -50,10 +50,20 @@ dnl **** Find difxmessage library                         ****
 dnl **********************************************************
 dm_enabled=true
 PKG_CHECK_MODULES(DIFXMESSAGE,
-        difxmessage >= 7.2,
+        difxmessage >= 7.3,
 	[AC_DEFINE([HAVE_DIFXMESSAGE], 1, [1=has DIFXMESSAGE])],
 	dm_enabled=false)
 AM_CONDITIONAL(WITH_DIFXMESSAGE, $dm_enabled)
+
+dnl **********************************************************
+dnl **** Find mark5ipc library                            ****
+dnl **********************************************************
+m5ipc_enabled=true
+PKG_CHECK_MODULES(MARK5IPC,
+        mark5ipc >= 7.3,
+	[AC_DEFINE([HAVE_MARK5IPC], 1, [1=has MARK5IPC])],
+	m5ipc_enabled=false)
+AM_CONDITIONAL(WITH_MARK5IPC, $m5ipc_enabled)
 
 dnl **********************************************************
 dnl **** Find streamstor library                          ****
@@ -104,8 +114,8 @@ PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.3.5)
 dnl **********************************************************
 
 
-CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${IPP_CFLAGS} ${RPFITS_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${SS_CFLAGS} ${CFLAG_QUIET}"
-LIBS="${M5ACCESS_LIBS} ${SS_LIBS} ${IPP_LIBS} ${RPFITS_LIBS} ${DIFXMESSAGE_LIBS}"
+CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${IPP_CFLAGS} ${RPFITS_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${MARK5IPC_CFLAGS} ${SS_CFLAGS} ${CFLAG_QUIET}"
+LIBS="${M5ACCESS_LIBS} ${SS_LIBS} ${IPP_LIBS} ${RPFITS_LIBS} ${DIFXMESSAGE_LIBS} ${MARK5IPC_LIBS}"
 
 echo "CXXFLAGS = ${CXXFLAGS}"
 echo "LIBS = ${LIBS}"
