@@ -19,9 +19,6 @@
 // $LastChangedDate$
 //
 //============================================================================
-#include "datastream.h"
-#include "core.h"
-#include "fxmanager.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -29,10 +26,12 @@
 #include <errno.h>
 #include <string.h>
 #include <strings.h>
-#include <limits.h>
 #include <math.h>
 #include "config.h"
 #include "alert.h"
+#include "datastream.h"
+#include "core.h"
+#include "fxmanager.h"
 
 DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
   : databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
@@ -897,12 +896,6 @@ uint64_t DataStream::openframe()
   memcpy(&fnamesize,  buf+sizeof(long long), sizeof(short));
   
   framesize = framesize - LBA_HEADER_LENGTH;
-
-  if (framesize>UINT64_MAX) {
-    keepreading=false;
-    cerror << startl << "Network stream trying to send too large frame - aborting!" << endl;
-    return(0);
-  }
 
   // Read filename size then ignore it
   if (fnamesize>LBA_HEADER_LENGTH) {

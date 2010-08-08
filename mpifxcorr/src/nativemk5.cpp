@@ -81,6 +81,9 @@ void *watchdogFunction(void *data)
 			{
 				cfatal << startl << "Watchdog caught a hang-up executing: " << nativeMk5->watchdogStatement << " Aborting!!!" << endl;
 				nativeMk5->sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
+#if HAVE_MARK5IPC
+				unlockMark5();
+#endif
 				MPI_Abort(MPI_COMM_WORLD, 1);
 			}
 			else if(deltat != lastdeltat && deltat > 4)
@@ -141,7 +144,6 @@ NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum,
 
 	nError = 0;
 	
-	sendMark5Status(MARK5_STATE_OPENING, 0, 0, 0.0, 0.0);
 #if HAVE_MARK5IPC
 	v = lockMark5(5);
 	if(v)
@@ -150,6 +152,7 @@ NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum,
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 #endif
+	sendMark5Status(MARK5_STATE_OPENING, 0, 0, 0.0, 0.0);
 	cinfo << startl << "Opening Streamstor" << endl;
 
 	WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
@@ -384,7 +387,12 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 	bw = config->getConfigBandwidth(configindex);
 	fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, framebytes, config->getDecimationFactor(configindex), formatname);
         if(fanout < 0)
-          MPI_Abort(MPI_COMM_WORLD, 1);
+	{
+#if HAVE_MARK5IPC
+		unlockMark5();
+#endif
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
 
 	cinfo << startl << "initialiseFile format=" << formatname << endl;
 	if(mark5stream)
