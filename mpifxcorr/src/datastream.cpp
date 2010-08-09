@@ -869,7 +869,7 @@ uint64_t DataStream::openframe()
   char *buf;
   short fnamesize;
   int ntoread, nread, status;
-  unsigned long long framesize;
+  uint64_t framesize;
 
   ntoread = sizeof(long long) + sizeof(short);
 
@@ -892,8 +892,8 @@ uint64_t DataStream::openframe()
   }
 	
   // Read totalnumber of expected bytes and filename size
-  memcpy(&framesize,  buf, sizeof(long long));
-  memcpy(&fnamesize,  buf+sizeof(long long), sizeof(short));
+  memcpy(&framesize,  buf, sizeof(uint64_t));
+  memcpy(&fnamesize,  buf+sizeof(uint64_t), sizeof(short));
   
   framesize = framesize - LBA_HEADER_LENGTH;
 
