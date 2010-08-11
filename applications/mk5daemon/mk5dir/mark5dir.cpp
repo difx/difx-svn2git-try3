@@ -413,7 +413,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	int dirVersion;		/* == 0 for old style (pre-mark5-memo 81) */
 				/* == version number for mark5-memo 81 */
 	int oldLen1, oldLen2, oldLen3;
-	int start;
+	int start, stop;
 
 	streamstordatatype *buffer;
 
@@ -485,17 +485,19 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	if(dirVersion == 0)
 	{
 		start = 0;
+		stop = 81952;
 	}
 	else
 	{
 		/* Don't base directory on header material as that can change */
 		start = sizeof(struct Mark5DirectoryHeaderVer1);
+		stop = len;
 	}
 	signature = 1;
 
-	if(start < len)
+	if(start < stop)
 	{
-		for(j = start/4; j < len/4; j++)
+		for(j = start/4; j < stop/4; j++)
 		{
 			x = ((unsigned int *)dirData)[j] + 1;
 			signature = signature ^ x;
@@ -1305,3 +1307,89 @@ int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], i
 	return nDrive;
 }
 
+
+int setDiscModuleStateLegacy(SSHANDLE xlrDevice, int newState)
+{
+	const char RecordSeparator = 30;	// ASCII "RS" == "Record separator"
+	char label[XLR_LABEL_LENGTH];
+	int labelLength = 0, rs = 0;
+
+	WATCHDOGTEST( XLRGetLabel(xlrDevice, label) );
+
+	for(labelLength = 0; labelLength < XLR_LABEL_LENGTH; labelLength++)
+	{
+		if(!label[labelLength])
+		{
+			break;
+		}
+	}
+	if(labelLength >= XLR_LABEL_LENGTH)
+	{
+		cerr << "Module label is not terminated!" << endl;
+		return -1;
+	}
+
+	for(rs = 0; rs < labelLength; rs++)
+	{
+		if(label[rs] == RecordSeparator)
+		{
+			break;
+		}
+	}
+	if(rs >= labelLength)
+	{
+		cerr << "Module label record separator not found!" << endl;
+		label[rs] = RecordSeparator;
+		label[rs+1] = 0;
+	}
+
+	label[rs] = 0;
+
+	if(strcmp(label+rs+1, moduleStatusName(newState)) == 0)
+	{
+		// Nothing to do here
+		return 0;
+	}
+
+	WATCHDOGTEST( XLRClearWriteProtect(xlrDevice) );
+	cout << "Directory version 0: setting module DMS to " << moduleStatusName(newState) << endl;
+	label[rs] = RecordSeparator;	// ASCII "RS" == "Record separator"
+	strcpy(label+rs+1, moduleStatusName(newState));
+	WATCHDOGTEST( XLRSetLabel(xlrDevice, label, strlen(label)) );
+	WATCHDOGTEST( XLRSetWriteProtect(xlrDevice) );
+
+	return 0;
+}
+
+int setDiscModuleStateNew(SSHANDLE xlrDevice, int newState)
+{
+	int dirLength;
+	char *dirData;
+	struct Mark5DirectoryHeaderVer1 *dirHead;
+
+	WATCHDOG( dirLength = XLRGetUserDirLength(xlrDevice) );
+
+	if(dirLength < 128 || dirLength % 128 != 0)
+	{
+		// Version must not be > 1!
+		return -1;
+	}
+
+	dirData = (char *)calloc(dirLength, 1);
+	WATCHDOGTEST( XLRGetUserDir(xlrDevice, dirLength, 0, dirData) );
+	
+	dirHead = (struct Mark5DirectoryHeaderVer1 *)dirData;
+
+	if(dirHead->status == newState)
+	{
+		// Nothing to do here
+		return 0;
+	}
+
+	cout << "Directory version " << dirHead->version << ": setting module DMS to " << moduleStatusName(newState) << endl;
+	dirHead->status = newState;
+
+	WATCHDOGTEST( XLRSetUserDir(xlrDevice, dirData, dirLength) );
+
+	return 0;
+}

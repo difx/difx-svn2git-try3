@@ -202,6 +202,10 @@ int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], i
 
 int roundModuleSize(long long a);
 
+int setDiscModuleStateLegacy(SSHANDLE xlrDevice, int newState);
+
+int setDiscModuleStateNew(SSHANDLE xlrDevice, int newState);
+
 #ifdef __cplusplus
 }
 #endif

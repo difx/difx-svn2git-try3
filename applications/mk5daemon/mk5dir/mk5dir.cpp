@@ -155,16 +155,69 @@ int dirCallback(int scan, int nscan, int status, void *data)
 	return die;
 }
 
-static int mk5dir(char *vsn, int force)
+static int getDirCore(struct Mark5Module *module, char *vsn, DifxMessageMk5Status *mk5status, int force)
 {
+	int v;
 	int mjdnow;
 	const char *mk5dirpath;
+	float replacedFrac;
+	char message[DIFX_MESSAGE_LENGTH];
+
+	mjdnow = (int)(40587.0 + time(0)/86400.0);
+
+	mk5dirpath = getenv("MARK5_DIR_PATH");
+	if(mk5dirpath == 0)
+	{
+		mk5dirpath = ".";
+	}
+
+	v = getCachedMark5Module(module, &xlrDevice, mjdnow, 
+		vsn, mk5dirpath, &dirCallback, 
+		mk5status, &replacedFrac, force);
+	if(replacedFrac > 0.01)
+	{
+		snprintf(message, DIFX_MESSAGE_LENGTH, 
+			"Module %s directory read encountered %4.2f%% data replacement rate",
+			vsn, replacedFrac);
+		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
+		fprintf(stderr, "Warning: %s\n", message);
+	}
+	if(v < 0)
+	{
+		if(!die)
+		{
+			snprintf(message, DIFX_MESSAGE_LENGTH, 
+				"Directory read for module %s unsuccessful, error code=%d",
+				vsn, v);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+			fprintf(stderr, "Error: %s\n", message);
+		}
+	}
+	else if(v == 0 && verbose > 0)
+	{
+		printMark5Module(module);
+	}
+
+	if(module->dirVersion == 0)
+	{
+		setDiscModuleStateLegacy(xlrDevice, MODULE_STATUS_PLAYED);
+	}
+	else
+	{
+		setDiscModuleStateNew(xlrDevice, MODULE_STATUS_PLAYED);
+	}
+
+	return v;
+}
+
+static int mk5dir(char *vsn, int force)
+{
 	struct Mark5Module module;
 	DifxMessageMk5Status mk5status;
 	char message[DIFX_MESSAGE_LENGTH];
 	char modules[100] = "";
 	int v;
-	float replacedFrac;
+
 	memset(&mk5status, 0, sizeof(mk5status));
 
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
@@ -191,14 +244,6 @@ static int mk5dir(char *vsn, int force)
 		strcpy(vsn, mk5status.vsnB);
 	}
 
-	mk5dirpath = getenv("MARK5_DIR_PATH");
-	if(mk5dirpath == 0)
-	{
-		mk5dirpath = ".";
-	}
-	
-	mjdnow = (int)(40587.0 + time(0)/86400.0);
-
 	mk5status.state = MARK5_STATE_GETDIR;
 	difxMessageSendMark5Status(&mk5status);
 
@@ -212,32 +257,7 @@ static int mk5dir(char *vsn, int force)
 		if(strlen(mk5status.vsnA) == 8)
 		{
 			mk5status.activeBank = 'A';
-			v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
-				mk5status.vsnA, mk5dirpath, &dirCallback, 
-				&mk5status, &replacedFrac, force);
-			if(replacedFrac > 0.01)
-			{
-				snprintf(message, DIFX_MESSAGE_LENGTH, 
-					"Module %s directory read encountered %4.2f%% data replacement rate",
-					mk5status.vsnA, replacedFrac);
-				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
-				fprintf(stderr, "Warning: %s\n", message);
-			}
-			if(v < 0)
-			{
-				if(!die)
-				{
-					snprintf(message, DIFX_MESSAGE_LENGTH, 
-						"Directory read for module %s unsuccessful, error code=%d",
-						mk5status.vsnA, v);
-					difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-					fprintf(stderr, "Error: %s\n", message);
-				}
-			}
-			else if(v == 0 && verbose > 0)
-			{
-				printMark5Module(&module);
-			}
+			v = getDirCore(&module, mk5status.vsnA, &mk5status, force);
 			if(v >= 0)
 			{
 				strcpy(modules, mk5status.vsnA);
@@ -250,31 +270,7 @@ static int mk5dir(char *vsn, int force)
 		if(strlen(mk5status.vsnB) == 8)
 		{
 			mk5status.activeBank = 'B';
-			v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
-				mk5status.vsnB, mk5dirpath, &dirCallback, 
-				&mk5status, &replacedFrac, force);
-			if(replacedFrac > 0.01)
-			{
-				snprintf(message, DIFX_MESSAGE_LENGTH,
-					"Module %s directory read encountered %4.2f%% data replacement rate",
-					mk5status.vsnB, replacedFrac);
-				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
-				fprintf(stderr, "Warning: %s\n", message);
-			}
-			if(v < 0)
-			{
-				if(!die)
-				{
-					snprintf(message, DIFX_MESSAGE_LENGTH,
-						"Directory read for module %s unsuccessful, error code=%d", mk5status.vsnB, v);
-					difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-					fprintf(stderr, "Error: %s\n", message);
-				}
-			}
-			else if(v == 0 && verbose > 0)
-			{
-				printMark5Module(&module);
-			}
+			v = getDirCore(&module, mk5status.vsnB, &mk5status, force);
 			if(v >= 0)
 			{
 				if(modules[0])
@@ -302,31 +298,7 @@ static int mk5dir(char *vsn, int force)
 				mk5status.activeBank = 'B';
 			}
 
-			v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
-				vsn, mk5dirpath, &dirCallback, &mk5status,
-				&replacedFrac, force);
-			if(replacedFrac > 0.01)
-			{
-				snprintf(message, DIFX_MESSAGE_LENGTH, 
-					"Module %s directory read encountered %4.2f%% data replacement rate",
-					vsn, replacedFrac);
-				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
-				fprintf(stderr, "Warning: %s\n", message);
-			}
-			if(v < 0)
-			{
-				if(!die)
-				{
-					snprintf(message, DIFX_MESSAGE_LENGTH,
-						"Directory read for module %s unsuccessful, error code=%d", vsn, v);
-					difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-					fprintf(stderr, "Error: %s\n", message);
-				}
-			}
-			else if(verbose > 0)
-			{
-				printMark5Module(&module);
-			}
+			v = getDirCore(&module, vsn, &mk5status, force);
 			if(v >= 0)
 			{
 				strcpy(modules, vsn);
