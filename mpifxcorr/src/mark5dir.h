@@ -56,6 +56,43 @@ struct Mark5Directory
 	double playRate; /* Playback clock rate, MHz */
 };
 
+/* first updated version as defined by Hastack Mark5 Memo #081 */
+struct Mark5DirectoryHeaderVer1
+{
+	int version;		/* should be 1 */
+	int status;		/* bit field: see MODULE_STATUS_xxx above */
+	char vsn[32];
+	char vsnPrev[32];	/* "continued from" VSN */
+	char vsnNext[32];	/* "continued to" VSN */
+	char zeros[24];
+};
+
+struct Mark5DirectoryScanHeaderVer1
+{
+	unsigned int typeNumber;	/* 0 to 10; see memo 81 */
+	unsigned short frameLength;
+	char station[2];
+	char scanName[32];
+	char expName[8];
+	long long startByte;
+	long long stopByte;
+};
+
+struct Mark5DirectoryLegacyBodyVer1
+{
+	unsigned char timeBCD[8];	/* version dependent time code. */
+	int firstFrame;
+	int byteOffset;
+	int trackRate;
+	int nTrack;
+	char zeros[40];
+};
+
+struct Mark5DirectoryVDIFBodyVer1
+{
+	unsigned short data[8][4];	/* packed bit fields for up to 8 thread groups */
+};
+
 struct Mark5Scan
 {
 	char name[MAXLENGTH];

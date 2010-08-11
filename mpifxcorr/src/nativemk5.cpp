@@ -148,6 +148,8 @@ NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum,
 	v = lockMark5(5);
 	if(v)
 	{
+		sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
+		nError++;
 		cfatal << startl << "Cannot obtain lock for Streamstor device." << endl;
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
@@ -388,13 +390,14 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 	fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, framebytes, config->getDecimationFactor(configindex), formatname);
         if(fanout < 0)
 	{
+		sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
+		nError++;
 #if HAVE_MARK5IPC
 		unlockMark5();
 #endif
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	cinfo << startl << "initialiseFile format=" << formatname << endl;
 	if(mark5stream)
 	{
 		delete_mark5_stream(mark5stream);
@@ -423,11 +426,15 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 
 		if(v < 0)
 		{
-			cerror << startl << "Module " << 
-				datafilenames[configindex][fileindex] << 
-				" not found in unit!" << endl;
+			cerror << startl << "Directory for module " << datafilenames[configindex][fileindex] << " is not up to date" << endl;
 			dataremaining = false;
-			return;
+			sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
+			nError++;
+			WATCHDOG( XLRClose(xlrDevice) );
+#if HAVE_MARK5IPC
+			unlockMark5();
+#endif
+			MPI_Abort(MPI_COMM_WORLD, 1);
 		}
 
 		v = sanityCheckModule(&module);
@@ -437,11 +444,15 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 				datafilenames[configindex][fileindex] <<
 				" contains undecoded scans!" << endl;
 			dataremaining = false;
+			sendMark5Status(MARK5_STATE_ERROR, 0, 0, 0.0, 0.0);
+			nError++;
 			return;
 		}
 
 		// Set the module state to "Played"
-		setDiscModuleState(xlrDevice, "Played");
+		
+		// Dont do this anymore!
+		// setDiscModuleState(xlrDevice, "Played");
 
 		if(module.needRealtimeMode)
 		{

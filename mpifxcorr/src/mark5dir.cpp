@@ -247,19 +247,26 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	int (*callback)(int, int, int, void *), void *data, float *replacedFrac)
 {
 	XLR_RETURN_CODE xlrRC;
-	Mark5Directory m5dir;
+	Mark5Directory *m5dir;
+	unsigned char *dirData;
 	int len, n;
+	int j;
 	struct mark5_format *mf;
 	Mark5Scan *scan;
 	char label[XLR_LABEL_LENGTH];
 	int bank;
 	unsigned long a, b;
-	streamstordatatype *buffer;
 	int bufferlen;
 	unsigned int x, signature;
 	int die = 0;
-	long long wGood, wBad;
+	long long wGood=0, wBad=0;
 	long long wGoodSum=0, wBadSum=0;
+	int dirVersion;		/* == 0 for old style (pre-mark5-memo 81) */
+				/* == version number for mark5-memo 81 */
+	int oldLen1, oldLen2, oldLen3;
+	int start, stop;
+
+	streamstordatatype *buffer;
 
 	/* allocate a bit more than the minimum needed */
 	bufferlen = 20160*8*10;
@@ -273,61 +280,136 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	xlrRC = XLRGetLabel(*xlrDevice, label);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		return -1;
+		return -2;
 	}
 	label[8] = 0;
 
 	len = XLRGetUserDirLength(*xlrDevice);
-	if(len < (signed int)sizeof(struct Mark5Directory))
+	/* The historic directories written by Mark5A could come in three sizes.
+	 * See readdir() in Mark5A.c.  If one of these matches the actual dir size,
+	 * then assume it is old style, which we declare to be directory version
+	 * 0.  Otherwise check for divisibility by 128.  If so, then it is considered 
+	 * new style, and the version number can be extracted from the header.
+	 */
+	oldLen1 = (int)sizeof(struct Mark5Directory);
+	oldLen2 = oldLen1 + 64 + 8*88;	/* 88 = sizeof(S_DRIVEINFO) */
+	oldLen3 = oldLen1 + 64 + 16*88;
+	if(len == oldLen1 || len == oldLen2 || len == oldLen3)
 	{
-		return -1;
+		dirVersion = 0;
+	}
+	else if(len % 128 == 0)
+	{
+		dirVersion = -1;  /* signal to get version number later */
+	}
+	else
+	{
+		printf("size=%d  len=%d\n", static_cast<int>(sizeof(struct Mark5Directory)), len);
+
+		return -3;
 	}
 
-	xlrRC = XLRGetUserDir(*xlrDevice, sizeof(struct Mark5Directory), 
-		0, &m5dir);
+	dirData = (unsigned char *)calloc(len, sizeof(int));
+	if(dirData == 0)
+	{
+		return -4;
+	}
+	m5dir = (struct Mark5Directory *)dirData;
+
+	xlrRC = XLRGetUserDir(*xlrDevice, len, 0, dirData);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		return -1;
+		free(dirData);
+		return -5;
+	}
+	if(dirVersion == -1)
+	{
+		dirVersion = ((int *)dirData)[0];
+	}
+	
+	if(dirVersion < 0 || dirVersion > 1)
+	{
+		return -6;
 	}
 
 	/* the adventurous would use md5 here */
-	signature = 1;
-	for(unsigned int u = 0; u < sizeof(struct Mark5Directory)/4; u++)
+	if(dirVersion == 0)
 	{
-		x = ((unsigned int *)(&m5dir))[u] + 1;
-		signature = signature ^ x;
+		start = 0;
+		stop = 81952;
 	}
-
-	/* prevent a zero signature */
-	if(signature == 0)
+	else
 	{
-		signature = 0x55555555;
+		/* Don't base directory on header material as that can change */
+		start = sizeof(struct Mark5DirectoryHeaderVer1);
+		stop = len;
+	}
+	signature = 1;
+
+	if(start < stop)
+	{
+		for(j = start/4; j < stop/4; j++)
+		{
+			x = ((unsigned int *)dirData)[j] + 1;
+			signature = signature ^ x;
+		}
+
+		/* prevent a zero signature */
+		if(signature == 0)
+		{
+			signature = 0x55555555;
+		}
 	}
 
 	if(module->signature == signature && module->nscans > 0)
 	{
 		module->bank = bank;
+		free(dirData);
 		return 0;
 	}
-
+	else
+	{
+		return -1;
+	}
+#if 0
 	buffer = (streamstordatatype *)malloc(bufferlen);
 	
 	memset(module, 0, sizeof(struct Mark5Module));
-	module->nscans = m5dir.nscans;
+	if(dirVersion == 0)
+	{
+		module->nscans = m5dir->nscans;
+	}
+	else
+	{
+		module->nscans = len/128 - 1;
+	}
 	module->bank = bank;
 	strcpy(module->label, label);
 	module->signature = signature;
-	module->needRealtimeMode = false;
+	module->dirVersion = dirVersion;
+	module->mode = MARK5_READ_MODE_NORMAL;
 
 	for(int i = 0; i < module->nscans; i++)
 	{
 		wGood = wBad = 0;
 		scan = module->scans + i;
 
-		strncpy(scan->name, m5dir.scanName[i], MAXLENGTH);
-		scan->start  = m5dir.start[i];
-		scan->length = m5dir.length[i];
-		if(scan->length < bufferlen*10)
+		if(dirVersion == 0)
+		{
+			strncpy(scan->name, m5dir->scanName[i], MAXLENGTH);
+			scan->start  = m5dir->start[i];
+			scan->length = m5dir->length[i];
+		}
+		else if(dirVersion == 1)
+		{
+			const struct Mark5DirectoryScanHeaderVer1 *sh;
+			sh = (struct Mark5DirectoryScanHeaderVer1 *)(dirData + 128*(i+1));
+			strncpy(scan->name, sh->scanName, 32);
+			scan->name[31] = 0;
+			scan->start  = sh->startByte;
+			scan->length = sh->stopByte - sh->startByte;
+		}
+		if(scan->length < bufferlen)
 		{
 			if(callback)
 			{
@@ -359,6 +441,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 				die = callback(i, module->nscans, MARK5_DIR_READ_ERROR, data);
 			}
 			scan->format = -2;
+
 			continue;
 		}
 
@@ -386,11 +469,20 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 			break;
 		}
 
+		/* Fix mjd.  FIXME: this should be done in mark5access */
+		if(mf->format == 0 || mf->format == 2)  /* VLBA or Mark5B format */
+		{
+			n = (mjdref - mf->mjd + 500) / 1000;
+			mf->mjd += n*1000;
+		}
+		else if(mf->format == 1)	/* Mark4 format */
+		{
+			n = (int)((mjdref - mf->mjd + 1826)/3652.4);
+			mf->mjd = addDecades(mf->mjd, n);
+		}
+		
 		scan->mjd = mf->mjd;
 		scan->sec = mf->sec;
-		n = (mjdref - scan->mjd + 500) / 1000;
-		scan->mjd += n*1000;
-		
 		scan->format      = mf->format;
 		scan->frameoffset = mf->frameoffset;
 		scan->tracks      = mf->ntrack;
@@ -428,21 +520,16 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 
 	if(replacedFrac)
 	{
-		if(wGood > 0)
-		{
-			*replacedFrac = (double)wBad/(double)wGood;
-		}
-		else
-		{
-			*replacedFrac = 0;
-		}
+		*replacedFrac = (double)wBad/(double)wGood;
 	}
 
 	free(buffer);
+	free(dirData);
 
 	uniquifyScanNames(module);
 
 	return -die;
+#endif
 }
 
 void printMark5Module(const struct Mark5Module *module)
