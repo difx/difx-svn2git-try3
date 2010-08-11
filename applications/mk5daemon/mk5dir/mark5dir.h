@@ -84,7 +84,7 @@ struct Mark5DirectoryHeaderVer1
 
 struct Mark5DirectoryScanHeaderVer1
 {
-	unsigned int typeNumber;	/* 0 to 10; see memo 81 */
+	unsigned int typeNumber;	/* and scan number; see memo 81 */
 	unsigned short frameLength;
 	char station[2];
 	char scanName[32];
@@ -133,6 +133,7 @@ struct Mark5Module
 	unsigned int signature;
 	enum Mark5ReadMode mode;
 	int dirVersion;		/* directory version = 0 for pre memo 81 */
+	int fast;		/* if true, the directory came from the ModuleUserDirectory only */
 };
 
 enum Mark5DirStatus
@@ -181,7 +182,7 @@ int sanityCheckModule(const struct Mark5Module *module);
 int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
 	int (*callback)(int, int, int, void *), void *data,
-	float *replacedFrac, int force);
+	float *replacedFrac, int force, int fast);
 
 void countReplaced(const streamstordatatype *data, int len,
 	long long *wGood, long long *wBad);

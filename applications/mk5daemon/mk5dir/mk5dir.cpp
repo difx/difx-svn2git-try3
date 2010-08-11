@@ -155,7 +155,7 @@ int dirCallback(int scan, int nscan, int status, void *data)
 	return die;
 }
 
-static int getDirCore(struct Mark5Module *module, char *vsn, DifxMessageMk5Status *mk5status, int force)
+static int getDirCore(struct Mark5Module *module, char *vsn, DifxMessageMk5Status *mk5status, int force, int fast)
 {
 	int v;
 	int mjdnow;
@@ -173,7 +173,7 @@ static int getDirCore(struct Mark5Module *module, char *vsn, DifxMessageMk5Statu
 
 	v = getCachedMark5Module(module, &xlrDevice, mjdnow, 
 		vsn, mk5dirpath, &dirCallback, 
-		mk5status, &replacedFrac, force);
+		mk5status, &replacedFrac, force, fast);
 	if(replacedFrac > 0.01)
 	{
 		snprintf(message, DIFX_MESSAGE_LENGTH, 
@@ -210,7 +210,7 @@ static int getDirCore(struct Mark5Module *module, char *vsn, DifxMessageMk5Statu
 	return v;
 }
 
-static int mk5dir(char *vsn, int force)
+static int mk5dir(char *vsn, int force, int fast)
 {
 	struct Mark5Module module;
 	DifxMessageMk5Status mk5status;
@@ -257,7 +257,7 @@ static int mk5dir(char *vsn, int force)
 		if(strlen(mk5status.vsnA) == 8)
 		{
 			mk5status.activeBank = 'A';
-			v = getDirCore(&module, mk5status.vsnA, &mk5status, force);
+			v = getDirCore(&module, mk5status.vsnA, &mk5status, force, fast);
 			if(v >= 0)
 			{
 				strcpy(modules, mk5status.vsnA);
@@ -270,7 +270,7 @@ static int mk5dir(char *vsn, int force)
 		if(strlen(mk5status.vsnB) == 8)
 		{
 			mk5status.activeBank = 'B';
-			v = getDirCore(&module, mk5status.vsnB, &mk5status, force);
+			v = getDirCore(&module, mk5status.vsnB, &mk5status, force, fast);
 			if(v >= 0)
 			{
 				if(modules[0])
@@ -298,7 +298,7 @@ static int mk5dir(char *vsn, int force)
 				mk5status.activeBank = 'B';
 			}
 
-			v = getDirCore(&module, vsn, &mk5status, force);
+			v = getDirCore(&module, vsn, &mk5status, force, fast);
 			if(v >= 0)
 			{
 				strcpy(modules, vsn);
@@ -334,6 +334,7 @@ int main(int argc, char **argv)
 {
 	char vsn[16] = "";
 	int force=0;
+	int fast=0;
 	int v;
 
 	difxMessageInit(-1, "mk5dir");
@@ -359,6 +360,11 @@ int main(int argc, char **argv)
 			strcmp(argv[a], "--force") == 0)
 		{
 			force = 1;
+		}
+		else if(strcmp(argv[a], "-F") == 0 ||
+			strcmp(argv[a], "--fast") == 0)
+		{
+			fast = 1;
 		}
 		else if(vsn[0] == 0)
 		{
@@ -392,7 +398,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		v = mk5dir(vsn, force);
+		v = mk5dir(vsn, force, fast);
 		if(v < 0)
 		{
 			if(watchdogXLRError[0] != 0)

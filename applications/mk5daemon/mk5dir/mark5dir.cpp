@@ -106,6 +106,32 @@ void countReplaced(const streamstordatatype *data, int len,
 	*wBad += nBad;
 }
 
+/* This useful routine counts the number of bits set */
+static int countbits(UINT32 v)
+{
+	int c; // c accumulates the total bits set in v
+
+	for(c = 0; v; c++)
+	{
+		v &= v - 1; // clear the least significant bit set
+	}
+
+	return c;
+}
+
+/* round the number up to the nearest power of 2 */
+/* from: http://stackoverflow.com/questions/364985/algorithm-for-finding-the-smallest-power-of-two-thats-greater-or-equal-to-a-give */
+static int upround2(int value)
+{
+	int result = 1;
+
+	while(result < value)
+	{
+		result <<= 1;
+	}
+
+	return result;
+}
 
 static int mjd2ymd(long mjd, int *pYear, int *pMonth, int *pDay)
 /*
@@ -392,6 +418,32 @@ static int uniquifyScanNames(struct Mark5Module *module)
 	return 0;
 }
 
+static int convertTimeBCD(const unsigned char *timeBCD, int *mjd, int *sec)
+{
+	int year, doy;
+
+	if(sec)
+	{
+		*sec =	((timeBCD[0] & 0x0F) >> 0)*1 + 
+			((timeBCD[0] & 0xF0) >> 4)*10 +
+			((timeBCD[1] & 0x0F) >> 0)*60 + 
+			((timeBCD[1] & 0xF0) >> 4)*600 +
+			((timeBCD[2] & 0x0F) >> 0)*3600 +
+			((timeBCD[2] & 0xF0) >> 4)*36000;
+	}
+	if(mjd)
+	{
+		doy =	((timeBCD[3] & 0x0F) >> 0)*1 +
+			((timeBCD[3] & 0xF0) >> 4)*10 +
+			((timeBCD[4] & 0x0F) >> 0)*100;
+		year =	((timeBCD[4] & 0xF0) >> 4) +
+			((timeBCD[5] & 0x0F) >> 0)*10 +
+			((timeBCD[5] & 0xF0) >> 4)*100 +
+			((timeBCD[6] & 0x0F) >> 0)*1000;
+		*mjd = doy2mjd(year, doy);
+	}
+}
+
 static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int mjdref, 
 	int (*callback)(int, int, int, void *), void *data, float *replacedFrac)
 {
@@ -414,8 +466,15 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 				/* == version number for mark5-memo 81 */
 	int oldLen1, oldLen2, oldLen3;
 	int start, stop;
+	int fast;
+	double overhead = 0.0;
 
 	streamstordatatype *buffer;
+
+	if(replacedFrac)
+	{
+		*replacedFrac = 0.0;
+	}
 
 	/* allocate a bit more than the minimum needed */
 	bufferlen = 20160*8*10;
@@ -469,6 +528,7 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	if(xlrRC != XLR_SUCCESS)
 	{
 		free(dirData);
+
 		return -5;
 	}
 	if(dirVersion == -1)
@@ -514,12 +574,15 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	{
 		module->bank = bank;
 		free(dirData);
+
 		return 0;
 	}
 
 	buffer = (streamstordatatype *)malloc(bufferlen);
 	
+	fast = module->fast;
 	memset(module, 0, sizeof(struct Mark5Module));
+	module->fast = fast;
 	if(dirVersion == 0)
 	{
 		module->nscans = m5dir->nscans;
@@ -534,138 +597,220 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	module->dirVersion = dirVersion;
 	module->mode = MARK5_READ_MODE_NORMAL;
 
-	for(int i = 0; i < module->nscans; i++)
+	printf("fast is %d\n", module->fast);
+
+	if(module->fast && dirVersion > 0)
 	{
-		wGood = wBad = 0;
-		scan = module->scans + i;
+		printf("Doing fast dir\n");
 
-		if(dirVersion == 0)
+		for(int i = 0; i < module->nscans; i++)
 		{
-			strncpy(scan->name, m5dir->scanName[i], MAXLENGTH);
-			scan->start  = m5dir->start[i];
-			scan->length = m5dir->length[i];
-		}
-		else if(dirVersion == 1)
-		{
-			const struct Mark5DirectoryScanHeaderVer1 *sh;
-			sh = (struct Mark5DirectoryScanHeaderVer1 *)(dirData + 128*(i+1));
-			strncpy(scan->name, sh->scanName, 32);
+			struct Mark5DirectoryScanHeaderVer1 *scanHeader;
+			int type;
+
+			scan = module->scans + i;
+
+			scanHeader = (struct Mark5DirectoryScanHeaderVer1 *)(dirData + 128*i + 128);
+			type = scanHeader->typeNumber & 0xFF;
+			strncpy(scan->name, scanHeader->scanName, 32);
 			scan->name[31] = 0;
-			scan->start  = sh->startByte;
-			scan->length = sh->stopByte - sh->startByte;
-		}
-		if(scan->length < bufferlen)
-		{
-			if(callback)
+			scan->start  = scanHeader->startByte;
+			scan->length = scanHeader->stopByte - scanHeader->startByte;
+			scan->framebytes  = scanHeader->frameLength;
+
+			if(type >= 3 && type <= 9)
 			{
-				die = callback(i, module->nscans, MARK5_DIR_SHORT_SCAN, data);
-			}
-			continue;
-		}
+				struct Mark5DirectoryLegacyBodyVer1 *scanBody;
+				scanBody = (struct Mark5DirectoryLegacyBodyVer1 *)(dirData + 128*i + 192);
 
-		if(die)
-		{
-			break;
-		}
-
-		if(scan->start & 4)
-		{
-			scan->start -= 4;
-			scan->length -= 4;
-		}
-
-		a = scan->start>>32;
-		b = scan->start % (1LL<<32);
-
-		xlrRC = XLRReadData(*xlrDevice, buffer, a, b, bufferlen);
-
-		if(xlrRC == XLR_FAIL)
-		{
-			if(callback)
-			{
-				die = callback(i, module->nscans, MARK5_DIR_READ_ERROR, data);
-			}
-			scan->format = -2;
-
-			continue;
-		}
-
-		countReplaced(buffer, bufferlen/4, &wGood, &wBad);
-
-		if(die)
-		{
-			break;
-		}
-
-		mf = new_mark5_format_from_stream(new_mark5_stream_memory(buffer, bufferlen));
-	
-		if(!mf)
-		{
-			if(callback)
-			{
-				die = callback(i, module->nscans, MARK5_DIR_DECODE_ERROR, data);
-			}
-			scan->format = -1;
-			continue;
-		}
-		
-		if(die)
-		{
-			break;
-		}
-
-		/* Fix mjd.  FIXME: this should be done in mark5access */
-		if(mf->format == 0 || mf->format == 2)  /* VLBA or Mark5B format */
-		{
-			n = (mjdref - mf->mjd + 500) / 1000;
-			mf->mjd += n*1000;
-		}
-		else if(mf->format == 1)	/* Mark4 format */
-		{
-			n = (int)((mjdref - mf->mjd + 1826)/3652.4);
-			mf->mjd = addDecades(mf->mjd, n);
-		}
-		
-		scan->mjd = mf->mjd;
-		scan->sec = mf->sec;
-		scan->format      = mf->format;
-		scan->frameoffset = mf->frameoffset;
-		scan->tracks      = mf->ntrack;
-		scan->framespersecond = int(1000000000.0/mf->framens + 0.5);
-		scan->framenuminsecond = int(mf->ns/mf->framens + 0.5);
-		scan->framebytes  = mf->framebytes;
-		scan->duration    = (int)((scan->length - scan->frameoffset)
-			/ scan->framebytes)/(double)(scan->framespersecond);
-		
-		delete_mark5_format(mf);
-
-		if(callback)
-		{
-			enum Mark5DirStatus s;
-
-			if(wBad > 8)
-			{
-				s = MARK5_DIR_DECODE_WITH_REPLACEMENTS;
+				switch(type)
+				{
+				case 3:
+					scan->format = MK5_FORMAT_VLBA;
+					overhead = 1.008;
+					break;
+				case 4:
+					scan->format = MK5_FORMAT_MARK4;
+					overhead = 1.0;
+					break;
+				case 8:
+				case 9:
+					scan->format = MK5_FORMAT_MARK5B;
+					scan->framebytes = 10016;
+					overhead = 1.0016;
+					break;
+				default:
+					scan->format = -1;
+					continue;
+				}
+				convertTimeBCD(scanBody->timeBCD, &scan->mjd, &scan->sec);
+				scan->frameoffset = scanBody->byteOffset;
+				if(scan->format == MK5_FORMAT_MARK5B)
+				{
+					scan->tracks = upround2(countbits(scanBody->nTrack));
+				}
+				else
+				{
+					scan->tracks = scanBody->nTrack;
+				}
+				scan->framespersecond = int(125000.0*(double)(scanBody->trackRate)*overhead*(double)(scan->tracks)/(double)(scan->framebytes) + 0.5);
+				scan->framenuminsecond = scanBody->firstFrame;
+				if(scan->framespersecond > 0)
+				{
+					scan->duration    = (int)((scan->length - scan->frameoffset)
+						/ scan->framebytes)/(double)(scan->framespersecond);
+				}
 			}
 			else
 			{
-				s = MARK5_DIR_DECODE_SUCCESS;
+				/* Currently unsupported type */
+				scan->format = -1;
 			}
-			die = callback(i, module->nscans, s, data);
+		
 		}
-
-		wGoodSum += wGood;
-		wBadSum += wBad;
-
-		if(die)
-		{
-			break;
-		}
+		printf("Wow -- that was fast!\n");
 	}
-
-	if(replacedFrac)
+	else
 	{
-		*replacedFrac = (double)wBad/(double)wGood;
+		for(int i = 0; i < module->nscans; i++)
+		{
+			wGood = wBad = 0;
+			scan = module->scans + i;
+			if(module->fast)
+			{
+				printf("Fast directory read requested but not supported for this module.\n");
+				printf("Performing normal directory read\n");
+				module->fast = 0;
+			}
+
+			if(dirVersion == 0)
+			{
+				strncpy(scan->name, m5dir->scanName[i], MAXLENGTH);
+				scan->start  = m5dir->start[i];
+				scan->length = m5dir->length[i];
+			}
+			else if(dirVersion == 1)
+			{
+				const struct Mark5DirectoryScanHeaderVer1 *scanHeader;
+				scanHeader = (struct Mark5DirectoryScanHeaderVer1 *)(dirData + 128*i + 128);
+				strncpy(scan->name, scanHeader->scanName, 32);
+				scan->name[31] = 0;
+				scan->start  = scanHeader->startByte;
+				scan->length = scanHeader->stopByte - scanHeader->startByte;
+			}
+			if(scan->length < bufferlen)
+			{
+				if(callback)
+				{
+					die = callback(i, module->nscans, MARK5_DIR_SHORT_SCAN, data);
+				}
+				continue;
+			}
+
+			if(die)
+			{
+				break;
+			}
+
+			if(scan->start & 4)
+			{
+				scan->start -= 4;
+				scan->length -= 4;
+			}
+
+			a = scan->start>>32;
+			b = scan->start % (1LL<<32);
+
+			xlrRC = XLRReadData(*xlrDevice, buffer, a, b, bufferlen);
+
+			if(xlrRC == XLR_FAIL)
+			{
+				if(callback)
+				{
+					die = callback(i, module->nscans, MARK5_DIR_READ_ERROR, data);
+				}
+				scan->format = -2;
+
+				continue;
+			}
+
+			countReplaced(buffer, bufferlen/4, &wGood, &wBad);
+
+			if(die)
+			{
+				break;
+			}
+
+			mf = new_mark5_format_from_stream(new_mark5_stream_memory(buffer, bufferlen));
+		
+			if(!mf)
+			{
+				if(callback)
+				{
+					die = callback(i, module->nscans, MARK5_DIR_DECODE_ERROR, data);
+				}
+				scan->format = -1;
+				continue;
+			}
+			
+			if(die)
+			{
+				break;
+			}
+
+			/* Fix mjd.  FIXME: this should be done in mark5access */
+			if(mf->format == 0 || mf->format == 2)  /* VLBA or Mark5B format */
+			{
+				n = (mjdref - mf->mjd + 500) / 1000;
+				mf->mjd += n*1000;
+			}
+			else if(mf->format == 1)	/* Mark4 format */
+			{
+				n = (int)((mjdref - mf->mjd + 1826)/3652.4);
+				mf->mjd = addDecades(mf->mjd, n);
+			}
+			
+			scan->mjd = mf->mjd;
+			scan->sec = mf->sec;
+			scan->format      = mf->format;
+			scan->frameoffset = mf->frameoffset;
+			scan->tracks      = mf->ntrack;
+			scan->framespersecond = int(1000000000.0/mf->framens + 0.5);
+			scan->framenuminsecond = int(mf->ns/mf->framens + 0.5);
+			scan->framebytes  = mf->framebytes;
+			scan->duration    = (int)((scan->length - scan->frameoffset)
+				/ scan->framebytes)/(double)(scan->framespersecond);
+			
+			delete_mark5_format(mf);
+
+			if(callback)
+			{
+				enum Mark5DirStatus s;
+
+				if(wBad > 8)
+				{
+					s = MARK5_DIR_DECODE_WITH_REPLACEMENTS;
+				}
+				else
+				{
+					s = MARK5_DIR_DECODE_SUCCESS;
+				}
+				die = callback(i, module->nscans, s, data);
+			}
+
+			wGoodSum += wGood;
+			wBadSum += wBad;
+
+			if(die)
+			{
+				break;
+			}
+		}
+
+		if(replacedFrac)
+		{
+			*replacedFrac = (double)wBad/(double)wGood;
+		}
 	}
 
 	free(buffer);
@@ -721,12 +866,12 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	FILE *in;
 	struct Mark5Scan *scan;
 	char line[256];
-	int i, nscans, n;
+	int i, j, nscans, n;
 	char *v;
 	char bank;
 	char label[XLR_LABEL_LENGTH];
 	unsigned int signature;
-	char extra1[12], extra2[12];
+	char extra[3][12];
 
 	if(!module)
 	{
@@ -735,6 +880,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 
 	module->label[0] = 0;
 	module->nscans = 0;
+	module->fast = 0;
 	module->bank = -1;
 	module->mode = MARK5_READ_MODE_NORMAL;
 	module->dirVersion = 0;
@@ -749,33 +895,33 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	if(!v)
 	{
 		fclose(in);
+
 		return -1;
 	}
 
-	n = sscanf(line, "%8s %d %c %u %11s %11s", label, &nscans, &bank, &signature, extra1, extra2);
+	n = sscanf(line, "%8s %d %c %u %11s %11s %11s", label, &nscans, &bank, &signature, extra[0], extra[1], extra[2]);
 	if(n < 3)
 	{
 		fclose(in);
+
 		return -1;
 	}
 	if(n == 3)
 	{
 		signature = ~0;
 	}
-	else if(n == 5)
+
+	for(j = 4; j < n; j++)
 	{
-		if(strcmp(extra1, "RT") == 0)
+		if(strcmp(extra[j], "RT") == 0)
 		{
 			module->mode = MARK5_READ_MODE_RT;
 		}
-	}
-	else if(n == 6)
-	{
-		if(strcmp(extra2, "RT") == 0)
+		else if(strcmp(extra[j], "Fast") == 0)
 		{
-			module->mode = MARK5_READ_MODE_RT;
+			module->fast = 1;
 		}
-		if(sscanf(extra1, "%d", &i) == 1)
+		else if(sscanf(extra[j], "%d", &i) == 1)
 		{
 			module->dirVersion = i;
 		}
@@ -784,6 +930,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 	if(nscans > MAXSCANS || nscans < 0)
 	{
 		fclose(in);
+
 		return -1;
 	}
 
@@ -801,6 +948,7 @@ int loadMark5Module(struct Mark5Module *module, const char *filename)
 		{
 			module->nscans = i;
 			fclose(in);
+
 			return -1;
 		}
 		
@@ -841,13 +989,14 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 		return -1;
 	}
 
-	fprintf(out, "%8s %d %c %u %d %s\n",
+	fprintf(out, "%8s %d %c %u %d %s%s\n",
 		module->label,
 		module->nscans,
 		module->bank+'A',
 		module->signature,
 		module->dirVersion,
-		Mark5ReadModeName[module->mode]);
+		Mark5ReadModeName[module->mode],
+		module->fast ? " Fast" : "");
 	for(i = 0; i < module->nscans; i++)
 	{
 		scan = module->scans + i;
@@ -878,7 +1027,7 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
 	int (*callback)(int, int, int, void *), void *data,
-	float *replacedFrac, int force)
+	float *replacedFrac, int force, int fast)
 {
 	char filename[256];
 	int v, curbank;
@@ -897,6 +1046,10 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 		module->signature = 0;
 	}
 
+	if(fast)
+	{
+		module->fast = 1;
+	}
 	v = getMark5Module(module, xlrDevice, mjdref, callback, data, replacedFrac);
 
 	if(v >= 0)
@@ -906,6 +1059,7 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 
 	return v;
 }
+
 int sanityCheckModule(const struct Mark5Module *module)
 {
 	int i;
@@ -1119,6 +1273,7 @@ int getModuleDirectoryVersion(SSHANDLE *xlrDevice, int *dirVersion, int *dirLeng
 	if(len % 128 == 0)
 	{
 		char *dirData;
+		int nScan;
 		
 		dirData = (char *)calloc(len, 1);
 		WATCHDOGTEST( XLRGetUserDir(*xlrDevice, len, 0, dirData) );
@@ -1132,6 +1287,41 @@ int getModuleDirectoryVersion(SSHANDLE *xlrDevice, int *dirVersion, int *dirLeng
 		{
 			ver = 1;
 		}
+
+		nScan = len/128 - 1;
+#if 0
+		printf("Directory information:");
+		printf("  Ver = %d  VSN = %s\n", ver, dirHeader->vsn);
+		for(int s = 0; s < nScan; s++)
+		{
+			struct Mark5DirectoryScanHeaderVer1 *p;
+			p = (struct Mark5DirectoryScanHeaderVer1 *)(dirData + 128*(s+1));
+			int type = p->typeNumber & 0xFF;
+			printf("  scan %d:\n", s+1);
+			printf("    type = %d\n", type);
+			printf("    frame length = %d\n", p->frameLength);
+			printf("    station = %c%c\n", p->station[0], p->station[1]);
+			printf("    scan name = %-32s\n", p->scanName);
+			printf("    exp name = %-8s\n", p->expName);
+			printf("    byte range = %Ld to %Ld\n", p->startByte, p->stopByte);
+			if(type >= 3 && type <= 9)
+			{
+				struct Mark5DirectoryLegacyBodyVer1 *q;
+				q = (struct Mark5DirectoryLegacyBodyVer1 *)(dirData + 192 + 128*s);
+				printf("  * time (BCD) = ");
+				for(int j = 7; j >= 0; j--)
+				{
+					printf("%d%d", q->timeBCD[j]/16,
+							q->timeBCD[j]%16);
+				}
+				printf("\n");
+				printf("    first frame = %d\n", q->firstFrame);
+				printf("    byte offset = %d\n", q->byteOffset);
+				printf("    bitstream rate = %d\n", q->trackRate);
+				printf("    bitstream mask = 0x%8x\n", q->nTrack);
+			}
+		}
+#endif
 		free(dirData);
 	}
 

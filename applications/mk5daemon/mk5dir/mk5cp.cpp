@@ -572,7 +572,7 @@ static int mk5cp(char *vsn, const char *scanlist, const char *outpath, int force
 	{
 		v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
 			vsn, mk5dirpath, &dirCallback, &mk5status,
-			&replacedFrac, false);
+			&replacedFrac, false, 0);
 		if(replacedFrac > 0.01)
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH,
