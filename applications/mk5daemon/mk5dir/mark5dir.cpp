@@ -107,7 +107,7 @@ void countReplaced(const streamstordatatype *data, int len,
 }
 
 /* This useful routine counts the number of bits set */
-static int countbits(UINT32 v)
+static int countbits(unsigned long int v)
 {
 	int c; // c accumulates the total bits set in v
 
@@ -418,7 +418,7 @@ static int uniquifyScanNames(struct Mark5Module *module)
 	return 0;
 }
 
-static int convertTimeBCD(const unsigned char *timeBCD, int *mjd, int *sec)
+static void convertTimeBCD(const unsigned char *timeBCD, int *mjd, int *sec)
 {
 	int year, doy;
 
