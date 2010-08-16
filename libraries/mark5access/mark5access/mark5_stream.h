@@ -217,6 +217,12 @@ int mark5_unpack(struct mark5_stream *ms, void *packed, float **unpacked,
 int mark5_unpack_with_offset(struct mark5_stream *ms, void *packed,
 	int offsetsamples, float **unpacked, int nsamp);
 
+int mark5_unpack_complex(struct mark5_stream *ms, void *packed, 
+			 mark5_float_complex **unpacked, int nsamp);
+
+int mark5_unpack_complex_with_offset(struct mark5_stream *ms, void *packed,
+	int offsetsamples, mark5_float_complex **unpacked, int nsamp);
+
 
 /* SPECIFIC FORMAT TYPES */
 
