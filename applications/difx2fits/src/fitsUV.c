@@ -878,6 +878,7 @@ static int storevis(DifxVis *dv)
 static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 {
 	/* blank array */
+	memset(dv->weight, 0, dv->nFreq*dv->D->nPolar*sizeof(float));
 	memset(dv->data, 0, dv->nData*sizeof(float));
 
 	dv->changed = 0;
