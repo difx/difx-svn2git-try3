@@ -158,6 +158,10 @@ const DifxInput *DifxInput2FitsSU(const DifxInput *D,
 	for(sourceId = 0; sourceId < D->nSource; sourceId++)
 	{
 		i = D->source[sourceId].fitsSourceId;
+		if(i < 0)
+		{
+			continue;
+		}
 		if(fitsSource[i] < 0)
 		{
 			fitsSource[i] = sourceId;
