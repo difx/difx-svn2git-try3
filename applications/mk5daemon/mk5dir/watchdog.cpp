@@ -96,6 +96,7 @@ int initWatchdog()
 {
 	int perr;
 
+	pthread_mutex_init(&watchdogLock, NULL);
 	watchdogStatement[0] = 0;
 	watchdogXLRError[0] = 0;
 	watchdogTime = 0;
@@ -103,7 +104,7 @@ int initWatchdog()
 
 	if(perr != 0)
 	{
-		fprintf(stderr, "Error -- could not launch watchdog thread!\n");
+		fprintf(stderr, "Error: could not launch watchdog thread!\n");
 		return -1;
 	}
 

@@ -31,13 +31,25 @@
 #define __MARK5ACCESS_H__
 
 #include <xlrapi.h>
-
-#define MAXSCANS  1024 /* Maximum number of scans in SDir */
-#define MAXLENGTH   64 /* Maximum length of a scan's extended name +1 */
+#include "config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define MAXSCANS  1024 /* Maximum number of scans in SDir */
+#define MAXLENGTH   64 /* Maximum length of a scan's extended name +1 */
+
+#ifndef MARK5_FILL_PATTERN
+#ifdef WORDS_BIGENDIAN
+#define MARK5_FILL_PATTERN 0x44332211UL
+#else
+#define MARK5_FILL_PATTERN 0x11223344UL
+#endif
+#endif
+
+
+#define DIRECTORY_NOT_CACHED	-7
 
 #define MODULE_STATUS_UNKNOWN	0x00
 #define MODULE_STATUS_ERASED	0x01
@@ -53,8 +65,10 @@ enum Mark5ReadMode
 
 // Test for SDK 9+
 #ifdef XLR_MAX_IP_ADDR
+#define SDKVERSION 9
 typedef unsigned int streamstordatatype;
 #else
+#define SDKVERSION 8
 typedef unsigned long streamstordatatype;
 #endif
 
@@ -130,7 +144,7 @@ struct Mark5Module
 	int bank;
 	int nscans;
 	Mark5Scan scans[MAXSCANS];
-	unsigned int signature;
+	unsigned int signature;	/* a hash code used to determine if dir is current */
 	enum Mark5ReadMode mode;
 	int dirVersion;		/* directory version = 0 for pre memo 81 */
 	int fast;		/* if true, the directory came from the ModuleUserDirectory only */
@@ -182,7 +196,7 @@ int sanityCheckModule(const struct Mark5Module *module);
 int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
 	int (*callback)(int, int, int, void *), void *data,
-	float *replacedFrac, int force, int fast);
+	float *replacedFrac, int force, int fast, int cacheOnly);
 
 void countReplaced(const streamstordatatype *data, int len,
 	long long *wGood, long long *wBad);

@@ -44,7 +44,7 @@
 const char program[] = "mk5cp";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.7";
-const char verdate[] = "20100728";
+const char verdate[] = "20100820";
 
 int verbose = 0;
 int die = 0;
@@ -230,7 +230,7 @@ int copyByteRange(SSHANDLE xlrDevice, const char *outpath, const char *outname, 
 		v = fwrite(data, 1, len, out);
 		if(v < len)
 		{
-			snprintf(message, DIFX_MESSAGE_LENGTH, "Incomplete write -- disk full?  path=%s", outpath);
+			snprintf(message, DIFX_MESSAGE_LENGTH, "Incomplete write.  Disk full?  path=%s", outpath);
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 			fprintf(stderr, "Error: %s\n", message);
 			
@@ -383,7 +383,7 @@ int copyScan(SSHANDLE xlrDevice, const char *vsn, const char *outpath, int scanN
 		v = fwrite(data+(skip/4), 1, len-skip, out);
 		if(v < len-skip)
 		{
-			snprintf(message, DIFX_MESSAGE_LENGTH, "Incomplete write -- disk full?  path=%s", outpath);
+			snprintf(message, DIFX_MESSAGE_LENGTH, "Incomplete write.  Disk full?  path=%s", outpath);
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
 			fprintf(stderr, "Error: %s\n", message);
 			
@@ -509,7 +509,7 @@ static int mk5cp(char *vsn, const char *scanlist, const char *outpath, int force
 	WATCHDOGTEST( XLROpen(1, &xlrDevice) );
 	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-	WATCHDOGTEST( XLRSetFillData(xlrDevice, 0x11223344UL) );
+	WATCHDOGTEST( XLRSetFillData(xlrDevice, MARK5_FILL_PATTERN) );
 
 	v = getBankInfo(xlrDevice, &mk5status, ' ');
 	if(v < 0)
@@ -572,7 +572,7 @@ static int mk5cp(char *vsn, const char *scanlist, const char *outpath, int force
 	{
 		v = getCachedMark5Module(&module, &xlrDevice, mjdnow, 
 			vsn, mk5dirpath, &dirCallback, &mk5status,
-			&replacedFrac, false, 0);
+			&replacedFrac, false, 0, 1);
 		if(replacedFrac > 0.01)
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH,
@@ -583,7 +583,19 @@ static int mk5cp(char *vsn, const char *scanlist, const char *outpath, int force
 		}
 		if(v < 0)
 		{
-			fprintf(stderr, "Unsuccessful dir read.  Return value = %d\n", v);
+			if(v == DIRECTORY_NOT_CACHED)
+			{
+				snprintf(message, DIFX_MESSAGE_LENGTH,
+					"Directory cache not up to date for module %s.  Please get directory first.",
+					vsn);
+			}
+			else
+			{
+				snprintf(message, DIFX_MESSAGE_LENGTH,
+					"Unsuccessful dir read for module %s.  Return value = %d\n", vsn, v);
+			}
+			fprintf(stderr, "%s\n", message);
+			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 			mk5status.activeBank = ' ';
 			bail = 1;
 		}
@@ -592,20 +604,23 @@ static int mk5cp(char *vsn, const char *scanlist, const char *outpath, int force
 			printMark5Module(&module);
 		}
 
-		v = sanityCheckModule(&module);
-		if(v < 0)
+		if(v >= 0)
 		{
-			snprintf(message, DIFX_MESSAGE_LENGTH, "Module %s directory contains undecoded scans!", vsn);
-			fprintf(stderr, "%s\n", message);
-			if(!force)
+			v = sanityCheckModule(&module);
+			if(v < 0)
 			{
-				difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-				mk5status.activeBank = ' ';
-				bail = 1;
-			}
-			else
-			{
-				fprintf(stderr, "Force is set, so continuing anyway\n");
+				snprintf(message, DIFX_MESSAGE_LENGTH, "Module %s directory contains undecoded scans!", vsn);
+				fprintf(stderr, "%s\n", message);
+				if(!force)
+				{
+					difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
+					mk5status.activeBank = ' ';
+					bail = 1;
+				}
+				else
+				{
+					fprintf(stderr, "Force is set, so continuing anyway\n");
+				}
 			}
 		}
 	}

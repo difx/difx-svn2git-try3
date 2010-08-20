@@ -37,15 +37,6 @@
 #include <mark5access.h>
 #include "mark5dir.h"
 #include "watchdog.h"
-#include "../config.h"
-
-#ifdef WORDS_BIGENDIAN
-#define MARK5_FILL_WORD32 0x44332211UL
-#define MARK5_FILL_WORD64 0x4433221144332211ULL
-#else
-#define MARK5_FILL_WORD32 0x11223344UL
-#define MARK5_FILL_WORD64 0x1122334411223344ULL
-#endif
 
 
 const char *moduleStatusName(int status)
@@ -96,7 +87,7 @@ void countReplaced(const streamstordatatype *data, int len,
 
 	for(i = 0; i < len; i++)
 	{
-		if(data[i] == MARK5_FILL_WORD32)
+		if(data[i] == MARK5_FILL_PATTERN)
 		{
 			nBad++;
 		}
@@ -445,7 +436,7 @@ static void convertTimeBCD(const unsigned char *timeBCD, int *mjd, int *sec)
 }
 
 static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int mjdref, 
-	int (*callback)(int, int, int, void *), void *data, float *replacedFrac)
+	int (*callback)(int, int, int, void *), void *data, float *replacedFrac, int cacheOnly)
 {
 	XLR_RETURN_CODE xlrRC;
 	Mark5Directory *m5dir;
@@ -577,6 +568,12 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 
 		return 0;
 	}
+	else if(cacheOnly)
+	{
+		return DIRECTORY_NOT_CACHED;
+	}
+
+	/* If we got this far, we're going to attempt to do the directory read */
 
 	buffer = (streamstordatatype *)malloc(bufferlen);
 	
@@ -596,8 +593,6 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 	module->signature = signature;
 	module->dirVersion = dirVersion;
 	module->mode = MARK5_READ_MODE_NORMAL;
-
-	printf("fast is %d\n", module->fast);
 
 	if(module->fast && dirVersion > 0)
 	{
@@ -668,7 +663,6 @@ static int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int m
 			}
 		
 		}
-		printf("Wow -- that was fast!\n");
 	}
 	else
 	{
@@ -1027,7 +1021,7 @@ int saveMark5Module(struct Mark5Module *module, const char *filename)
 int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
 	int mjdref, const char *vsn, const char *dir,
 	int (*callback)(int, int, int, void *), void *data,
-	float *replacedFrac, int force, int fast)
+	float *replacedFrac, int force, int fast, int cacheOnly)
 {
 	char filename[256];
 	int v, curbank;
@@ -1050,7 +1044,7 @@ int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice,
 	{
 		module->fast = 1;
 	}
-	v = getMark5Module(module, xlrDevice, mjdref, callback, data, replacedFrac);
+	v = getMark5Module(module, xlrDevice, mjdref, callback, data, replacedFrac, cacheOnly);
 
 	if(v >= 0)
 	{
@@ -1456,8 +1450,8 @@ int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], i
 		if(xlrRC != XLR_SUCCESS)
 		{
 			snprintf(message, DIFX_MESSAGE_LENGTH,
-				"XLRGetDriveInfo failed for disk %d", d);
-			printf("message\n");
+				"XLRGetDriveInfo failed for disk %d (perhaps the disk is not present)", d);
+			printf(message);
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 
 			drive[d].model[0] = 0;

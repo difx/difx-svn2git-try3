@@ -163,6 +163,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	int returnValue;
 	char altDifxProgram[64];
 	time_t t1, t2;
+	const char *user;
 
 	if(!G)
 	{
@@ -479,13 +480,17 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_WARNING);
 	}
 
+	user = getenv("DIFX_USER_ID");
+	if(!user)
+	{
+		user = difxUser;
+	}
+
 	childPid = fork();
 
 	/* here is where the spawning of mpifxcorr happens... */
 	if(childPid == 0)
 	{
-		const char *user;
-
 		// Avoid the period when modules are being checked
 		int tm = time(0) % D->loadMonInterval;
 		if(tm == D->loadMonInterval/2 - 2)
@@ -514,12 +519,6 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 			snprintf(message, MAX_MESSAGE_SIZE,
 				"Time=%d  no sleeping to be done", (int)time(0));
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
-		}
-
-		user = getenv("DIFX_USER_ID");
-		if(!user)
-		{
-			user = difxUser;
 		}
 
 		if(S->force && outputExists)
@@ -554,14 +553,20 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 			message);
 
 		/* register this job with the Transient Event Monitor */
+//		printf("EventQueue *Q = D->eventManager.startJob(%s);\n", jobName);
+//		D->eventManager.print();
 //		EventQueue *Q = D->eventManager.startJob(jobName);
 //		for(int i = 0; i < S->nDatastream; i++)
 //		{
+//			printf("Q->addMark5Unit(%s)\n", S->datastreamNode[i]);
 //			Q->addMark5Unit(S->datastreamNode[i]);
 //		}
+//		printf("Q->setUser(%s)\n", user);
 //		Q->setUser(user);
+//		D->eventManager.print();
 		/* cause mpifxcorr to run! */
 
+//		printf("Starting correlation\n");
 		t1 = time(0);
 		returnValue = Mk5Daemon_system(D, command, 1);
 		t2 = time(0);
@@ -569,7 +574,9 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 		/* deregister this job with the Transient Event Monitor after 
 		 * performing any needed data copying
 		 */
+//		printf("D->eventManager.stopJob(jobName, (t2-t1)/100.0);\n");
 //		D->eventManager.stopJob(jobName, (t2-t1)/100.0);
+//		printf("All done\n");
 
 		/* FIXME -- make use of returnValue  */
 		difxMessageSendDifxStatus2(jobName, DIFX_STATE_MPIDONE, "");
@@ -598,14 +605,6 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	/* now spawn the difxlog process. */
 	if(fork() == 0)
 	{
-		const char *user;
-
-		user = getenv("DIFX_USER_ID");
-		if(!user)
-		{
-			user = difxUser;
-		}
-
 		snprintf(command, MAX_COMMAND_SIZE,
 			"su - %s -c 'ssh -x %s \"difxlog %s %s.difxlog 4 %d\"'",
 			user, S->headNode, jobName, filebase, childPid);

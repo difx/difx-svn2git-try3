@@ -12,6 +12,7 @@ Version 1.4
 * Use mark5ipc to lock out access to /dev/windrvr6 
 * Remove compatibility with Mark5A program
 * Add very nascent mk5lock utility
+* mk5dir: now by default will change the disk module state
 
 Version 1.3
 ~~~~~~~~~~~

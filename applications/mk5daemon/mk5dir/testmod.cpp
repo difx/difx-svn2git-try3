@@ -223,7 +223,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	S_DIR dir;
 	char label[XLR_LABEL_LENGTH+1];
 	char oldLabel[XLR_LABEL_LENGTH+1];
-	int labelLength = 0, rs = 0;
+	int labelLength = 0;
 	int badLabel = 0;
 	int dirLen;
 	int nDrive;

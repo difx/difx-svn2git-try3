@@ -700,13 +700,13 @@ int main(int argc, char **argv)
 			{
 				if(verbose)
 				{
-					printf("OK -- continuing\n\n");
+					printf("OK.  Continuing\n\n");
 				}
 				break;
 			}
 			else if(strcmp(resp, "N\n") == 0 || strcmp(resp, "n\n") == 0)
 			{
-				printf("OK -- I won't continue.\n\n");
+				printf("Module erasure cancelled.\n\n");
 				return 0;
 			}
 			else
