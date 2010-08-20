@@ -31,7 +31,6 @@
 #include "alert.h"
 
 #define MAXPACKETSIZE 100000
-#define MARK5FILL 0x11223344;
 
 /// Mk5DataStream -------------------------------------------------------
 
@@ -74,7 +73,7 @@ void Mk5DataStream::initialise()
     invalid_buf = new char[udpsize];
     unsigned int *tmp = (unsigned int*)invalid_buf;
     for (int i=0; i<udpsize/4; i++) {
-      tmp[i] = MARK5FILL;
+      tmp[i] = MARK5_FILL_PATTERN;
     }
 
     // UDP statistics

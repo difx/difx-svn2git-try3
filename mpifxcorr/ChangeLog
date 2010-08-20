@@ -1,6 +1,9 @@
 Version 1.5.4
 ~~~~~~~~~~~~~
 * Support for streamstor SDK 9.0+
+* Support for new Mark5 directory versions (see Haystack Mark5 memo 81)
+* Don't read mark5 directories
+* Use mark5ipc to lock out mark5 units
 
 Version 1.5.3, 2010 March 17
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
