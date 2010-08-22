@@ -39,6 +39,7 @@ const char program[] = PACKAGE_NAME;
 const char author[]  = PACKAGE_BUGREPORT;
 const char version[] = VERSION;
 
+const double DefaultSniffInterval = 30.0;
 
 static int usage(const char *pgm)
 {
@@ -114,6 +115,9 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  --dont-sniff\n");
 	fprintf(stderr, "  -x                  Don't produce sniffer output\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --sniff-time <t>\n");
+	fprintf(stderr, "  -x           <t>    Sniff output on a <t> second timescale (default %4.2f)\n", DefaultSniffInterval);
+	fprintf(stderr, "\n");
 #endif
 	fprintf(stderr, "  --verbose\n");
 	fprintf(stderr, "  -v                  Be verbose.  -v -v for more!\n");
@@ -132,7 +136,7 @@ struct CommandLineOptions *newCommandLineOptions()
 		sizeof(struct CommandLineOptions));
 	
 	opts->writemodel = 1;
-	opts->sniffTime = 30.0;
+	opts->sniffTime = DefaultSniffInterval;
 	opts->jobMatrixDeltaT = 20.0;
 
 	return opts;

@@ -2,9 +2,12 @@ Version 2.6.3
 * Post DiFX-1.5.3
 * Support for sub-band subsets
 * Per antenna quantization bits
+* can now produce FITS files with only a subset of the correlated sub-bands
+* can be instructed to sniff on an arbitrary timescale
 * Slightly better support for X-Y correlations (still probably fails somehow)
 * makefits: pass --override-version on to difx2fits
-* Option for multiple phase bins (one at a time with -B)
+* Weights are blanked prior to populating each record, preventing screwy weights for unused sub-bands.
+* Option for multiple phase bins in makefits (one at a time with -B)
 
 Version 2.6.2
 * Fixes by Olaf Wuchnitz: print format for writing strings to FITS and argument order in memcpy
