@@ -16,7 +16,7 @@
 #include "../difxmessage.h"
 #include "difxmessageinternal.h"
 
-const int MIN_SEND_GAP=40;
+const int MIN_SEND_GAP=20;
 
 int expandEntityRefrences(char *dest, const char *src)
 {
