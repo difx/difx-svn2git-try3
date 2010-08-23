@@ -1578,10 +1578,6 @@ static DifxInput *populateUVW(DifxInput *D, DifxParameters *up)
 			continue;
 		}
 		strcpy(D->antenna[a].mount, DifxParametersvalue(up, rows[0]));
-		if(strcasecmp(D->antenna[a].mount, "azel"))
-		{
-			strcpy(D->antenna[a].mount, "altz");
-		}
 		D->antenna[a].offset[0]= 0.0;	/* Default */
 		D->antenna[a].offset[1]= 0.0;	
 		D->antenna[a].offset[2]= 0.0;	
@@ -1976,10 +1972,6 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		}
 		nFound++;
 		strcpy(D->antenna[a].mount, DifxParametersvalue(cp, rows[1]));
-		if(strcasecmp(D->antenna[a].mount, "azel"))
-		{
-			strcpy(D->antenna[a].mount, "altz");
-		}
 		D->antenna[a].offset[0]= atof(DifxParametersvalue(cp, rows[2]));
 		D->antenna[a].offset[1]= 0.0;	/* FIXME */
 		D->antenna[a].offset[2]= 0.0;	/* FIXME */
