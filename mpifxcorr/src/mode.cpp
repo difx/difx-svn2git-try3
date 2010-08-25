@@ -79,6 +79,16 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int nchan, int bper
       unpackedarrays[i] = vectorAlloc_f32(unpacksamples);
       fftoutputs[i] = vectorAlloc_cf32(numchannels+1);
       conjfftoutputs[i] = vectorAlloc_cf32(numchannels+1);
+      //zero the Nyquist channel for every band - that is where the weight will be stored on all
+      //baselines (the imag part) so the datastream channel for it must be zeroed
+      if(config->getDLowerSideband(configindex, datastreamindex, config->getDLocalFreqIndex(configindex, datastreamindex, i))) {
+        fftoutputs[i][0].re = 0.0;
+        fftoutputs[i][0].im = 0.0;
+      }
+      else {
+        fftoutputs[i][numchannels].re = 0.0;
+        fftoutputs[i][numchannels].im = 0.0;
+      }
     }
     dataweight = 0.0;
   
@@ -122,19 +132,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int nchan, int bper
       status = vectorGetFFTBufSizeC_f32(pFFTSpecC, &fftbuffersize);
       if(status != vecNoErr)
         csevere << startl << "Error in FFT buffer size calculation!!!" << status << endl;
-      //zero the Nyquist channel for every band - that is where the weight will be stored on all
-      //baselines (the imag part) so the datastream channel for it must be zeroed
-      for(int i=0;i<numinputbands;i++)
-      {
-        if(config->getDLowerSideband(configindex, datastreamindex, config->getDLocalFreqIndex(configindex, datastreamindex, i))) {
-          fftoutputs[i][0].re = 0.0;
-          fftoutputs[i][0].im = 0.0;
-        }
-        else {
-          fftoutputs[i][numchannels].re = 0.0;
-          fftoutputs[i][numchannels].im = 0.0;
-        }
-      }
     }
     fftbuffer = vectorAlloc_u8(fftbuffersize);
   
@@ -373,7 +370,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       phaserotation = (averagedelay-integerdelay)*lofreq;
       if(fractionalLoFreq)
         phaserotation += integerdelay*(lofreq-int(lofreq));
-      phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation + 0.5)));
+      phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
 
       status = vectorAddC_f32_I(phaserotationfloat, fracmult, numchannels+1);
       if(status != vecNoErr)
@@ -430,6 +427,8 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
             if(status != vecNoErr)
               csevere << startl << "Error in conjugate!!!" << status << endl;
           }
+          fftoutputs[j][numchannels*(1-sidebandoffset)].re = 0.0;
+          fftoutputs[j][numchannels*(1-sidebandoffset)].im = 0.0;
         }
         else //doing pre-f fringe rot
         {
