@@ -489,8 +489,8 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			}
 
 			printf("\n");
-			writeRate = totalBytes/readTime;
-			readRate = totalBytes/readTime;
+			writeRate = totalBytes/(8.0e6*readTime);
+			readRate = totalBytes/(8.0e6*readTime);
 			printf("Total write time = %7.5f sec -> %5.3f Mbps\n", writeTime, writeRate);
 			printf("Total read time  = %7.5f sec -> %5.3f Mbps\n", readTime, readRate);
 			printf("\n");
@@ -614,7 +614,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 		}
 
 		printf("\n");
-		readRate = totalBytes/readTime;
+		readRate = totalBytes/(8.0e6*readTime);
 		printf("Total read time = %7.5f sec -> %5.3f Mbps\n", readTime, readRate);
 		printf("\n");
 
