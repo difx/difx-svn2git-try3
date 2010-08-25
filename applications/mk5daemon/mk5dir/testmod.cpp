@@ -119,9 +119,12 @@ int comparebuffers(const char *buf1, const char *buf2, int size)
 	return n;
 }
 
-int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep)
+int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep, double *timeAccumulator)
 {
 	int r;
+	struct timeval tv;
+	double startTime;
+	double endTime;
 
 	if(num == 0)
 	{
@@ -131,6 +134,9 @@ int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep)
 	{
 		WATCHDOGTEST( XLRAppend(xlrDevice) );
 	}
+
+	gettimeofday(&tv, 0);
+	startTime = tv.tv_sec + tv.tv_usec*1.0e-6;
 
 	printf("Writing ");
 	for(r = 0; r < nRep; r++)
@@ -142,20 +148,35 @@ int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep)
 			break;
 		}
 	}
-	printf("\n");
 
 	WATCHDOGTEST( XLRStop(xlrDevice) );
+
+	gettimeofday(&tv, 0);
+	endTime = tv.tv_sec + tv.tv_usec*1.0e-6;
+
+	if(timeAccumulator)
+	{
+		*timeAccumulator += (endTime - startTime);
+	}
+
+	printf(" [%7.5f s]\n", endTime - startTime);
 
 	return 0;
 }
 
-long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, int size, int nRep, long long ptr)
+static long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, int size, int nRep, long long ptr, double *timeAccumulator)
 {
 	XLR_RETURN_CODE xlrRC;
 	int r, v;
 	long long pos, L = 0;
 	unsigned int a, b;
-	
+	struct timeval tv;
+	double startTime;
+	double endTime;
+
+	gettimeofday(&tv, 0);
+	startTime = tv.tv_sec + tv.tv_usec*1.0e-6;
+
 	printf("Reading ");
 	for(r = 0; r < nRep; r++)
 	{
@@ -176,7 +197,16 @@ long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, i
 			break;
 		}
 	}
-	printf("\n");
+
+	gettimeofday(&tv, 0);
+	endTime = tv.tv_sec + tv.tv_usec*1.0e-6;
+
+	if(timeAccumulator)
+	{
+		*timeAccumulator += (endTime - startTime);
+	}
+
+	printf(" [%7.5f s]\n", endTime - startTime);
 
 	return L;
 }
@@ -246,6 +276,8 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	int rate = 0;
 	struct DriveInformation drive[8];
 	int moduleStatus = 0;
+	double writeTime = 0.0;
+	double readTime = 0.0;
 
 	buffer1 = (char *)malloc(bufferSize);
 	buffer2 = (char *)malloc(bufferSize);
@@ -430,7 +462,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 				printf("\nTest %d/%d\n", n+1, nWrite);
 				setbuffer(n, buffer1, bufferSize);
 
-				v = writeblock(xlrDevice, n, buffer1, bufferSize, nRep);
+				v = writeblock(xlrDevice, n, buffer1, bufferSize, nRep, &writeTime);
 				if(v < 0)
 				{
 					return -1;
@@ -439,7 +471,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 				mk5status.state = MARK5_STATE_TESTREAD;
 				difxMessageSendMark5Status(&mk5status);
 
-				L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep, 0);
+				L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep, 0, &readTime);
 				if(L < 0)
 				{
 					return -1;
@@ -455,6 +487,9 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 				}
 			}
 
+			printf("\n");
+			printf("Total write time = %7.5f sec", writeTime);
+			printf("Total read time  = %7.5f sec", readTime);
 			printf("\n");
 
 			for(d = 0; d < 8; d++)
@@ -561,7 +596,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			mk5status.state = MARK5_STATE_TESTREAD;
 			difxMessageSendMark5Status(&mk5status);
 
-			L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep, ptr);
+			L = readblock(xlrDevice, n, buffer1, buffer2, bufferSize, nRep, ptr, &readTime);
 			if(L < 0)
 			{
 				return -1;
@@ -575,6 +610,8 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			}
 		}
 
+		printf("\n");
+		printf("Total read time = %7.5f sec", readTime);
 		printf("\n");
 
 		for(d = 0; d < 8; d++)
