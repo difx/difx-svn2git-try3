@@ -116,6 +116,7 @@ int usage(const char *pgm)
 	printf("To assign it prior to erasure or conditioning.\n\n");
 	printf("Ctrl-C can be used to safely abort.  The module will be left in\n");
 	printf("the Error state afterwards.\n\n");
+	printf("This program appears to be compiled for SDK version %d\n\n", SDKVERSION);
 
 	return 0;
 }

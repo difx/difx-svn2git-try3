@@ -68,6 +68,7 @@ int usage(const char *pgm)
 	printf("<bank> should be either A or B.\n\n");
 	printf("<vsn> is the new module VSN (must be 8 characters long).\n");
 	printf("  If not provided, the existing VSN will be returned.\n\n");
+	printf("This program appears to be compiled for SDK version %d\n\n", SDKVERSION);
 
 	return 0;
 }

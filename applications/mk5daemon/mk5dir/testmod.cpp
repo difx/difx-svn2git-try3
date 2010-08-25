@@ -47,6 +47,10 @@ const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
 const char verdate[] = "20100710";
 
+const int defaultBlockSize = 10000000;
+const int defaultNBlock = 50;
+const int defaultNRep = 2;
+
 int die = 0;
 typedef void (*sighandler_t)(int);
 sighandler_t oldsiginthand;
@@ -77,16 +81,17 @@ int usage(const char *pgm)
 	printf("  --skipdircheck\n");
 	printf("  -d         Disable directory checking (sometimes needed for bad packs)\n\n");
 	printf("  --nrep <n>\n");
-	printf("  -n <n>     Perform the test <n> times\n\n");
+	printf("  -n <n>     Perform the test <n> times (default=%d)\n\n", defaultNRep);
 	printf("  --blocksize <s>\n");
-	printf("  -s <s>     Use a read/write block of <s> MB\n\n");
+	printf("  -s <s>     Use a read/write block of <s> MB (default=%d)\n\n", defaultBlockSize/1000000);
 	printf("  --nblock <b>\n");
-	printf("  -b <b>     Read/write <b> blocks per test\n\n");
+	printf("  -b <b>     Read/write <b> blocks per test (default=%d)\n\n", defaultNBlock);
 	printf("  --dirfile <f>\n");
 	printf("  -o <f>     Write the entire module directory to file <f>\n\n");
 	printf("  --position <p>\n");
 	printf("  -p <p>     Start read tests from pointer position <p>\n\n");
 	printf("and <bank> should be either A or B\n\n");
+	printf("This program appears to be compiled for SDK version %d\n\n", SDKVERSION);
 
 	return 0;
 }
@@ -620,9 +625,9 @@ int main(int argc, char **argv)
 {
 	int a, v;
 	int bank = -1;
-	int nRep = 2;
-	int blockSize = 10000000;
-	int nBlock = 50;
+	int nRep = defaultNRep;
+	int blockSize = defaultBlockSize;
+	int nBlock = defaultNBlock;
 	int readOnly = 0;
 	int verbose = 0;
 	int force = 0;

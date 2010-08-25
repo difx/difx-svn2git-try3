@@ -46,13 +46,13 @@
 const char program[] = "recover";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100711";
+const char verdate[] = "20100822";
 
 int usage(const char *pgm)
 {
 	printf("\n%s ver. %s   %s %s\n\n", program, version, author, verdate);
 	printf("A program that attempts to recover a Mark5 module\n\n");
-	printf("Usage: %s <options> <type> <bank> [<vsn>]\n\n", pgm);
+	printf("Usage: %s <options> <type> <bank>\n\n", pgm);
 	printf("<options> can include:\n\n");
 	printf("  --help\n");
 	printf("  -h         Print help info and quit\n\n");
@@ -62,12 +62,11 @@ int usage(const char *pgm)
 	printf("  -f         Don't ask before continuing\n\n");
 	printf("<type> should be 0, 1 or 2.  See below.\n\n");
 	printf("<bank> should be either A or B.\n\n");
-	printf("<vsn> is the new module VSN (must be 8 characters long).\n");
-	printf("  If not provided, the existing VSN will be returned.\n\n");
 	printf("The three types of recovery that can be attempted are:\n");
 	printf("  0. Fix directory if power failed during recording.\n");
 	printf("  1. Allow access to data that might have been overwritten.\n");
 	printf("  2. Unerase module.\n\n");
+	printf("This program appears to be compiled for SDK version %d\n\n", SDKVERSION);
 
 	return 0;
 }
