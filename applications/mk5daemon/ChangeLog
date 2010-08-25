@@ -13,6 +13,7 @@ Version 1.4
 * Remove compatibility with Mark5A program
 * Add very nascent mk5lock utility
 * mk5dir: now by default will change the disk module state
+* testmod: add timing
 
 Version 1.3
 ~~~~~~~~~~~

@@ -278,6 +278,7 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	int moduleStatus = 0;
 	double writeTime = 0.0;
 	double readTime = 0.0;
+	double readRate, writeRate;
 
 	buffer1 = (char *)malloc(bufferSize);
 	buffer2 = (char *)malloc(bufferSize);
@@ -488,8 +489,10 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 			}
 
 			printf("\n");
-			printf("Total write time = %7.5f sec", writeTime);
-			printf("Total read time  = %7.5f sec", readTime);
+			writeRate = totalBytes/readTime;
+			readRate = totalBytes/readTime;
+			printf("Total write time = %7.5f sec -> %5.3f Mbps\n", writeTime, writeRate);
+			printf("Total read time  = %7.5f sec -> %5.3f Mbps\n", readTime, readRate);
 			printf("\n");
 
 			for(d = 0; d < 8; d++)
@@ -611,7 +614,8 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 		}
 
 		printf("\n");
-		printf("Total read time = %7.5f sec", readTime);
+		readRate = totalBytes/readTime;
+		printf("Total read time = %7.5f sec -> %5.3f Mbps\n", readTime, readRate);
 		printf("\n");
 
 		for(d = 0; d < 8; d++)

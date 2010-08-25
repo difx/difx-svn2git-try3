@@ -491,6 +491,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 	/* here is where the spawning of mpifxcorr happens... */
 	if(childPid == 0)
 	{
+#if 0
 		// Avoid the period when modules are being checked
 		int tm = time(0) % D->loadMonInterval;
 		if(tm == D->loadMonInterval/2 - 2)
@@ -520,7 +521,7 @@ void Mk5Daemon_startMpifxcorr(Mk5Daemon *D, const DifxMessageGeneric *G)
 				"Time=%d  no sleeping to be done", (int)time(0));
 			difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_INFO);
 		}
-
+#endif
 		if(S->force && outputExists)
 		{
 			snprintf(command, MAX_COMMAND_SIZE, 
