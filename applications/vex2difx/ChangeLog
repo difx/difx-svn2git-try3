@@ -8,7 +8,6 @@ Version 1.0.4
 * Check for sources with illegal names
 * Improved function/variable naming to indicate explicitly where some def names are used
 * Allow generation of 1-antenna jobs
-* Change velocities from vex definition of year to Goddard definition
 
 Version 1.0.3
 ~~~~~~~~~~~~~
