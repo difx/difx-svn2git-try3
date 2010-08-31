@@ -1,3 +1,6 @@
+2.12.4
+* Post DiFX-1.5.4
+
 2.12.3
 * testdifxinput can now concatenate
 * Get rid of baselineFreq2IF map -- its use was flawed and is actually not 
