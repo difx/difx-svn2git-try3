@@ -183,12 +183,12 @@ static long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buf
 		pos = (long long)size*(num*nRep + r) + ptr;
 		a = pos>>32;
 		b = pos & 0xFFFFFFFF;
-		WATCHDOG( xlrRC = XLRReadData(xlrDevice, (streamstordatatype *)buffer2, a, b, size) );
-		if(xlrRC != XLR_SUCCESS)
-		{
-			fprintf(stderr, "XLRReadData error pos=%Ld a=%u b=%u size=%d\n", pos, a, b, size);
-			return -1;
-		}
+		WATCHDOGTEST( XLRReadData(xlrDevice, (streamstordatatype *)buffer2, a, b, size) );
+//		if(xlrRC != XLR_SUCCESS)
+//		{
+//			fprintf(stderr, "XLRReadData error pos=%Ld a=%u b=%u size=%d\n", pos, a, b, size);
+//			return -1;
+//		}
 		v = comparebuffers(buffer1, buffer2, size);
 		L += v;
 		printf("."); fflush(stdout);
