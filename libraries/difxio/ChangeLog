@@ -1,5 +1,4 @@
 2.12.3
-* Post DiFX-1.5.3
 * testdifxinput can now concatenate
 * Get rid of baselineFreq2IF map -- its use was flawed and is actually not 
   needed
@@ -7,7 +6,7 @@
   and ammendments to freqId2IF: -1 now means that freq is not to be used
 * Clock accountability 1: Prevent merging of two jobs with incompatible clocks
 * Clock accountability 2: Keep separate clockEpoch parameter for each antenna
-
+* Version for DiFX-1.5.4
 
 2.12.2
 * Fix some compiler warnings
