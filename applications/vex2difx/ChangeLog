@@ -1,6 +1,5 @@
 Version 1.0.4
 ~~~~~~~~~~~~~
-* Post DiFX-1.5.3
 * Fix problem with job generation convergence
 * Force v2d file to start with a letter
 * oms2v2d: warn if both .skd and .vex are found; default to .vex
@@ -8,6 +7,7 @@ Version 1.0.4
 * Check for sources with illegal names
 * Improved function/variable naming to indicate explicitly where some def names are used
 * Allow generation of 1-antenna jobs
+* Version for DiFX-1.5.4
 
 Version 1.0.3
 ~~~~~~~~~~~~~
