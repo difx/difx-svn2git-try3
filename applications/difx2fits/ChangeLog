@@ -1,5 +1,4 @@
 Version 2.6.3
-* Post DiFX-1.5.3
 * Support for sub-band subsets
 * Per antenna quantization bits
 * can now produce FITS files with only a subset of the correlated sub-bands
@@ -8,6 +7,7 @@ Version 2.6.3
 * makefits: pass --override-version on to difx2fits
 * Weights are blanked prior to populating each record, preventing screwy weights for unused sub-bands.
 * Option for multiple phase bins in makefits (one at a time with -B)
+* Version for DiFX-1.5.4
 
 Version 2.6.2
 * Fixes by Olaf Wuchnitz: print format for writing strings to FITS and argument order in memcpy
