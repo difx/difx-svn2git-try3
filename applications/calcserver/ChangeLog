@@ -1,5 +1,6 @@
 Version 1.4
-* Post DiFX-1.5.3
+* Fix error in handling of mount types
+* Version for DiFX-1.5.4
 
 Version 1.3
 * Fixes from Olaf Wuchnitz, both in calc9.1 and in CALC5Server
