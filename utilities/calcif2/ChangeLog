@@ -1,6 +1,8 @@
 calcif2
 ~~~~~~~
 Version 1.4
+* Improved support for non alt-az mounts
+* Version for DiFX-1.5.4
 
 Version 1.3
 * difxsniff: Retain extra digit in amplitude column
