@@ -535,9 +535,9 @@ void Core::receivedata(int index, bool * terminate)
 
 void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord)
 {
-  int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel, channelinc, freqindex;
+  int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel, channelinc, freqindex, subintsamples;
   double offsetmins;
-  f32 bweight;
+  f32 bweight, dweight;
   float * dsweights = new float[numdatastreams];
   Mode * m1, * m2;
   cf32 * vis1;
@@ -699,6 +699,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 
   //if required, send off a message with the STA results
   if(starecord != 0) {
+    subintsamples = config->getBlocksPerSend(procslots[index].configindex)*2*procslots[index].numchannels;
     if(procslots[index].numchannels < starecord->nChan)
       starecord->nChan = procslots[index].numchannels;
     channelinc = procslots[index].numchannels/starecord->nChan;
@@ -710,11 +711,15 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         starecord->bandId = j;
         int nyquistoffset = (config->getFreqTableLowerSideband(config->getDFreqIndex(procslots[index].configindex, i, j)))?1:0;
         acdata = (f32*)(modes[i]->getAutocorrelation(false, j));
+        dweight = 1.0/(acdata[(1-nyquistoffset)*2*procslots[index].numchannels + 1]*subintsamples);
         for (int k=0;k<starecord->nChan;k++) {
           starecord->data[k] = acdata[2*(k*channelinc + nyquistoffset)];
           for (int l=1;l<channelinc;l++)
             starecord->data[k] += acdata[2*(k*channelinc+l+nyquistoffset)];
         }
+        status = vectorMulC_f32_I(dweight, starecord->data, starecord->nChan);
+        if(status != vecNoErr)
+          cerror << startl << "Error trying to scale filterbank data!" << endl;
         difxMessageSendBinary((const char *)starecord, BINARY_STA, sizeof(DifxMessageSTARecord) + sizeof(f32)*config->getSTADumpChannels());
       }
     }
