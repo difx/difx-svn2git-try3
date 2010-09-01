@@ -699,7 +699,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 
   //if required, send off a message with the STA results
   if(starecord != 0) {
-    subintsamples = config->getBlocksPerSend(procslots[index].configindex)*2*procslots[index].numchannels;
+    subintsamples = numblocks*2*procslots[index].numchannels;
     if(procslots[index].numchannels < starecord->nChan)
       starecord->nChan = procslots[index].numchannels;
     channelinc = procslots[index].numchannels/starecord->nChan;
