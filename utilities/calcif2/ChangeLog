@@ -126,6 +126,9 @@ Version 1.3
 * Select on refants for xcb files
 * APD: refant always first
 * Version for DiFX-1.5.2
+Version 1.4
+* Don't readlines() on large files to prevent memory overrun
+* Version for DiFX-1.5.4
 
 vlog
 ~~~~
