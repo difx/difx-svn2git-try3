@@ -45,11 +45,12 @@
 const char program[] = "testmod";
 const char author[]  = "Walter Brisken";
 const char version[] = "0.1";
-const char verdate[] = "20100710";
+const char verdate[] = "20100903";
 
 const int defaultBlockSize = 10000000;
 const int defaultNBlock = 50;
 const int defaultNRep = 2;
+const int statsRange[] = { 75000, 150000, 300000, 600000, 1200000, 2400000, 4800000, -1 };
 
 int die = 0;
 typedef void (*sighandler_t)(int);
@@ -166,7 +167,6 @@ int writeblock(SSHANDLE xlrDevice, int num, char *buffer, int size, int nRep, do
 
 static long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buffer2, int size, int nRep, long long ptr, double *timeAccumulator)
 {
-	XLR_RETURN_CODE xlrRC;
 	int r, v;
 	long long pos, L = 0;
 	unsigned int a, b;
@@ -184,11 +184,6 @@ static long long readblock(SSHANDLE xlrDevice, int num, char *buffer1, char *buf
 		a = pos>>32;
 		b = pos & 0xFFFFFFFF;
 		WATCHDOGTEST( XLRReadData(xlrDevice, (streamstordatatype *)buffer2, a, b, size) );
-//		if(xlrRC != XLR_SUCCESS)
-//		{
-//			fprintf(stderr, "XLRReadData error pos=%Ld a=%u b=%u size=%d\n", pos, a, b, size);
-//			return -1;
-//		}
 		v = comparebuffers(buffer1, buffer2, size);
 		L += v;
 		printf("."); fflush(stdout);
@@ -292,6 +287,14 @@ int testModule(int bank, int readOnly, int nWrite, int bufferSize, int nRep, int
 	}
 	WATCHDOGTEST( XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 	WATCHDOGTEST( XLRSetOption(xlrDevice, options) );
+
+	for(int b = 0; b < XLR_MAXBINS; b++)
+	{
+		driveStats[b].range = statsRange[b];
+		driveStats[b].count = 0;
+	}
+	WATCHDOGTEST( XLRSetDriveStats(xlrDevice, driveStats) );
+
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, bank, &bankStat) );
 	if(bankStat.State != STATE_READY)
 	{
