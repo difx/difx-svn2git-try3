@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -33,6 +33,7 @@
 #include "config.h"
 #include "difx2fits.h"
 
+const double defaultIATUTC=33.0;
 
 static double arrayGMST(int mjd)
 {
@@ -112,6 +113,7 @@ const DifxInput *DifxInput2FitsAG(const DifxInput *D,
 	{
 		fprintf(stderr, "AG table : nRowBytes != sizeof(row) : "
 			"%d != %u\n", nRowBytes, (unsigned int)(sizeof(row)));
+
 		exit(0);
 	}
 
@@ -146,8 +148,8 @@ const DifxInput *DifxInput2FitsAG(const DifxInput *D,
 
 		if(e >= D->nEOP)
 		{
-			fprintf(stderr, "EOP entry not found for mjd=%d\n", 
-				mjd);
+			fprintf(stderr, "EOP entry not found for mjd=%d\n", mjd);
+			
 			return 0;
 		}
 
@@ -158,7 +160,8 @@ const DifxInput *DifxInput2FitsAG(const DifxInput *D,
 	}
 	else
 	{
-		fitsWriteFloat(out, "IATUTC", 33.0, "");
+		printf("\n\nWarning: IATUTC is not provided.  Assuming %3.1f seconds.\n\n", defaultIATUTC);
+		fitsWriteFloat(out, "IATUTC", defaultIATUTC, "");
 	}
 	
   	arrayWriteKeys(p_fits_keys, out);
@@ -177,26 +180,13 @@ const DifxInput *DifxInput2FitsAG(const DifxInput *D,
 		row.dy = antenna->dY;
 		row.dz = antenna->dZ;
 		row.antId1 = a+1;
-		if(strcasecmp(antenna->mount, "xyew") == 0)
+		row.mountType = antenna->mount;
+		if(antenna->mount == AntennaMountXYNS)
 		{
-			row.mountType = 4;
+			printf("\n\nWarning: mount type XYNS is not handled in AIPS so is being set to XYEW.\n");
+			printf("Expect parallactic angles to be calculated incorrectly.\n\n");
 		}
-		else if(strcasecmp(antenna->mount, "xyns") == 0)
-		{
-			row.mountType = 3;
-		}
-		else if(strcasecmp(antenna->mount, "spac") == 0)
-		{
-			row.mountType = 2;
-		}
-		else if(strcasecmp(antenna->mount, "equa") == 0)
-		{
-			row.mountType = 1;
-		}
-		else
-		{
-			row.mountType = 0;
-		}
+
 		for(i = 0; i < 3; i++)
 		{
 			row.offset[i] = antenna->offset[i];

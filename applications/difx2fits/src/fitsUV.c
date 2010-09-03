@@ -425,7 +425,8 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 		}
                 v = fread(&(sync), sizeof(int), 1, dv->in);
 	}
-	if(sync == VISRECORD_SYNC_WORD_DIFX1) //old style ascii header
+	if(1)
+	//if(sync == VISRECORD_SYNC_WORD_DIFX1) //old style ascii header
 	{
 		line[0] = 'B';
 		line[1] = 'A';
@@ -999,6 +1000,7 @@ static int storevis(DifxVis *dv)
 static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin, int phasecentre)
 {
 	/* blank array */
+	memset(dv->weight, 0, dv->nFreq*dv->D->nPolar*sizeof(float));
 	memset(dv->data, 0, dv->nData*sizeof(float));
 
 	dv->changed = 0;
