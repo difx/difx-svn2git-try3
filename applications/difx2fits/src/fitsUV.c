@@ -430,10 +430,6 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int convertAllToUS
 		readSize -= nFloat;
 		readOffset = nFloat;
 		found = 0;
-		for(i=0;i<readOffset;i++)
-		{
-			dv->spectrum[i] = 0.0;
-		}
 		for(i=0;i<dv->D->nFreq;i++)
 		{
 			if(dv->D->freq[i].sideband == 'U' && dv->D->freq[i].bw ==
@@ -457,6 +453,19 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int convertAllToUS
 	if(v < readSize)
 	{
 		return DATA_READ_ERROR;
+	}
+	if(readOffset > 0)
+	{
+		//read the extra one channel of data (LSB DC/USB Nyquist), discard it and zero USB DC channel
+		v = fread(dv->spectrum, sizeof(float), readOffset, dv->in);
+		if(v < readOffset)
+		{
+			return DATA_READ_ERROR;
+		}
+		for(i=0;i<readOffset;i++)
+		{
+			dv->spectrum[i] = 0.0;
+		}
 	}
 
 	/* Drop all records (except autocorrelations) not associated 
