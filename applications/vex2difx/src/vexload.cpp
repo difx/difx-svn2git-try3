@@ -744,8 +744,8 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 				  string bits = s2mode.substr(g+1);
 
 				  F.nBit = atoi(bits.c_str());
-				  F.nRecordChan = atoi(tracks.c_str())/F.nBit; // should equal bbc2pol.size();
-				  //F.nRecordChan = atoi(tracks.c_str());
+				  //F.nRecordChan = atoi(tracks.c_str())/F.nBit; // should equal bbc2pol.size();
+				  F.nRecordChan = atoi(tracks.c_str());
 				} else {
 				  F.nBit = 2;
 				  F.nRecordChan = 0;
