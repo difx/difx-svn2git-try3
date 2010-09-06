@@ -18,7 +18,7 @@ int main(int argc, const char * argv[])
     jobnamestart = 0;
   jobnameend = configfile.find_first_of('.', jobnamestart);
   jobname = configfile.substr(jobnamestart,jobnameend-jobnamestart);
-  identifier = string(argv[0]) + "." + jobname;
+  identifier = "difxfb." + jobname;
   keepwriting = true;
   numchans = atoi(numchannelsstring.c_str());
   binarymsglength = sizeof(DifxMessageSTARecord) + numchans*sizeof(f32);
