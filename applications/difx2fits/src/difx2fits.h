@@ -24,6 +24,7 @@ struct CommandLineOptions
 	float nOutChan;
 	float startChan;
 	int keepOrder;
+	int convertAllToUSB;
 	int dontCombine;
 	int overrideVersion;
 	double sniffTime;

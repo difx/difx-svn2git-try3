@@ -320,7 +320,7 @@ static double evalPoly(const double *p, int n, double x)
 }
 
 	
-int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
+int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin, int convertAllToUSB)
 {
 	const int MaxLineLength=100;
 	
@@ -363,7 +363,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	int bl, scanId;
 	double mjd, iat, dt, dt2;
 	int changed = 0;
-	int nFloat, readSize;
+	int nFloat, readSize, readOffset, found;
 	char line[MaxLineLength+1];
 	int freqId;		/* index to D->freq[] */
 	int configId;		/* index to D->config[] */
@@ -424,7 +424,36 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int pulsarBin)
 	/* for now, force nFloat = 2 (one weight for entire vis record) */
 	nFloat = 2;
 	readSize = nFloat * dv->D->nInChan;
-	v = fread(dv->spectrum, sizeof(float), readSize, dv->in);
+	readOffset = 0;
+	if(convertAllToUSB && dv->D->freq[freqId].sideband == 'L')
+	{
+		readSize -= nFloat;
+		readOffset = nFloat;
+		found = 0;
+		for(i=0;i<readOffset;i++)
+		{
+			dv->spectrum[i] = 0.0;
+		}
+		for(i=0;i<dv->D->nFreq;i++)
+		{
+			if(dv->D->freq[i].sideband == 'U' && dv->D->freq[i].bw ==
+			dv->D->freq[freqId].bw && fabs(dv->D->freq[freqId].freq -
+			dv->D->freq[i].bw - dv->D->freq[i].freq) < 0.000001)
+			{
+				freqId = i;
+				found = 1;
+				break;
+			}
+		}
+		if(!found)
+		{
+			fprintf(stderr, "Was told to convert all LSB to USB and couldn't find a matching USB band\n");
+			fprintf(stderr, "freqid was %d\n", freqId);
+			fprintf(stderr, "Aborting!\n");
+			exit(0);
+		}
+	}
+	v = fread(dv->spectrum+readOffset, sizeof(float), readSize, dv->in);
 	if(v < readSize)
 	{
 		return DATA_READ_ERROR;
@@ -875,7 +904,7 @@ static int storevis(DifxVis *dv)
 	return 0;
 }
 
-static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
+static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin, int convertAllToUSB)
 {
 	/* blank array */
 	memset(dv->weight, 0, dv->nFreq*dv->D->nPolar*sizeof(float));
@@ -889,7 +918,7 @@ static int readvisrecord(DifxVis *dv, int verbose, int pulsarBin)
 		{
 			storevis(dv);
 		}
-		dv->changed = DifxVisNewUVData(dv, verbose, pulsarBin);
+		dv->changed = DifxVisNewUVData(dv, verbose, pulsarBin, convertAllToUSB);
 	}
 
 	return 0;
@@ -1064,7 +1093,7 @@ static int DifxVisConvert(const DifxInput *D,
 	/* First prime each structure with some data */
 	for(j = 0; j < nJob; j++)
 	{
-		readvisrecord(dvs[j], opts->verbose, opts->pulsarBin);
+		readvisrecord(dvs[j], opts->verbose, opts->pulsarBin, opts->convertAllToUSB);
 	}
 
 	/* Now loop until done, looking at */
@@ -1141,7 +1170,7 @@ static int DifxVisConvert(const DifxInput *D,
 				return -3;
 			}
 
-			readvisrecord(dv, opts->verbose, opts->pulsarBin);
+			readvisrecord(dv, opts->verbose, opts->pulsarBin, opts->convertAllToUSB);
 		}
 	}
 

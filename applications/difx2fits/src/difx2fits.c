@@ -112,6 +112,9 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  --keep-order\n");
 	fprintf(stderr, "  -k                  Keep antenna order\n");
 	fprintf(stderr, "\n");
+        fprintf(stderr, "  --convert-all-usb\n");
+        fprintf(stderr, "  -c                  Convert all sidebands to USB (all sidebands must have a USB equivalent!)\n");
+        fprintf(stderr, "\n");
 #ifdef HAVE_FFTW
 	fprintf(stderr, "  --dont-sniff\n");
 	fprintf(stderr, "  -x                  Don't produce sniffer output\n");
@@ -223,6 +226,11 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 			{
 				opts->keepOrder = 1;
 			}
+                        else if (strcmp(argv[i], "--convert-all-usb") == 0 ||
+                                 strcmp(argv[i], "-c") == 0)
+                        {
+                                opts->convertAllToUSB = 1;
+                        }
 			else if (strcmp(argv[i], "--override-version") == 0)
 			{
 				opts->overrideVersion = 1;
