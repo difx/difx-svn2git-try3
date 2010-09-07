@@ -97,6 +97,7 @@ void genJobGroups(vector<VexJobGroup> &JGs, const VexData *V, const CorrParams *
 			// Skip any scans that don't overlap with .v2d mjdStart and mjdStop
 			if(P->overlap(*scan2) <= 0.0)
 			{
+				it++;
 				continue;
 			}
 
