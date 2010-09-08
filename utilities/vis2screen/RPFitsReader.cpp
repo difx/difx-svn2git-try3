@@ -25,6 +25,7 @@
 #include <stddef.h>
 #include <dirent.h>
 #include <stdlib.h>
+#include <string.h>
 #include <iomanip>
 #include <math.h>
 #include <complex> 
