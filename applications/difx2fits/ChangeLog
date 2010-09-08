@@ -7,6 +7,7 @@ Version 2.6.3
 * makefits: pass --override-version on to difx2fits
 * Weights are blanked prior to populating each record, preventing screwy weights for unused sub-bands.
 * Option for multiple phase bins in makefits (one at a time with -B)
+* Add option --convert-all-usb/-c to cConvert all sidebands to USB
 * Version for DiFX-1.5.4
 
 Version 2.6.2

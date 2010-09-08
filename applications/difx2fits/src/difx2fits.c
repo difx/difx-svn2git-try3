@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008, 2009 by Walter Brisken                            *
+ *   Copyright (C) 2008-2010 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -113,7 +113,8 @@ static int usage(const char *pgm)
 	fprintf(stderr, "  -k                  Keep antenna order\n");
 	fprintf(stderr, "\n");
         fprintf(stderr, "  --convert-all-usb\n");
-        fprintf(stderr, "  -c                  Convert all sidebands to USB (all sidebands must have a USB equivalent!)\n");
+        fprintf(stderr, "  -c                  Convert all sidebands to USB\n");
+	fprintf(stderr, "                      (all sidebands must have a USB equivalent!)\n");
         fprintf(stderr, "\n");
 #ifdef HAVE_FFTW
 	fprintf(stderr, "  --dont-sniff\n");
