@@ -53,17 +53,18 @@ dnl **********************************************************
 dnl **********************************************************
 dnl **** Look for RPFITS                                  ****
 dnl **********************************************************
-rpfits_enabled=true
-AC_ARG_WITH(rpfits, [AS_HELP_STRING([--without-rpfits],[Disable rpfits output])])
-if test x"$with_rpfits" = xno; then
-        rpfits_enabled=false
+AC_ARG_WITH(rpfits, [AS_HELP_STRING([--with-rpfits],[Enable rpfits output])])
+if test x"$with_rpfits" = xyes; then
+        rpfits_enabled=true
 else
-        PWD=`pwd`
-        AC_CHECK_HEADER([$DIFXROOT/include/RPFITS.h],
-                [AC_DEFINE([HAVE_RPFITS], 1, [1=has RPFITS])],
-                [rpfits_enabled=false])
+ 	rpfits_enabled=false
 fi
+AC_CHECK_HEADER([$DIFXROOT/include/RPFITS.h], ,
+                [rpfits_enabled=false])
+
 if test ${rpfits_enabled} = true; then
+   	echo "RPFITS enabled"
+        AC_DEFINE([HAVE_RPFITS], 1, [1=has RPFITS])
         RPFITS_CFLAGS="-I$DIFXROOT/include"
         if test x"$USEGFORTRAN" != "x"; then
               RPFITS_LIBS=" -lrpfits -lgfortran"
@@ -71,13 +72,12 @@ if test ${rpfits_enabled} = true; then
               RPFITS_LIBS=" -lrpfits -lg2c"
         fi
 else
-        echo "RPFITS disabled"
+	echo "RPFITS disabled"
         RPFITS_CFLAGS=""
         RPFITS_LIBS=""
-f
+fi
 AC_SUBST(RPFITS_CFLAGS)
 AC_SUBST(RPFITS_LIBS)
-
 AM_CONDITIONAL(WITH_RPFITS, $rpfits_enabled)
 dnl **********************************************************
 
