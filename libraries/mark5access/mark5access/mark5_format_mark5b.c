@@ -2049,13 +2049,13 @@ static int mark5_format_mark5b_make_formatname(struct mark5_stream *ms)
 {
 	if(ms->format == MK5_FORMAT_MARK5CB)
 	{
-		sprintf(ms->formatname, "Mark5CB-%d-%d-%d", ms->Mbps, 
-			ms->nchan, ms->nbit);
+		snprintf(ms->formatname, MARK5_STREAM_ID_LENGTH,
+			"Mark5CB-%d-%d-%d", ms->Mbps, ms->nchan, ms->nbit);
 	}
 	else
 	{
-		sprintf(ms->formatname, "Mark5B-%d-%d-%d", ms->Mbps, 
-			ms->nchan, ms->nbit);
+		snprintf(ms->formatname, MARK5_STREAM_ID_LENGTH, 
+			"Mark5B-%d-%d-%d", ms->Mbps, ms->nchan, ms->nbit);
 	}
 
 	return 0;

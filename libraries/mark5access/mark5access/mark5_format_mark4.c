@@ -6859,8 +6859,9 @@ static int mark5_format_mark4_make_formatname(struct mark5_stream *ms)
 
 	f = (struct mark5_format_mark4 *)(ms->formatdata);
 	
-	sprintf(ms->formatname, "MKIV1_%d-%d-%d-%d/%d",
-		f->fanout, ms->Mbps, ms->nchan, ms->nbit, ms->decimation);
+	snprintf(ms->formatname, MARK5_STREAM_ID_LENGTH,
+		"MKIV1_%d-%d-%d-%d/%d", f->fanout, ms->Mbps, 
+		ms->nchan, ms->nbit, ms->decimation);
 
 	return 0;
 }

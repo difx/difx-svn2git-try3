@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006, 2007 by Walter Brisken                            *
+ *   Copyright (C) 2006-2010 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -26,6 +26,7 @@
 // $LastChangedDate$
 //
 //============================================================================
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,11 +65,11 @@ static int mark5_stream_unpacker_init(struct mark5_stream *ms)
 	ms->mjd = -1;
 	if(ms->next == mark5_stream_unpacker_next_noheaders)
 	{
-		sprintf(ms->streamname, "Unpacker-no-headers");
+		snprintf(ms->streamname, MARK5_STREAM_ID_LENGTH, "Unpacker-no-headers");
 	}
 	else
 	{
-		sprintf(ms->streamname, "Unpacker-with-headers");
+		snprintf(ms->streamname, MARK5_STREAM_ID_LENGTH, "Unpacker-with-headers");
 	}
 	
 	return 0;

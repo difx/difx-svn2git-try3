@@ -66,6 +66,7 @@ enum Mark5Format
 
 #define OPTIMAL_2BIT_HIGH	3.3359
 #define MAXBLANKZONES		32
+#define MARK5_STREAM_ID_LENGTH	256
 
 enum Mark5Blanker
 {
@@ -76,8 +77,8 @@ enum Mark5Blanker
 struct mark5_stream
 {
 	/* globally readable values -- should not be changed */
-	char streamname[80];	/* name of stream */
-	char formatname[80];	/* name of format */
+	char streamname[MARK5_STREAM_ID_LENGTH];	/* name of stream */
+	char formatname[MARK5_STREAM_ID_LENGTH];	/* name of format */
 	enum Mark5Format format;/* format id */
 	int Mbps;		/* total data rate */
 	int nchan;		/* # of data channels; all will be decoded */

@@ -6871,8 +6871,9 @@ static int mark5_format_vlba_nomod_make_formatname(struct mark5_stream *ms)
 
 	f = (struct mark5_format_vlba_nomod *)(ms->formatdata);
 	
-	sprintf(ms->formatname, "VLBN1_%d-%d-%d-%d/%d",
-		f->fanout, ms->Mbps, ms->nchan, ms->nbit, ms->decimation);
+	snprintf(ms->formatname, MARK5_STREAM_ID_LENGTH,
+		"VLBN1_%d-%d-%d-%d/%d", f->fanout, ms->Mbps, ms->nchan, 
+		ms->nbit, ms->decimation);
 
 	return 0;
 }
