@@ -1,6 +1,7 @@
 Version 1.3.6
 * Post DiFX-1.5.4
 * Improve string (mostly filename) handling safety with snprintf
+* Allow read from stdin (at least in some circumstances) via filename = "-"
 
 Version 1.3.5
 * m5d and m5spec : behave better if -h is given
