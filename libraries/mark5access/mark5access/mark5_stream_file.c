@@ -153,8 +153,8 @@ static int mark5_stream_file_init(struct mark5_stream *ms)
 	v = read(F->in, F->buffer, F->buffersize);
 	if(v < F->buffersize)
 	{
-		fprintf(stderr, "mark5_stream_file_init: Initial read of %d was short (%d bytes actually read).  Shortening datawindowsize\n", F->buffersize, r);
-		ms->datawindowsize = F->buffersize = r;
+		fprintf(stderr, "mark5_stream_file_init: Initial read of %d was short (%d bytes actually read).  Shortening datawindowsize\n", F->buffersize, v);
+		ms->datawindowsize = F->buffersize = v;
 	}
 
 	return 0;
