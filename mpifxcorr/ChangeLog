@@ -6,6 +6,7 @@ Version 1.5.4
 * Use mark5ipc to lock out mark5 units
 * Bug fix for post-F fringe rotation, where weights were being corrupted
 * Normalise filterbank packets to power, not energy
+* New polyco parser and checker is more forgiving of TEMPO2 generated polycos
 
 Version 1.5.3, 2010 March 17
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
