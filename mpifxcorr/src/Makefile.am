@@ -23,7 +23,8 @@ mpifxcorr_SOURCES = \
 	alert.cpp \
 	filters.cpp \
 	filterchain.cpp \
-	filter_avg.cpp \
+	filterhelpers.cpp \
+	filter_int.cpp \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
 	$(mark5_files)
