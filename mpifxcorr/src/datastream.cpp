@@ -19,9 +19,6 @@
 // $LastChangedDate$
 //
 //============================================================================
-#include "datastream.h"
-#include "core.h"
-#include "fxmanager.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -29,10 +26,12 @@
 #include <errno.h>
 #include <string.h>
 #include <strings.h>
-#include <limits.h>
 #include <math.h>
 #include "config.h"
 #include "alert.h"
+#include "datastream.h"
+#include "core.h"
+#include "fxmanager.h"
 
 DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
   : databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
@@ -91,7 +90,7 @@ void DataStream::initialise()
     if(config->getDataBytes(i, streamnum) < mindatabytes)
       mindatabytes = config->getDataBytes(i, streamnum);
   }
-  maxsendspersegment = 3*bufferbytes/(mindatabytes*numdatasegments); //overkill, can get more sends than you would expect with MkV data
+  maxsendspersegment = bufferbytes/mindatabytes/numdatasegments*3; //overkill, can get more sends than you would expect with MkV data
 
   stationname = config->getDStationName(0, streamnum);
   clockoffset = config->getDClockOffset(0, streamnum);
@@ -302,10 +301,17 @@ void DataStream::initialiseFile(int configindex, int fileindex)
   if(inputline.length() != 15 || inputline.c_str()[8] != ':') //must be a new style header, find the time keyword
   {
     bytes = inputline.length() + 1;
-    while(inputline.substr(0,4) != "TIME")
+    while(inputline.substr(0,4) != "TIME" && bytes < LBA_HEADER_LENGTH)
     {
       getline(input, inputline);
       bytes += inputline.length() + 1;
+    }
+    if (bytes >= LBA_HEADER_LENGTH) 
+    {
+        //bad header, skip the rest of the file
+        cerror << startl << "Bad header in data file " << datafilenames[configindex][fileindex] << endl;
+        dataremaining = false;
+        return;
     }
     inputline = inputline.substr(5,15);
   }
@@ -687,7 +693,8 @@ void DataStream::loopfileread()
 
 void DataStream::loopnetworkread()
 {
-  int perr, framebytesremaining, lastvalidsegment;
+  int perr, lastvalidsegment;
+  uint64_t framebytesremaining;
 
   //lock the outstanding send lock
   perr = pthread_mutex_lock(&outstandingsendlock);
@@ -857,12 +864,12 @@ void DataStream::closestream()
     cerror << startl << "Error closing socket" << endl;
 }
 
-int DataStream::openframe()
+uint64_t DataStream::openframe()
 {
   char *buf;
   short fnamesize;
   int ntoread, nread, status;
-  unsigned long long framesize;
+  uint64_t framesize;
 
   ntoread = sizeof(long long) + sizeof(short);
 
@@ -885,16 +892,10 @@ int DataStream::openframe()
   }
 	
   // Read totalnumber of expected bytes and filename size
-  memcpy(&framesize,  buf, sizeof(long long));
-  memcpy(&fnamesize,  buf+sizeof(long long), sizeof(short));
+  memcpy(&framesize,  buf, sizeof(uint64_t));
+  memcpy(&fnamesize,  buf+sizeof(uint64_t), sizeof(short));
   
   framesize = framesize - LBA_HEADER_LENGTH;
-
-  if (framesize>INT_MAX) {
-    keepreading=false;
-    cerror << startl << "Network stream trying to send too large frame - aborting!" << endl;
-    return(0);
-  }
 
   // Read filename size then ignore it
   if (fnamesize>LBA_HEADER_LENGTH) {
@@ -1000,7 +1001,7 @@ int DataStream::initialiseFrame(char * frameheader)
   return 0;
 }
 
-void DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
+void DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
   char *ptr;
   int bytestoread, nread, status;

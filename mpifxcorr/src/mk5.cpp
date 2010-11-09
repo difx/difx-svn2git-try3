@@ -31,7 +31,6 @@
 #include "alert.h"
 
 #define MAXPACKETSIZE 100000
-#define MARK5FILL 0x11223344;
 
 /// Mk5DataStream -------------------------------------------------------
 
@@ -74,7 +73,7 @@ void Mk5DataStream::initialise()
     invalid_buf = new char[udpsize];
     unsigned int *tmp = (unsigned int*)invalid_buf;
     for (int i=0; i<udpsize/4; i++) {
-      tmp[i] = MARK5FILL;
+      tmp[i] = MARK5_FILL_PATTERN;
     }
 
     // UDP statistics
@@ -223,7 +222,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   input.seekg(offset);
 }
 
-void Mk5DataStream::networkToMemory(int buffersegment, int & framebytesremaining)
+void Mk5DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
 
   if (udp_offset>readbytes) {
@@ -591,7 +590,7 @@ double tim(void) {
   return t;
 }
 
-int Mk5DataStream::openframe()
+uint64_t Mk5DataStream::openframe()
 {
   // The number of segments per "frame" is arbitrary. Just set it to ~ 5sec
   int nsegment;

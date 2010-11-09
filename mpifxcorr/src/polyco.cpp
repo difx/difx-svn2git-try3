@@ -19,6 +19,7 @@
 // $LastChangedDate$
 //
 //============================================================================
+#include <sstream>
 #include "polyco.h"
 #include "mode.h"
 #include "math.h"
@@ -360,152 +361,106 @@ void Polyco::calculateDMPhaseOffsets(double offsetmins)
 bool Polyco::loadPolycoFile(string filename, int subcount)
 {
     string strbuffer;
-    char buffer[80];
+    istringstream iss;
     int hour, minute;
     double timedouble, second, mjddouble;
 
     ifstream input(filename.c_str(), ios::in);
     if(!input.is_open() || input.bad())
-        return false; //note return with failure here!!!
+      return false; //note return with failure here!!!
 
     coefficients = 0;
+    iss.precision(20);
 
     cinfo << startl << "About to start processing the polyco file " << filename << ", looking for subcount " << subcount << endl;
 
     for(int s=0;s<=subcount;s++)
     {
       //process the first line
-      input.get(buffer, 11);
-      pulsarname = buffer;
+      getline(input, strbuffer); 
+      iss.str(strbuffer);
 
-      input.get(buffer, 11); //ignore the date - we'll use the mjd instead
-      input.get(buffer, 13);
-      if(!fieldOK(buffer, 12))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the date field contained " << buffer << ".  Aborting!" << endl;
-        return false;
-      }
-      timedouble = atof(buffer);
+      iss >> pulsarname; //pulsarname
+      iss >> strbuffer; //date - ignore (will use mjd instead)
+      iss >> strbuffer; //time
+      timedouble = atof(strbuffer.c_str());
       hour = int(timedouble/10000);
       minute = int((timedouble - 10000*hour)/100);
       second = timedouble - (minute*100 + hour*10000);
-
-      //get the mjd
-      input.get(buffer, 20);
-      if(!fieldOK(buffer, 19))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the MJD field contained " << buffer << ".  Aborting!" << endl;
-        return false;
-      }
-      mjddouble = atof(buffer);
+      iss >> mjddouble; //mjd
       mjd = int(mjddouble);
       mjdfraction = double(hour)/24.0 + double(minute)/1440.0 + second/86400.0;
+      iss >> dm; //dm
 
-      //get the dm, dopplershift and logresidual
-      input.get(buffer, 22);
-      dm = atof(buffer);
-      if(!fieldOK(buffer, 21))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the DM field contained " << buffer << ".  Aborting!" << endl;
+      //check if we missed anything important
+      if (iss.fail()) {
+        cfatal << startl << "Hit end of first line prematurely - check that polyco conforms to standard! Aborting." << endl;
         return false;
       }
+      iss >> dopplershift; //dopplershift
+      iss >> logresidual; //logresidual
 
-      input.get(buffer, 8);
-      dopplershift = atof(buffer);
-
-      input.get(buffer, 8);
-      logresidual = atof(buffer);
-
-      //check if we missed anything
-      if (input.fail()) {
-        cwarn << startl << "Hit end of first line prematurely - check your polyco conforms to standard! Some values may not have been set properly, but likely everything is ok" << endl;
-        input.clear();
+      //check if we missed anything non-important
+      if (iss.fail()) {
+        cwarn << startl << "Hit end of first line prematurely (missed dopplershift and/or logresidual).  Likely everything is ok - continuing." << endl;
       }
-
-      getline(input, strbuffer); //skip over any remaining whitespace
+      iss.clear(); //in case we hit the end of the line
 
       //process the second line
-      //get the refphase, reference frequency, observatory, timespan, number of coefficients, observing frequency and binary phase
-      input.get(buffer, 21);
-      if(!fieldOK(buffer, 20))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the reference phase field contained " << buffer << ".  Aborting!" << endl;
-        return false;
-      }
-      refphase = atof(buffer);
+      getline(input, strbuffer); 
+      iss.str(strbuffer);
+
+      iss >> refphase; //refphase
       refphase = refphase - floor(refphase);
+      iss >> f0; //reference frequency
+      iss >> observatory; //observatory code (integer)
+      iss >> timespan; //timespan in minutes
+      iss >> numcoefficients; //number of polynomial coefficients
+      iss >> obsfrequency; //observing frequency (MHz)
 
-      input.get(buffer, 19);
-      if(!fieldOK(buffer, 18))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the reference frequency field contained " << buffer << ".  Aborting!" << endl;
-        return false;
-      }
-      f0 = atof(buffer);
-
-      input.get(buffer, 6);
-      observatory = atoi(buffer);
-
-      input.get(buffer, 7);
-      timespan = atoi(buffer);
-      if(!fieldOK(buffer, 6))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the timespan field contained " << buffer << ".  Aborting!" << endl;
+      //check if we missed anything important
+      if (iss.fail()) {
+        cfatal << startl << "Hit end of second line prematurely - check that polyco conforms to standard! Aborting." << endl;
         return false;
       }
 
-      input.get(buffer, 6);
-      numcoefficients = atoi(buffer);
-      if(!fieldOK(buffer, 5))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the number of coefficients field contained " << buffer << ".  Aborting!" << endl;
-        return false;
+      iss >> binaryphase;
+      //check if we missed anything non-important
+      if (iss.fail()) {
+        ; //non-binary pulsars don't have anything here, so no point actually issuing a warning
       }
-
-      input.get(buffer, 22);
-      obsfrequency = atof(buffer);
-      if(!fieldOK(buffer, 21))
-      {
-        cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the observing frequency field contained " << buffer << ".  Aborting!" << endl;
-        return false;
-      }
-
-      input.get(buffer, 6);
-      binaryphase = atof(buffer);
-
-      //check if the end of line was reached prematurely
-      if (input.fail()) {
-        cwarn << startl << "Hit end of second line prematurely - check your polyco conforms to standard! Some values may not have been set properly.  This often happens for non-binary pulsars.  Likely everything is ok." << endl;
-        input.clear();
-      }
-
-      getline(input, strbuffer); //skip to next line
+      iss.clear(); //in case we hit the end of the line
 
       //grab all the coefficients
       coefficients = new double[numcoefficients];
-
       for(int i=0;i<numcoefficients;i++)
       {
-          input.get(buffer, 26);
-          if(!fieldOK(buffer, 25))
-          {
-            cfatal << startl << "Polyco " << s+1 << "/" << subcount+1 << " is malformed - the " << i << "th coefficient field contained " << buffer << ".  Aborting!" << endl; 
-            return false;
-          }
-          if(input.fail()) {
-            csevere << startl << "Input related error processing polyco file " << filename << " coefficients!!! Will attempt clearing stream and continuing." << endl;
-            input.clear();
-          }
-          //check for exponents given with D's rather than E's, and fix if necessary
-          for (int j=0;j<26;j++)
-          {
-            if(buffer[j] == 'D' || buffer[j] == 'd')
-              buffer[j] = 'E';
-          }
-          coefficients[i] = atof(buffer);
-          if((((i+1)%3)==0) && (i>0)) // at the end of a line, need to skip
-              getline(input, strbuffer);
+        if(i%3 == 0) {
+          iss.clear(); //clear the eof
+          getline(input, strbuffer);
+          iss.str(strbuffer);
+        }
+        iss >> strbuffer;
+        if(iss.fail()) {
+          cfatal << startl << "Input related error processing polyco file " << filename << " coefficients! Aborting." << endl;
+          return false;
+        }
+        //replace any D or d characters with E, so atof works properly
+        size_t lookHere = 0;
+        size_t foundHere;
+        while((foundHere = strbuffer.find("D", lookHere)) != string::npos)
+        {
+          strbuffer.replace(foundHere, 1, "E");
+          lookHere = foundHere + 1;
+        }
+        while((foundHere = strbuffer.find("d", lookHere)) != string::npos)
+        {
+          strbuffer.replace(foundHere, 1, "E");
+          lookHere = foundHere + 1;
+        }
+        coefficients[i] = atof(strbuffer.c_str());
       }
+      iss.clear();
     }
     input.close();
 
@@ -529,20 +484,3 @@ bool Polyco::loadPolycoFile(string filename, int subcount)
     return true;
 }
 
-bool Polyco::fieldOK(char * buffer, int width)
-{
-  int at;
-
-  at = 0;
-  while(at<width && buffer[at] == ' ') //skip any preceding whitespace
-    at++;
-  while(at<width && buffer[at] != ' ') //skip through the block
-    at++;
-  while(at<width && buffer[at] == ' ') //skip any trailing whitespace
-    at++;
-
-  if(at != width) //found a second alphanumeric block before end of buffer - bad polyco!
-    return false;
-
-  return true;
-}

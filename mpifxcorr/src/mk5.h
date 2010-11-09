@@ -22,7 +22,17 @@
 #ifndef MK5_H
 #define MK5_H
 
+#include "config.h"
 #include "datastream.h"
+
+#ifndef MARK5_FILL_PATTERN
+#ifdef WORDS_BIGENDIAN
+#define MARK5_FILL_PATTERN 0x44332211UL
+#else
+#define MARK5_FILL_PATTERN 0x11223344UL
+#endif
+#endif
+
 
 /**
 @class Mk5DataStream 
@@ -78,13 +88,13 @@ protected:
   */
   virtual void initialiseFile(int configindex, int fileindex);
 
-  virtual void networkToMemory(int buffersegment, int & framebytesremaining);
+  virtual void networkToMemory(int buffersegment, uint64_t & framebytesremaining);
   
   void initialiseNetwork(int configindex, int buffersegment);
 
   virtual int readnetwork(int sock, char* ptr, int bytestoread, int* nread);
 
-  virtual int openframe();
+  virtual uint64_t openframe();
 
   int lastconfig;
 
