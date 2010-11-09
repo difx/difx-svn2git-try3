@@ -44,7 +44,7 @@ using std::flush;
 /**
  * Private data class
  */
-struct IIRFilter::P {
+struct IntFilter::P {
    public:
     int N;
     Ipp32fc* accu;
@@ -53,8 +53,8 @@ struct IIRFilter::P {
 /**
  * Prepare private data
  */
-IIRFilter::IIRFilter() {
-    pD = new IIRFilter::P();
+IntFilter::IntFilter() {
+    pD = new IntFilter::P();
     pD->N = -1;
     pD->accu = 0;
 }
@@ -62,19 +62,17 @@ IIRFilter::IIRFilter() {
 /**
  * Release private data
  */
-IIRFilter::~IIRFilter() {
-    if (pD->accu != 0) {
-        ippsFree (pD->accu);
-        pD->accu = 0;
-    }
+IntFilter::~IntFilter() {
+    ippsFree(pD->accu);
     delete pD;
     pD = 0;
 }
 
+
 /**
  * Reset filter state
  */
-void IIRFilter::clear() {
+void IntFilter::clear() {
     if (pD->N > 0) {
         ippsZero_32fc(pD->accu, pD->N);
     }
@@ -85,45 +83,30 @@ void IIRFilter::clear() {
  * will be ignored. Filter cutoff depends on how
  * many input samples are added for averaging.
  * 
- * @arg order Filter order
- * @arg N Number of channels i.e. parallel filters
+ * @arg order Ignored
+ * @arg N     Number of channels i.e. parallel filters
  */
-void IIRFilter::init(size_t order, size_t N) {
-    // no coefficients etc to compute
-    if ((N==pD->N) && (pD->accu!=0)) {
-        clear();
-    } else {
-        ippsFree(pD->accu);
-        pD->N = N;
+void IntFilter::init(size_t order, size_t N) {
+    pD->N = N;
+    ippsFree(pD->accu);
+    pD->accu = 0;
+    if (N > 0) {
         pD->accu = ippsMalloc_32fc(pD->N);
+        clear();
     }
-}
-
-/**
- * Set filter gain coefficient.
- */
-void IIRFilter::set_prescaling(double g) {
-    return;
-}
-
-/**
- * Get filter gain coefficient.
- */
-double IIRFilter::get_prescaling() {
-    return 1.0f;
 }
 
 /**
  * Set filter coefficient at given index to new value.
  */
-void IIRFilter::set_coeff(int index, double c) {
+void IntFilter::set_coeff(int, double) {
    return;
 }
 
 /**
  * Return filter coefficient at index.
  */
-double IIRFilter::get_coeff(int index) {
+double IntFilter::get_coeff(int index) {
     return (index < 2) ? 1.0f : 0.0f;
 }
 
@@ -131,17 +114,16 @@ double IIRFilter::get_coeff(int index) {
  * Pass new data to filter
  * @arg x array of single samples from multiple channels
  */
-void IIRFilter::filter(Ipp32fc* freqbins) {
+void IntFilter::filter(Ipp32fc* freqbins) {
     assert((pD!=0) && (pD->accu!=0));
     ippsAdd_32fc_I(freqbins, pD->accu, pD->N);
 }
 
-int IIRFilter::get_num_coeffs() { return 6; } // TODO
+int IntFilter::get_num_coeffs() { return 1; }
 
 /**
  * Return current states
  */
-Ipp32fc* IIRFilter::y() {
+Ipp32fc* IntFilter::y() {
     return pD->accu;
 }
-

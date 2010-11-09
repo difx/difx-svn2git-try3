@@ -25,36 +25,52 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA
  *********************************************************************/
+#ifndef _FILTERCHAIN_H
+#define _FILTERCHAIN_H
 
-#include "filters.h"
+#include <ipps.h>
+#include <ippm.h>
+#include <ippvm.h>
+#include <ippcore.h>
 
-#include <cassert>
+#include <cstring>
+#include <vector>
 #include <iostream>
-using std::cerr;
-using std::endl;
-using std::flush;
 
-#include <memory.h>
-#include <malloc.h>
-
-////////////////////////////////////////////////
-// BASE CLASS Factory
-///////////////////////////////////////////////
+#include "filter.h" 
+//class Filter;
 
 /**
- * Filter type factory
+ * FilterChain class
  */
-Filter* Filter::getFilter(FltType t) {
-    switch (t) {
-        FLT_AVERAGING: 
-            return new IntFilter();
-        FLT_CIC: 
-            return new IntFilter();
-        FLT_IIR_SOS: 
-            return new IIRSOSFilter();
-        FLT_FIR: 
-            return new IntFilter();
-        default: 
-            return new IntFilter();
-    }
-}
+class FilterChain : public Filter {
+    public:
+        FilterChain();
+        ~FilterChain();
+    public:
+        const char* name() { return "Filterchain"; }
+        // initialize filter chain from config file
+        void buildFromFile(const char*, int);
+        // chain access
+        void appendFilter(Filter*, int);
+        // funcs from the Filter class
+        void clear();
+        void init(size_t, size_t);
+        void   set_prescaling(double) { };
+        double get_prescaling() { return 1.0f; }
+        void   set_coeff(int, double);
+        double get_coeff(int);
+        int get_num_coeffs();
+    public:
+        void filter(Ipp32fc*);
+        Ipp32fc* y();
+    public:
+        void summary(std::ostream& o);
+    private:
+        std::vector<Filter*> fchain;
+        std::vector<int> rchain;
+        std::vector<int*> countchain;
+};
+
+#endif // _FILTERCHAIN_H
+

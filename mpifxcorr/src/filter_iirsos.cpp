@@ -7,8 +7,6 @@
  * channels. With N channel data, you can think of it as a group
  * of N parallel filters. Filtering output is the output of these N
  * parallel filters.
- * The filter is implemented as an IIR biquad/second-order-structure
- * series of filters. Coefficients are fixed...
  *
  ********************************************************************
  *
@@ -28,11 +26,6 @@
  * 02110-1301, USA
  *********************************************************************/
 
-// Notes:
-// http://www.cs.uiuc.edu/class/sp08/cs232/section/Discussion13/disc13.pdf
-// http://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html
-// http://gcc.gnu.org/onlinedocs/gcc/X86-Built_002din-Functions.html
-
 #include "filters.h"
 
 #include <cassert>
@@ -44,8 +37,11 @@ using std::flush;
 #include <memory.h>
 #include <malloc.h>
 
+#define COEFFS_PER_STAGE 6
+#define DEBUG_V 0
+
 ////////////////////////////////////////////////
-// IIR IN CUSTOM SOS/BIQUAD not covered by IPP
+// IIR Second-order-structures filter
 ///////////////////////////////////////////////
 
 /**
@@ -53,42 +49,102 @@ using std::flush;
  */
 struct IIRSOSFilter::P {
    public:
-    int N;
-    IppsIIRState_32fc** iirstates;
-    Ipp32fc* y;
-    Ipp32fc* tapsBA;
-    const int order;
+    P();
+    ~P();
+    void zero();
+    void alloc(int stages, int channels);
+    void dealloc();
+   private:
+    IIRSOSFilter::P& operator= (const IIRSOSFilter::P& o);
+    P(const IIRSOSFilter::P& o);
    public:
-    P() : order(8) {}
+    int numchannels, N;
+    int numstages;
+    Ipp64f    prescaling;
+    Ipp64f*   coeffs;
+    Ipp32f    prescaling_f32;
+    Ipp32f*   coeffs_f32;
+    // vars store Ipp32fc but due to real-val filter coeffs, for performance we can use 2*Ipp32f
+    Ipp32f*  z1; // N*stages of z^-1
+    Ipp32f*  z2; // N*stages of z^-2
+    Ipp32f*  pre_sum;
+    Ipp32f*  outputs;
 };
+
+/** Private data c'stor */
+IIRSOSFilter::P::P() {
+   N = numchannels = numstages = 0;
+   coeffs = 0;
+   coeffs_f32 = 0;
+   z1 = z2 = 0;
+   pre_sum = outputs = 0;
+   prescaling = 1.0f;
+   prescaling_f32 = 1.0f;
+}
+
+/** Private data d'stor */
+IIRSOSFilter::P::~P() {
+   this->dealloc();
+}
+
+/** Deallocate internal state */
+void IIRSOSFilter::P::dealloc() {
+    if (coeffs != 0) {
+        ippsFree(coeffs);
+        ippsFree(coeffs_f32);
+        ippsFree(pre_sum);
+        ippsFree(outputs);
+        ippsFree(z1); 
+        ippsFree(z2); 
+    }
+}
+
+/** Allocate memory for filter state */
+void IIRSOSFilter::P::alloc(int stages, int channels) {
+    if (stages < 1 || channels < 1) { return; }
+    if (coeffs != 0) { this->dealloc(); }
+    numchannels = channels;
+    N = 2*channels;
+    numstages = stages;
+    coeffs = ippsMalloc_64f(6 * numstages);
+    coeffs_f32 = ippsMalloc_32f(6 * numstages);
+    z1 = ippsMalloc_32f(N*numstages);
+    z2 = ippsMalloc_32f(N*numstages);
+    pre_sum = ippsMalloc_32f(N);
+    outputs = ippsMalloc_32f(N);
+    ippsZero_64f(coeffs, 6 * numstages);
+    zero();
+}
+
+/** Clear internal filter state */
+void IIRSOSFilter::P::zero() {
+    ippsZero_32f(z1, N*numstages);
+    ippsZero_32f(z2, N*numstages);
+    ippsZero_32f(pre_sum, N);
+    ippsZero_32f(outputs, N);
+}
+
 
 /**
  * Prepare private data
  */
 IIRSOSFilter::IIRSOSFilter() {
     pD = new IIRSOSFilter::P();
-    pD->N = -1;
-    pD->iirstates = 0;
-    pD->tapsBA = 0;
 }
 
 /**
  * Release private data
  */
 IIRSOSFilter::~IIRSOSFilter() {
-    if (pD->iirstates != 0) {
-        for (int i=0; i<pD->N; i++) {
-            ippsIIRFree_32fc(pD->iirstates[i]);
-        }
-        delete[] pD->iirstates;
-    }
     delete pD;
+    pD = 0;
 }
 
 /**
  * Reset filter state
  */
 void IIRSOSFilter::clear() {
+    pD->zero();
 }
 
 /**
@@ -96,39 +152,59 @@ void IIRSOSFilter::clear() {
  * will be ignored. Filter cutoff depends on how
  * many input samples are added for averaging.
  * 
- * @arg w_cutoff Normalized cutoff frequency (ignored!)
+ * @arg order Filter order, must be a multiple of 2 for 2nd-order-sections
  * @arg N Number of channels i.e. parallel filters
  */
-void IIRSOSFilter::init(double w_cutoff, size_t N) {
-    IppStatus s;
-    // no coefficients etc to compute
-    if ((N==pD->N) && (pD->iirstates!=0)) {
-        clear();
-    } else {
-        pD->N = N;
-        // alloc outputs
-        pD->y = ippsMalloc_32fc(pD->N);
-        // let IPP design a filter?
-        Ipp64f tapsBAlp[2*(pD->order + 1)];
-        s = ippsIIRGenLowpass_64f(w_cutoff/2, 1.0, pD->order, tapsBAlp, ippChebyshev1);
-        if (s == ippStsNoErr) {
-            for (int i = 0; i < (pD->order+1); i++) {
-                fprintf(stderr, "b[%d]=%e a[%d]=%e\n", i, tapsBAlp[i], i, tapsBAlp[i+pD->order+1]);
-            }
-        }
-        // or use Matlab IIR filter (note: direct form, no SOS/biquad)
-        // Num = [0.028  0.053 0.071  0.053 0.028]
-        // Den = [1.000 -2.026 2.148 -1.159 0.279]
-        pD->tapsBA = new Ipp32fc[2*(pD->order + 1)];
-        //        pD->tabsBA = {
-        pD->iirstates = new IppsIIRState_32fc*[pD->N];
-        for (int i=0; i<pD->N; i++) {
-            s = ippsIIRInitAlloc_32fc(&(pD->iirstates[i]), pD->tapsBA, pD->order, NULL);
-            if (s != ippStsNoErr) {
-                fprintf(stderr, "ippsIIRInitAlloc_32fc error %d\n", s);
-            }
-        }
+void IIRSOSFilter::init(size_t order, size_t N) {
+    if (pD!=0) { delete pD; }
+    pD = new IIRSOSFilter::P();
+    pD->alloc(order/2, N); // order/2 = nr of second order sections
+}
+
+/**
+ * Set filter gain coefficient.
+ */
+void IIRSOSFilter::set_prescaling(double g) {
+    pD->prescaling = g;
+    pD->prescaling_f32 = (float)g;
+}
+
+/**
+ * Get filter gain coefficient.
+ */
+double IIRSOSFilter::get_prescaling() {
+    return pD->prescaling;
+}
+
+/**
+ * Set filter coefficient at given index to new value.
+ */
+void IIRSOSFilter::set_coeff(int index, double c) {
+    if ((index < (6 * pD->numstages)) && (pD->coeffs != 0)) {
+        pD->coeffs[index] = c;
+        pD->coeffs_f32[index] = (float)c;
     }
+    return;
+}
+
+/**
+ * Return filter coefficient at index.
+ */
+double IIRSOSFilter::get_coeff(int index) {
+    if ((index < (6 * pD->numstages)) && (pD->coeffs != 0)) {
+        return pD->coeffs[index];
+    }
+    return 0.0f;
+}
+
+/**
+ * Return number of coefficients used by the filter.
+ */
+int IIRSOSFilter::get_num_coeffs() { 
+    if (pD->coeffs != 0) {
+        return (6 * pD->numstages);
+    }
+    return 0;
 }
 
 /**
@@ -136,9 +212,62 @@ void IIRSOSFilter::init(double w_cutoff, size_t N) {
  * @arg x array of single samples from multiple channels
  */
 void IIRSOSFilter::filter(Ipp32fc* freqbins) {
-    assert((pD!=0) && (pD->iirstates!=0));
-    for (int i=0; i<pD->N; i++) {
-        ippsIIROne_32fc(freqbins[i], &(pD->y[i]), pD->iirstates[i]);
+    assert((pD!=0) && (pD->coeffs!=0) && (pD->numchannels>0));
+
+    /* --Matlab--
+     * input = Giir * channels(:, ii);
+     * for jj=1:
+     *   presum = input - Ciir(jj,5)*storagemid(:,jj,1) - Ciir(jj,6)*storagemid(:,jj,2);          
+     *   output = Ciir(jj,1)*presum + Ciir(jj,2)*storagemid(:,jj,1) + Ciir(jj,3)*storagemid(:,jj,2);
+     *   storagemid(:,jj,2) = storagemid(:,jj,1);
+     *   storagemid(:,jj,1) = presum;
+     *   input = output;
+     * end;
+     * % When normalized: Ciir(jj,1)==1
+     * % Always: Ciir(jj,4)==1
+     */
+
+    // Filter coefficients are real
+    // For performance we can thus use <real,real> operations.
+    Ipp32f* input = (Ipp32f*)freqbins;
+    Ipp32f* out   = (Ipp32f*)pD->outputs;
+    Ipp32f* t1    = (Ipp32f*)pD->z1;
+    Ipp32f* t2    = (Ipp32f*)pD->z2;
+    Ipp32f* Ciir  = pD->coeffs_f32;
+
+    if (DEBUG_V) { cerr << flush << "filter() in[0]=" << freqbins[0].re << endl; }
+
+    for (int jj=0; jj<(pD->numstages); jj++) {
+
+        // presum = input - Ciir(jj,5)*storagemid(:,jj,1) - Ciir(jj,6)*storagemid(:,jj,2);
+        ippsMulC_32f(t1, -Ciir[4], /*dst*/pD->pre_sum, pD->N);
+        ippsAddProductC_32f(t2, -Ciir[5], /*srcdst*/pD->pre_sum, pD->N);
+        if (jj==0) {
+            ippsAddProductC_32f(input, pD->prescaling_f32, /*srcdst*/pD->pre_sum, pD->N);
+        } else {
+            ippsAdd_32f_I(input, /*srcdst*/pD->pre_sum, pD->N);
+        }
+
+        // output = Ciir(jj,1)*presum + Ciir(jj,2)*storagemid(:,jj,1) + Ciir(jj,3)*storagemid(:,jj,2);
+        if (Ciir[0] == 1) {
+            ippsCopy_32f(pD->pre_sum, out, pD->N);
+        } else {
+            ippsMulC_32f(pD->pre_sum, Ciir[0], out, pD->N);
+        }
+        ippsAddProductC_32f(t1, Ciir[1], out, pD->N);
+        ippsAddProductC_32f(t2, Ciir[2], out, pD->N);
+
+        if (DEBUG_V) { cerr << std::flush << "jj=" << jj << " in=" << input[0]<< " out=" << out[0] << " sum=" << pD->pre_sum[0] << " s[0]=" << t1[1] << " s[1]=" << t2[0] << endl; }
+
+        // memory shifting
+        ippsCopy_32f(t1,  /*dst*/t2, pD->N);
+        ippsCopy_32f(pD->pre_sum, /*dst*/t1, pD->N);
+
+        // pointers for next stage
+        input = out;
+        t1 += pD->N;
+        t2 += pD->N;
+        Ciir += COEFFS_PER_STAGE;
     }
 }
 
@@ -146,6 +275,5 @@ void IIRSOSFilter::filter(Ipp32fc* freqbins) {
  * Return current states
  */
 Ipp32fc* IIRSOSFilter::y() {
-    return pD->y;
+    return (Ipp32fc*)(pD->outputs);
 }
-
