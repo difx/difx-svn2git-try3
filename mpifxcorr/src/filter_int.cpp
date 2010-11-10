@@ -48,6 +48,7 @@ struct IntFilter::P {
    public:
     int N;
     Ipp32fc* accu;
+    bool user_output;
 };
 
 /**
@@ -57,13 +58,14 @@ IntFilter::IntFilter() {
     pD = new IntFilter::P();
     pD->N = -1;
     pD->accu = 0;
+    pD->user_output = false;
 }
 
 /**
  * Release private data
  */
 IntFilter::~IntFilter() {
-    ippsFree(pD->accu);
+    if (!pD->user_output) { ippsFree(pD->accu); }
     delete pD;
     pD = 0;
 }
@@ -88,12 +90,14 @@ void IntFilter::clear() {
  */
 void IntFilter::init(size_t order, size_t N) {
     pD->N = N;
-    ippsFree(pD->accu);
-    pD->accu = 0;
-    if (N > 0) {
-        pD->accu = ippsMalloc_32fc(pD->N);
-        clear();
+    if (!pD->user_output) { 
+        ippsFree(pD->accu);
+        pD->accu = 0;
+        if (N > 0) {
+            pD->accu = ippsMalloc_32fc(pD->N);
+        }
     }
+    if (N > 0) { clear(); }
 }
 
 /**
@@ -127,3 +131,14 @@ int IntFilter::get_num_coeffs() { return 1; }
 Ipp32fc* IntFilter::y() {
     return pD->accu;
 }
+
+/**
+ * Allow user to specify own result buffer.
+ */
+void IntFilter::setUserOutbuffer(Ipp32fc* userY) {
+    if (!pD->user_output) { ippsFree(pD->accu); }
+    pD->user_output = true;
+    pD->accu = (Ipp32fc*)userY;
+    clear();
+}
+

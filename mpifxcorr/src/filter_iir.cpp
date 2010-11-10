@@ -145,3 +145,6 @@ Ipp32fc* IIRFilter::y() {
     return pD->accu;
 }
 
+void IIRFilter::setUserOutbuffer(Ipp32fc* userY) {
+}
+

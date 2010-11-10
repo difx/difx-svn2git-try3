@@ -61,6 +61,7 @@ int main(int argc, char** argv)
     cout << endl;
 
     cout << "---- Test filter builder" << endl;
+    Ipp32fc* userY = ippsMalloc_32fc(Nch);
     Ipp32fc* tvec = ippsMalloc_32fc(Nch);
     Filter* f = Filter::getFilter(FLT_AVERAGING);
     f->init(0.01, Nch);
@@ -87,6 +88,7 @@ int main(int argc, char** argv)
 
 #if VERIFY
   {
+    fc.setUserOutbuffer(userY);
     for (int i=0; i<Nsamps; i++) {
         ippsSet_32fc(oneChVec[i], allChVec, Nch);
         fc.filter(allChVec);

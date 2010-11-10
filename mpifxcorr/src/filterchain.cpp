@@ -210,6 +210,13 @@ Ipp32fc* FilterChain::y() {
 }
 
 /**
+ * Allow user to specify own result buffer.
+ */
+void FilterChain::setUserOutbuffer(Ipp32fc* userY) {
+    fchain[fchain.size()-1]->setUserOutbuffer(userY);
+}
+
+/**
  * Print summary of filter
  */
 void FilterChain::summary(std::ostream& o) {
@@ -239,3 +246,4 @@ void FilterChain::summary(std::ostream& o) {
     }
     o.precision(old_prec);
 }
+

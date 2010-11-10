@@ -69,6 +69,7 @@ struct IIRSOSFilter::P {
     Ipp32f*  z2; // N*stages of z^-2
     Ipp32f*  pre_sum;
     Ipp32f*  outputs;
+    bool user_output;
 };
 
 /** Private data c'stor */
@@ -80,6 +81,7 @@ IIRSOSFilter::P::P() {
    pre_sum = outputs = 0;
    prescaling = 1.0f;
    prescaling_f32 = 1.0f;
+   user_output = false;
 }
 
 /** Private data d'stor */
@@ -93,7 +95,7 @@ void IIRSOSFilter::P::dealloc() {
         ippsFree(coeffs);
         ippsFree(coeffs_f32);
         ippsFree(pre_sum);
-        ippsFree(outputs);
+        if (!user_output) { ippsFree(outputs); }
         ippsFree(z1); 
         ippsFree(z2); 
     }
@@ -277,3 +279,14 @@ void IIRSOSFilter::filter(Ipp32fc* freqbins) {
 Ipp32fc* IIRSOSFilter::y() {
     return (Ipp32fc*)(pD->outputs);
 }
+
+/**
+ * Allow user to specify own result buffer.
+ */
+void IIRSOSFilter::setUserOutbuffer(Ipp32fc* userY) {
+    if (!pD->user_output) { ippsFree(pD->outputs); }
+    pD->user_output = true;
+    pD->outputs = (Ipp32f*)userY;
+    clear();
+}
+ 
