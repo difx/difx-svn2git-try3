@@ -287,6 +287,5 @@ void IIRSOSFilter::setUserOutbuffer(Ipp32fc* userY) {
     if (!pD->user_output) { ippsFree(pD->outputs); }
     pD->user_output = true;
     pD->outputs = (Ipp32f*)userY;
-    clear();
 }
  

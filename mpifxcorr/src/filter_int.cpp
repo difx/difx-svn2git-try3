@@ -139,6 +139,5 @@ void IntFilter::setUserOutbuffer(Ipp32fc* userY) {
     if (!pD->user_output) { ippsFree(pD->accu); }
     pD->user_output = true;
     pD->accu = (Ipp32fc*)userY;
-    clear();
 }
 
