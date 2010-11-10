@@ -87,8 +87,9 @@ public:
   inline bool writeAutoCorrs(int configindex) { return configs[configindex].writeautocorrs; }
   inline outputformat getOutputFormat() { return outformat; }
   inline string getOutputFilename() { return outputfilename; }
-  inline string getBaselineFLTFilename() { return baselinefltfilename; }
-  inline string getBaselineFLTFormat() { return baselinefltformat; }
+  inline string getRFIFilterFilename() { return rfifilterfilename; }
+  inline string getRFIFilterFormat() { return rfifilterformat; }
+  inline bool getUseRFIFilter() { return rfifilter_enabled; }
   inline bool pulsarBinOn(int configindex) { return configs[configindex].pulsarbin; }
   inline bool scrunchOutputOn(int configindex) { return configs[configindex].scrunchoutput; }
   inline int getNumPulsarBins(int configindex) { return configs[configindex].numbins; }
@@ -592,10 +593,10 @@ private:
 
   int mpiid;
   char header[MAX_KEY_LENGTH];
-  bool commonread, configread, datastreamread, consistencyok, commandthreadinitialised, dumpsta, dumplta;
+  bool commonread, configread, datastreamread, consistencyok, commandthreadinitialised, dumpsta, dumplta, rfifilter_enabled;
   int visbufferlength;
   int executeseconds, startmjd, startseconds, startns, numdatastreams, numbaselines, numconfigs, defaultconfigindex, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength, databufferfactor, numdatasegments, numcoreconfs, maxnumchannels, maxnumpulsarbins, numindependentchannelconfigs, stadumpchannels, ltadumpchannels;
-  string delayfilename, uvwfilename, coreconffilename, outputfilename, baselinefltfilename, baselinefltformat;
+  string delayfilename, uvwfilename, coreconffilename, outputfilename, rfifilterfilename, rfifilterformat;
   int * numprocessthreads;
   int * firstnaturalconfigindices;
   configdata * configs;

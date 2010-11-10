@@ -704,18 +704,19 @@ void Configuration::processCommon(ifstream * input)
     consistencyok = false;
   }
   getinputline(input, &outputfilename, "OUTPUT FILENAME");
-  getinputline(input, &baselinefltformat, "BLINE FLT TYPE");
-  if (!(baselinefltformat == "NONE" || baselinefltformat == "DIRECT" || baselinefltformat == "CHAIN"))
+  getinputline(input, &rfifilterformat, "RFI FILT TYPE");
+  if (!(rfifilterformat == "NONE" || rfifilterformat == "DIRECT" || rfifilterformat == "CHAIN"))
   {
-    cerror << startl << "Unknown RFI filter format " << baselinefltformat << " (case sensitive choices are NONE, DIRECT, CHAIN)" << endl;
+    cerror << startl << "Unknown RFI filter format " << rfifilterformat << " (case sensitive choices are NONE, DIRECT, CHAIN)" << endl;
     consistencyok = false;
   }
-  getinputline(input, &baselinefltfilename, "BLINE FLT COEFFS");
-  if (baselinefltformat != "NONE" && baselinefltfilename == "")
+  getinputline(input, &rfifilterfilename, "RFI FILT COEFFS");
+  if (rfifilterformat != "NONE" && rfifilterfilename == "")
   {
     cerror << startl << "RFI filtering enabled but no coefficient file specified!" << endl;
     consistencyok = false;
   }
+  rfifilter_enabled = (rfifilterformat != "NONE");
   commonread = true;
 }
 
