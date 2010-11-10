@@ -24,6 +24,7 @@
 
 #include "architecture.h"
 #include "configuration.h"
+#include "filterchain.h"
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -187,6 +188,8 @@ protected:
   vecFFTSpecC_f32 * pFFTSpecC;
   u8 * fftbuffer;
   vecHintAlg hint;
+  FilterChain** autocorrfilters;
+  cf32* rfiscratch;
 
   //pref fringe rotation variables
   f32* rotateargument;

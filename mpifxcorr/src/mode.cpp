@@ -26,6 +26,7 @@
 #include "architecture.h"
 #include "datastream.h"
 #include "alert.h"
+#include "filterchain.h"
 
 //using namespace std;
 const float Mode::TINY = 0.000000001;
@@ -98,6 +99,17 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int nchan, int bper
     xoffset = vectorAlloc_f64(twicenumchannels);
     for(int i=0;i<twicenumchannels;i++)
       xoffset[i] = double(i)/double(numchannels*blockspersend);
+
+    //initialize rfi filtering
+    rfiscratch = vectorAlloc_cf32(numchannels+1);
+    autocorrfilters = new FilterChain*[numinputbands];
+    for (int i=0;i<numinputbands;i++) {
+        const char* filterfile = config->getRFIFilterFilename().c_str();
+        autocorrfilters[i] = new FilterChain();
+        if (config->getUseRFIFilter()) {
+            autocorrfilters[i]->buildFromFile(filterfile,numchannels); // without Nyquist
+        }
+    }
   
     //initialise the fft info
     order = 0;
@@ -149,7 +161,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int nchan, int bper
     lsbchannelfreqs = vectorAlloc_f32(numchannels + 1);
     for(int i=0;i<numchannels + 1;i++)
       lsbchannelfreqs[i] = (float)((-TWO_PI*(numchannels-i)*bandwidth)/numchannels);
-  
+
     //space for the autocorrelations
     if(calccrosspolautocorrs)
       autocorrwidth = 2;
@@ -182,6 +194,12 @@ Mode::~Mode()
   delete [] conjfftoutputs;
   vectorFree(xoffset);
   vectorFree(xval);
+
+  for (int i=0;i<numinputbands;i++) {
+    delete autocorrfilters[i];
+  }
+  delete [] autocorrfilters;
+  vectorFree(rfiscratch);
 
   if(postffringerot)
   {
@@ -357,6 +375,13 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
     if(config->getDLowerSideband(configindex, datastreamindex, i))
       sidebandoffset = 1;
 
+    //update rfi filter output buffer for autocorrelations to proper sidebandoffset
+    if (config->getUseRFIFilter()) {
+      for(int j=0;j<numinputbands;j++) {
+        autocorrfilters[j]->setUserOutbuffer(autocorrelations[0][j]+sidebandoffset);
+      }
+    }
+
     //create the array for fractional sample error correction - including the post-f fringe rotation
     currentchannelfreqptr = (config->getDLowerSideband(configindex, datastreamindex, i))?lsbchannelfreqs:channelfreqs;
     status = vectorMulC_f32(currentchannelfreqptr, fracsampleerror - freqclockoffsets[i], fracmult, numchannels + 1);
@@ -470,10 +495,18 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
         if(status != vecNoErr)
           csevere << startl << "Error in conjugate!!!" << status << endl;
 
-        //do the autocorrelation (skipping Nyquist channel)
-        status = vectorAddProduct_cf32(fftoutputs[j]+sidebandoffset, conjfftoutputs[j]+sidebandoffset, autocorrelations[0][j]+sidebandoffset, numchannels);
-        if(status != vecNoErr)
-          csevere << startl << "Error in autocorrelation!!!" << status << endl;
+        //accumulate the autocorrelation (skipping Nyquist channel)
+        if (!config->getUseRFIFilter()) {
+          status = vectorAddProduct_cf32(fftoutputs[j]+sidebandoffset, conjfftoutputs[j]+sidebandoffset, autocorrelations[0][j]+sidebandoffset, numchannels);
+          if(status != vecNoErr)
+            csevere << startl << "Error in autocorrelation!!!" << status << endl;
+        } else {
+          status = vectorMul_cf32(fftoutputs[j]+sidebandoffset, conjfftoutputs[j]+sidebandoffset, rfiscratch, numchannels);
+          if(status != vecNoErr)
+            csevere << startl << "Error in autocorrelation!!!" << status << endl;
+          autocorrfilters[j]->filter(rfiscratch);
+          // autocorrfilters[j]->y() already map to autocorrelations[0][j]+sidebandoffset
+        }
 
         //Add the weight in magic location (imaginary part of Nyquist channel)
         autocorrelations[0][j][numchannels*(1-sidebandoffset)].im += dataweight;
@@ -493,6 +526,7 @@ float Mode::process(int index)  //frac sample error, fringedelay and wholemicros
       //add the weight in magic location (imaginary part of Nyquist channel)
       autocorrelations[1][indices[0]][numchannels*(1-sidebandoffset)].im += dataweight;
       autocorrelations[1][indices[1]][numchannels*(1-sidebandoffset)].im += dataweight;
+      //TODO: RFI filtering for cross-polar ac as well?
     }
   }
 
