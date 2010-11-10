@@ -64,6 +64,7 @@ class FilterChain : public Filter {
     public:
         void filter(Ipp32fc*);
         Ipp32fc* y();
+        void setUserOutbuffer(Ipp32fc*);
     public:
         void summary(std::ostream& o);
     private:

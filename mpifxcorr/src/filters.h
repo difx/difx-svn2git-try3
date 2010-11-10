@@ -60,7 +60,8 @@ class IntFilter : public Filter {
    public:
         void filter(Ipp32fc*);
         Ipp32fc* y();
-    // Data
+        void setUserOutbuffer(Ipp32fc*);
+   // Data
     private:
         struct P;
         P* pD;
@@ -90,6 +91,7 @@ class IIRFilter : public Filter {
    public:
         void filter(Ipp32fc*);
         Ipp32fc* y();
+        void setUserOutbuffer(Ipp32fc*);
     // Data
     private:
         struct P;
@@ -120,6 +122,7 @@ class IIRSOSFilter : public Filter {
    public:
         void filter(Ipp32fc*);
         Ipp32fc* y();
+        void setUserOutbuffer(Ipp32fc*);
     // Data
     private:
         struct P;

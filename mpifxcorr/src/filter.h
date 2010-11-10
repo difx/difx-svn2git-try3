@@ -65,6 +65,7 @@ class Filter {
     public:
         virtual void filter(Ipp32fc*) = 0;
         virtual Ipp32fc* y() = 0;
+        virtual void setUserOutbuffer(Ipp32fc*) = 0;
 };
 
 #endif // _FILTER_H
