@@ -304,17 +304,19 @@ void * Core::launchNewProcessThread(void * tdata)
 
 void Core::loopprocess(int threadid)
 {
-  int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos,  numchan, maxbins, maxchan, maxpolycos, maxfreqs, stadumpchannels;
+  int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos,  numchan, maxbins, maxchan, maxpolycos, maxfreqs, stadumpchannels, numrfifilters;
   bool pulsarbin, somepulsarbin, scrunch, dumpingsta, nowdumpingsta;
   Polyco ** polycos=0;
   Polyco * currentpolyco=0;
   Mode ** modes;
   s32 ** bins;
   cf32 * threadresults = vectorAlloc_cf32(maxresultlength);
+  cf32 * rfiscratch;
   cf32 * pulsarscratchspace=0;
   cf32 ***** pulsaraccumspace=0;
   DifxMessageSTARecord * starecord = 0;
-
+  FilterChain** rfifilters;
+ 
   pulsarbin = false;
   somepulsarbin = false;
   scrunch = false;
@@ -323,6 +325,7 @@ void Core::loopprocess(int threadid)
   maxchan = 0;
   maxfreqs = config->getMaxNumFreqs();
   maxbins = config->getMaxNumPulsarBins();
+  numrfifilters = 0;
 
   //work out whether we'll need to do any pulsar binning, and work out the maximum # channels (and # polycos if applicable)
   for(int i=0;i<config->getNumConfigs();i++)
@@ -360,6 +363,24 @@ void Core::loopprocess(int threadid)
   updateconfig(lastconfigindex, lastconfigindex, threadid, startblock, numblocks, numpolycos, pulsarbin, modes, polycos, true, &bins);
   numprocessed = 0;
 //  cinfo << startl << "Core thread id " << threadid << " will be processing from block " << startblock << ", length " << numblocks << endl;
+
+  //prepare RFI filters
+  if (config->getUseRFIFilter()) 
+  {
+    rfiscratch = vectorAlloc_cf32(procslots[0].numchannels+1);
+    for(int j=0;j<numbaselines;j++)
+      for(int k=0;k<config->getBNumFreqs(procslots[0].configindex, j);k++)
+        for(int p=0;p<config->getBNumPolProducts(procslots[0].configindex,j,k);p++)
+          numrfifilters++; // there should be a better way!
+    rfifilters = new FilterChain*[numrfifilters];
+    const char* filterfile = config->getRFIFilterFilename().c_str();
+    for (int j=0;j<numrfifilters;j++)
+    {
+      rfifilters[j] = new FilterChain();
+      rfifilters[j]->buildFromFile(filterfile,procslots[0].numchannels+1); 
+    }
+    cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process created " << numrfifilters << " RFI filter instances" << endl;
+  }
 
   //lock the end section
   perr = pthread_mutex_lock(&(procslots[RECEIVE_RING_LENGTH-1].slotlocks[threadid]));
@@ -414,7 +435,7 @@ void Core::loopprocess(int threadid)
     }
 
     //process our section of responsibility for this time range
-    processdata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, threadresults, bins, pulsarscratchspace, pulsaraccumspace, starecord);
+    processdata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, threadresults, bins, rfiscratch, (Filter**)rfifilters, pulsarscratchspace, pulsaraccumspace, starecord);
 
     //if the configuration changes from this segment to the next, change our setup accordingly
     if(procslots[numprocessed%RECEIVE_RING_LENGTH].configindex != lastconfigindex)
@@ -463,6 +484,15 @@ void Core::loopprocess(int threadid)
   vectorFree(threadresults);
   if(starecord != 0) {
     delete starecord;
+  }
+  if (config->getUseRFIFilter()) 
+  {
+    vectorFree(rfiscratch);
+    for (int i=0; i<numrfifilters; i++)
+    {
+      delete rfifilters[i];
+    }
+    delete [] rfifilters;
   }
 
   //cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process thread exiting!!!" << endl;
@@ -533,7 +563,7 @@ void Core::receivedata(int index, bool * terminate)
   }
 }
 
-void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord)
+void Core::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* rfiscratch, Filter** rfifilters, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord)
 {
   int status, perr, resultindex=0, currentnumoutputbands, cindex, maxproducts, ds1index, ds2index, nyquistchannel, channelinc, freqindex, subintsamples;
   double offsetmins;
@@ -563,6 +593,21 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   if(status != vecNoErr)
     csevere << startl << "Error trying to zero threadresults!!!" << endl;
 
+  //attach RFI filter outputs to threadresults
+  if (config->getUseRFIFilter())
+  {
+    int flt = 0;
+    cf32* subresults = threadresults;
+    for(int j=0;j<numbaselines;j++)
+      for(int k=0;k<config->getBNumFreqs(procslots[index].configindex, j);k++)
+        for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,k);p++)
+        {
+          rfifilters[flt]->setUserOutbuffer(subresults);
+          subresults += procslots[index].numchannels+1;
+          flt++;
+        }
+  }
+
   //process each FFT chunk in turn
   for(int i=startblock;i<startblock+numblocks;i++)
   {
@@ -584,6 +629,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     //do the cross multiplication - gets messy for the pulsar binning
     for(int j=0;j<numbaselines;j++)
     {
+      int rfifilterindex = 0;
+
       //get the two modes that contribute to this baseline
       ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
       ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
@@ -641,11 +688,21 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
           else
           {
             //not pulsar binning, so this is nice and simple - just cross multiply accumulate
-            status = vectorAddProduct_cf32(m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, k, p)), m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p)), &(threadresults[resultindex]), procslots[index].numchannels+1);
-            if(status != vecNoErr)
-              csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
+            cf32* xmsrc1 = m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, k, p));
+            cf32* xmsrc2 = m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, k, p));
+            if (!config->getUseRFIFilter()) {
+              status = vectorAddProduct_cf32(xmsrc1, xmsrc2, &(threadresults[resultindex]), procslots[index].numchannels+1);
+              if(status != vecNoErr)
+                csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
+            } else {
+              status = vectorMul_cf32(xmsrc1, xmsrc2, rfiscratch, procslots[index].numchannels+1);
+              if (status != vecNoErr)
+                csevere << startl << "Error trying to xmac baseline " << j << " frequency " << k << " polarisation product " << p << ", status " << status << endl;
+              rfifilters[rfifilterindex]->filter(rfiscratch); // output already tied to threadresults[resultindex]
+            }
             threadresults[resultindex+nyquistchannel].im += dsweights[ds1index]*dsweights[ds2index];
             resultindex += procslots[index].numchannels+1;
+            rfifilterindex += 1;
           }
         }
         if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)

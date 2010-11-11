@@ -27,6 +27,7 @@
 #include "configuration.h"
 #include "mode.h"
 #include "difxmessage.h"
+#include "filter.h"
 #include <pthread.h>
 
 /**
@@ -129,7 +130,7 @@ private:
   * @param pulsaraccumspace Room in which to accumulate the binned results ([#baselines][#frequencies][#polproducts][#bins][#channels+1])
   * @param starecord Message to be sent to a process listening for STA results
   */
-  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord);
+  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, cf32 * threadresults, s32 ** bins, cf32* rfiscratch, Filter** rfifilters, cf32* pulsarscratchspace, cf32***** pulsaraccumspace, DifxMessageSTARecord * starecord);
 
  /**
   * Updates all the parameters for processing thread when the configuration changes
