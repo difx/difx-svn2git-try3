@@ -129,4 +129,35 @@ class IIRSOSFilter : public Filter {
         P* pD;
 };
 
+/**
+ * Digital State Variable filter (lowpass mode)
+ */
+class DSVFFilter : public Filter {
+    // C'stors
+    public:
+        DSVFFilter();
+        ~DSVFFilter();
+    // No copy c'stors
+    private:
+        DSVFFilter& operator= (const DSVFFilter& o);
+        DSVFFilter(const DSVFFilter& o);
+    public:
+        const char* name() { return "BiQuadIIR"; }
+        void clear();
+        void init(size_t, size_t);
+        void   set_prescaling(double);
+        double get_prescaling();
+        void   set_coeff(int, double);
+        double get_coeff(int);
+        int get_num_coeffs();
+   public:
+        void filter(Ipp32fc*);
+        Ipp32fc* y();
+        void setUserOutbuffer(Ipp32fc*);
+    // Data
+    private:
+        struct P;
+        P* pD;
+};
+
 #endif // _FILTERS_H

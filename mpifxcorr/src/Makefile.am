@@ -27,6 +27,7 @@ mpifxcorr_SOURCES = \
 	filter_int.cpp \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
+	filter_dsvf.cpp \
 	$(mark5_files)
 
 library_includedir = $(includedir)/mpifxcorr

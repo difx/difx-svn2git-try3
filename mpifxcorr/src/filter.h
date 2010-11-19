@@ -38,7 +38,7 @@
  * Filter types
  */
 
-enum FltType { FLT_AVERAGING=0, FLT_CIC=1, FLT_IIR_SOS=2, FLT_FIR=3 };
+enum FltType { FLT_AVERAGING=0, FLT_CIC=1, FLT_IIR_SOS=2, FLT_FIR=3, FLT_DSVF=4 };
 
 /**
  * Base class for Filter

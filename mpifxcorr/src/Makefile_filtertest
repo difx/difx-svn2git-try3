@@ -1,4 +1,4 @@
-BASEFILES = filters.cpp filter_int.cpp filter_iir.cpp filter_iirsos.cpp filterchain.cpp filter_test.cpp filterhelpers.cpp
+BASEFILES = filters.cpp filter_int.cpp filter_iir.cpp filter_iirsos.cpp filter_dsvf.cpp filterchain.cpp filter_test.cpp filterhelpers.cpp
 BASEHEADERS = filter.h filters.h filterchain.h
 BASEOBJS = $(BASEFILES:.cpp=.o)
 

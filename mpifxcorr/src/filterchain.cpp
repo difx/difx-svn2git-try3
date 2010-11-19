@@ -22,7 +22,7 @@
 #include "filters.h"
 #include "filterhelpers.h"
 
-#define DEBUG_V 1
+#define DEBUG_V 0
 #define F_PREC  16  // number of float printout decimals
 
 #include <iostream>
@@ -113,6 +113,15 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
                     if (DEBUG_V) { cout << std::setprecision(F_PREC) << " " << c; }
                 }
                 if (DEBUG_V) { cout << endl; }
+                this->appendFilter(flt, R);
+            } break;
+            case FLT_DSVF:
+            {
+                DSVFFilter* flt = new DSVFFilter();
+                flt->init((size_t)N_M, (size_t)parallelism); // filter oder is ignored
+                flt->set_prescaling(vec[idx++]);
+                flt->set_coeff(0, vec[idx++]); // f = 2*sin(pi*fc/fs)
+                flt->set_coeff(1, vec[idx++]); // q = 1/Q
                 this->appendFilter(flt, R);
             } break;
             default:
