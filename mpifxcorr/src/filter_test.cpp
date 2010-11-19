@@ -28,8 +28,9 @@
 using std::cout;
 using std::endl;
 
-#define VERIFY 1 // verification test
-#define BENCH  1 // benchmarking test
+#define VERIFY1 0 // verification test with input file
+#define VERIFY2 1 // verification test with fixed DC-level '1.0'
+#define BENCH   0 // benchmarking test
 
 class Timing {
    public:
@@ -87,7 +88,7 @@ int main(int argc, char** argv)
     ifile.read((char*)oneChVec, Nsamps*sizeof(Ipp32fc));
     cout << "Read " << (ifile.gcount()/sizeof(Ipp32fc)) << " complex samples." << endl;
 
-#if VERIFY
+#if VERIFY1
   {
     fc.setUserOutbuffer(userY);
     for (int i=0; i<Nsamps; i++) {
@@ -113,6 +114,30 @@ int main(int argc, char** argv)
     }
     cout << "Expected integrated value: " << sum.re << " + i" << sum.im << endl;
     cout << "Expected double-integrated value: " << sum2.re << " + i" << sum2.im << endl;
+  }
+#endif
+
+#ifdef VERIFY2
+ {
+    int NfixSamps = 32000;
+    if (argc == 2) {
+       NfixSamps = atof(argv[1]);
+    }
+    Ipp32fc cval = {1.5f, 2.0f};
+    fc.setUserOutbuffer(userY);
+    fc.clear();
+    cout << "---- Filtering " << NfixSamps << " 1.5+i2.0-valued samples at " << Nch << " parallel channels (" << NfixSamps*Nch << " complex samples)" << endl;
+    Timing timing;
+    for (int i=0; i<NfixSamps; i++) {
+        ippsSet_32fc(cval, allChVec, Nch);
+        fc.filter(allChVec);
+    }
+    double dT = timing.stop();
+    Ipp32fc* y = userY; //fc.y();
+    cout << "Final filter value ch0: " << std::setprecision(17) << y[0].re << " + i" << y[0].im << endl;
+    cout << "Final filter value ch1: " << std::setprecision(17) << y[1].re << " + i" << y[1].im << endl;
+    cout << "Final filter value chN: " << std::setprecision(17) << y[Nch-1].re << " + i" << y[Nch-1].im << endl;
+    cout << "Filter speed: " << 1e-6*((double)NfixSamps*Nch)/dT << " Msamp/sec (*2 if not complex)" << endl;
   }
 #endif
 
