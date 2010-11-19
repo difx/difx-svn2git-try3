@@ -30,7 +30,6 @@
 #include <sys/types.h>
 #include <strings.h>
 #include "difx2fits.h"
-#include "fitsPH.h"
 #include "other.h"
 
 //phase values from mpifxcorr currently have to be inverted to match FITS conversion
