@@ -51,7 +51,7 @@ public:
   enum outputformat {RPFITS, ASCII, DIFX};
 
   /// Supported types of recorded data format
-  enum dataformat {LBASTD, LBAVSOP, NZ, K5, MKIV, VLBA, MARK5B, VDIF, VLBN};
+  enum dataformat {LBASTD, LBAVSOP, NZ, K5, MKIV, VLBA, MARK5B, VDIF, VLBN, RAW};
 
   /// Supported sources of data
   enum datasource {UNIXFILE, MK5MODULE, EVLBI};

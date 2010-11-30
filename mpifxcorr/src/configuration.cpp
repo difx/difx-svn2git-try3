@@ -23,6 +23,7 @@
 #include <string.h>
 #include <climits>
 #include "mk5mode.h"
+#include "rawmode.h"
 #include "configuration.h"
 #include "mode.h"
 #include "alert.h"
@@ -552,6 +553,11 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
 
   switch(stream.format)
   {
+    case RAW:
+      if (!RawMode::handles(stream.numbits, stream.numinputbands))
+          cerror << startl << "Specified Raw mode configuration not supported yet" << endl;
+      return new RawMode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, stream.numbits, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      break;
     case LBASTD:
       if(stream.numbits != 2)
         cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
@@ -877,9 +883,11 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].format = MARK5B;
     else if(line == "VDIF")
       datastreamtable[i].format = VDIF;
+    else if(line == "RAW")
+      datastreamtable[i].format = RAW;
     else
     {
-      cfatal << startl << "Unknown data format " << line << " (case sensitive choices are LBASTD, LBAVSOP, NZ, K5, MKIV, VLBA, VLBN, MARK5B and VDIF)" << endl;
+      cfatal << startl << "Unknown data format " << line << " (case sensitive choices are LBASTD, LBAVSOP, NZ, K5, MKIV, VLBA, VLBN, MARK5B, VDIF and RAW)" << endl;
       return false;
     }
     getinputline(input, &line, "QUANTISATION BITS");

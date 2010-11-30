@@ -32,6 +32,7 @@
 #include "datastream.h"
 #include "core.h"
 #include "fxmanager.h"
+#include "configuration.h"
 
 DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
   : databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
@@ -286,53 +287,62 @@ void DataStream::openfile(int configindex, int fileindex)
 
 void DataStream::initialiseFile(int configindex, int fileindex)
 {
-  string inputline;
-  int year, month, day, hour, minute, second, bytes;
-  char headerbuffer[LBA_HEADER_LENGTH];
-  bytes = 0;
-  
-  getline(input, inputline);
-  if(input.fail()) //get around problems caused by "peeking" for EOF
-  {
-    input.clear();
+  Configuration::dataformat format = config->getDataFormat(configindex, fileindex);
+  if (format == Configuration::RAW) {
+     // headerless format
+    filestartday = corrstartday;
+    filestartseconds = corrstartseconds;
+    cinfo << startl << "DATASTREAM " << mpiid << " headerless data start time fixed to correlation start time" << endl;
+  } else {  
+    // LBA format
+    string inputline;
+    int year, month, day, hour, minute, second, bytes;
+    char headerbuffer[LBA_HEADER_LENGTH];
+    bytes = 0;
+
     getline(input, inputline);
-  }
-  
-  if(inputline.length() != 15 || inputline.c_str()[8] != ':') //must be a new style header, find the time keyword
-  {
-    bytes = inputline.length() + 1;
-    while(inputline.substr(0,4) != "TIME" && bytes < LBA_HEADER_LENGTH)
+    if(input.fail()) //get around problems caused by "peeking" for EOF
     {
+      input.clear();
       getline(input, inputline);
-      bytes += inputline.length() + 1;
     }
-    if (bytes >= LBA_HEADER_LENGTH) 
-    {
-        //bad header, skip the rest of the file
-        cerror << startl << "Bad header in data file " << datafilenames[configindex][fileindex] << endl;
-        dataremaining = false;
-        return;
-    }
-    inputline = inputline.substr(5,15);
-  }
-
-  year = atoi((inputline.substr(0,4)).c_str());
-  month = atoi((inputline.substr(4,2)).c_str());
-  day = atoi((inputline.substr(6,2)).c_str());
-  hour = atoi((inputline.substr(9,2)).c_str());
-  minute = atoi((inputline.substr(11,2)).c_str());
-  second = atoi((inputline.substr(13,2)).c_str());
-
-  if(bytes != 0) //it was a new style header so we need to get the rest of the header
-  {
-    input.read(headerbuffer, LBA_HEADER_LENGTH - bytes);
-    cinfo << startl << "Processed a new style header, all info ignored except date/time" << endl;
-  }
   
-  cinfo << startl << "DATASTREAM " << mpiid << " got the header " << inputline << endl;
+    if(inputline.length() != 15 || inputline.c_str()[8] != ':') //must be a new style header, find the time keyword
+    {
+      bytes = inputline.length() + 1;
+      while(inputline.substr(0,4) != "TIME" && bytes < LBA_HEADER_LENGTH)
+      {
+        getline(input, inputline);
+        bytes += inputline.length() + 1;
+      }
+      if (bytes >= LBA_HEADER_LENGTH) 
+      {
+          //bad header, skip the rest of the file
+          cerror << startl << "Bad header in data file " << datafilenames[configindex][fileindex] << endl;
+          dataremaining = false;
+          return;
+      }
+      inputline = inputline.substr(5,15);
+    }
 
-  //convert this date into MJD
-  config->getMJD(filestartday, filestartseconds, year, month, day, hour, minute, second);
+    year = atoi((inputline.substr(0,4)).c_str());
+    month = atoi((inputline.substr(4,2)).c_str());
+    day = atoi((inputline.substr(6,2)).c_str());
+    hour = atoi((inputline.substr(9,2)).c_str());
+    minute = atoi((inputline.substr(11,2)).c_str());
+    second = atoi((inputline.substr(13,2)).c_str());
+
+    if(bytes != 0) //it was a new style header so we need to get the rest of the header
+    {
+      input.read(headerbuffer, LBA_HEADER_LENGTH - bytes);
+      cinfo << startl << "Processed a new style header, all info ignored except date/time" << endl;
+    }
+  
+    cinfo << startl << "DATASTREAM " << mpiid << " got the header " << inputline << endl;
+ 
+    //convert this date into MJD
+    config->getMJD(filestartday, filestartseconds, year, month, day, hour, minute, second);
+  }
 
   //cinfo << startl << "DATASTREAM " << mpiid << " worked out a filestartday of " << filestartday << " and a filestartseconds of " << filestartseconds << endl;
 

@@ -19,6 +19,7 @@ mpifxcorr_SOURCES = \
 	mode.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
+	rawmode.cpp \
 	polyco.cpp \
 	alert.cpp \
 	filters.cpp \
