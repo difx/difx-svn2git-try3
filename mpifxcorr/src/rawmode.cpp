@@ -25,9 +25,9 @@
 RawMode::RawMode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * freqclkoffsets, int ninputbands, int noutputbands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
   : Mode(conf, confindex, dsindex, nchan, bpersend, gblocks, nfreqs, bw, freqclkoffsets, ninputbands, noutputbands, nbits, nchan*2+4, fbank, postffringe, quaddelayinterp, cacorrs, bw*2)
 {
-  samplestounpack = (nbits/8) * nchan;
-  if (!RawMode::handles(nbits, nchan)) {
-      cfatal << startl << "Format error: " << nbits << " bits x " << nchan << " channels not supported by RawMode" << endl;
+  samplestounpack = (nbits/8) * ninputbands;
+  if (!RawMode::handles(nbits, ninputbands)) {
+      cfatal << startl << "Format error: " << nbits << " bits x " << ninputbands << " channels not supported by RawMode" << endl;
       initok = false;
   }
   return;
