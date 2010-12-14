@@ -37,7 +37,6 @@
 
 const int pcaltiny = 1e-10; //FIXME review once we've got pcal amplitudes sorted
 
-
 int pulsecalIsZero(float pulseCal[2][array_MAX_TONES], int nBand, int nTone, int nPol)
 {
 	int p, b, t;

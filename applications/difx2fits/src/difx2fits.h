@@ -33,10 +33,8 @@
 #include "fits.h"
 
 #define array_MAX_BANDS 32
-#define array_MAX_TONES	512
+#define array_MAX_TONES	64
 #define MAX_INPUT_FILES 4096
-
-extern const int binomialcoeffs[6][6];
 
 struct CommandLineOptions
 {
@@ -115,5 +113,4 @@ const DifxInput *DifxInput2FitsGD(const DifxInput *D,
 const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
 	struct CommandLineOptions *opts);
-
 #endif

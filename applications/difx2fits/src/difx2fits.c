@@ -41,9 +41,6 @@ const char version[] = VERSION;
 const double DefaultSniffInterval = 30.0;
 const double DefaultJobMatrixInterval = 20.0;
 
-const int binomialcoeffs[6][6] = {{1,0,0,0,0,0},{1,1,0,0,0,0},{1,2,1,0,0,0},
-				{1,3,3,1,0,0},{1,4,6,4,1,0},{1,5,10,10,5,1}};
-
 static int usage(const char *pgm)
 {
 	fprintf(stderr, "\n%s ver. %s   %s\n\n",
@@ -672,6 +669,7 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 				printf("Merging %s\n", opts->baseFile[i]);
 			}
 
+			printf("About to merge in file %d/%d\n", i+1, opts->nBaseFile);
 			D = mergeDifxInputs(D1, D2, opts->verbose);
 
 			deleteDifxInput(D1);
@@ -764,22 +762,12 @@ int convertFits(struct CommandLineOptions *opts, int passNum)
 	}
 	else
 	{
-		if(opts->pulsarBin == 0 && opts->phaseCentre == 0)
-		{
-			sprintf(outFitsName, "%s%s.%d.FITS",
-				D->job[0].obsCode,
-				D->job[0].obsSession,
-				passNum);
-		}
-		else 
-		{
-			sprintf(outFitsName, "%s%s.%d.bin%04d.source%04d.FITS",
-				D->job[0].obsCode,
-				D->job[0].obsSession,
-				passNum,
-				opts->pulsarBin,
-				opts->phaseCentre);
-		}
+		sprintf(outFitsName, "%s%s.%d.bin%04d.source%04d.FITS",
+			D->job[0].obsCode,
+			D->job[0].obsSession,
+			passNum,
+			opts->pulsarBin,
+			opts->phaseCentre);
 	}
 
 	if(!opts->pretend)
