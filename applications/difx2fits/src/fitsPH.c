@@ -136,6 +136,8 @@ static int getNTone(const char *filename, double t1, double t2, const char *antN
 	return maxnTone;
 }
 
+/* The following function is for parsing a line of the 
+ * station-extracted `pcal' file. */
 static int parsePulseCal(const char *line, 
 	int antId, int nBand, int nTone,
 	int *sourceId,
@@ -158,13 +160,6 @@ static int parsePulseCal(const char *line,
 	double mjd;
 	char antName[20];
 	
-	union
-	{
-		int32_t i32;
-		float f;
-	} nan;
-	nan.i32 = -1;
-
 	n = sscanf(line, "%s%lf%f%lf%d%d%d%d%d%n", antName, time, timeInt, 
 		cableCal, &np, &nb, &nt, &ns, &nRecBand, &p);
 	if(n != 9)
@@ -175,7 +170,7 @@ static int parsePulseCal(const char *line,
 
 	if(*cableCal > 999.89 && *cableCal < 999.91)
 	{
-		*cableCal = nan.f;
+		*cableCal = NAN;
 	}
 
 	*time -= refDay;
@@ -266,9 +261,9 @@ static int parsePulseCal(const char *line,
 					   (C >= 999.89 && C < 999.91))
 					{
 					  pulseCalRe[polId][tone + bandId*nt] = 
-						nan.f;
+						NAN;
 					  pulseCalIm[polId][tone + bandId*nt] = 
-						nan.f;
+						NAN;
 					}
 					else
 					{
@@ -340,6 +335,9 @@ static int parsePulseCal(const char *line,
 
 	return 0;
 }
+/* The following function is for parsing a line of the 
+ * station-extracted `pcal' file and extracting only the cable cal
+ * value */
 static int parsePulseCalCableCal(const char *line, 
 	int antId,
 	int *sourceId,
@@ -352,13 +350,6 @@ static int parsePulseCalCableCal(const char *line,
 	double mjd;
 	char antName[20];
 
-	union
-	{
-		int32_t i32;
-		float f;
-	} nan;
-	nan.i32 = -1;
-	
 	n = sscanf(line, "%s%lf%f%lf%n", antName, time, timeInt, 
 		cableCal, &p);
 	//printf("\n n%d %f\n", n, *cableCal);
@@ -369,7 +360,7 @@ static int parsePulseCalCableCal(const char *line,
 
 	if(*cableCal > 999.89 && *cableCal < 999.91)
 	{
-		*cableCal = nan.f;
+		*cableCal = NAN;
 	}
 
 	*time -= refDay;
@@ -401,6 +392,8 @@ static int parsePulseCalCableCal(const char *line,
 	
 	*cableCal *= 1e-12;
 }
+/* The following function is for parsing a line of the files containing 
+ * The DiFX-extracted pulse cals */
 static int parseDifxPulseCal(const char *line, 
 	int dsId, int nBand, int nTone,
 	int *sourceId, double *time,
@@ -424,13 +417,6 @@ static int parseDifxPulseCal(const char *line,
 	char antName[20];
 	double cableCal;
 	float timeInt;
-
-	union
-	{
-		int32_t i32;
-		float f;
-	} nan;
-	nan.i32 = -1;
 
 	n = sscanf(line, "%s%lf%f%lf%d%d%d%d%d%n", antName, time, &timeInt, 
 		&cableCal, &np, &nb, &nt, &ns, &nRecChan, &p);
@@ -526,10 +512,8 @@ static int parseDifxPulseCal(const char *line,
 				freqs[pol][j*nTone + k] = (double) D->datastream[dsId].recToneFreq[tone]*1.0e6;
 				if(B < pcaltiny && B > -pcaltiny && C < pcaltiny && C > -pcaltiny)
 				{
-				  pulseCalRe[pol][j*nTone + k] = 
-					nan.f;
-				  pulseCalIm[pol][j*nTone + k] = 
-					nan.f;
+					pulseCalRe[pol][j*nTone + k] = NAN;
+					pulseCalIm[pol][j*nTone + k] = NAN;
 				}
 				else
 				{
@@ -543,10 +527,8 @@ static int parseDifxPulseCal(const char *line,
 			}
 			while(k < nTone)
 			{
-				pulseCalRe[pol][j*nTone + k] = 
-				nan.f;
-				pulseCalIm[pol][j*nTone + k] = 
-				nan.f;
+				pulseCalRe[pol][j*nTone + k] = NAN;
+				pulseCalIm[pol][j*nTone + k] = NAN;
 				k++;
 			}
 			j++;
@@ -620,13 +602,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	int jobId;
 	char antName[20];
 
-	union
-	{
-		int32_t i32;
-		float f;
-	} nan;
-	nan.i32 = -1;
-
 	if(D == 0)
 	{
 		return D;
@@ -655,6 +630,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	printf("\n");
 
 	//check all antennas for pcal and work out maxtones per IF (nTones)
+	//FIXME loop over all antennas
 	for(i = 0; i < D->nDatastream; i++)
 	{
 		a = D->datastream[i].antennaId;
@@ -858,7 +834,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					}
 					else
 					{
-						cableCal = nan.f;
+						cableCal = NAN;
 					}
 				}
 				else
