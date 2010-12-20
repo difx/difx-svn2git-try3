@@ -160,6 +160,13 @@ static int parsePulseCal(const char *line,
 	double mjd;
 	char antName[20];
 	
+	union
+	{
+		int32_t i32;
+		float f;
+	} nan;
+	nan.i32 = -1;
+
 	n = sscanf(line, "%s%lf%f%lf%d%d%d%d%d%n", antName, time, timeInt, 
 		cableCal, &np, &nb, &nt, &ns, &nRecBand, &p);
 	if(n != 9)
@@ -170,7 +177,7 @@ static int parsePulseCal(const char *line,
 
 	if(*cableCal > 999.89 && *cableCal < 999.91)
 	{
-		*cableCal = NAN;
+		*cableCal = nan.f;
 	}
 
 	*time -= refDay;
@@ -261,9 +268,9 @@ static int parsePulseCal(const char *line,
 					   (C >= 999.89 && C < 999.91))
 					{
 					  pulseCalRe[polId][tone + bandId*nt] = 
-						NAN;
+						nan.f;
 					  pulseCalIm[polId][tone + bandId*nt] = 
-						NAN;
+						nan.f;
 					}
 					else
 					{
@@ -350,6 +357,13 @@ static int parsePulseCalCableCal(const char *line,
 	double mjd;
 	char antName[20];
 
+	union
+	{
+		int32_t i32;
+		float f;
+	} nan;
+	nan.i32 = -1;
+	
 	n = sscanf(line, "%s%lf%f%lf%n", antName, time, timeInt, 
 		cableCal, &p);
 	//printf("\n n%d %f\n", n, *cableCal);
@@ -360,7 +374,7 @@ static int parsePulseCalCableCal(const char *line,
 
 	if(*cableCal > 999.89 && *cableCal < 999.91)
 	{
-		*cableCal = NAN;
+		*cableCal = nan.f;
 	}
 
 	*time -= refDay;
@@ -417,6 +431,13 @@ static int parseDifxPulseCal(const char *line,
 	char antName[20];
 	double cableCal;
 	float timeInt;
+
+	union
+	{
+		int32_t i32;
+		float f;
+	} nan;
+	nan.i32 = -1;
 
 	n = sscanf(line, "%s%lf%f%lf%d%d%d%d%d%n", antName, time, &timeInt, 
 		&cableCal, &np, &nb, &nt, &ns, &nRecChan, &p);
@@ -512,8 +533,10 @@ static int parseDifxPulseCal(const char *line,
 				freqs[pol][j*nTone + k] = (double) D->datastream[dsId].recToneFreq[tone]*1.0e6;
 				if(B < pcaltiny && B > -pcaltiny && C < pcaltiny && C > -pcaltiny)
 				{
-					pulseCalRe[pol][j*nTone + k] = NAN;
-					pulseCalIm[pol][j*nTone + k] = NAN;
+				  pulseCalRe[pol][j*nTone + k] = 
+					nan.f;
+				  pulseCalIm[pol][j*nTone + k] = 
+					nan.f;
 				}
 				else
 				{
@@ -527,8 +550,10 @@ static int parseDifxPulseCal(const char *line,
 			}
 			while(k < nTone)
 			{
-				pulseCalRe[pol][j*nTone + k] = NAN;
-				pulseCalIm[pol][j*nTone + k] = NAN;
+				pulseCalRe[pol][j*nTone + k] = 
+				nan.f;
+				pulseCalIm[pol][j*nTone + k] = 
+				nan.f;
 				k++;
 			}
 			j++;
@@ -601,6 +626,13 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	int stationpcal = 0;
 	int jobId;
 	char antName[20];
+
+	union
+	{
+		int32_t i32;
+		float f;
+	} nan;
+	nan.i32 = -1;
 
 	if(D == 0)
 	{
@@ -834,7 +866,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					}
 					else
 					{
-						cableCal = NAN;
+						cableCal = nan.f;
 					}
 				}
 				else
