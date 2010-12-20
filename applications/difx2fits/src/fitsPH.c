@@ -58,7 +58,7 @@ int pulsecalIsZero(float pulseCal[2][array_MAX_TONES], int nBand, int nTone, int
 
 int nextfile(const DifxInput *D, int antId, int *jobId, FILE **file)
 {
-	char filename[50];
+	char filename[DIFXIO_FILENAME_LENGTH];
 	//FIXME must/should be a maxfilebase in difxio
 	const char suffix[] = ".difx/PCAL_";
 	if(*file)
@@ -78,7 +78,7 @@ int nextfile(const DifxInput *D, int antId, int *jobId, FILE **file)
 		}
 		//FIXME add check to see if antenna is present in this job
 		
-		sprintf(filename, "%s%s%s", D->job[*jobId].fileBase,
+		sprintf(filename, "%s%s%s", D->job[*jobId].outputFile,
 				 suffix, D->antenna[antId].name);
 		//printf("Opening File %s\n", filename);
 		*file = fopen(filename, "r");
