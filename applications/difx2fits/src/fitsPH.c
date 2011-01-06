@@ -33,7 +33,6 @@
 #include "other.h"
 
 //phase values from mpifxcorr currently have to be inverted to match FITS conversion
-#define PCAL_INVERT
 
 const float pcaltiny = 1e-10; //FIXME review once we've got pcal amplitudes sorted
 const int MaxLineLength=10000;//FIXME even this could be too small!!
@@ -526,9 +525,7 @@ static int parseDifxPulseCal(const char *line,
 				else
 				{
 					pulseCalRe[pol][j*nTone + k] = B;
-#ifdef PCAL_INVERT
 					C *= -1;
-#endif
 					pulseCalIm[pol][j*nTone + k] = C;
 				}
 				k++;
