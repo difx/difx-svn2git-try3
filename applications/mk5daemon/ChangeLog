@@ -2,6 +2,7 @@ Version 1.4.1
 ~~~~~~~~~~~~~
 * Post DiFX-1.5.4
 * NOTE: Active version is now in DiFX-2.0
+* mk5dir:  Fix parsing of mark5 directory files: stepping through extra parameters had a bug.
 
 Version 1.4
 ~~~~~~~~~~~
