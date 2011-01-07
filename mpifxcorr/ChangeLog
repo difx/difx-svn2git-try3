@@ -1,6 +1,7 @@
 Version 1.5.5
 ~~~~~~~~~~~~~
 * Added new checkmpifxcorr utility which makes sure an input file is valid
+* Fix parsing of mark5 directory files: stepping through extra parameters had a bug.
 
 Version 1.5.4
 ~~~~~~~~~~~~~
