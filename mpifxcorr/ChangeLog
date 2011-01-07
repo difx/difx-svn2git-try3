@@ -2,6 +2,7 @@ Version 1.5.5
 ~~~~~~~~~~~~~
 * Added new checkmpifxcorr utility which makes sure an input file is valid
 * Fix parsing of mark5 directory files: stepping through extra parameters had a bug.
+* Native Mark5: Swap order of fill pattern setting and bank mode setting to better work around certain module problems
 
 Version 1.5.4
 ~~~~~~~~~~~~~

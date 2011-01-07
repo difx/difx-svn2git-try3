@@ -197,21 +197,21 @@ NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum,
 		cinfo << startl << "Success opening Streamstor device" << endl;
 	}
 
+	WATCHDOG( xlrRC = XLRSetFillData(xlrDevice, MARK5_FILL_PATTERN) );
+	if(xlrRC == XLR_SUCCESS)
+	{
+		WATCHDOG( xlrRC = XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
+	}
+	if(xlrRC != XLR_SUCCESS)
+	{
+		cerror << startl << "Cannot set Mark5 data replacement mode / fill pattern" << endl;
+	}
+
 	// FIXME -- for non-bank-mode operation, need to look at the modules to determine what to do here.
 	WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 	if(xlrRC != XLR_SUCCESS)
 	{
 		cerror << startl << "Cannot put Mark5 unit in bank mode" << endl;
-	}
-
-	WATCHDOG( xlrRC = XLRSetOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
-	if(xlrRC == XLR_SUCCESS)
-	{
-		WATCHDOG( xlrRC = XLRSetFillData(xlrDevice, MARK5_FILL_PATTERN) );
-	}
-	if(xlrRC != XLR_SUCCESS)
-	{
-		cerror << startl << "Cannot set Mark5 data replacement mode / fill pattern" << endl;
 	}
 
 	module.nscans = -1;
@@ -680,7 +680,8 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	xlrRD.XferLength = bytes;
 	xlrRD.BufferAddr = (streamstordatatype *)buf;
 
-	WATCHDOG( xlrRC = XLRRead(xlrDevice, &xlrRD) );
+	//WATCHDOG( xlrRC = XLRRead(xlrDevice, &xlrRD) );
+	WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
 	if(xlrRC != XLR_SUCCESS)
 	{
 		xlrEC = XLRGetLastError();
