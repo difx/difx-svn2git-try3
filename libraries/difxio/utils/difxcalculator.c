@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009 by Walter Brisken                                  *
+ *   Copyright (C) 2009-2011 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -213,9 +213,9 @@ int main(int argc, char **argv)
 		printf("Record data rate (Mbps)   \t%5.3f\n", recDataRate);
 		printf("Baseband msg size (MB)    \t%5.3f\tDS to Core send; want a few MB\n", basebandMessageSize);
 		printf("Baseband read size (MB)   \t%5.3f\tTypically want ~10 to 50 MB\n", basebandReadSize);
-		printf("Core input data ratio     \t%5.3f\tReally should be << 1.0\n", coreInputRatio);
+		printf("Core input data ratio     \t%5.3f\n", coreInputRatio);
 		printf("Core input rate (Mbps)    \t%5.3f\n", coreInputRate);
-		printf("Core output data ratio    \t%5.3f\n", coreOutputRatio);
+		printf("Core output data ratio    \t%5.3f\tReally should be << 1.0\n", coreOutputRatio);
 		printf("Core output rate (Mbps)   \t%5.3f\n", coreOutputRate);
 		printf("Manager input rate (Mbps) \t%5.3f\n", manInputRate);
 		printf("Disk output rate (MB/s)   \t%5.3f\n", diskDataRate);
