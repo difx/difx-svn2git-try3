@@ -21,6 +21,7 @@
 //============================================================================
 
 #include <sstream>
+#include <strings.h>
 #include "architecture.h"
 #include "configuration.h"
 #include "alert.h"
@@ -154,6 +155,14 @@ Model::~Model()
   }
 }
 
+void Model::updateClock(int antennaindex, int order, double * deltaclock)
+{
+  string antennaname = stationtable[antennaindex].name;
+  double refmjd = modelmjd + (double)modelstartseconds/86400.0;
+
+  addClockTerms(antennaname, refmjd, order, deltaclock, true);
+}
+
 bool Model::interpolateUVW(int scanindex, double offsettime, int antennaindex1, int antennaindex2, int scansourceindex, double* uvw)
 {
   int scansample, polyoffset;
@@ -268,9 +277,9 @@ bool Model::calculateDelayInterpolator(int scanindex, f64 offsettime, f64 timesp
   return true;
 }
 
-bool Model::addClockTerms(string antennaname, double refmjd, int order, double * terms)
+bool Model::addClockTerms(string antennaname, double refmjd, int order, double * terms, bool isupdate)
 {
-  double clockdistance, dt, polysampleclock;
+  double clockdistance;
   double * clockdt;
 
   if(scantable == 0) //hasn't been allocated yet
@@ -297,8 +306,19 @@ bool Model::addClockTerms(string antennaname, double refmjd, int order, double *
           clockdt[0] = 1.0;
           for(int l=1;l<=order;l++)
             clockdt[l] = clockdt[l-1]*clockdistance;
-          for(int l=0;l<=polyorder;l++)
-            scantable[j].clock[k][i][l] = 0.0;
+          if(!isupdate) {
+            for(int l=0;l<=polyorder;l++)
+              scantable[j].clock[k][i][l] = 0.0;
+          }
+          else { //first subtract the old clock model out of delay
+            for(int p=0;p<scantable[j].numphasecentres+1;p++)
+            {
+              for(int l=0;l<=polyorder;l++)
+              {
+                scantable[j].delay[k][p][i][l] -= scantable[j].clock[k][i][l];
+              }
+            }
+          }
           for(int l=0;l<=order;l++)
           {
             for(int m=l;m<=order;m++)
@@ -342,10 +362,19 @@ bool Model::readCommonData(ifstream * input)
 {
   int year, month, day, hour, minute, second;
   double mjd;
+  string key = "";
   string line = "";
 
   //Get the start time
-  config->getinputline(input, &line, "START MJD");
+  config->getinputkeyval(input, &key, &line);
+  if(key.find("VEX") != string::npos) { //look for the VEX line, skip it if present
+    config->getinputline(input, &line, "START MJD");
+  }
+  else {
+    if(key.find("START MJD") == string::npos) {
+      cerror << startl << "Went looking for START MJD (or maybe VEX FILE), but got " << key << endl;
+    }
+  }
   mjd = atof(line.c_str());
   config->getinputline(input, &line, "START YEAR");
   year = atoi(line.c_str());
@@ -698,16 +727,17 @@ bool Model::fillPolyRow(f64* vals, string line, int npoly)
 //utility routine which returns an integer which FITS expects based on the type of mount
 Model::axistype Model::getMount(string mount)
 {
-  if(mount.compare("azel") == 0 || mount.compare("altz") == 0) //its an azel mount
+  if(strcasecmp(mount.c_str(), "azel") == 0) //its an azel mount
     return ALTAZ;
-  if(mount.compare("equa") == 0 || mount.compare("hadec") == 0) //equatorial mount
+  if(strcasecmp(mount.c_str(), "equa") == 0) //equatorial mount
     return RADEC;
-  if(mount.compare("orbi") == 0) //orbital mount
+  if(strcasecmp(mount.c_str(), "orbi") == 0) //orbital mount
     return ORB;
-  if((mount.substr(0,2)).compare("xy") == 0) //xy mount
+  if(strcasecmp(mount.substr(0,2).c_str(), "xy") == 0) //xy mount
     return XY;
 
   //otherwise unknown
   cerror << startl << "Warning - unknown mount type: Assuming Az-El" << endl;
   return ALTAZ;
 }
+// vim: shiftwidth=2:softtabstop=2:expandtab

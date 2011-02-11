@@ -27,7 +27,6 @@
 #include "architecture.h"
 #include "visibility.h"
 #include "core.h"
-#include "uvw.h"
 #include <pthread.h>
 
 
@@ -72,6 +71,12 @@ public:
   */
   void execute();
 
+ /**
+  * Returns the estimated number of bytes used by the FxManager
+  * @return Estimated memory size of the FxManager (bytes)
+  */
+  inline int getEstimatedBytes() { return estimatedbytes; }
+
   void MonitorThread();
 
 protected:
@@ -85,20 +90,10 @@ protected:
 
   
 private:
- /** @name RPFITS constants
-  * These constants are used by the RPFITS standard and are necessary for creating RPFITS files
-  */
- //@{
-  static const int ANTENNA_NAME_LENGTH = 8;
-  static const int SOURCE_NAME_LENGTH = 16;
-  static const int SOURCE_CALCODE_LENGTH = 4;
-  static const int RPFITS_HEADER_LENGTH = 80;
-  static const int STOKES_NAME_LENGTH = 2;
-  static const int MAX_FILENAME_LENGTH = 256;
+  //constants
   static const string CIRCULAR_POL_NAMES[4];
   static const string LL_CIRCULAR_POL_NAMES[4];
   static const string LINEAR_POL_NAMES[4];
- //@}
 
   //methods
  /** 
@@ -122,25 +117,20 @@ private:
   int locateVisIndex(int coreid);
 
  /** 
-  * Opens the RPFITS file if necessary
+  * Open the files
   */
   void initialiseOutput();
+
+ /**
+  * Prints a summary of the internal buffers and how many subints were received from each core
+  * @param visindex The index in the visibility buffer which was just completed
+  */
+  void printSummary(int visindex);
 
  /** 
   * While the correlation is active, continually tries to obtain a lock on the next Visibility, write it out, and increment it
   */
   void loopwrite();
-
- /** 
-  * Closes the RPFITS file if necessary
-  */
-  void finaliseOutput();
-
- /** 
-  * Writes the RPFITS header to disk
-  */
-  void writeheader();
-
 
   /* 
    * Copy vis data into buffer and signal to monitor thread to start copying 
@@ -153,19 +143,22 @@ private:
   //variables
   Configuration * config;
   MPI_Comm return_comm;
-  int numcores, mpiid, numdatastreams, startmjd, startseconds, startns, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis, skipseconds;
-  double inttime, halfsampleseconds;
+  int numcores, mpiid, numdatastreams, startmjd, startseconds, initns, initsec, initscan, executetimeseconds, resultlength, numbaselines, nsincrement, currentconfigindex, newestlockedvis, oldestlockedvis, writesegment, estimatedbytes;
+  double inttime;
   bool keepwriting, circularpols, writethreadinitialised, visibilityconfigok;
-  int senddata[3];
-  Uvw * uvw;
+  int senddata[4];
+  Model * model;
   int * datastreamids;
   int * coreids;
+  int * corecounts;
+  int * recentcorecounts;
   int * numsent;
   int * extrareceived;
   int *** coretimes;
   bool monitor;
   char * hostname;
   cf32 * resultbuffer;
+  char * todiskbuffer;
   Visibility ** visbuffer;
   pthread_mutex_t * bufferlock, startlock;
   bool * islocked;
@@ -175,9 +168,9 @@ private:
   int lastsource;
 
   // Variables needed for monitoring
-  int monitorport;
-  int mon_socket;
   int monitor_skip;
+  int mon_socket;
+  int monitorport;
   pthread_cond_t monitorcond;
   pthread_mutex_t moncondlock, monitorwritelock;
   pthread_t monthread;
@@ -188,3 +181,4 @@ private:
 };
 
 #endif
+// vim: shiftwidth=2:softtabstop=2:expandtab

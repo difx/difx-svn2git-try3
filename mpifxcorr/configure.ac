@@ -1,4 +1,4 @@
-AC_INIT([mpifxcorr], [1.5.4], [Adam Deller <adeller@astro.swin.edu.au>])
+AC_INIT([mpifxcorr], [2.0.1], [Adam Deller <adeller@astro.swin.edu.au>])
 PACKAGE_VERSION=AC_PACKAGE_VERSION
 AC_SUBST([PACKAGE_VERSION])
 AC_SUBST([LIBRARY_VERSION])
@@ -15,98 +15,68 @@ AC_ARG_ENABLE(quiet, [AS_HELP_STRING([--enable-quiet],[disable some verbiage])],
 dnl **********************************************************
 dnl **** Set path for Intel Performance Primitive library ****
 dnl **********************************************************
-if test "$OSTYPE" == "darwin"; then
-        ipp_libname="Libraries"
-else
-        ipp_libname="sharedlib"
-fi
 
-AC_ARG_WITH(ipp-root, [AS_HELP_STRING([--with-ipp-root=ROOT],[ipp root is ROOT (optional).  Use env variable IPPROOT otherwise.])],
-ipp_root="$withval", ipp_root="")
-if test x"$ipp_root" != "x"; then
-        IPP_CFLAGS="-I$ipp_root/include"
-        IPP_LIBS="-L$ipp_root/$ipp_libname"
-else
-        IPP_CFLAGS="-I$IPPROOT/include"
-        IPP_LIBS="-L$IPPROOT/$ipp_libname"
-fi
-
-if test x"$IPPLINKLIBS" != x; then
-        IPP_LIBS=$IPP_LIBS" $IPPLINKLIBS"
-else
-	if test "$DIFXBITS" == "32"; then
-           IPP_LIBS=$IPP_LIBS" -lipps -lguide -lippvm -lippcore"
-	elif test "$DIFXBITS" == "64"; then
-           IPP_LIBS=$IPP_LIBS" -lippsem64t -lguide -lippvmem64t -liomp5 -lippcoreem64t"
-	else
-	   IPP_LIBS=$IPP_LIBS" -lipps -lguide -lippvm"
-           echo "32/64 bit unspecified - assuming 32 bit for IPP"
-        fi
-fi
+PKG_CHECK_MODULES(IPP, ipp)
 dnl **********************************************************
+
 
 dnl **********************************************************
 dnl **** Find difxmessage library                         ****
 dnl **********************************************************
 dm_enabled=true
 PKG_CHECK_MODULES(DIFXMESSAGE,
-        difxmessage >= 7.2,
-	[AC_DEFINE([HAVE_DIFXMESSAGE], 1, [1=has DIFXMESSAGE])],
-	dm_enabled=false)
+        [difxmessage >= 2.0.1 difxmessage < 7],
+        [AC_DEFINE([HAVE_DIFXMESSAGE], 1, [1=has DIFXMESSAGE])],
+        dm_enabled=false)
 AM_CONDITIONAL(WITH_DIFXMESSAGE, $dm_enabled)
 
 dnl **********************************************************
-dnl **** Find streamstor library                          ****
+dnl **** Find vdifio library                              ****
+dnl **********************************************************
+PKG_CHECK_MODULES(VDIFIO, vdifio >= 0.1)
+
+dnl **********************************************************
+dnl **** Find mark5ipc library                            ****
+dnl **********************************************************
+m5ipc_enabled=true
+PKG_CHECK_MODULES(MARK5IPC,
+        [mark5ipc >= 2.0.1 mark5ipc < 7],
+	[AC_DEFINE([HAVE_MARK5IPC], 1, [1=has MARK5IPC])],
+	m5ipc_enabled=false)
+AM_CONDITIONAL(WITH_MARK5IPC, $m5ipc_enabled)
+
+dnl **********************************************************
+dnl **** Look for StreamStor libraries                    ****
 dnl **** cause native Mark5 to be built if found.         ****
 dnl **********************************************************
 ss_enabled=true
-PKG_CHECK_MODULES(SS,
-        streamstor >= 8.0,
-	[AC_DEFINE([HAVE_XLRAPI_H], 1, [1=has SS])],
-	ss_enabled=false)
+PKG_CHECK_EXISTS([streamstor >= 8.0],
+	[ PKG_CHECK_MODULES(SS, streamstor) ],
+	[ AC_MSG_NOTICE([Did not find STREAMSTOR in $PKG_CONFIG_PATH])
+	  ss_enabled=false])
+if test ${ss_enabled} = true; then
+	CPPFLAGS="${CPPFLAGS} ${SS_CFLAGS}"
+	CXXFLAGS="${CXXFLAGS} ${SS_CFLAGS}"
+	AC_CHECK_HEADERS([xlrapi.h])
+else
+	SS_CFLAGS=""
+	SS_LIBS=""
+	echo 'No suitable streamstor.pc file was found so the native'
+	echo 'Mark5 support will be suppressed.  See the documentation'
+	echo 'if you are surprised by this.'
+fi
 AM_CONDITIONAL(WITH_SS, $ss_enabled)
-if test ss_enabled = false; then
-	echo 'No suitable streamstor.pc file found so native mark5 support will be suppressed.  See documentation if you are surprised by this.'
-fi
-
-dnl **********************************************************
-dnl **** Look for RPFITS                                  ****
-dnl **********************************************************
-rpfits_enabled=true
-AC_ARG_WITH(rpfits, [AS_HELP_STRING([--without-rpfits],[Disable rpfits output])])
-if test x"$with_rpfits" = xno; then
-   	rpfits_enabled=false
-else
-	PWD=`pwd`
-	AC_CHECK_HEADER([$DIFXROOT/include/RPFITS.h],
-		[AC_DEFINE([HAVE_RPFITS], 1, [1=has RPFITS])],
-		[rpfits_enabled=false])
-fi
-if test ${rpfits_enabled} = true; then
-   	RPFITS_CFLAGS="-I$DIFXROOT/include"
-	if test x"$USEGFORTRAN" != "x"; then
-	      RPFITS_LIBS=" -lrpfits -lgfortran"  
-	else
-	      RPFITS_LIBS=" -lrpfits -lg2c"
-        fi
-else
-	echo "RPFITS disabled"
-	RPFITS_CFLAGS=""
-	RPFITS_LIBS=""
-fi
-dnl **********************************************************
-
 
 dnl **********************************************************
 dnl **** Find mark5access library                         ****
 dnl **********************************************************
-PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.3.5)
+PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.4.2)
 dnl **********************************************************
 
 
-CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${IPP_CFLAGS} ${RPFITS_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${SS_CFLAGS} ${CFLAG_QUIET}"
-LIBS="${M5ACCESS_LIBS} ${SS_LIBS} ${IPP_LIBS} ${RPFITS_LIBS} ${DIFXMESSAGE_LIBS}"
+CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${VDIFIO_CFLAGS} ${IPP_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${MARK5IPC_CFLAGS} ${CFLAG_QUIET}"
+LIBS="${M5ACCESS_LIBS} ${VDIFIO_LIBS} ${SS_LIBS} ${IPP_LIBS} ${DIFXMESSAGE_LIBS} ${MARK5IPC_LIBS}"
 
 echo "CXXFLAGS = ${CXXFLAGS}"
 echo "LIBS = ${LIBS}"
-AC_OUTPUT(Makefile mpifxcorr.pc fxcorr.pc src/Makefile scripts/Makefile)
+AC_OUTPUT(Makefile mpifxcorr.pc fxcorr.pc src/Makefile scripts/Makefile utils/Makefile)

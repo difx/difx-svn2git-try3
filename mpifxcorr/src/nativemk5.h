@@ -25,9 +25,9 @@
 
 #include <pthread.h>
 #include <time.h>
+#include <mark5access.h>
 #include "mode.h"
 #include "datastream.h"
-#include "mark5access.h"
 #include "config.h"
 
 #ifdef HAVE_XLRAPI_H
@@ -35,10 +35,7 @@
 #endif
 
 #include "mk5.h"
-
-#ifdef HAVE_DIFXMESSAGE
 #include <difxmessage.h>
-#endif
 
 class NativeMk5DataStream : public Mk5DataStream
 {
@@ -48,15 +45,13 @@ public:
 	virtual void initialiseFile(int configindex, int fileindex);
 	virtual void openfile(int configindex, int fileindex);
 	virtual void loopfileread();
-	virtual int calculateControlParams(int offsetsec, int offsetns);
-#ifdef HAVE_DIFXMESSAGE
+	virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
 	int sendMark5Status(enum Mk5State state, int scanNumber, long long position, double dataMJD, float rate);
 
 protected:
 	void moduleToMemory(int buffersegment);
 #ifdef HAVE_XLRAPI_H
 	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
-#endif
 #endif
 
 private:
@@ -67,9 +62,7 @@ private:
 	SSHANDLE xlrDevice;
 #endif
 
-#ifdef HAVE_DIFXMESSAGE
 	DifxMessageMk5Status mk5status;
-#endif
 
 	int executeseconds;
 	int invalidtime;
@@ -83,12 +76,7 @@ private:
 	int nError;
 	bool nomoredata;
 	int nfill, ninvalid, ngood;
-
-public:
-	time_t watchdogTime;
-	string watchdogStatement;
-	pthread_mutex_t watchdogLock;
-	pthread_t watchdogThread;
 };
 
 #endif
+// vim: shiftwidth=2:softtabstop=2:expandtab

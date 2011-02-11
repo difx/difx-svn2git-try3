@@ -48,6 +48,7 @@
 //act on an XML command message which was received
 bool actOnCommand(Configuration * config, DifxMessageGeneric * difxmessage) {
   string paramname, paramvalue;
+  bool ok;
 
   //Only act on parameter setting commands
   //cout << "received a message" << endl;
@@ -69,13 +70,16 @@ bool actOnCommand(Configuration * config, DifxMessageGeneric * difxmessage) {
         config->setDumpSTAState((paramvalue == "true") || (paramvalue == "True"));
       else if (paramname == "dumplta")
         config->setDumpLTAState((paramvalue == "true") || (paramvalue == "True"));
+      else if (paramname == "dumpkurtosis")
+        config->setDumpKurtosisState((paramvalue == "true") || (paramvalue == "True"));
       else if (paramname == "stachannels")
         config->setSTADumpChannels(atoi(pmessage->paramValue));
       else if (paramname == "ltachannels")
         config->setLTADumpChannels(atoi(pmessage->paramValue));
-      //else if (pmessage->paramname == "clock stuff")
+      else if (paramname == "clockupdate")
+        ok = config->updateClock(paramvalue);
       else {
-        cwarn << startl << "MPI Id " << config->getMPIId() << ": warning - received a parameter instruction regarding " <<  pmessage->paramName << " which cannot be honored and will be ignored!" << endl;
+        cwarn << startl << config->getMPIId() << ": warning - received a parameter instruction regarding " <<  pmessage->paramName << " which cannot be honored and will be ignored!" << endl;
       }
     }
   }
@@ -126,7 +130,7 @@ void * launchCommandMonitorThread(void * c) {
   free(genericmessage);
   if(socket >= 0)
     difxMessageReceiveClose(socket);
-  //cverbose << startl << "Command monitor thread shutting down" << endl;
+  //cinfo << startl << "Command monitor thread shutting down" << endl;
   return 0;
 }
 
@@ -193,9 +197,9 @@ int setup_net(char *monhostname, int port, int window_size, int *sock) {
   return(0);
 } /* Setup Net */
 
-static void generateIdentifier(const char *inputfile, int myID, char *identifier)
+static void generateIdentifier(const char *inputfile, char *identifier)
 {
-  int i, l, s=0;
+  int i, s=0;
 
   for(i = 0; inputfile[i]; i++)
   {
@@ -210,17 +214,16 @@ static void generateIdentifier(const char *inputfile, int myID, char *identifier
     s = 0;
   }
 
-  strcpy(identifier, inputfile+s);
-  l = strlen(identifier);
-  
-  // strip off ".input"
-  for(i = l-1; i > 0; i--)
+  for(i=0;i<DIFX_MESSAGE_PARAM_LENGTH-1;i++)
   {
-    if(identifier[i] == '.')
-    {
-      identifier[i] = 0;
+    if(strcmp(&(inputfile[s+i]), ".input") == 0)
       break;
-    }
+    identifier[i] = inputfile[s+i];
+  }
+  identifier[i] = 0;
+  if(i == DIFX_MESSAGE_PARAM_LENGTH-1) //job name was too long!
+  {
+    cwarn << "Job name was too long to serve as difxmessage identifier; identifier was truncated to " << identifier << endl;
   }
 }
 
@@ -244,7 +247,7 @@ int main(int argc, char *argv[])
   char * monhostname = new char[nameslength];
   int port=0, monitor_skip=0, namelen;
   char processor_name[MPI_MAX_PROCESSOR_NAME];
-  char difxMessageID[128];
+  char difxMessageID[DIFX_MESSAGE_PARAM_LENGTH];
 
   cout << "About to run MPIInit" << endl;
 
@@ -255,13 +258,32 @@ int main(int argc, char *argv[])
   MPI_Comm_dup(world, &return_comm);
   MPI_Get_processor_name(processor_name, &namelen);
 
+  if(argc < 2 || argc > 3)
+  {
+    cerr << "Error: invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
+    MPI_Barrier(world);
+    MPI_Finalize();
+    return EXIT_FAILURE;
+  }
+
+  //setup difxmessage
+  generateIdentifier(argv[1], difxMessageID);
+  difxMessageInit(myID, difxMessageID);
+  if(myID == 0)
+  {
+    if(isDifxMessageInUse())
+    {
+      cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!" << endl;
+    }
+  }
+
   cinfo << startl << "MPI Process " << myID << " is running on host " << processor_name << endl;
   
   if(argc == 3)
   {
     if(!(argv[2][0]=='-' && argv[2][1]=='M'))
     {
-      cfatal << startl << "Please invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
+      cfatal << startl << "Invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
       MPI_Barrier(world);
       MPI_Finalize();
       return EXIT_FAILURE;
@@ -283,40 +305,23 @@ int main(int argc, char *argv[])
     }
     strcpy(monhostname, monitoropt.substr(2,colindex1-2).c_str());
   }
-  else if(argc != 2)
-  {
-    cfatal << startl << "Please invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
-    MPI_Barrier(world);
-    MPI_Finalize();
-    return EXIT_FAILURE;
-  }
 
-  generateIdentifier(argv[1], myID, difxMessageID);
-  difxMessageInit(myID, difxMessageID);
-  if(myID == 0)
-  {
-    if(isDifxMessageInUse())
-    {
-      cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!" << endl;
-    }
-  }
-
-  cverbose << startl << "About to process the input file." << endl;
+  cverbose << startl << "About to process the input file.." << endl;
   //process the input file to get all the info we need
   config = new Configuration(argv[1], myID);
   if(!config->consistencyOK())
   {
     //There was a problem with the input file, so shut down gracefully
-    cfatal << startl << "Config encountered inconsistent setup in config file - aborting!!!" << endl;
-    MPI_Barrier(world);
-    MPI_Finalize();
+    cfatal << startl << "Config encountered inconsistent setup in config file - aborting correlation" << endl;
+    //MPI_Barrier(world); MPI_Finalize(); does not always shut down, so
+    MPI_Abort(MPI_COMM_WORLD, 1);
     return EXIT_FAILURE;
   }
 
   //handle difxmessage setup for sending and receiving
   perr = pthread_create(&commandthread, NULL, launchCommandMonitorThread, (void *)(config));
   if (perr != 0)
-    csevere << startl << "Cannot create the command monitoring thread!" << endl;
+    csevere << startl << "Error creating command monitoring thread!" << endl;
   else {
     //wait for commandmonthread to be initialised
     while(!config->commandThreadInitialised())
@@ -326,7 +331,7 @@ int main(int argc, char *argv[])
   numcores = numprocs - (fxcorr::FIRSTTELESCOPEID + numdatastreams);
   if(numcores < 1)
   {
-    cfatal << startl << "mpifxcorr must be invoked with at least " << fxcorr::FIRSTTELESCOPEID + numdatastreams + 1 << " processors (was invoked with " << numprocs << " processors) - aborting!!!" << endl;
+    cfatal << startl << "Must be invoked with at least " << fxcorr::FIRSTTELESCOPEID + numdatastreams + 1 << " processors (was invoked with " << numprocs << " processors) - aborting!" << endl;
     MPI_Barrier(world);
     MPI_Finalize();
     return EXIT_FAILURE;
@@ -352,6 +357,7 @@ int main(int argc, char *argv[])
       manager = new FxManager(config, numcores, datastreamids, coreids, myID, return_comm, monitor, monhostname, port, monitor_skip);
       MPI_Barrier(world);
       t1 = MPI_Wtime();
+      cinfo << startl << "Estimated memory usage by FXManager: " << manager->getEstimatedBytes()/1048576.0 << " MB" << endl;
       manager->execute();
       t2 = MPI_Wtime();
       cinfo << startl << "Total wallclock time was **" << t2 - t1 << "** seconds" << endl;
@@ -367,36 +373,38 @@ int main(int argc, char *argv[])
         stream = new DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
       stream->initialise();
       MPI_Barrier(world);
+      cinfo << startl << "Estimated memory usage by Datastream: " << stream->getEstimatedBytes()/1048576.0 << " MB" << endl;
       stream->execute();
     }
     else //im a processing core
     {
       core = new Core(myID, config, datastreamids, return_comm);
       MPI_Barrier(world);
+      cinfo << startl << "Estimated memory usage by Core: " << core->getEstimatedBytes()/1048576.0 << " MB" << endl;
       core->execute();
     }
     MPI_Barrier(world);
   }
   catch (MPI::Exception e)
   {
-    cfatal << startl << "Caught an MPI exception!!! " << e.Get_error_string() << endl;
+    cerror << startl << "Caught an exception!!! " << e.Get_error_string() << endl;
     return EXIT_FAILURE;
   }
   MPI_Finalize();
   delete [] coreids;
   delete [] datastreamids;
 
-  //if(myID == 0) difxMessageSendDifxAlert("Will this work?", 3);
-  if(myID == 0) difxMessageSendDifxParameter("keepacting", "false", DIFX_MESSAGE_ALLMPIFXCORR);
-  //if(myID == 0) difxMessageSendDifxAlert("Not expecting this one!?", 3);
-  perr = pthread_join(commandthread, NULL);
-  if(perr != 0) csevere << startl << "Cannot join commandthread!!!" << endl;
   if(manager) delete manager;
   if(stream) delete stream;
   if(core) delete core;
+  if(myID == 0) difxMessageSendDifxParameter("keepacting", "false", DIFX_MESSAGE_ALLMPIFXCORR);
+  perr = pthread_join(commandthread, NULL);
+  if(perr != 0) csevere << startl << "Error in closing commandthread!!!" << endl;
+
   //delete config;  	// FIXME!!! Revisit this commented out destructor sometime.
   			// It is currently commented out to prevent hang on exit
 
   cinfo << startl << "MPI ID " << myID << " says BYE!" << endl;
   return EXIT_SUCCESS;
 }
+// vim: shiftwidth=2:softtabstop=2:expandtab

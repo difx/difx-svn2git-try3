@@ -19,18 +19,27 @@
 // $LastChangedDate$
 //
 //============================================================================
+#include <cmath>
+#include <cstring>
 #include <mpi.h>
-#include "mk5.h"
 #include <iomanip>
 #include <errno.h>
-#include <math.h>
-#include <string.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include "config.h"
 #include "alert.h"
+#include "mk5.h"
+#include "mode.h"
 
 #define MAXPACKETSIZE 100000
+
+#ifdef WORDS_BIGENDIAN
+#define FILL_PATTERN 0x44332211UL
+#else
+#define FILL_PATTERN 0x11223344UL
+#endif
+
 
 /// Mk5DataStream -------------------------------------------------------
 
@@ -39,15 +48,32 @@ Mk5DataStream::Mk5DataStream(Configuration * conf, int snum, int id, int ncores,
 {
   //each data buffer segment contains an integer number of frames, because thats the way config determines max bytes
   lastconfig = -1;
+
+  // switched power output assigned a name based on the datastream number (MPIID-1)
+  int spf_Hz = conf->getDSwitchedPowerFrequency(id-1);
+  if(spf_Hz > 0)
+  {
+    switchedpower = new SwitchedPower(conf->getOutputFilename(), id);
+    switchedpower->frequency = spf_Hz;
+  }
 }
 
 Mk5DataStream::~Mk5DataStream()
-{}
+{
+  if(syncteststream != 0)
+    delete_mark5_stream(syncteststream);
+  if(switchedpower)
+  {
+    delete switchedpower;
+    switchedpower = 0;
+  }
+}
 
 void Mk5DataStream::initialise()
 {
   DataStream::initialise();
 
+  syncteststream = 0;
   udp_offset = 0;
   if (!readfromfile && !tcp) {
     if (sizeof(long long)!=8) {
@@ -56,7 +82,7 @@ void Mk5DataStream::initialise()
     }
     udpsize = abs(tcpwindowsizebytes/1024)-20-2*4-sizeof(long long); // IP header is 20 bytes, UDP is 4x2 bytes
     if (udpsize<=0) {
-      cfatal << startl << "Datastream " << mpiid << ": implied UDP packet size is negative - aborting!!!" << endl;
+      cfatal << startl << "Datastream " << mpiid << ":" << " implied UDP packet size is negative - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
     udpsize &= ~ 0x7;  // Ensures udpsize multiple of 64 bits
@@ -73,7 +99,7 @@ void Mk5DataStream::initialise()
     invalid_buf = new char[udpsize];
     unsigned int *tmp = (unsigned int*)invalid_buf;
     for (int i=0; i<udpsize/4; i++) {
-      tmp[i] = MARK5_FILL_PATTERN;
+      tmp[i] = FILL_PATTERN ;
     }
 
     // UDP statistics
@@ -86,24 +112,14 @@ void Mk5DataStream::initialise()
 
 }
 
-int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
+int Mk5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
   int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
-  
-  bufferindex = DataStream::calculateControlParams(offsetsec, offsetns);
 
-  if(!(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] > MAX_NEGATIVE_DELAY))
+  bufferindex = DataStream::calculateControlParams(scan, offsetsec, offsetns);
+
+  if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
     return 0;
-
-  //do the necessary correction to start from a frame boundary - work out the offset from the start of this segment
-  vlbaoffset = bufferindex - atsegment*readbytes;
-
-  if(vlbaoffset < 0)
-  {
-    cerror << startl << "Mk5DataStream::calculateControlParams : vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
-    return 0;
-  }
 
   looksegment = atsegment;
   if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
@@ -113,7 +129,7 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
     if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
     {
       cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
       return bufferindex;
     }
   }
@@ -127,34 +143,65 @@ int Mk5DataStream::calculateControlParams(int offsetsec, int offsetns)
     if(bufferinfo[looksegment].configindex < 0)
     {
       cwarn << startl << "Cannot find a valid configindex to set Mk5-related info.  Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
       return bufferindex;
     }
     if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
     {
       cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
       return bufferindex;
     }
   }
 
-  //if we got here, we found a configindex we are happy with. Find out the mk5 details
+  //if we got here, we found a configindex we are happy with.  Find out the mk5 details
   payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
   framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
   framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
+
+  //do the necessary correction to start from a frame boundary - work out the offset from the start of this segment
+  vlbaoffset = bufferindex - atsegment*readbytes;
+
+  if(vlbaoffset < 0)
+  {
+    cfatal << startl << "Mk5DataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+    return 0;
+  }
 
   // bufferindex was previously computed assuming no framing overhead
   framesin = vlbaoffset/payloadbytes;
 
   // Note here a time is needed, so we only count payloadbytes
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = bufferinfo[atsegment].seconds + double(bufferinfo[atsegment].nanoseconds)*1.0e-9 + ((double)framesin)/framespersecond;
+  int segoffns = bufferinfo[atsegment].scanns + (int)((1000000000.0*framesin)/framespersecond);
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + segoffns/1000000000;
+  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = segoffns%1000000000;
 
   //go back to nearest frame -- here the total number of bytes matters
   bufferindex = atsegment*readbytes + framesin*framebytes;
+
+  //if we are right at the end of the last segment, and there is a jump after this segment, bail out
+  if(bufferindex == bufferbytes)
+  {
+    if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
+      ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
+        bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
+    {
+      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+      return 0; //note exit here!!!!
+    }
+    else
+    {
+      cwarn << startl << "Developer error - bufferindex == bufferbytes in a 'normal' situation" << endl;
+    }
+  }
+
   if(bufferindex >= bufferbytes)
   {
-    cwarn << startl << "Mk5DataStream::calculateControlParams : bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][0] = MAX_NEGATIVE_DELAY;
+    cfatal << startl << "Mk5DataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
+    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+    MPI_Abort(MPI_COMM_WORLD, 1);
     return 0;
   }
   return bufferindex;
@@ -173,83 +220,260 @@ void Mk5DataStream::updateConfig(int segmentindex)
   //take care of the case where an integral number of frames is not an integral number of blockspersend - ensure sendbytes is long enough
 
   //note below, the math should produce a pure integer, but add 0.5 to make sure that the fuzziness of floats doesn't cause an off-by-one error
-  bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getBlocksPerSend(bufferinfo[segmentindex].configindex)))/(config->getBlocksPerSend(bufferinfo[segmentindex].configindex) + config->getGuardBlocks(bufferinfo[segmentindex].configindex)) + 0.5));
+  bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getSubintNS(bufferinfo[segmentindex].configindex)))/(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex)) + 0.5));
 }
 
 void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 {
   int offset;
-  char formatname[64];
-  struct mark5_stream *mark5stream;
-  int nbits, ninputbands, fanout;
+  int nbits, nrecordedbands, fanout, jumpseconds, currentdsseconds;
+  Configuration::datasampling sampling;
   Configuration::dataformat format;
-  double bw;
+  double bw, bytespersecond;
+  long long dataoffset = 0;
 
   format = config->getDataFormat(configindex, streamnum);
+  sampling = config->getDSampling(configindex, streamnum);
   nbits = config->getDNumBits(configindex, streamnum);
-  ninputbands = config->getDNumInputBands(configindex, streamnum);
-  bw = config->getConfigBandwidth(configindex);
+  nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
+  bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
-  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, config->getFrameBytes(configindex, streamnum), config->getDecimationFactor(configindex), formatname);
-  if (fanout < 0)
+  fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, config->getFrameBytes(configindex, streamnum), config->getDDecimationFactor(configindex, streamnum), formatname);
+  if (fanout < 0) {
+    cfatal << startl << "Fanount is " << fanout << ", which is impossible - no choice but to abort!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
+  }
 
-  cinfo << startl << "initialiseFile format=" << formatname << " file=" << datafilenames[configindex][fileindex].c_str() << endl;
-  mark5stream = new_mark5_stream(
+  if(syncteststream != 0)
+    delete_mark5_stream(syncteststream);
+  syncteststream = new_mark5_stream(
     new_mark5_stream_file(datafilenames[configindex][fileindex].c_str(), 0),
     new_mark5_format_generic_from_string(formatname) );
-  if(mark5stream->nchan != config->getDNumInputBands(configindex, streamnum))
+  if(syncteststream == 0)
   {
-    cerror << startl << "Number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with Mark5 file " << datafilenames[configindex][fileindex] << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
+    cwarn << startl << " could not open file " << datafilenames[configindex][fileindex] << endl;
+    dataremaining = false;
+    return;
+  }
+  if(syncteststream->nchan != config->getDNumRecordedBands(configindex, streamnum))
+  {
+    cerror << startl << "Number of recorded bands for datastream " << streamnum << " (" << nrecordedbands << ") does not match with MkV file " << datafilenames[configindex][fileindex] << " (" << syncteststream->nchan << "), will be ignored!" << endl;
   }
 
   // resolve any day ambiguities
-  mark5_stream_fix_mjd(mark5stream, corrstartday);
+  mark5_stream_fix_mjd(syncteststream, corrstartday);
 
-  mark5_stream_print(mark5stream);
+  mark5_stream_print(syncteststream);
 
-  offset = mark5stream->frameoffset;
+  offset = syncteststream->frameoffset;
 
-  readseconds = 86400*(mark5stream->mjd-corrstartday) + mark5stream->sec-corrstartseconds + intclockseconds;
-  readnanoseconds = int(mark5stream->ns);
-  cverbose << startl << "The frame start is day=" << mark5stream->mjd << ", seconds=" << mark5stream->sec << ", ns=" << mark5stream->ns << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
+  bytespersecond = syncteststream->framebytes/syncteststream->framens * 1e9;
 
-  //close mark5stream
-  delete_mark5_stream(mark5stream);
+  readseconds = 86400*(syncteststream->mjd-corrstartday) + syncteststream->sec-corrstartseconds + intclockseconds;
+  readnanoseconds = int(syncteststream->ns);
+  currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
 
-  cverbose << startl << "About to seek to byte " << offset << " to get to the first frame" << endl;
+  //cout << "Mk5DataStream::initialiseFile" << endl;
+  //cout << "  framens= " << syncteststream->framens << endl;
+  //cout << "   offset= " << syncteststream->frameoffset << endl;
+  //cout << "   mjd= " << syncteststream->mjd << endl;
+  //cout << "   sec= " << syncteststream->sec << endl;
+  //cout << "    ns= " << syncteststream->ns << endl;
+  //cout << "    ns= " << syncteststream->ns << endl;
+  //cout << endl;
 
-  input.seekg(offset);
+  if (currentdsseconds  > readseconds+1)
+  {
+    jumpseconds = currentdsseconds - readseconds;
+    if (activens < readnanoseconds)
+    {
+      jumpseconds--;
+    }
+
+    // set byte offset to the requested time
+    dataoffset = (long long)(jumpseconds * bytespersecond + 0.5);
+    readseconds += jumpseconds;
+  }
+
+  while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+    readscan++;
+  while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+    readscan--;
+  readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+  cverbose << startl << "The frame start is day=" << syncteststream->mjd << ", seconds=" << syncteststream->sec << ", ns=" << syncteststream->ns << ", readscan=" << readscan << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
+
+  //close the stream used to get the offset, create the one we will use to test
+  delete_mark5_stream(syncteststream);
+  syncteststream = 0;
+  cverbose << startl << "About to seek to byte " << offset << " plus " << dataoffset << " to get to the first frame" << endl;
+
+  input.seekg(offset + dataoffset, ios_base::beg);
+  if (input.peek() == EOF) {
+    cinfo << startl << "File " << datafilenames[configindex][fileindex] << " ended before the currently desired time" << endl;
+    dataremaining = false;
+    input.clear();
+  }
+}
+
+int Mk5DataStream::testForSync(int configindex, int buffersegment)
+{
+  int corrday, corrsec;
+  int mjd, sec;
+  double ns, deltatime;
+  struct mark5_stream *mark5stream;
+  int offset;
+  char * ptr;
+
+  offset = 0;
+  corrday = config->getStartMJD();
+  corrsec = config->getStartSeconds();
+  if(syncteststream != 0)
+    delete_mark5_stream(syncteststream);
+  syncteststream = new_mark5_stream(new_mark5_stream_memory(&(databuffer[buffersegment*(bufferbytes/numdatasegments)]), bufferbytes/numdatasegments), new_mark5_format_generic_from_string(formatname) );
+  if(syncteststream == 0)
+  {
+    cerror << startl << "Could not create a mark5stream to test for sync!" << endl;
+    return 0; //note exit here
+  }
+  // resolve any day ambiguities
+  mark5_stream_fix_mjd(syncteststream, corrday);
+  mark5_stream_get_frame_time(syncteststream, &mjd, &sec, &ns);
+
+  deltatime = 86400*(corrday - mjd) + (model->getScanStartSec(bufferinfo[buffersegment].scan, corrday, corrsec) + bufferinfo[buffersegment].scanseconds + corrsec - intclockseconds - sec) + double(bufferinfo[buffersegment].scanns-ns)/1e9;
+  //cout << "Received some data with a time " << mjd << ", " << sec << ", " << ns << endl;
+
+  if(fabs(deltatime) > 1e-10) //oh oh, a problem
+  {
+    if(readfromfile || readscan != 0 || readseconds != 0 || readnanoseconds != 0) //its not an error for the *first* network read
+    {
+      cerror << startl << "Lost Sync on segment " << buffersegment << "! Will attempt to resync. Deltatime was " << deltatime << endl;
+      cdebug << startl << "Corrday was " << corrday << ", corrsec was " << corrsec << ". MJD was " << mjd << ", sec was " << sec << "> Readseconds was " << bufferinfo[buffersegment].scanseconds << ". readns was " << bufferinfo[buffersegment].scanns << ", ns was " << ns << ", intclockseconds was " << intclockseconds << endl;
+    }
+    mark5stream = new_mark5_stream(
+    new_mark5_stream_memory(&databuffer[buffersegment*(bufferbytes/numdatasegments)], bufferinfo[buffersegment].validbytes), new_mark5_format_generic_from_string(formatname) );
+
+    if (mark5stream==0)
+    {
+      //Don't change time (will be deadreckoned from that last segment) but set validbytes to zero (crap data)
+      cwarn << startl << "Could not identify Mark5 segment time (" << formatname << ") - this segment will be trash!" << endl;
+      bufferinfo[buffersegment].validbytes = 0;
+    }
+    else
+    {
+      if(mark5stream->nchan != config->getDNumRecordedBands(configindex, streamnum))
+      {
+        cerror << startl << "Number of recorded bands for datastream " << streamnum << " (" << config->getDNumRecordedBands(configindex, streamnum) << ") does not match with Mark5 data " << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
+      }
+
+      // resolve any day ambiguities
+      mark5_stream_fix_mjd(mark5stream, corrstartday);
+
+      if (configindex != lastconfig) {
+        cinfo << startl << "Config has changed!" << endl;
+        mark5_stream_print(mark5stream);
+        lastconfig = configindex;
+        if(switchedpower) {
+          switchedpower->flush();
+        }
+      }
+
+      offset = mark5stream->frameoffset;
+
+      // If offset is non-zero we need to shuffle the data in memory to align on a frame boundary
+      if (offset>0) { 
+        ptr = (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
+
+        if (offset>bufferinfo[buffersegment].validbytes) {
+          cerror << startl << "Mark5 offset (" << offset << ") > valid bytes in current segment (" << bufferinfo[buffersegment].validbytes << "!!! Will trash this segment." << endl;
+          bufferinfo[buffersegment].validbytes = 0;
+        } else {
+          cinfo << startl << "************: Shifting " << offset << " bytes in memory to regain sync" << endl;
+          memmove(ptr, ptr+offset, bufferinfo[buffersegment].validbytes-offset);
+        }
+      }
+
+      if (offset <= bufferinfo[buffersegment].validbytes)
+      {
+        //No need to update validbytes - caller will attempt to fill the missing data
+        //just fill in the new times
+        readseconds = 86400*(mark5stream->mjd-corrstartday) + mark5stream->sec-corrstartseconds + intclockseconds;
+        readnanoseconds = mark5stream->ns;
+        while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
+          readscan++;
+        while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
+          readscan--;
+        readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+        //also in the buffer
+        bufferinfo[buffersegment].scanns = readnanoseconds;
+        bufferinfo[buffersegment].scanseconds = readseconds;
+        bufferinfo[buffersegment].scan = readscan;
+
+        if(readfromfile || readscan != 0 || readseconds != 0 || readnanoseconds != 0) //its not an error for the *first* network read
+        {
+          cinfo << startl << "After regaining sync, the frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
+        }
+      }
+      delete_mark5_stream(mark5stream);
+    }
+  }
+  else
+  {
+    // Switched power detection
+    if(switchedpower)
+    {
+      switchedpower->feed(syncteststream);
+    }
+  }
+
+  delete_mark5_stream(syncteststream);
+  syncteststream = 0;
+
+  return offset;
 }
 
 void Mk5DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
+  int nbits, nrecordedbands, fanout;
+  Configuration::dataformat format;
+  Configuration::datasampling sampling;
+  double bw;
+
+  //cout << "Datastream " << mpiid << " about to read " << readbytes << " into buffer segment " << buffersegment << "; framebytesremaining is " << framebytesremaining << endl;
 
   if (udp_offset>readbytes) {
-    cinfo << startl << "DataStream " << mpiid << ": Skipping over " << udp_offset-(udp_offset%readbytes) << " bytes" << "(" << udp_offset << "," << readbytes << "," << udp_offset % readbytes << ")" << endl;
+    cinfo << startl << "DataStream " << mpiid << ": Skipping over " << udp_offset-(udp_offset%readbytes) << " bytes" << endl;
     udp_offset %= readbytes;
+  }
+  if(bufferinfo[buffersegment].configindex != lastconfig)
+  {
+    //regenerate formatname (only ever likely in eVLBI, and probably not even then)
+    format = config->getDataFormat(bufferinfo[buffersegment].configindex, streamnum);
+    nbits = config->getDNumBits(bufferinfo[buffersegment].configindex, streamnum);
+    sampling = config->getDSampling(bufferinfo[buffersegment].configindex, streamnum);
+    nrecordedbands = config->getDNumRecordedBands(bufferinfo[buffersegment].configindex, streamnum);
+    bw = config->getDRecordedBandwidth(bufferinfo[buffersegment].configindex, streamnum, 0);
+
+    fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, config->getFrameBytes(bufferinfo[buffersegment].configindex, streamnum), config->getDDecimationFactor(bufferinfo[buffersegment].configindex, streamnum), formatname);
+    if (fanout < 0) {
+      cfatal << startl << "Fanount is " << fanout << ", which is impossible - no choice but to abort!" << endl;
+      MPI_Abort(MPI_COMM_WORLD, 1);
+    }
   }
 
   DataStream::networkToMemory(buffersegment, framebytesremaining);
-
-  // This deadreckons readseconds from the last frame. This will not initially be set, and we really should 
-  // resync occasionally, so..
-  initialiseNetwork(0, buffersegment);
-
-  readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
-  readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
-  readseconds += readnanoseconds/1000000000;
-  readnanoseconds %= 1000000000;
+  framebytesremaining = 2*readbytes;
+  //cout << "Datastream " << mpiid << " finished reading; framebytesremaining is now " << framebytesremaining << ", buffersegment is " << buffersegment << ", keepreading is " << keepreading << endl;
 }
 
 
 /****
  ASSUMPTIONS
 
- udp_offset is left containing number of bytes still to be consumed from last UDP packet. If
- first packet from next frame is missing then udp_offset points to END of initial data. It is
- assumed only udpsize bytes are available though. udp_buf actually contains the left over bytes 
- so that must be dealt with before any more data is read.
+ udp_offset is left containing number of bytes still to be consumed
+ from last UDP packet. If first packet from next frame is missing then
+ udp_offset points to END of initial data. It is assumed only udpsize
+ bytes are available though. udp_buf actually contains the left over
+ bytes so that must be dealt with before any more data is read.
 
 *****/
 
@@ -286,7 +510,7 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
     //cinfo << startl << "****** readnetwork will read packets " << packet_segmentstart << " to " << packet_segmentend << "(" << segmentsize << ")" << endl;
     
     if (segmentsize>packets_arrived.size()) {
-      cfatal << startl << "Mk5DataStream::readnetwork bytestoread too large (" << bytestoread << "/" << segmentsize << ") - aborting!!!" << endl;
+      cfatal << startl << "Mk5DataStream::readnetwork bytestoread too large (" << bytestoread << "/" << segmentsize << ")" << endl;
       cinfo << startl << "packet_segmentstart = " << packet_segmentstart << endl;
       cinfo << startl << "packet_segmentend = " << packet_segmentend << endl;
       cinfo << startl << "segmentsize = " << segmentsize << endl;
@@ -329,10 +553,10 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
 	  if (udp_offset>0) {
 	    memmove(udp_buf, udp_buf+bytestoread, udp_offset);
 	    next_segmentstart = packet_segmentend;
-	  } else {
-	    next_segmentstart = packet_segmentend+1;
-	  }
-	  next_udpoffset = udp_offset;
+	} else {
+	  next_segmentstart = packet_segmentend+1;
+        }
+	next_udpoffset = udp_offset;
 
 	} else {
 	  int bytes = (bytestoread-udp_offset)%udpsize;
@@ -369,15 +593,15 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
 	if (errno == EINTR) continue;
 	return(nr);
       } else if (nr==0) {  // Socket closed remotely
-	cinfo << startl << "Datastream " << mpiid << ": remote socket closed" << endl;
+	cinfo << startl << "Datastream " << mpiid << ": Remote socket closed" << endl;
 	return(nr);
       } else if (nr!=expectedsize) {
-	cfatal << startl << "DataStream " << mpiid << ": expected " << expectedsize << " bytes, got " << nr << " bytes - aborting!!!" << endl;
+	cfatal << startl << "DataStream " << mpiid << ": Expected " << expectedsize << " bytes, got " << nr << "bytes. Quiting" << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
       } else {
 	if (packet_head==0 && sequence!=0) { // First packet!
 	  packet_head = sequence;
-	  cinfo << startl <<  "DataStream " << mpiid << ": first packet has sequence " << sequence << endl;
+	  cinfo << startl <<  "DataStream " << mpiid << ": First packet has sequence " << sequence << endl;
 
 	  packet_segmentstart = sequence;
 	  packet_segmentend = packet_segmentstart+(bytestoread-1)/udpsize;
@@ -390,19 +614,21 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
 	  // Resync
 	  packet_oo++;  // This could be duplicate but we cannot tell
 	  // Probably should decrease packet dropped count, maybe (it was not counted after all)
-	} else if (sequence==packet_segmentend) { 
+	} else if (static_cast<long long>(sequence)==packet_segmentend) { 
 	  //cinfo << startl << "**Segmentend " << packet_index << " (" << packet_segmentend << ")" << endl;
 	  int bytes;
-	  if (udp_offset==udpsize && segmentsize==1) 
+	  if (udp_offset==udpsize && segmentsize==1)
 	    bytes = bytestoread;
-	  else 
-	    bytes = (bytestoread-udp_offset-1)%udpsize+1;
+          else 
+            bytes = (bytestoread-udp_offset-1)%udpsize+1;
 	  // Consistence check
 	  if (bytes<0) {
-	    cfatal << startl << "Datastream " << mpiid << ": read too many UDP packets: bytestoread=" << bytestoread << " udp_offset=" << udp_offset << " bytes=" << bytes << " - aborting!!!" << endl;
+	    cfatal << startl << "Datastream: Error read too many UDP packets!!" << endl;
+	    cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
 	    MPI_Abort(MPI_COMM_WORLD, 1);
 	  } else if (bytes > udpsize) {
-	    cfatal << startl << "Datastream " << mpiid << ": read too few UDP packets: bytestoread=" << bytestoread << " udp_offset=" << udp_offset << " bytes=" << bytes << " - aborting!!!" << endl;
+	    cfatal << startl << "Datastream: Error have not read enough UDP packets!!" << endl;
+	    cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
 	    MPI_Abort(MPI_COMM_WORLD, 1);
 	  }
 	  memcpy(ptr+udp_offset+(packet_index-1)*udpsize,udp_buf,bytes);
@@ -477,10 +703,10 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
 	if (i==0) {
 	  memcpy(ptr, invalid_buf, udp_offset); // CHECK INITIAL FULL OR EMPTY BUFFER
 	} else if (i==packet_segmentend-packet_segmentstart) {
-	  if (udp_offset+(i-1)*udpsize+(bytestoread-udp_offset)%udpsize > bytestoread) 
-	    cwarn << startl << "Internal Error, trying to copy pass buffer size" << endl;
+          if (static_cast<int>(udp_offset+(i-1)*udpsize+(bytestoread-udp_offset)%udpsize) > bytestoread) 
+            cwarn << startl << "Internal Error, trying to copy pass buffer size" << endl;
 	  else 
-	    memcpy(ptr+udp_offset+(i-1)*udpsize,invalid_buf,(bytestoread-udp_offset)%udpsize);	  
+	    memcpy(ptr+udp_offset+(i-1)*udpsize,invalid_buf,(bytestoread-udp_offset)%udpsize);
 	} else {
 	  memcpy(ptr+udp_offset+(i-1)*udpsize,invalid_buf,udpsize);	  
 	}
@@ -491,93 +717,9 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
     udp_offset = next_udpoffset;
 
   }
+
+  // UPDATE NUMBER OF BYTES READ TO UDP PACKET STATISTICS
   return(1);
-}
-
-// This is almost identical to initialiseFile. The two should maybe be combined
-void Mk5DataStream::initialiseNetwork(int configindex, int buffersegment)
-{
-  int offset;
-  char formatname[64];
-  char *ptr;
-  struct mark5_stream *mark5stream;
-  int nbits, ninputbands, fanout;
-  Configuration::dataformat format;
-  double bw;
-
-  format = config->getDataFormat(configindex, streamnum);
-  nbits = config->getDNumBits(configindex, streamnum);
-  ninputbands = config->getDNumInputBands(configindex, streamnum);
-  bw = config->getConfigBandwidth(configindex);
-
-  fanout = config->genMk5FormatName(format, ninputbands, bw, nbits, config->getFrameBytes(configindex, streamnum), config->getDecimationFactor(configindex), formatname);
-  if (fanout < 0)
-    MPI_Abort(MPI_COMM_WORLD, 1);
-
-  //cinfo << startl << "******* validbytes " << bufferinfo[buffersegment].validbytes << endl;
-
-  //cinfo << startl << "DataStream " << mpiid << ": Create a new Mark5 stream " << formatname << endl;
-
-  mark5stream = new_mark5_stream(
-    new_mark5_stream_memory(&databuffer[buffersegment*(bufferbytes/numdatasegments)], 
-			    bufferinfo[buffersegment].validbytes),
-    new_mark5_format_generic_from_string(formatname) );
-
-  if (mark5stream==0) {
-    cwarn << startl << "DataStream " << mpiid << ": could not identify Mark5 segment time (" << formatname << ")" << endl;
-    // We don't need to actually set the time - it ill just be deadreckoned from that last segment. As there is no good data this does not matter
-  } else {
-
-    if(mark5stream->nchan != config->getDNumInputBands(configindex, streamnum))
-    {
-      cerror << startl << "Number of input bands for datastream " << streamnum << " (" << ninputbands << ") does not match with Mark5 data " << " (" << mark5stream->nchan << "), will be ignored!!!" << endl;
-    }
-
-    // resolve any day ambiguities
-    mark5_stream_fix_mjd(mark5stream, corrstartday);
-
-    if (configindex != lastconfig) {
-      mark5_stream_print(mark5stream);
-      lastconfig = configindex;
-    }
-
-    offset = mark5stream->frameoffset;
-
-    // If offset is non-zero we need to shuffle the data in memory to align on a frame
-    // boundary. This is the equivalent of a seek in the file case.
-    if (offset>0) { 
-      ptr = (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
-
-      if (offset>bufferinfo[buffersegment].validbytes) {
-	cerror << startl << "Datastream " << mpiid << ": Mark5 offset (" << offset << ") > segment size (" << bufferinfo[buffersegment].validbytes << "!!!" << endl;
-	keepreading=false;
-      } else {
-	int nread, status;
-	cinfo << startl << "************Datastream " << mpiid << ": seeking " << offset << " bytes into stream. " << endl;
-	memmove(ptr, ptr+offset, bufferinfo[buffersegment].validbytes-offset);
-	status = readnetwork(socketnumber, ptr+bufferinfo[buffersegment].validbytes-offset, offset, &nread);
-	
-	// We *should not* update framebytes remaining (or validbyes). 
-
-	if (status==-1) { // Error reading socket
-	  cerror << startl << "Datastream " << mpiid << ": cannot read from socket" << endl;
-	  keepreading=false;
-	} else if (status==0) {  // Socket closed remotely
-	  keepreading=false;
-	} else if (nread!=offset) {
-	  cerror << startl << "Datastream " << mpiid << ": did not read enough bytes" << endl;
-	  keepreading=false;
-	}
-      }
-    }
-
-    readseconds = 86400*(mark5stream->mjd-corrstartday) + mark5stream->sec-corrstartseconds + intclockseconds;
-    readnanoseconds = mark5stream->ns;
-    //cinfo << startl << "DataStream " << mpiid << ": The frame start day is " << mark5stream->mjd << ", the frame start seconds is " << mark5stream->sec << ", the frame start ns is " << mark5stream->ns << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
-
-    delete_mark5_stream(mark5stream);
-  }
-
 }
 
 double tim(void) {
@@ -592,10 +734,10 @@ double tim(void) {
 
 uint64_t Mk5DataStream::openframe()
 {
-  // The number of segments per "frame" is arbitrary. Just set it to ~ 5sec
+  // The number of segments per "frame" is arbitrary. Just set it to ~ 5sec 
   int nsegment;
   nsegment = (int)(2.0e9/bufferinfo[0].nsinc+0.1);
-
+  
   if (!tcp) {
     // Print statistics. 
     double delta, thistime;
@@ -629,6 +771,6 @@ uint64_t Mk5DataStream::openframe()
     packet_sum = 0;
   }
 
-
-  return readbytes*nsegment;  
+  return readbytes*nsegment;
 }
+// vim: shiftwidth=2:softtabstop=2:expandtab

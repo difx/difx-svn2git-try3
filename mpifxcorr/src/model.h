@@ -57,6 +57,9 @@ class Model{
     /// Types of antenna axis
     enum axistype {ALTAZ=0, RADEC=1, ORB=2, XY=3};
 
+    /// Constants
+    static const int MAX_POLY_ORDER = 10;
+
     /// Structures that are used by other classes
     typedef struct {
       string name;
@@ -125,11 +128,21 @@ class Model{
     ///accessor methods for source information from a scan
     inline int getPointingCentreSourceIndex(int scan) { return scantable[scan].pointingcentre->index; }
     inline int getPhaseCentreSourceIndex(int scan, int phasecentre) { return scantable[scan].phasecentres[phasecentre]->index; }
+    inline source * getScanPointingCentreSource(int scan) { return scantable[scan].pointingcentre; }
     inline source * getScanPhaseCentreSource(int scan, int phasecentre) { return scantable[scan].phasecentres[phasecentre]; }
 
     ///accessor methods for antenna information
     inline int getNumStations() { return numstations; }
     inline station getStation(int station) { return stationtable[station]; }
+
+    /**
+     * Updates a clock value mid-correlation (intended for eVLBI only!!)
+     * Clock reference time is forced to model start time
+     * @param antennaindex The index of the antenna
+     * @param order The order of the clock model to be updated
+     * @param deltaclock array of clock polynomial update values
+     */
+     void updateClock(int antennaindex, int order, double * deltaclock);
 
     /**
      * Fills in the UVW values, in metres, for the specified antenna pointing centre
@@ -165,9 +178,10 @@ class Model{
      * @param refmjd The reference time for this clock model (MJD, with fraction)
      * @param order The order of the clock polynomial model (0, 1, or more)
      * @param terms The clock model coefficients (in us, us/s, us/s^2 ...)
+     * @param isupdate True if this is a mid-correlation clock update (eVLBI); false will zero clock first
      * @return True unless the antenna was not found
      */
-    bool addClockTerms(string antennaname, double refmjd, int order, double * terms);
+    bool addClockTerms(string antennaname, double refmjd, int order, double * terms, bool isupdate);
 
     /**
      * Returns the number of phase centres to be correlated for this scan
@@ -182,8 +196,6 @@ class Model{
     inline bool isPointingCentre(int scan, int source) { return (scantable[scan].phasecentres[source] == scantable[scan].pointingcentre); }
 
   private:
-    static const int MAX_POLY_ORDER = 10;
-
     typedef struct {
       int offsetseconds, durationseconds, nummodelsamples, polystartmjd, polystartseconds;
       string obsmodename, identifier;
@@ -228,3 +240,4 @@ class Model{
 };
 
 #endif
+// vim: shiftwidth=2:softtabstop=2:expandtab
