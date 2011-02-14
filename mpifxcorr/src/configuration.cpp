@@ -22,10 +22,11 @@
 #include <mpi.h>
 #include <string.h>
 #include <climits>
+#include "mode.h"
 #include "mk5mode.h"
+#include "lbamode.h"
 #include "rawmode.h"
 #include "configuration.h"
-#include "mode.h"
 #include "visibility.h"
 #include "alert.h"
 

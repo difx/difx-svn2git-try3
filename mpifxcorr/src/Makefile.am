@@ -20,6 +20,7 @@ mpifxcorr_SOURCES = \
         model.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
+	lbamode.cpp \
 	rawmode.cpp \
 	polyco.cpp \
 	alert.cpp \
@@ -46,6 +47,7 @@ library_include_HEADERS = \
 	configuration.h \
 	mk5.h \
 	mk5mode.h \
+	lbamode.h \
         model.h \
         mode.h \
 	polyco.h \
@@ -70,6 +72,7 @@ libmpifxcorr_a_SOURCES = \
 	polyco.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
+	lbamode.cpp \
 	rawmode.cpp \
 	fxmanager.cpp \
         model.cpp \
@@ -91,6 +94,7 @@ libfxcorr_a_SOURCES = \
 	pcal.cpp \
 	mode.cpp \
 	mk5mode.cpp \
+	lbamode.cpp \
 	rawmode.cpp \
 	polyco.cpp \
 	visibility.cpp \
