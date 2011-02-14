@@ -141,22 +141,25 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
     //initialize rfi filtering 
     // the zoomed bands attach to filter output subsets later on and do not use own filters
-    for (int xpolac=0;xpolac<2;xpolac++) 
+    if (config->rfifilterEnabled())
     {
-      const char* filterfile = config->getRFIFilterFilename().c_str();
-      autocorrfilters[xpolac] = new FilterChain*[numrecordedbands];
-      for (int band=0;band<numrecordedbands;band++) 
+      for (int xpolac=0;xpolac<2;xpolac++) 
       {
-        autocorrfilters[xpolac][band] = new FilterChain();
-        if (config->rfifilterEnabled()) 
+        const char* filterfile = config->getRFIFilterFilename().c_str();
+        autocorrfilters[xpolac] = new FilterChain*[numrecordedbands];
+        for (int band=0;band<numrecordedbands;band++) 
         {
+          autocorrfilters[xpolac][band] = new FilterChain();
+          if (config->rfifilterEnabled()) 
+          {
             // load actual filter instead of dummy
             autocorrfilters[xpolac][band]->buildFromFile(filterfile,recordedbandchannels);
+          }
         }
       }
+      rfiscratch = vectorAlloc_cf32(recordedbandchannels+1);
+      DUT_CHECK( vectorZero_cf32(rfiscratch, recordedbandchannels+1), csevere, "RFI scratch zeroing" );
     }
-    rfiscratch = vectorAlloc_cf32(recordedbandchannels+1);
-    DUT_CHECK( vectorZero_cf32(rfiscratch, recordedbandchannels+1), csevere, "RFI scratch zeroing" );
 
     //initialise the fft info
     order = 0;
@@ -351,15 +354,18 @@ Mode::~Mode()
   delete [] conjfftoutputs;
   delete [] interpolator;
 
-  for (int xpolac=0;xpolac<2;xpolac++) 
+  if (config->rfifilterEnabled())
   {
-    for (int i=0;i<numrecordedbands;i++) 
+    for (int xpolac=0;xpolac<2;xpolac++) 
     {
-      delete autocorrfilters[xpolac][i];
+      for (int i=0;i<numrecordedbands;i++) 
+      {
+        delete autocorrfilters[xpolac][i];
+      }
+      delete [] autocorrfilters[xpolac];
     }
-    delete [] autocorrfilters[xpolac];
+    vectorFree(rfiscratch);
   }
-  vectorFree(rfiscratch);
 
   for(int i=0;i<numrecordedbands;i++)
     vectorFree(unpackedarrays[i]);
