@@ -20,6 +20,7 @@ mpifxcorr_SOURCES = \
         model.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
+	rawmode.cpp \
 	polyco.cpp \
 	alert.cpp \
 	pcal.cpp \
@@ -69,6 +70,7 @@ libmpifxcorr_a_SOURCES = \
 	polyco.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
+	rawmode.cpp \
 	fxmanager.cpp \
         model.cpp \
 	visibility.cpp \
@@ -89,10 +91,18 @@ libfxcorr_a_SOURCES = \
 	pcal.cpp \
 	mode.cpp \
 	mk5mode.cpp \
+	rawmode.cpp \
 	polyco.cpp \
 	visibility.cpp \
         model.cpp \
 	datamuxer.cpp \
+	filters.cpp \
+	filterchain.cpp \
+	filterhelpers.cpp \
+	filter_int.cpp \
+	filter_iir.cpp \
+	filter_iirsos.cpp \
+	filter_dsvf.cpp \
 	alert.cpp
 
 neuteredmpifxcorr_SOURCES = \
