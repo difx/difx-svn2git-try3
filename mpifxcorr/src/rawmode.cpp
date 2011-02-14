@@ -22,14 +22,18 @@
 #include "rawmode.h"
 #include "alert.h"
 
-RawMode::RawMode(Configuration * conf, int confindex, int dsindex, int nchan, int bpersend, int gblocks, int nfreqs, double bw, double * freqclkoffsets, int ninputbands, int noutputbands, int nbits, bool fbank, bool postffringe, bool quaddelayinterp, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
-  : Mode(conf, confindex, dsindex, nchan, bpersend, gblocks, nfreqs, bw, freqclkoffsets, ninputbands, noutputbands, nbits, nchan*2+4, fbank, postffringe, quaddelayinterp, cacorrs, bw*2)
+RawMode::RawMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
+ : Mode(conf, confindex, dsindex, recordedbandchan, chanstoavg, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, sampling, recordedbandchan*1 /*=unpacksamp*/, fbank, fringerotorder, arraystridelen, cacorrs, recordedbw*2)
 {
-  samplestounpack = (nbits/8) * ninputbands;
-  if (!RawMode::handles(nbits, ninputbands)) {
-      cfatal << startl << "Format error: " << nbits << " bits x " << ninputbands << " channels not supported by RawMode" << endl;
+  if (!RawMode::handles(nbits, recordedbandchan)) 
+  {
+      cfatal << startl << "Format error: " << nbits << " bits x " << recordedbandchan << " channels not supported by RawMode" << endl;
       initok = false;
   }
+
+  int factor = (!usecomplex) ? 1 : 2;
+  unpacksamples = factor * recordedbandchan;
+  _samplestounpack = factor * recordedbandchan;
   return;
 }
 
@@ -40,9 +44,12 @@ RawMode::~RawMode()
 
 float RawMode::unpack(int sampleoffset)
 {
-  for (int i=0; i<samplestounpack; i++) {
-     size_t off = size_t(i) + size_t(sampleoffset);
+  size_t off = size_t(sampleoffset);
+  for (int i=0; i<_samplestounpack && off<datalengthbytes; i++, off++) 
+  {
      unpackedarrays[0][i] = float((signed char)data[off]);
   }
+ 
+  // always 100% of unpacked samples are valid
   return 1.0f;
 }
