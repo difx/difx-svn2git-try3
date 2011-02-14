@@ -656,9 +656,9 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
   switch(stream.format)
   {
     case RAW:
-      if (!RawMode::handles(stream.numbits, stream.numinputbands))
+      if (!RawMode::handles(stream.numbits, stream.numrecordedbands))
           cerror << startl << "Specified Raw mode configuration not supported yet" << endl;
-      return new RawMode(this, configindex, datastreamindex, conf.numchannels, conf.blockspersend, conf.guardblocks, stream.numfreqs, freqtable[stream.freqtableindices[0]].bandwidth, stream.freqclockoffsets, stream.numinputbands, stream.numoutputbands, stream.numbits, stream.filterbank, conf.postffringerot, conf.quadraticdelayinterp, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      return new RawMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.sampling, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     case LBASTD:
       if(stream.numbits != 2)
