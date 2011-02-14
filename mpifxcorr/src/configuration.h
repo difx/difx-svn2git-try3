@@ -55,7 +55,7 @@ public:
   enum datadomain {TIME, FREQUENCY};
 
   /// Supported types of recorded data format
-  enum dataformat {LBASTD, LBAVSOP, LBA8BIT, LBA16BIT, K5, MKIV, VLBA, MARK5B, VDIF, VLBN};
+  enum dataformat {LBASTD, LBAVSOP, LBA8BIT, LBA16BIT, K5, MKIV, VLBA, MARK5B, VDIF, VLBN, RAW};
 
   /// Supported sources of data
   enum datasource {UNIXFILE, MK5MODULE, NETWORKSTREAM};
@@ -112,7 +112,7 @@ public:
   inline string getOutputFilename() { return outputfilename; }
   inline string getRFIFilterFilename() { return rfifilterfilename; }
   inline string getRFIFilterFormat() { return rfifilterformat; }
-  inline bool getUseRFIFilter() { return rfifilter_enabled; }
+  inline bool rfifilterEnabled() { return rfifilter_enabled; }
   inline bool pulsarBinOn(int configindex) { return configs[configindex].pulsarbin; }
   inline bool scrunchOutputOn(int configindex) { return configs[configindex].scrunchoutput; }
   inline int getNumPulsarBins(int configindex) { return configs[configindex].numbins; }
@@ -782,6 +782,9 @@ private:
   ///The length of keywords in all input files
   static const int DEFAULT_KEY_LENGTH = 20;
   static const int MAX_KEY_LENGTH = 128;
+
+  ///The maximum number if recorded bands
+  static const int MAX_RECORDED_BANDS = 64;
 
   ///The character used to denote a comment line, to be ignored
   static const char COMMENT_CHAR = '@';
