@@ -118,7 +118,8 @@ private:
     f32 * argument;
     f32 ** dsweights;
     cf32* rfiscratch;
-    Filter** rfifilters;
+    int numrfifilters;
+    FilterChain** rfifilters;
     DifxMessageSTARecord * starecordbuffer;
     bool dumpsta;
     bool dumpkurtosis;

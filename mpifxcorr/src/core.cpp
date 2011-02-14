@@ -354,8 +354,9 @@ void Core::loopprocess(int threadid)
   Polyco ** polycos=0;
   Polyco * currentpolyco=0;
   Mode ** modes;
-  FilterChain** rfifilters;
+
   threadscratchspace * scratchspace = new threadscratchspace;
+  memset((void*)scratchspace, 0, sizeof(threadscratchspace));
   scratchspace->threadcrosscorrs = vectorAlloc_cf32(maxthreadresultlength);
   scratchspace->baselineweight = new f32***[config->getFreqTableLength()];
   scratchspace->baselineshiftdecorr = new f32**[config->getFreqTableLength()];
@@ -378,7 +379,6 @@ void Core::loopprocess(int threadid)
   maxpolycos = 0;
   maxchan = config->getMaxNumChannels();
   maxbins = config->getMaxNumPulsarBins();
-  numrfifilters = 0;
   slen = config->getArrayStrideLength(0);
   if(slen>config->getXmacStrideLength(0))
     slen = config->getXmacStrideLength(0);
@@ -438,22 +438,24 @@ void Core::loopprocess(int threadid)
   numprocessed = 0;
 //  cinfo << startl << "Core thread id " << threadid << " will be processing from block " << startblock << ", length " << numblocks << endl;
 
-  //prepare RFI filters
-  if (config->getUseRFIFilter()) 
+  //initialize cross-correlation data filters and scratch space for RFI
+  if (config->rfifilterEnabled()) 
   {
-    rfiscratch = vectorAlloc_cf32(procslots[0].numchannels+1);
+    const char* filterfile = config->getRFIFilterFilename().c_str();
+    scratchspace->rfiscratch = vectorAlloc_cf32(maxchan+1);
+    //figure out the number of cross-product vectors (cumbersome!) and then allocate and init enough filters
+    scratchspace->numrfifilters = 0;
     for(int j=0;j<numbaselines;j++)
       for(int k=0;k<config->getBNumFreqs(procslots[0].configindex, j);k++)
         for(int p=0;p<config->getBNumPolProducts(procslots[0].configindex,j,k);p++)
-          numrfifilters++; // there should be a better way!
-    rfifilters = new FilterChain*[numrfifilters];
-    const char* filterfile = config->getRFIFilterFilename().c_str();
-    for (int j=0;j<numrfifilters;j++)
+          scratchspace->numrfifilters++;
+    scratchspace->rfifilters = new FilterChain*[scratchspace->numrfifilters];
+    for (int j=0;j<scratchspace->numrfifilters;j++)
     {
-      rfifilters[j] = new FilterChain();
-      rfifilters[j]->buildFromFile(filterfile,procslots[0].numchannels+1); 
+      scratchspace->rfifilters[j] = new FilterChain();
+      scratchspace->rfifilters[j]->buildFromFile(filterfile,maxchan+1); 
     }
-    cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process created " << numrfifilters << " RFI filter instances" << endl;
+    cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process created " << scratchspace->numrfifilters << " RFI filter instances" << endl;
   }
 
   //lock the end section
@@ -556,12 +558,12 @@ void Core::loopprocess(int threadid)
       delete [] scratchspace->pulsaraccumspace;
     }
   }
-  if (config->getUseRFIFilter()) 
+  if (config->rfifilterEnabled()) 
   {
-    vectorFree(rfiscratch);
-    for (int i=0; i<numrfifilters; i++)
-      delete rfifilters[i];
-    delete [] rfifilters;
+    vectorFree(scratchspace->rfiscratch);
+    for (int i=0; i<scratchspace->numrfifilters; i++)
+      delete scratchspace->rfifilters[i];
+    delete [] scratchspace->rfifilters;
   }
   for(int i=0;i<numdatastreams;i++)
     delete [] scratchspace->dsweights[i];
@@ -692,7 +694,14 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     modes[j]->setDumpKurtosis(scratchspace->dumpkurtosis);
     if(scratchspace->dumpkurtosis)
       modes[j]->zeroKurtosis();
-    
+
+    //reset filter states
+    if(config->rfifilterEnabled())
+    {
+      for(int ff=0;ff<scratchspace->numrfifilters; ff++)
+        scratchspace->rfifilters[ff]->clear();
+    }
+
     //reset pcal
     if(config->getDPhaseCalIntervalMHz(procslots[index].configindex, j) > 0)
     {
@@ -846,6 +855,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                 if(status != vecNoErr)
                   cerror << startl << "Error trying to scale phased array results!" << endl;
 
+                //TODO: rfi filter for configurable integration/averaging?
+
                 //add it to the result
                 status = vectorAdd_cf32_I(scratchspace->rotated, &(scratchspace->threadcrosscorrs[resultindex]), freqchannels);
                 if(status != vecNoErr)
@@ -958,11 +969,23 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   }
                   else
                   {
-                    //not pulsar binning, so this is nice and simple - just cross multiply accumulate
-                    status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
-
-                    if(status != vecNoErr)
-                      csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
+                    //not pulsar binning, so this is nice and simple - just cross multiply, then integrate
+                    if (!config->rfifilterEnabled())
+                    {
+                      status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+                      if(status != vecNoErr)
+                        csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
+                    }
+                    else
+                    {
+                      DUT_CHECK( vectorMul_cf32(vis1, vis2, scratchspace->rfiscratch, xmacmullength), csevere, "Error trying to xmul baseline. " );
+                      scratchspace->rfifilters[j/*0..numbaselines-1*/]->filter(scratchspace->rfiscratch);
+                      // filter not tied to  &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength])
+                      // and data needs to be copied later!
+                      status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+                      if(status != vecNoErr)
+                        csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
+                    }
                   }
                 }
               }
