@@ -279,5 +279,13 @@ inline int genericCopy_u8(u8 * src, u8 * dest, int length)
 
 #endif /* Generic Architecture */
 
+//error checking (DiFX Utility)
+#define DUT_CHECK(op,sstreamref,msg) \
+  do { \
+    int rc=(op); \
+    if(vecNoErr!=rc)\
+      sstreamref << startl << msg << " " << rc << endl; \
+  } while(0) ;
+
 #endif /* Defined architecture header */
 // vim: shiftwidth=2:softtabstop=2:expandtab
