@@ -249,6 +249,7 @@ int main(int argc, char *argv[])
   char processor_name[MPI_MAX_PROCESSOR_NAME];
   char difxMessageID[DIFX_MESSAGE_PARAM_LENGTH];
 
+  cout << "DiFX " << PACKAGE_NAME << " version " << VERSION << endl;
   cout << "About to run MPIInit" << endl;
 
   MPI_Init(&argc, &argv);
