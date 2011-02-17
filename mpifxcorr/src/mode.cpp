@@ -139,28 +139,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     linearunpacked = vectorAlloc_s16(numlookups*samplesperlookup);
     estimatedbytes += 2*(numlookups*samplesperlookup + (MAX_U16+1)*samplesperlookup);
 
-    //initialize rfi filtering 
-    // the zoomed bands attach to filter output subsets later on and do not use own filters
-    if (config->rfifilterEnabled())
-    {
-      for (int xpolac=0;xpolac<2;xpolac++) 
-      {
-        const char* filterfile = config->getRFIFilterFilename().c_str();
-        autocorrfilters[xpolac] = new FilterChain*[numrecordedbands];
-        for (int band=0;band<numrecordedbands;band++) 
-        {
-          autocorrfilters[xpolac][band] = new FilterChain();
-          if (config->rfifilterEnabled()) 
-          {
-            // load actual filter instead of dummy
-            autocorrfilters[xpolac][band]->buildFromFile(filterfile,recordedbandchannels);
-          }
-        }
-      }
-      rfiscratch = vectorAlloc_cf32(recordedbandchannels+1);
-      DUT_CHECK( vectorZero_cf32(rfiscratch, recordedbandchannels+1), csevere, "RFI scratch zeroing" );
-    }
-
     //initialise the fft info
     order = 0;
     while((fftchannels) >> order != 1)
@@ -305,6 +283,28 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
       }
     }
 
+    //initialize rfi filtering in autocorrelations
+    if (config->rfifilterEnabled())
+    {
+      const char* filterfile = config->getRFIFilterFilename().c_str();
+      autocorrfilters = new FilterChain**[autocorrwidth];
+      for (int xx=0;xx<autocorrwidth;xx++)
+      { 
+        autocorrfilters[xx] = new FilterChain* [numrecordedbands];
+        for (int band=0;band<numrecordedbands;band++) 
+        {
+          // note1: zoomed bands copied from filter output subsets autocorrelations[0][j][a..b]), need no own filter
+          // note2: for cross-pol, different output arrays attached later (see Mode::process())
+          FilterChain* flt = new FilterChain();
+          flt->buildFromFile(filterfile,recordedbandchannels);
+          flt->setUserOutbuffer(autocorrelations[0][band]); 
+          autocorrfilters[xx][band] = flt;
+        }
+      }
+      rfiscratch = vectorAlloc_cf32(recordedbandchannels+1);
+      DUT_CHECK( vectorZero_cf32(rfiscratch, recordedbandchannels+1), csevere, "RFI scratch zeroing" );
+    }
+
     //kurtosis-specific stuff
     dumpkurtosis = false; //off by default
     s1 = 0;
@@ -312,6 +312,8 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     sk = 0;
     kscratch = 0;
   }
+
+
   // Phase cal stuff
   if(config->getDPhaseCalIntervalMHz(configindex, datastreamindex))
   {
@@ -356,14 +358,13 @@ Mode::~Mode()
 
   if (config->rfifilterEnabled())
   {
-    for (int xpolac=0;xpolac<2;xpolac++) 
+    for (int xx=0;xx<autocorrwidth;xx++) 
     {
       for (int i=0;i<numrecordedbands;i++) 
-      {
-        delete autocorrfilters[xpolac][i];
-      }
-      delete [] autocorrfilters[xpolac];
+        delete autocorrfilters[xx][i];
+      delete [] autocorrfilters[xx];
     }
+    delete [] autocorrfilters;
     vectorFree(rfiscratch);
   }
 
@@ -533,6 +534,12 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
     }
     //cout << "Mode for DS " << datastreamindex << " is bailing out of index " << index << "/" << subloopindex << " which is scan " << currentscan << ", sec " << offsetseconds << ", ns " << offsetns << " because datalengthbytes is " << datalengthbytes << " and validflag was " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
     return 0.0; //don't process crap data
+  }
+
+  if (index < 0)
+  {
+    csevere << startl << "Mode::process index=" << index << " < 0, I knew it!!" << endl;
+    return 0.0;
   }
 
   fftcentre = index+0.5;
@@ -802,21 +809,12 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
     if(status != vecNoErr)
     csevere << startl << "Error doing the first bit of the time-saving complex multiplication in frac sample correction!!!" << endl;
 
-
     for(int j=0;j<numrecordedbands;j++)
     {
       if(config->matchingRecordedBand(configindex, datastreamindex, i, j))
       {
         indices[count++] = j;
 
-        //rfi filters, set output data location for re-using the autocorrelation arrays
-        if (config->rfifilterEnabled())
-        { 
-          autocorrfilters[0][j]->setUserOutbuffer(autocorrelations[0][j]);
-          if (calccrosspolautocorrs)
-            autocorrfilters[1][j]->setUserOutbuffer(autocorrelations[1][indices[j]]);
-        }
- 
         //fringe rotation
         switch(fringerotationorder) {
           case 0: //post-F
@@ -914,6 +912,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
     }
 
     //if we need to, do the cross-polar autocorrelations
+    //JanW: potential BUG, why is xpol ac computed only for first pair of all numrecordedbands?
     if(calccrosspolautocorrs && count > 1)
     {
       if (!config->rfifilterEnabled())
@@ -927,11 +926,14 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
       }
       else
       {
-        // filters operate into vector memory {autocorrelations[1][indices[0]]}, {autocorrelations[1][indices[1]]}
+        // set filters to operate into preallocated vector memory (done here because indices[] not known in c'stor)
+        autocorrfilters[1][0]->setUserOutbuffer(autocorrelations[1][indices[0]]);
+        autocorrfilters[1][1]->setUserOutbuffer(autocorrelations[1][indices[1]]);
+        // finally, filter
         DUT_CHECK( vectorMul_cf32(fftoutputs[indices[0]][subloopindex], conjfftoutputs[indices[1]][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in cross-polar autocorrelation!!!" );
-        autocorrfilters[1][indices[0]]->filter(rfiscratch);
+        autocorrfilters[1][0]->filter(rfiscratch);
         DUT_CHECK( vectorMul_cf32(fftoutputs[indices[1]][subloopindex], conjfftoutputs[indices[0]][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in cross-polar autocorrelation!!!" );
-        autocorrfilters[1][indices[1]]->filter(rfiscratch);
+        autocorrfilters[1][1]->filter(rfiscratch);
       }
 
       //store the weights
@@ -1032,9 +1034,9 @@ void Mode::zeroAutocorrelations()
   {
     for(int j=0;j<numrecordedbands;j++)
     {
-      status = vectorZero_cf32(autocorrelations[i][j], recordedbandchannels);
-      if(status != vecNoErr)
-        cerror << startl << "Error trying to zero autocorrelations!" << endl;
+      if (config->rfifilterEnabled())
+        autocorrfilters[i][j]->clear(); // zero the internal state and output buffer (can be autocorrelations[][])
+      DUT_CHECK( vectorZero_cf32(autocorrelations[i][j], recordedbandchannels), cerror, "Error trying to zero autocorrelations!" );
       weights[i][j] = 0.0;
     }
   }

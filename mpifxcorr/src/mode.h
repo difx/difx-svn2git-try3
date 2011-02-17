@@ -255,7 +255,7 @@ protected:
   vecHintAlg hint;
   Model * model;
   f64 * interpolator;
-  FilterChain** autocorrfilters[2];
+  FilterChain*** autocorrfilters; // [xpols=0..1][band]=>(FilterChain*)
   cf32* rfiscratch;
 
   //new arrays for strided complex multiply for fringe rotation and fractional sample correction
