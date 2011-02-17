@@ -438,24 +438,19 @@ void Core::loopprocess(int threadid)
   numprocessed = 0;
 //  cinfo << startl << "Core thread id " << threadid << " will be processing from block " << startblock << ", length " << numblocks << endl;
 
-  //initialize cross-correlation data filters and scratch space for RFI
+  //initialize cross-correlation data filters and scratch space
   if (config->rfifilterEnabled()) 
   {
     const char* filterfile = config->getRFIFilterFilename().c_str();
-    scratchspace->rfiscratch = vectorAlloc_cf32(maxchan+1);
-    //figure out the number of cross-product vectors (cumbersome!) and then allocate and init enough filters
-    scratchspace->numrfifilters = 0;
-    for(int j=0;j<numbaselines;j++)
-      for(int k=0;k<config->getBNumFreqs(procslots[0].configindex, j);k++)
-        for(int p=0;p<config->getBNumPolProducts(procslots[0].configindex,j,k);p++)
-          scratchspace->numrfifilters++;
+    scratchspace->numrfifilters = config->getMaxThreadResultVectorCount();
     scratchspace->rfifilters = new FilterChain*[scratchspace->numrfifilters];
     for (int j=0;j<scratchspace->numrfifilters;j++)
     {
       scratchspace->rfifilters[j] = new FilterChain();
       scratchspace->rfifilters[j]->buildFromFile(filterfile,maxchan+1); 
     }
-    cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process created " << scratchspace->numrfifilters << " RFI filter instances" << endl;
+    cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process created " << scratchspace->numrfifilters << " filter instances" << endl;
+    scratchspace->rfiscratch = vectorAlloc_cf32(maxchan+1);
   }
 
   //lock the end section
@@ -673,6 +668,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   double sampletimens;
   int starttimens;
   int fftsize;
+  int rfifilterindex;
 #endif
   int perr;
 
@@ -694,13 +690,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     modes[j]->setDumpKurtosis(scratchspace->dumpkurtosis);
     if(scratchspace->dumpkurtosis)
       modes[j]->zeroKurtosis();
-
-    //reset filter states
-    if(config->rfifilterEnabled())
-    {
-      for(int ff=0;ff<scratchspace->numrfifilters; ff++)
-        scratchspace->rfifilters[ff]->clear();
-    }
 
     //reset pcal
     if(config->getDPhaseCalIntervalMHz(procslots[index].configindex, j) > 0)
@@ -724,6 +713,11 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   status = vectorZero_cf32(scratchspace->threadcrosscorrs, procslots[index].threadresultlength);
   if(status != vecNoErr)
     csevere << startl << "Error trying to zero threadcrosscorrs!!!" << endl;
+
+  //zero the results of internal cross-corr filter states (later copied into *threadcrosscorrs)
+  if(config->rfifilterEnabled())
+    for(int ff=0;ff<scratchspace->numrfifilters; ff++)
+      scratchspace->rfifilters[ff]->clear();
 
   //zero the baselineweights and baselineshiftdecorrs for this thread
   for(int i=0;i<config->getFreqTableLength();i++)
@@ -814,6 +808,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 
     //do the baseline-based processing for this batch of FFT chunks
     resultindex = 0;
+    rfifilterindex = 0;
     for(int f=0;f<config->getFreqTableLength();f++)
     {
       if(config->phasedArrayOn(procslots[index].configindex)) //phased array processing
@@ -856,6 +851,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   cerror << startl << "Error trying to scale phased array results!" << endl;
 
                 //TODO: rfi filter for configurable integration/averaging?
+                rfifilterindex++;
 
                 //add it to the result
                 status = vectorAdd_cf32_I(scratchspace->rotated, &(scratchspace->threadcrosscorrs[resultindex]), freqchannels);
@@ -895,6 +891,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                 if(config->getBFreqOddLSB(procslots[index].configindex, j, localfreqindex) > 0)
                 {
                   //uh-oh.  Need to move any LSB datastreams' FFT results appropriately
+                  //JanW: TODO someone added this nested identical if(), perhaps by mistake?
                   if(config->getBFreqOddLSB(procslots[index].configindex, j, localfreqindex) > 0)
                   {
                     outputoffset = 1;
@@ -978,13 +975,13 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     }
                     else
                     {
+                      assert(rfifilterindex<scratchspace->numrfifilters);
+                      status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
                       DUT_CHECK( vectorMul_cf32(vis1, vis2, scratchspace->rfiscratch, xmacmullength), csevere, "Error trying to xmul baseline. " );
-                      scratchspace->rfifilters[j/*0..numbaselines-1*/]->filter(scratchspace->rfiscratch);
+                      scratchspace->rfifilters[rfifilterindex]->filter(scratchspace->rfiscratch);
+                      rfifilterindex++;
                       // filter not tied to  &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength])
                       // and data needs to be copied later!
-                      status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
-                      if(status != vecNoErr)
-                        csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
                     }
                   }
                 }
@@ -1278,6 +1275,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex)) {
         freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
         //put autocorrs in resultsbuffer
+        //  TODO: for RFI filtering, this final (x)pol-auto integration needs to be taken into account in Matlab filter designer
         status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[resultindex], freqchannels);
         if(status != vecNoErr)
           csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << endl;
