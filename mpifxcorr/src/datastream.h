@@ -73,13 +73,13 @@ public:
   * While the correlation continues, keep accepting control information from the FxManager and sending data to the appropriate
   * Cores, while maintaining fresh data in the buffer
   */
-  void execute();
+  virtual void execute();
 
  /**
   * Returns the estimated number of bytes used by the Datastream
   * @return Estimated memory size of the Datastream (bytes)
   */
-  inline int getEstimatedBytes() { return estimatedbytes; }
+  virtual inline int getEstimatedBytes() { return estimatedbytes; }
 
 protected:
   /// Structure which maintains all information necessary for a segment of the databuffer, including the configuration parameters for
@@ -191,12 +191,12 @@ protected:
   * @param portnumber The port to read from
   * @param tcpwindowsize The size of the packets to receive, in KB
   */
-  void openstream(int portnumber, int tcpwindowsize);
+  virtual void openstream(int portnumber, int tcpwindowsize);
 
  /** 
   * Attempts to close a network socket
   */
-  void closestream();
+  virtual void closestream();
 
  /** 
   * While the correlation continues and there are more files to be read, continues reading data into the databuffer as fast as possible
@@ -206,13 +206,13 @@ protected:
  /** 
   * While the correlation continues and the network socket remains open, continues reading data into the databuffer as fast as possible
   */
-  void loopnetworkread();
+  virtual void loopnetworkread();
 
  /** 
   * Reads one segment's worth of data from the currently open file into the specified segment
   * @param buffersegment The segment of the databuffer that this read will be stored in
   */
-  void diskToMemory(int buffersegment);
+  virtual void diskToMemory(int buffersegment);
 
  /** 
   * Reads one segment's worth of data from the currently open network socket into the specified segment
@@ -241,19 +241,19 @@ protected:
  /**
   * Launches the read thread (whether from file or network) and waits until it has initialised itself
   */
-  void initialiseMemoryBuffer();
+  virtual void initialiseMemoryBuffer();
 
  /**
   * Depending on the relative positions of the reading thread and the main (sending) thread in the databuffer, either tests to see
   * if all sends from the segment containing oldest data have completed, or actually waits until they have
   */
-  void waitForSendComplete();
+  virtual void waitForSendComplete();
 
  /**
   * Waits until all sends from the given buffer segment have been completed, using MPI_Wait
   * @param buffersegment The segment of the databuffer to wait on
   */
-  void waitForBuffer(int buffersegment);
+  virtual void waitForBuffer(int buffersegment);
 
   string stationname;
   int mpiid, filestartday, filestartseconds, numcores, numsent, delayincms, lastnearestindex, lastscan, lastvalidsegment, totaldelays, maxsendspersegment, waitsegment, portnumber, tcpwindowsizebytes, socketnumber;
