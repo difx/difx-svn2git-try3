@@ -22,6 +22,8 @@
 #include "rawmode.h"
 #include "alert.h"
 
+// TODO: first must have a true generic file DataStream base class, not a LBA-specific DataStream "base" class
+
 RawMode::RawMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
  : Mode(conf, confindex, dsindex, recordedbandchan, chanstoavg, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, sampling, recordedbandchan*1 /*=unpacksamp*/, fbank, fringerotorder, arraystridelen, cacorrs, recordedbw*2)
 {
