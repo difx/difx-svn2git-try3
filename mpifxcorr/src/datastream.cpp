@@ -34,6 +34,8 @@
 #include "config.h"
 #include "alert.h"
 
+// TODO: BUG, this class should really be called LBADataStream, the base class DataStream should handle raw data
+
 DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
   : databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
 {
