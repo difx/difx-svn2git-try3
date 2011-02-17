@@ -1655,6 +1655,7 @@ bool Configuration::populateResultLengths()
   int numaccs;
 
   maxthreadresultlength = 0;
+  maxthreadresultveccount = 0;
   maxcoreresultlength = 0;
   for(int c=0;c<numconfigs;c++)
   {
@@ -1686,6 +1687,7 @@ bool Configuration::populateResultLengths()
         for(int f=0;f<freqtablelength;f++)
         {
           threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels;
+          configs[c].threadresultveccount += configs[c].numpafreqpols[f];
         }
         configs[c].threadresultlength = threadfindex;
       }
@@ -1694,6 +1696,7 @@ bool Configuration::populateResultLengths()
         for(int f=0;f<freqtablelength;f++)
         {
           threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels;
+          configs[c].threadresultveccount += configs[c].numpafreqpols[f];
         }
         configs[c].threadresultlength = threadfindex;
       }
@@ -1739,6 +1742,7 @@ bool Configuration::populateResultLengths()
             {
               configs[c].threadresultbaselineoffset[i][j] = threadbindex;
               threadbindex += binloop*bldata.numpolproducts[bldata.localfreqindices[i]]*xmacstridelen;
+              configs[c].threadresultveccount += bldata.numpolproducts[bldata.localfreqindices[i]]; //TODO: binloop?
             }
           }
           configs[c].completestridelength[i] = threadbindex;
@@ -1869,6 +1873,8 @@ bool Configuration::populateResultLengths()
       maxthreadresultlength = configs[c].threadresultlength;
     if(configs[c].coreresultlength > maxcoreresultlength)
       maxcoreresultlength = configs[c].coreresultlength;
+    if(configs[c].threadresultveccount > maxthreadresultveccount)
+      maxthreadresultveccount = configs[c].threadresultveccount;
   }
 
   return true;

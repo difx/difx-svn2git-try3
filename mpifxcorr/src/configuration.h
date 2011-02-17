@@ -89,8 +89,10 @@ public:
   inline int getXmacStrideLength(int configindex) { return configs[configindex].xmacstridelen; }
   inline int getNumBufferedFFTs(int configindex) { return configs[configindex].numbufferedffts; }
   inline int getThreadResultLength(int configindex) { return configs[configindex].threadresultlength; }
+  inline int getThreadResultVectorCount(int configindex) { return configs[configindex].threadresultveccount; }
   inline int getCoreResultLength(int configindex) { return configs[configindex].coreresultlength; }
   inline int getMaxThreadResultLength() { return maxthreadresultlength; }
+  inline int getMaxThreadResultVectorCount() { return maxthreadresultveccount; }
   inline int getMaxCoreResultLength() { return maxcoreresultlength; }
   inline int getMaxNumBufferedFFTs() { return maxnumbufferedffts; }
   inline int getNumXmacStrides(int configindex, int freqindex) { return configs[configindex].numxmacstrides[freqindex]; }
@@ -570,6 +572,7 @@ private:
     int numbins;
     int minpostavfreqchannels;
     int threadresultlength;
+    int threadresultveccount;
     int coreresultlength;
     bool scrunchoutput;
     int numphasecentres;
@@ -798,6 +801,7 @@ private:
   bool consistencyok, commandthreadinitialised, dumpsta, dumplta, dumpkurtosis;
   bool rfifilter_enabled;
   string rfifilterfilename, rfifilterformat;
+  int maxthreadresultveccount;
   int visbufferlength, databufferfactor, numdatasegments;
   int numdatastreams, numbaselines, numcoreconfs;
   int executeseconds, startmjd, startseconds, startns;
