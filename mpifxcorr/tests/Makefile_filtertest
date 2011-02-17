@@ -1,0 +1,38 @@
+BASEDIR = ../src/
+BASEFILES = filter_test.cpp $(BASEDIR)/filters.cpp $(BASEDIR)/filter_int.cpp $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
+BASEHEADERS = $(BASEDIR)/filter.h $(BASEDIR)/filters.h $(BASEDIR)/filterchain.h
+BASEOBJS = $(BASEFILES:.cpp=.o)
+
+# Custom IPP path or the one from DiFX environment
+# IPP_PATH = /cluster/intel/ipp/6.1.2.051/em64t/
+# IPP_PATH = /cluster/intel/ipp/5.3.1.062/em64t/
+IPP_PATH = $(IPPROOT)
+
+CC = g++
+
+# normal compile:
+CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR)
+
+# for 'oprofile' profiling:
+# CFLAGS = -pthread -g -O0 -fno-inline -fno-default-inline -c -Wall
+
+all: filter_test
+
+clean:
+	rm -f filter_test filter_test.o
+
+intel_CFLAGS = $(CFLAGS) -DINTEL_IPP=1 -I${IPP_PATH}/include/ -I. -I./IA-32/
+intel_LDFLAGS = -pthread -L${IPP_PATH}/sharedlib/ -L${IPP_PATH}/lib/ #-liomp5 
+
+LBITS := $(shell getconf LONG_BIT)
+ifeq ($(LBITS),64)
+	intel_LDINCL = -lm -lippsem64t -lippvmem64t -lippmem64t -B -lguide -lippcoreem64t
+else
+	intel_LDINCL = -lm -lippcore -lipps -lguide -lippvm -lippm
+endif
+
+filter_test: $(BASEOBJS) $(BASEFILES) $(BASEHEADERS)
+	$(CC) $(intel_LDFLAGS) $(intel_LDINCL) $(BASEOBJS) -o filter_test
+
+.cpp.o:
+	$(CC) $(intel_CFLAGS) $< -o $@

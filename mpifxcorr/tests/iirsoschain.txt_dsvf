@@ -1,0 +1,50 @@
+# ----- Example filter configuration file
+
+1    # the number of filters in series
+
+# ---- Digital state variable filter
+
+4    # type 0=AVG, 1=CIC, 2=Biquad-IIR, 3=FIR, 4=DSVF
+1    # decimation ratio before filering
+2    # filter order, ignored
+
+1.0  # prescaling gain
+
+0.000773 # tuning f = 2*sin(pi*(1024*(1/0.52))/16e6)
+0.5      # quality q = 1/Q=1/2.0
+
+# ----- Biquad IIR Filter
+
+2    # type 0=AVG, 1=CIC, 2=Biquad-IIR, 3=FIR, 4=DSVF
+1    # decimation ratio before filtering
+10   # filter order
+
+9.99831172521226110e-006    # prescaling gain
+
+# filter coefficients in M=order/2 rows (M x 6 coeffs total)
+# b0(1) b1(1) b2(1) a0(1) a1(1) a2(1)
+# ...
+# b0(M) b1(M) b2(M) a0(M) a1(M) a2(M)
+1.00000000000000000 -1.99999451637268070 1.00000000000000000 1.00000000000000000 -1.99986529350280760 0.99986535310745239
+1.00000000000000000 -1.99999928474426270 1.00000000000000000 1.00000000000000000 -1.99989640712738040 0.99989646673202515
+1.00000000000000000 -1.99999964237213130 1.00000000000000000 1.00000000000000000 -1.99993586540222170 0.99993598461151123
+1.00000000000000000 -1.99999976158142090 1.00000000000000000 1.00000000000000000 -1.99996757507324220 0.99996769428253174
+1.00000000000000000 -1.99999976158142090 1.00000000000000000 1.00000000000000000 -1.99999022483825680 0.99999040365219116
+
+# ----- Averaging filter
+
+0    # type 0=AVG, 1=CIC, 2=Biquad-IIR, 3=FIR, 4=DSVF
+1    # decimation ratio before filtering
+1    # filter order
+
+# ---- Digital state variable filter
+
+4    # type 0=AVG, 1=CIC, 2=Biquad-IIR, 3=FIR, 4=DSVF
+1    # decimation ratio before filering
+2    # filter order, ignored
+
+1.0  # prescaling gain
+
+0.000773 # tuning f = 2*sin(pi*(1024*(1/0.52))/16e6)
+0.5      # quality q = 1/Q=1/2.0
+
