@@ -19,6 +19,10 @@
 // $LastChangedDate: 2010-12-14 07:01:27 +0100 (ti, 14 joulu 2010) $
 //
 //============================================================================
+
+#ifndef SWITCHEDPOWER_H
+#define SWITCHEDPOWER_H
+
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -59,3 +63,7 @@ public:
 	bool failed;
 	std::string filepath;
 };
+
+#endif
+// vim: shiftwidth=2:softtabstop=2:expandtab
+
