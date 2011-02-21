@@ -25,6 +25,7 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <cmath>
 using std::cout;
 using std::endl;
 using std::flush;
@@ -77,8 +78,13 @@ class Timing {
 ////////////////////////////////////////////////////////////////////
 // Result comparison
 ////////////////////////////////////////////////////////////////////
+void cout_precision_init() {
+    //cout.setf(std::ios::scientific,std::ios::floatfield);
+    cout.precision(10);
+}
 bool quite_equal(const double a, const double b) {
-    return (abs(a-b)<1e-9);
+    double m = std::min(abs(a)+0.5, abs(b)+0.5);
+    return (abs(a-b)<(m*1e-9));
 }
 bool quite_equal(const Ipp32fc a, const Ipp32fc b) {
     return (quite_equal((double)a.re,(double)b.re) && quite_equal((double)a.im,(double)b.im));
@@ -86,8 +92,11 @@ bool quite_equal(const Ipp32fc a, const Ipp32fc b) {
 
 void compare_to_ref(const Ipp32fc act, const Ipp32fc ref)
 {
+    double e_re = std::abs(act.re - ref.re);
+    double e_im = std::abs(act.im - ref.im);
     cout << "Final filter output   : {" << act.re << ", " << act.im << "}" << endl;
     cout << "Expected filter output: {" << ref.re << ", " << ref.im << "}" << endl;
+    cout << "Error                 : {e=" << e_re   << ", e=" << e_im << "}" << endl;
     if (quite_equal(act,ref))
         cout << "PASS" << endl;
     else
@@ -192,28 +201,27 @@ void bench_filter_vs_chain()
 
     if (1) {
         Timing T("** Computing the reference on one channel ", Nsamps);
+        for (int i=0;i<NI;i++)
         for (int s=0;s<Nsamps;s++) {
             ref.re += singlechdata[s].re;
             ref.im += singlechdata[s].im;
         }
-        ref.re *= NI;
-        ref.im *= NI;
     }
-    ippsSet_32fc(c, filtered, Nch);
+    ippsZero_32fc(filtered, Nch);
     if (1) {
         Timing T("** Cache warmup with inline ippsAdd_32fc_I", Nsamps*Nch*NI);
         for (int i=0;i<NI;i++)
         for (int s=0;s<Nsamps;s++) {
             c = singlechdata[s];
-            //default method, ??? Ms/s:
+            //default method:
             ippsSet_32fc(c, multichannelline, Nch);
             ippsAdd_32fc_I(multichannelline, filtered, Nch);
-            //other method, 1027 Ms/s:
+            //other method:
             //ippsSet_32f(c.re, (Ipp32f*)multichannelline, 2*Nch);
             //ippsAdd_32f_I((Ipp32f*)multichannelline, (Ipp32f*)filtered, 2*Nch);
         }
     }
-    ippsSet_32fc(c, filtered, Nch);
+    ippsZero_32fc(filtered, Nch);
     if (1) {
         Timing T("** Inline ippsAdd_32fc_I speed", Nsamps*Nch*NI);
         for (int i=0;i<NI;i++)
@@ -284,8 +292,8 @@ void test_filterloader_on_data(bool ownOutput)
     cout << "Output = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
 
     // some expected values (really depends on filter_chain1.coeff setup though!)
-    Ipp32fc ex1 = { c.re*NI*Nsamps/3, c.im*NI*Nsamps/3 };
-    cout << "** Expected value _if_ 1:3 decimation and then integration" << endl;
+    cout << "** Expected value _IF_ 1:3 decimation and then integration" << endl;
+    Ipp32fc ex1 = { c.re*std::ceil(NI*Nsamps/3.0), c.im*std::ceil(NI*Nsamps/3.0) };
     compare_to_ref(*(fc.y()), ex1);
     ippsFree(tvec);
     ippsFree(ovec);
@@ -331,6 +339,8 @@ void test_filterloader_on_data2(bool ownOutput)
 int main(int argc, char** argv)
 {
     ippStaticInit();
+    cout_precision_init();
+
     cout << "----------------------------------------------------" << endl;
     cout << "Test setup: Nch=" << Nch << " Nsamps=" << Nsamps << " NI=" << NI << endl;
     cout << "----------------------------------------------------" << endl;
