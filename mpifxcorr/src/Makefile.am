@@ -23,6 +23,7 @@ mpifxcorr_SOURCES = \
 	lbamode.cpp \
 	rawmode.cpp \
 	polyco.cpp \
+	helpers.cpp \
 	alert.cpp \
 	pcal.cpp \
 	switchedpower.cpp \
@@ -30,6 +31,7 @@ mpifxcorr_SOURCES = \
 	filters.cpp \
 	filterchain.cpp \
 	filterhelpers.cpp \
+	filter_dec.cpp \
 	filter_int.cpp \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
@@ -57,6 +59,7 @@ library_include_HEADERS = \
 	mpifxcorr.h \
 	switchedpower.h \
 	datamuxer.h \
+	helpers.h \
 	alert.h 
 
 # historically these have been in both $(includedir)/{.,mpifxcorr}
@@ -77,12 +80,14 @@ libmpifxcorr_a_SOURCES = \
 	fxmanager.cpp \
         model.cpp \
 	visibility.cpp \
+	helpers.cpp \
 	alert.cpp \
 	switchedpower.cpp \
 	datamuxer.cpp \
 	filters.cpp \
 	filterchain.cpp \
 	filterhelpers.cpp \
+	filter_dec.cpp \
 	filter_int.cpp \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
@@ -100,9 +105,11 @@ libfxcorr_a_SOURCES = \
 	visibility.cpp \
         model.cpp \
 	datamuxer.cpp \
+	helpers.cpp \
 	filters.cpp \
 	filterchain.cpp \
 	filterhelpers.cpp \
+	filter_dec.cpp \
 	filter_int.cpp \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
@@ -115,6 +122,7 @@ neuteredmpifxcorr_SOURCES = \
 	core.cpp \
 	datastream.cpp \
 	mk5.cpp \
+	helpers.cpp \
 	switchedpower.cpp \
 	datamuxer.cpp \
 	$(mark5_files)
