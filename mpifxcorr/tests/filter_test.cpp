@@ -27,140 +27,289 @@
 #include <fstream>
 using std::cout;
 using std::endl;
+using std::flush;
 
 #define VERIFY1 0 // verification test with input file
-#define VERIFY2 1 // verification test with fixed DC-level '1.0'
+#define VERIFY2 0 // verification test with fixed DC-level '1.0'
 #define BENCH   0 // benchmarking test
 
+#if 0  // short filter size test
+static const long Nch = 32;
+static const long NI = 256; //1024
+#else  // wide filter size test
+static const long Nch = 1024;
+static const long NI = 32;
+#endif
+static const long Nsamps = 80000;
+
+////////////////////////////////////////////////////////////////////
+// Timing auto-class
+////////////////////////////////////////////////////////////////////
 class Timing {
    public:
-     Timing()  { start(); }
-     ~Timing() { cout << "dT=" << stop() << endl << std::flush; };
+     Timing() : _msg(std::string("")),_samples(8000*1024.0) 
+        { start(); }
+     Timing(const char* msg, double samples) : _msg(std::string(msg)),_samples(samples) 
+        { start(); }
+     ~Timing() { 
+         double t = stop();
+         double msps = _samples*1e-6 / t;
+         cout << _msg << ": " << (1e6*t) << " usec  "
+              << msps << " Ms/s " << endl << flush; 
+     }
    public:
-     void start() { gettimeofday(&tstart, NULL); }
+     void start() { gettimeofday(&_tstart, NULL); }
      double stop() { 
-         gettimeofday(&tstop, NULL);
-         return (tstop.tv_sec - tstart.tv_sec) + 1e-6*(tstop.tv_usec - tstart.tv_usec);
+         double dsec;
+         gettimeofday(&_tstop, NULL);
+         dsec = (_tstop.tv_sec - _tstart.tv_sec);
+         dsec += 1e-6*(_tstop.tv_usec - _tstart.tv_usec);
+         return dsec;
      }
    private:
-     struct timeval tstart;
-     struct timeval tstop;
+     std::string _msg;
+     double _samples;
+     struct timeval _tstart;
+     struct timeval _tstop;
 };
 
-int main(int argc, char** argv)
+
+////////////////////////////////////////////////////////////////////
+// Result comparison
+////////////////////////////////////////////////////////////////////
+bool quite_equal(const double a, const double b) {
+    return (abs(a-b)<1e-9);
+}
+bool quite_equal(const Ipp32fc a, const Ipp32fc b) {
+    return (quite_equal((double)a.re,(double)b.re) && quite_equal((double)a.im,(double)b.im));
+}
+
+void compare_to_ref(const Ipp32fc act, const Ipp32fc ref)
 {
-    const int Nch = 1024;
-    const int NI = 100;
-    const int Nsamps = 80000;
+    cout << "Final filter output   : {" << act.re << ", " << act.im << "}" << endl;
+    cout << "Expected filter output: {" << ref.re << ", " << ref.im << "}" << endl;
+    if (quite_equal(act,ref))
+        cout << "PASS" << endl;
+    else
+        cout << "FAIL" << endl;
+}
 
-    ippStaticInit();
+////////////////////////////////////////////////////////////////////
+// Input data generators
+////////////////////////////////////////////////////////////////////
+Ipp32fc* load_datafile(void)
+{
+    std::string fn("pulse_32fc.raw");
+    std::ifstream ifile(fn.c_str());
+    Ipp32fc* singlechannel = ippsMalloc_32fc(Nsamps*sizeof(Ipp32fc));
+    ifile.read((char*)singlechannel, Nsamps*sizeof(Ipp32fc));
+    cout << "Read " << (ifile.gcount()/sizeof(Ipp32fc)) 
+         << " complex samples from " << fn << endl;
+    return singlechannel;
+}
 
-    cout << "---- Test helper class" << endl;
+Ipp32fc* load_constvec(const Ipp32fc val)
+{
+    Ipp32fc* fullchannels = ippsMalloc_32fc(Nch);
+    ippsSet_32fc(val, fullchannels, Nch);
+    return fullchannels;
+}
+
+////////////////////////////////////////////////////////////////////
+// Helper class test
+////////////////////////////////////////////////////////////////////
+void test_helperclass()
+{
+    std::string fn("filter_test_commentfile.txt");
+    cout << endl << "---- Test Helper .coeff parser using file " << fn << endl;
     std::vector<double> vec;
-    Helpers::parse_numerics_file(vec, "commentfile.txt");
-    for (int i=0; i<vec.size(); i++) { cout << " " << vec.at(i); }
+    Helpers::parse_numerics_file(vec, fn.c_str());
+    if (vec.size()<1) {
+        cout << "Parse failed or file is empty" << endl;
+    }
+    for (size_t i=0; i<vec.size(); i++) { 
+        cout << " " << vec.at(i); 
+    }
     cout << endl;
+}
 
-    cout << "---- Test filter builder" << endl;
-    Ipp32fc* userY = ippsMalloc_32fc(Nch);
-    ippsZero_32fc(userY, Nch);
+////////////////////////////////////////////////////////////////////
+// Filter factory test
+////////////////////////////////////////////////////////////////////
+void test_filterfactory()
+{
+    cout << endl << "---- Test filter factory using Filter::getFilter(FLT_AVERAGING)" << endl;
     Ipp32fc* tvec = ippsMalloc_32fc(Nch);
-    Filter* f = Filter::getFilter(FLT_AVERAGING);
+    Filter*  f = Filter::getFilter(FLT_AVERAGING);
     f->init(0.01, Nch);
     f->clear();
-    for (int i=0; i<NI; i++) {
-        f->filter(tvec);
-    }
-    delete f;
-    ippsFree(tvec);
-
-    cout << "---- Test filter chain loader <iirsoschain.txt>" << endl;
-    FilterChain fc;
-    fc.buildFromFile("iirsoschain.txt", /*channels:*/Nch);
-    fc.summary(cout);
-
-    Ipp32fc* oneChVec = ippsMalloc_32fc(Nsamps);
-    Ipp32fc* allChVec = ippsMalloc_32fc(Nch);
-    ippsSet_32f(1.0f, (Ipp32f*)allChVec, 2*Nch);
-
-    cout << "---- Reading samples from <pulse_32fc.raw>" << endl;
-    std::ifstream ifile("pulse_32fc.raw");
-    ifile.read((char*)oneChVec, Nsamps*sizeof(Ipp32fc));
-    cout << "Read " << (ifile.gcount()/sizeof(Ipp32fc)) << " complex samples." << endl;
-
-#if VERIFY1
-  {
-    fc.setUserOutbuffer(userY);
-    for (int i=0; i<Nsamps; i++) {
-        ippsSet_32fc(oneChVec[i], allChVec, Nch);
-        fc.filter(allChVec);
-        Ipp32fc* y = fc.y();
-        for (int j=0; j<Nch; j++) {
-            if ((y[j].re != y[0].re) && (y[j].im != y[0].im)) {
-                cout << "Filter out y[chN]!=y[ch0] : FAIL" << endl;
-                break;
-            }
+    Ipp32fc c = {1, 0.5};
+    Ipp32fc ref = {c.re*NI,c.im*NI};
+    ippsSet_32fc(c, tvec, Nch);
+    if (1) {
+        Timing T("Filter run with FLT_AVERAGING/INT filter", Nch*NI);
+        for (int i=0; i<NI; i++) {
+            f->filter(tvec);
         }
     }
-    Ipp32fc* y = fc.y();
-    cout << "Final filter value: " << std::setprecision(17) << y[0].re << " + i" << y[0].im << endl;
-    Ipp32fc sum = {0.0f, 0.0f};
-    Ipp32fc sum2 = {0.0f, 0.0f};
-    for (int i=0; i<Nsamps; i++) {
-        sum.re += oneChVec[i].re;
-        sum.im += oneChVec[i].im;
-        sum2.re += sum.re;
-        sum2.im += sum.im;
-    }
-    cout << "Expected integrated value: " << sum.re << " + i" << sum.im << endl;
-    cout << "Expected double-integrated value: " << sum2.re << " + i" << sum2.im << endl;
-  }
-#endif
+    compare_to_ref(*(f->y()), ref);
+    delete f;
+    ippsFree(tvec);
+}
 
-#ifdef VERIFY2
- {
-    int NfixSamps = 32000;
-    if (argc == 2) {
-       NfixSamps = atof(argv[1]);
-    }
-    Ipp32fc cval = {1.5f, 2.0f};
-    fc.setUserOutbuffer(userY);
-    fc.clear();
-    cout << "---- Filtering " << NfixSamps << " 1.5+i2.0-valued samples at " << Nch << " parallel channels (" << NfixSamps*Nch << " complex samples)" << endl;
-    Timing timing;
-    for (int i=0; i<NfixSamps; i++) {
-        ippsSet_32fc(cval, allChVec, Nch);
-        fc.filter(allChVec);
-    }
-    double dT = timing.stop();
-    Ipp32fc* y = userY; //fc.y();
-    cout << "Final filter value ch0: " << std::setprecision(17) << y[0].re << " + i" << y[0].im << endl;
-    cout << "Final filter value ch1: " << std::setprecision(17) << y[1].re << " + i" << y[1].im << endl;
-    cout << "Final filter value chN: " << std::setprecision(17) << y[Nch-1].re << " + i" << y[Nch-1].im << endl;
-    cout << "Filter speed: " << 1e-6*((double)NfixSamps*Nch)/dT << " Msamp/sec (*2 if not complex)" << endl;
-  }
-#endif
+////////////////////////////////////////////////////////////////////
+// Filter coeff file parser
+////////////////////////////////////////////////////////////////////
+void test_filterloader()
+{
+    std::string fn("filter_longchain.coeff");
+    cout << endl << "---- Test filter chain loader with " << fn << endl;
+    FilterChain fc;
+    fc.buildFromFile(fn.c_str(), /*channels:*/Nch);
+    fc.summary(cout);
+}
 
-#if BENCH
-  {
-    cout << "---- Filtering speed test with <pulse_32fc.raw> with chain and " << Nch << " parallel channels" << endl;
-    fc.clear();
-    Timing timing;
-    for (int i=0; i<Nsamps; i++) {
-        // ippsSet_32fc(oneChVec[i], allChVec, Nch);
-        allChVec[0].re = oneChVec[i].re;
-        allChVec[0].im = oneChVec[i].im;
-        fc.filter(allChVec);
-    }
-    double dT = timing.stop();
-    cout << "Filter speed: " << 1e-6*((double)Nsamps*Nch)/dT << " Mcomplex/sec" << endl;
-    Ipp32fc* y = fc.y();
-    cout << "Final filter value: " << std::setprecision(17) << y[0].re << " + i" << y[0].im << endl;
-  }
-#endif
+////////////////////////////////////////////////////////////////////
+// Benchmark performance of direct filter versus single-filter chain
+////////////////////////////////////////////////////////////////////
+void bench_filter_vs_chain()
+{
+    cout << endl << "---- Benchmark INT filter on its own and in a chain" << endl;
+    FilterChain fc;
+    IntFilter* flt1 = new IntFilter();
+    IntFilter* flt2 = new IntFilter();
+    flt1->init(/*order ignored:*/0, Nch);
+    flt2->init(/*order ignored:*/0, Nch);
+    fc.appendFilter(flt2);
 
-    ippsFree(oneChVec);
-    ippsFree(allChVec);
-    cout << "---- END" << endl;
+    Ipp32fc c = {0, 0};
+    Ipp32fc ref = {0.0f,0.0f};
+    Ipp32fc* singlechdata = load_datafile();
+    Ipp32fc* multichannelline = load_constvec(c);
+
+    Ipp32fc* filtered = ippsMalloc_32fc(Nch);
+
+    if (1) {
+        Timing T("** Computing the reference on one channel ", Nsamps);
+        for (int s=0;s<Nsamps;s++) {
+            ref.re += singlechdata[s].re;
+            ref.im += singlechdata[s].im;
+        }
+        ref.re *= NI;
+        ref.im *= NI;
+    }
+    ippsSet_32fc(c, filtered, Nch);
+    if (1) {
+        Timing T("** Cache warmup with inline ippsAdd_32fc_I", Nsamps*Nch*NI);
+        for (int i=0;i<NI;i++)
+        for (int s=0;s<Nsamps;s++) {
+            c = singlechdata[s];
+            //ippsSet_32fc(c, multichannelline, Nch);
+            //ippsAdd_32fc_I(multichannelline, filtered, Nch);
+            ippsSet_32f(c.re, (Ipp32f*)multichannelline, 2*Nch);
+            ippsAdd_32f_I((Ipp32f*)multichannelline, (Ipp32f*)filtered, 2*Nch);
+        }
+    }
+    ippsSet_32fc(c, filtered, Nch);
+    if (1) {
+        Timing T("** Inline ippsAdd_32fc_I speed", Nsamps*Nch*NI);
+        for (int i=0;i<NI;i++)
+        for (int s=0;s<Nsamps;s++) {
+            c = singlechdata[s];
+            ippsSet_32fc(c, multichannelline, Nch);
+            ippsAdd_32fc_I(multichannelline, filtered, Nch);
+        }
+    }
+    compare_to_ref(filtered[0], ref);
+    if (1) {
+        Timing T("** Separate complex INT filter", Nsamps*Nch*NI);
+        for (int i=0;i<NI;i++)
+        for (int s=0;s<Nsamps;s++) {
+            c = singlechdata[s];
+            ippsSet_32fc(c, multichannelline, Nch);
+            flt1->filter(multichannelline);
+        }
+    }
+    compare_to_ref(*(flt1->y()), ref);
+    if (1) {
+        Timing T("** Chain 1-entry complex INT filter", Nsamps*Nch*NI);
+        for (int i=0;i<NI;i++)
+        for (int s=0;s<Nsamps;s++) {
+            c = singlechdata[s];
+            ippsSet_32fc(c, multichannelline, Nch);
+            fc.filter(multichannelline);
+        }
+    }
+    compare_to_ref(*(fc.y()), ref);
+    ippsFree(singlechdata);
+    ippsFree(multichannelline);
+    ippsFree(filtered);
+    delete flt1;
+    // delete flt2; -- deleted by FilterChain
+}
+
+
+////////////////////////////////////////////////////////////////////
+// Test filterchain created from .coeff file and filter a constant
+////////////////////////////////////////////////////////////////////
+void test_filterloader_on_data(bool ownOutput)
+{
+    Ipp32fc c = {1, 0.5};
+    std::string fn("filter_chain1.coeff");
+    cout << endl << "---- Test filtering of constant "
+         << "{" << c.re << "," << c.im << "} " 
+         << (NI*Nsamps) << " times with setup in " << fn << endl;
+    FilterChain fc;
+    fc.buildFromFile(fn.c_str(), /*channels:*/Nch);
+    fc.summary(cout);
+
+    Ipp32fc* tvec = ippsMalloc_32fc(Nch);
+    Ipp32fc* ovec = ippsMalloc_32fc(Nch);
+    ippsZero_32fc(ovec, Nch);
+    if (ownOutput) { 
+        fc.setUserOutbuffer(ovec); 
+        cout << "Assigned USER output buffer to filterchain" << endl;
+    }
+    ippsSet_32fc(c, tvec, Nch);
+    if (1) {
+        for (int i=0;i<NI;i++)
+        for (int s=0;s<Nsamps;s++) {
+            fc.filter(tvec);
+        }
+    }
+    // dummy compare, just to print
+    cout << "Output = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
+
+    // some expected values (really depends on filter_chain1.coeff setup though!)
+    Ipp32fc ex1 = { c.re*NI*Nsamps/3, c.im*NI*Nsamps/3 };
+    cout << "** Expected value _if_ 1:3 decimation and then integration" << endl;
+    compare_to_ref(*(fc.y()), ex1);
+    ippsFree(tvec);
+    ippsFree(ovec);
+}
+
+////////////////////////////////////////////////////////////////////
+// MAIN choose tests
+////////////////////////////////////////////////////////////////////
+int main(int argc, char** argv)
+{
+    ippStaticInit();
+    cout << "----------------------------------------------------" << endl;
+    cout << "Test setup: Nch=" << Nch << " Nsamps=" << Nsamps << " NI=" << NI << endl;
+    cout << "----------------------------------------------------" << endl;
+
+    test_helperclass();
+
+    test_filterfactory();
+
+    bench_filter_vs_chain();
+
+    test_filterloader();
+
+    test_filterloader_on_data(false);
+
+    test_filterloader_on_data(true);
+
+    cout << endl << "---- END" << endl;
     return 0;
 }
