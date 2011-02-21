@@ -5,14 +5,14 @@
 
 4    # the number of filters in series
 
-# ----- Integrator
-
-0 # type=0=integrator
-
 # ----- Decimator
 
 1 # type=1=decimator
-2 # decimation ratio: 1=1:1, 2=1:2, 3=1:3 etc
+3 # decimation ratio: 1=1:1, 2=1:2, 3=1:3 etc
+
+# ----- Integrator
+
+0 # type=0=integrator
 
 # ----- Biquad IIR Filter
 
