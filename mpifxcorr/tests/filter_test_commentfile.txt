@@ -1,0 +1,15 @@
+   # File intended for testing the filterchain builder 
+   # The test is included in filter_test.cpp
+   # A successful test will print out only the numbers
+   # in this file and discard all comments
+
+# A file with comments
+16
+   1 2 3 # and numbers, should not show this one: 8888
+1.9             2.2 0 4 3.12345 # and floats
+
+4e-3
+# last
+
+
+    1
