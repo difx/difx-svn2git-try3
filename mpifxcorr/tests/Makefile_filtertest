@@ -1,5 +1,5 @@
 BASEDIR = ../src/
-BASEFILES = filter_test.cpp $(BASEDIR)/filters.cpp $(BASEDIR)/filter_int.cpp $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
+BASEFILES = filter_test.cpp $(BASEDIR)/filters.cpp $(BASEDIR)/filter_dec.cpp $(BASEDIR)/filter_int.cpp $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
 BASEHEADERS = $(BASEDIR)/filter.h $(BASEDIR)/filters.h $(BASEDIR)/filterchain.h
 BASEOBJS = $(BASEFILES:.cpp=.o)
 
@@ -11,7 +11,7 @@ IPP_PATH = $(IPPROOT)
 CC = g++
 
 # normal compile:
-CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR)
+CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -DDEBUG_V=1 -m64
 
 # for 'oprofile' profiling:
 # CFLAGS = -pthread -g -O0 -fno-inline -fno-default-inline -c -Wall
@@ -20,6 +20,7 @@ all: filter_test
 
 clean:
 	rm -f filter_test filter_test.o
+	rm -f $(BASEOBJS)
 
 intel_CFLAGS = $(CFLAGS) -DINTEL_IPP=1 -I${IPP_PATH}/include/ -I. -I./IA-32/
 intel_LDFLAGS = -pthread -L${IPP_PATH}/sharedlib/ -L${IPP_PATH}/lib/ #-liomp5 
