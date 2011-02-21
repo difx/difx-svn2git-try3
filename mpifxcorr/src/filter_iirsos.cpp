@@ -38,7 +38,9 @@ using std::flush;
 #include <malloc.h>
 
 #define COEFFS_PER_STAGE 6
+#ifndef DEBUG_V
 #define DEBUG_V 0
+#endif
 
 ////////////////////////////////////////////////
 // IIR Second-order-structures filter
@@ -213,7 +215,7 @@ int IIRSOSFilter::get_num_coeffs() {
  * Pass new data to filter
  * @arg x array of single samples from multiple channels
  */
-void IIRSOSFilter::filter(Ipp32fc* freqbins) {
+size_t IIRSOSFilter::filter(Ipp32fc* freqbins) {
     assert((pD!=0) && (pD->coeffs!=0) && (pD->numchannels>0));
 
     /* --Matlab--
@@ -271,6 +273,7 @@ void IIRSOSFilter::filter(Ipp32fc* freqbins) {
         t2 += pD->N;
         Ciir += COEFFS_PER_STAGE;
     }
+    return pD->numchannels;
 }
 
 /**

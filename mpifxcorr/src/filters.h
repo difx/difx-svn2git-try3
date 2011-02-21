@@ -58,7 +58,7 @@ class IntFilter : public Filter {
         double get_coeff(int);
         int get_num_coeffs();
    public:
-        void filter(Ipp32fc*);
+        size_t filter(Ipp32fc*);
         Ipp32fc* y();
         void setUserOutbuffer(Ipp32fc*);
    // Data
@@ -89,7 +89,7 @@ class IIRFilter : public Filter {
         double get_coeff(int);
         int get_num_coeffs();
    public:
-        void filter(Ipp32fc*);
+        size_t filter(Ipp32fc*);
         Ipp32fc* y();
         void setUserOutbuffer(Ipp32fc*);
     // Data
@@ -120,7 +120,7 @@ class IIRSOSFilter : public Filter {
         double get_coeff(int);
         int get_num_coeffs();
    public:
-        void filter(Ipp32fc*);
+        size_t filter(Ipp32fc*);
         Ipp32fc* y();
         void setUserOutbuffer(Ipp32fc*);
     // Data
@@ -142,7 +142,7 @@ class DSVFFilter : public Filter {
         DSVFFilter& operator= (const DSVFFilter& o);
         DSVFFilter(const DSVFFilter& o);
     public:
-        const char* name() { return "BiQuadIIR"; }
+        const char* name() { return "DSVF"; }
         void clear();
         void init(size_t, size_t);
         void   set_prescaling(double);
@@ -151,7 +151,38 @@ class DSVFFilter : public Filter {
         double get_coeff(int);
         int get_num_coeffs();
    public:
-        void filter(Ipp32fc*);
+        size_t filter(Ipp32fc*);
+        Ipp32fc* y();
+        void setUserOutbuffer(Ipp32fc*);
+    // Data
+    private:
+        struct P;
+        P* pD;
+};
+
+/**
+ * Decimator
+ */
+class DecFilter : public Filter {
+    // C'stors
+    public:
+        DecFilter();
+        ~DecFilter();
+    // No copy c'stors
+    private:
+        DecFilter& operator= (const DecFilter& o);
+        DecFilter(const DecFilter& o);
+    public:
+        const char* name() { return "Decimator"; }
+        void clear();
+        void init(size_t, size_t);
+        void   set_prescaling(double);
+        double get_prescaling();
+        void   set_coeff(int, double);
+        double get_coeff(int);
+        int get_num_coeffs();
+   public:
+        size_t filter(Ipp32fc*);
         Ipp32fc* y();
         void setUserOutbuffer(Ipp32fc*);
     // Data

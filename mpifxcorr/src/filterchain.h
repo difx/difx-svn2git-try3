@@ -52,7 +52,7 @@ class FilterChain : public Filter {
         // initialize filter chain from config file
         void buildFromFile(const char*, int);
         // chain access
-        void appendFilter(Filter*, int);
+        void appendFilter(Filter*);
         // funcs from the Filter class
         void clear();
         void init(size_t, size_t);
@@ -62,15 +62,13 @@ class FilterChain : public Filter {
         double get_coeff(int);
         int get_num_coeffs();
     public:
-        void filter(Ipp32fc*);
+        size_t filter(Ipp32fc*);
         Ipp32fc* y();
         void setUserOutbuffer(Ipp32fc*);
     public:
         void summary(std::ostream& o);
     private:
         std::vector<Filter*> fchain;
-        std::vector<int> rchain;
-        std::vector<int*> countchain;
 };
 
 #endif // _FILTERCHAIN_H

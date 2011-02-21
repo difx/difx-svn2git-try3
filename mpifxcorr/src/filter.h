@@ -38,7 +38,7 @@
  * Filter types
  */
 
-enum FltType { FLT_AVERAGING=0, FLT_CIC=1, FLT_IIR_SOS=2, FLT_FIR=3, FLT_DSVF=4 };
+enum FltType { FLT_AVERAGING=0, FLT_DECIMATOR=1, FLT_IIR_SOS=2, FLT_FIR=3, FLT_DSVF=4, FLT_CIC=5 };
 
 /**
  * Base class for Filter
@@ -63,7 +63,7 @@ class Filter {
         virtual int    get_num_coeffs() = 0;
         virtual const char* name() = 0;
     public:
-        virtual void filter(Ipp32fc*) = 0;
+        virtual size_t filter(Ipp32fc*) = 0;
         virtual Ipp32fc* y() = 0;
         virtual void setUserOutbuffer(Ipp32fc*) = 0;
 };

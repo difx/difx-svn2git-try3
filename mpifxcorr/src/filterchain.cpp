@@ -22,7 +22,10 @@
 #include "filters.h"
 #include "filterhelpers.h"
 
+#ifndef DEBUG_V
 #define DEBUG_V 0
+#endif
+
 #define F_PREC  16  // number of float printout decimals
 
 #include <iostream>
@@ -33,25 +36,16 @@ using std::endl;
 /** C'stor clear the chain */
 FilterChain::FilterChain() { 
     fchain.clear();
-    rchain.clear();
-    countchain.clear();
 }
 
 /** D'stor free interal allocs */
 FilterChain::~FilterChain() {
-    std::vector<int*>::iterator citr = countchain.begin();
     std::vector<Filter*>::iterator fitr = fchain.begin();
-    int len = countchain.size();
+    int len = fchain.size();
     while ((len--)>0) {
-        delete (*citr);
         delete (*fitr);
-        *citr = 0;
-        *fitr = 0;
-        citr++;
         fitr++;
     }
-    countchain.clear();
-    rchain.clear();
     fchain.clear();
 }
 
@@ -76,20 +70,27 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
     std::streamsize old_prec = cout.precision();
     for (int stage=0; stage<Nstages; stage++) {
         FltType ftype = static_cast<FltType>((int)(vec[idx++]));
-        int R = vec[idx++];
-        int N_M = vec[idx++];
-        if (DEBUG_V) { cout << "Stage " << (stage+1) << " type=" << ftype << " decim=" << R << " order=" << N_M << endl; }
+        if (DEBUG_V) { cout << "Stage " << (stage+1) << " type=" << ftype << endl; }
         switch (ftype) {
+            case FLT_DECIMATOR:
+            {
+                int R = vec[idx++];
+                DecFilter* flt = new DecFilter();
+                flt->init((size_t)0, (size_t)parallelism); // filter order is ignored
+                flt->set_coeff(0, R);
+                fchain.push_back(flt);
+            } break;
             case FLT_AVERAGING:
             {
                 int c_idx = 0;
                 IntFilter* flt = new IntFilter();
-                flt->init((size_t)N_M, (size_t)parallelism);
-                this->appendFilter(flt, R);
+                flt->init((size_t)1, (size_t)parallelism); // filter order is ignored
+                fchain.push_back(flt);
             } break;
             case FLT_IIR_SOS: 
             {
                 int c_idx = 0;
+                int N_M = vec[idx++];
                 IIRSOSFilter* flt = new IIRSOSFilter();
                 flt->init((size_t)N_M, (size_t)parallelism);
                 flt->set_prescaling(vec[idx++]);
@@ -101,11 +102,12 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
                     }
                     if (DEBUG_V) { cout << endl; }
                 }
-                this->appendFilter(flt, R);
+                fchain.push_back(flt);
             } break;
             case FLT_FIR:
             {
-                IIRSOSFilter* flt = new IIRSOSFilter(); // TODO
+                int N_M = vec[idx++];
+                IIRSOSFilter* flt = new IIRSOSFilter(); // TODO FLT_FIR!
                 flt->init((size_t)N_M, (size_t)parallelism);
                 flt->set_prescaling(vec[idx++]);
                 for (int n=0; n<N_M; n++) {
@@ -113,16 +115,16 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
                     if (DEBUG_V) { cout << std::setprecision(F_PREC) << " " << c; }
                 }
                 if (DEBUG_V) { cout << endl; }
-                this->appendFilter(flt, R);
+                fchain.push_back(flt);
             } break;
             case FLT_DSVF:
             {
                 DSVFFilter* flt = new DSVFFilter();
-                flt->init((size_t)N_M, (size_t)parallelism); // filter oder is ignored
+                flt->init((size_t)2, (size_t)parallelism); // filter oder is ignored
                 flt->set_prescaling(vec[idx++]);
                 flt->set_coeff(0, vec[idx++]); // f = 2*sin(pi*fc/fs)
                 flt->set_coeff(1, vec[idx++]); // q = 1/Q
-                this->appendFilter(flt, R);
+                fchain.push_back(flt);
             } break;
             default:
                 cout << " filterchain: unknown or not yet implemented type " << ftype << endl;
@@ -134,29 +136,14 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
 
 
 /**
- * Append filter to end of chain.
- * @arg fp Pointer to filter object to add
- * @arg R  Decimation factor to apply to filter input (R=0,R=1: no decimation)
- */
-void FilterChain::appendFilter(Filter* fp, int R) {
-    int* Rp = new int(0);
-    fchain.push_back(fp);
-    rchain.push_back(R);
-    countchain.push_back(Rp);
-}
-
-/**
  * Clear filters in the chain.
  */
 void FilterChain::clear() {
     std::vector<Filter*>::iterator fitr = fchain.begin();
-    std::vector<int*>::iterator citr = countchain.begin();
     int len = fchain.size();
     while ((len--)>0) {
         (*fitr)->clear();
-        *(*citr) = 0;
         fitr++;
-        citr++;
     }
 }
 
@@ -171,6 +158,13 @@ void FilterChain::init(size_t order, size_t N) {
         (*fitr)->init(order, N);
         fitr++;
      }
+}
+
+/**
+ * Append external filter
+ */
+void FilterChain::appendFilter(Filter* flt) {
+    fchain.push_back(flt);
 }
 
 void FilterChain::set_coeff(int, double) {
@@ -191,31 +185,27 @@ int FilterChain::get_num_coeffs() {
  * Add one sample per channel and process data along the filter chain,
  * taking into account also the decimation factors.
  */
-void FilterChain::filter(Ipp32fc* in) {
+size_t FilterChain::filter(Ipp32fc* in) {
     std::vector<Filter*>::iterator fitr = fchain.begin();
-    std::vector<int>::iterator ritr = rchain.begin();
-    std::vector<int*>::iterator citr = countchain.begin();
     int len = fchain.size();
+    size_t newsamps = 0;
     for (int i=0; i<len; i++) {
-        (**citr)++;
-        if ((**citr) >= *ritr) {
-            // Target R reached, take output of prev filter as input of curr filter
-            Ipp32fc *xin = (i==0) ? in : (*(fitr-1))->y();
-            (*fitr)->filter(xin);
-            (**citr) = 0;
-        }
+        // input from chain start or output of prev filter
+        Ipp32fc *xin = (i==0) ? in : (*(fitr-1))->y();
+        // filter, then quit chain if decimator/filter had no new output data
+        newsamps = (*fitr)->filter(xin);
+        if (!newsamps)
+            break;
         fitr++;
-        citr++;
-        ritr++;
     }
+    return newsamps;
 }
 
 /**
  * Return pointer to output of last filter.
  */
 Ipp32fc* FilterChain::y() {
-    std::vector<Filter*>::iterator fitr = fchain.end() - 1;
-    return (*fitr)->y();
+    return fchain.back()->y();
 }
 
 /**
@@ -230,18 +220,14 @@ void FilterChain::setUserOutbuffer(Ipp32fc* userY) {
  */
 void FilterChain::summary(std::ostream& o) {
     std::vector<Filter*>::iterator fitr = fchain.begin();
-    std::vector<int>::iterator ritr = rchain.begin();
-    std::vector<int*>::iterator citr = countchain.begin();
     std::streamsize old_prec = o.precision();
     int len = fchain.size();
     o << "Summary of FilterChain" << endl;
     o << "Number of stages: " << len << endl;
     for (int i=0; i<len; i++) {
         Filter* f = (*fitr);
-        int R_goal = (*ritr);
-        int R_count = *(*citr);
         int N_coeffs = f->get_num_coeffs();
-        o << "Stage " << (i+1) << " " << f->name() << " filter, C=" << R_count << "/R=" << R_goal << endl;
+        o << "Stage " << (i+1) << " " << f->name() << endl;
         o << "  coeffs: ";
         o << std::setprecision(F_PREC);
         for (int ci=0; ci<N_coeffs; ci++) {
@@ -250,8 +236,6 @@ void FilterChain::summary(std::ostream& o) {
         }
         o << endl;
         fitr++;
-        citr++;
-        ritr++;
     }
     o.precision(old_prec);
 }

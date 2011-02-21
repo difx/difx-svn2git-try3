@@ -131,9 +131,10 @@ double IIRFilter::get_coeff(int index) {
  * Pass new data to filter
  * @arg x array of single samples from multiple channels
  */
-void IIRFilter::filter(Ipp32fc* freqbins) {
+size_t IIRFilter::filter(Ipp32fc* freqbins) {
     assert((pD!=0) && (pD->accu!=0));
     ippsAdd_32fc_I(freqbins, pD->accu, pD->N);
+    return pD->N;
 }
 
 int IIRFilter::get_num_coeffs() { return 6; } // TODO

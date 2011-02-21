@@ -38,7 +38,9 @@ using std::flush;
 #include <malloc.h>
 
 #define COEFFS_PER_STAGE 6
+#ifndef DEBUG_V
 #define DEBUG_V 0
+#endif
 
 ////////////////////////////////////////////////
 // Digital state variable filter
@@ -206,7 +208,7 @@ int DSVFFilter::get_num_coeffs() {
  * Pass new data to filter
  * @arg x array of single samples from multiple channels
  */
-void DSVFFilter::filter(Ipp32fc* freqbins) {
+size_t DSVFFilter::filter(Ipp32fc* freqbins) {
     assert((pD!=0) && (pD->numchannels>0));
 
     /* --Matlab--
@@ -257,6 +259,8 @@ void DSVFFilter::filter(Ipp32fc* freqbins) {
     // fb2 = output
     ippsCopy_32f(pD->sum2, /*dst*/pD->z1, pD->N);
     ippsCopy_32f(pD->outputs, /*dst*/pD->z2, pD->N);
+
+    return pD->numchannels;
 }
 
 /**
