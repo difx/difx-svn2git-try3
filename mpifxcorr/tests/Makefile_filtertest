@@ -11,7 +11,8 @@ IPP_PATH = $(IPPROOT)
 CC = g++
 
 # normal compile:
-CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -DDEBUG_V=1 -m64
+#CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -DDEBUG_V=1 -m64
+CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -m64
 
 # for 'oprofile' profiling:
 # CFLAGS = -pthread -g -O0 -fno-inline -fno-default-inline -c -Wall

@@ -204,10 +204,12 @@ void bench_filter_vs_chain()
         for (int i=0;i<NI;i++)
         for (int s=0;s<Nsamps;s++) {
             c = singlechdata[s];
-            //ippsSet_32fc(c, multichannelline, Nch);
-            //ippsAdd_32fc_I(multichannelline, filtered, Nch);
-            ippsSet_32f(c.re, (Ipp32f*)multichannelline, 2*Nch);
-            ippsAdd_32f_I((Ipp32f*)multichannelline, (Ipp32f*)filtered, 2*Nch);
+            //default method, ??? Ms/s:
+            ippsSet_32fc(c, multichannelline, Nch);
+            ippsAdd_32fc_I(multichannelline, filtered, Nch);
+            //other method, 1027 Ms/s:
+            //ippsSet_32f(c.re, (Ipp32f*)multichannelline, 2*Nch);
+            //ippsAdd_32f_I((Ipp32f*)multichannelline, (Ipp32f*)filtered, 2*Nch);
         }
     }
     ippsSet_32fc(c, filtered, Nch);
@@ -272,18 +274,52 @@ void test_filterloader_on_data(bool ownOutput)
     }
     ippsSet_32fc(c, tvec, Nch);
     if (1) {
+        Timing T("** filter_chain1.coeff", Nsamps*Nch*NI);
         for (int i=0;i<NI;i++)
         for (int s=0;s<Nsamps;s++) {
             fc.filter(tvec);
         }
     }
-    // dummy compare, just to print
     cout << "Output = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
 
     // some expected values (really depends on filter_chain1.coeff setup though!)
     Ipp32fc ex1 = { c.re*NI*Nsamps/3, c.im*NI*Nsamps/3 };
     cout << "** Expected value _if_ 1:3 decimation and then integration" << endl;
     compare_to_ref(*(fc.y()), ex1);
+    ippsFree(tvec);
+    ippsFree(ovec);
+}
+
+////////////////////////////////////////////////////////////////////
+// Test filterchain created from .coeff file and filter a constant
+////////////////////////////////////////////////////////////////////
+void test_filterloader_on_data2(bool ownOutput)
+{
+    Ipp32fc c = {1, 0.5};
+    std::string fn("filter_longchain.coeff");
+    cout << endl << "---- Test filtering of constant "
+         << "{" << c.re << "," << c.im << "} " 
+         << (NI*Nsamps) << " times with setup in " << fn << endl;
+    FilterChain fc;
+    fc.buildFromFile(fn.c_str(), /*channels:*/Nch);
+    fc.summary(cout);
+
+    Ipp32fc* tvec = ippsMalloc_32fc(Nch);
+    Ipp32fc* ovec = ippsMalloc_32fc(Nch);
+    ippsZero_32fc(ovec, Nch);
+    if (ownOutput) { 
+        fc.setUserOutbuffer(ovec); 
+        cout << "Assigned USER output buffer to filterchain" << endl;
+    }
+    ippsSet_32fc(c, tvec, Nch);
+    if (1) {
+        Timing T("** filter_longchain.coeff", Nsamps*Nch*NI);
+        for (int i=0;i<NI;i++)
+        for (int s=0;s<Nsamps;s++) {
+            fc.filter(tvec);
+        }
+    }
+    cout << "Output = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
     ippsFree(tvec);
     ippsFree(ovec);
 }
@@ -309,6 +345,10 @@ int main(int argc, char** argv)
     test_filterloader_on_data(false);
 
     test_filterloader_on_data(true);
+
+    test_filterloader_on_data2(false);
+
+    test_filterloader_on_data2(true);
 
     cout << endl << "---- END" << endl;
     return 0;
