@@ -33,9 +33,9 @@ using std::flush;
 #define VERIFY2 0 // verification test with fixed DC-level '1.0'
 #define BENCH   0 // benchmarking test
 
-#if 0  // short filter size test
+#if 1  // short filter size test
 static const long Nch = 32;
-static const long NI = 256; //1024
+static const long NI = 512; //1024
 #else  // wide filter size test
 static const long Nch = 1024;
 static const long NI = 32;
@@ -138,17 +138,18 @@ void test_helperclass()
 ////////////////////////////////////////////////////////////////////
 void test_filterfactory()
 {
+    const int NI2 = 10000;
     cout << endl << "---- Test filter factory using Filter::getFilter(FLT_AVERAGING)" << endl;
     Ipp32fc* tvec = ippsMalloc_32fc(Nch);
     Filter*  f = Filter::getFilter(FLT_AVERAGING);
     f->init(0.01, Nch);
     f->clear();
     Ipp32fc c = {1, 0.5};
-    Ipp32fc ref = {c.re*NI,c.im*NI};
+    Ipp32fc ref = {c.re*NI*NI2,c.im*NI*NI2};
     ippsSet_32fc(c, tvec, Nch);
     if (1) {
-        Timing T("Filter run with FLT_AVERAGING/INT filter", Nch*NI);
-        for (int i=0; i<NI; i++) {
+        Timing T("Filter run with INT filter", Nch*NI*NI2);
+        for (int i=0; i<NI*NI2; i++) {
             f->filter(tvec);
         }
     }
