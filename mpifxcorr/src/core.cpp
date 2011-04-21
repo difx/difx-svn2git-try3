@@ -354,7 +354,6 @@ void Core::loopprocess(int threadid)
   Polyco ** polycos=0;
   Polyco * currentpolyco=0;
   Mode ** modes;
-
   threadscratchspace * scratchspace = new threadscratchspace;
   memset((void*)scratchspace, 0, sizeof(threadscratchspace));
   scratchspace->threadcrosscorrs = vectorAlloc_cf32(maxthreadresultlength);
@@ -491,9 +490,9 @@ void Core::loopprocess(int threadid)
     }
 
     //if necessary, allocate/reallocate space for the STAs
-    nowdumpingsta = config->dumpSTA() || config->dumpKurtosis();
     scratchspace->dumpsta = config->dumpSTA();
     scratchspace->dumpkurtosis = config->dumpKurtosis();
+    nowdumpingsta = scratchspace->dumpsta || scratchspace->dumpkurtosis;
     if(nowdumpingsta != dumpingsta) {
       if (scratchspace->starecordbuffer != 0) {
         free(scratchspace->starecordbuffer);
@@ -690,7 +689,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     modes[j]->setDumpKurtosis(scratchspace->dumpkurtosis);
     if(scratchspace->dumpkurtosis)
       modes[j]->zeroKurtosis();
-
+    
     //reset pcal
     if(config->getDPhaseCalIntervalMHz(procslots[index].configindex, j) > 0)
     {
@@ -1005,7 +1004,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       xcblockcount = 0;
       xcshiftcount++;
     }
-    acblockcount += config->getNumBufferedFFTs(procslots[index].configindex);
+    acblockcount += numfftsprocessed;
     if(acblockcount == maxacblocks)
     {
       //shift/average and then lock results and copy data
@@ -1163,7 +1162,7 @@ void Core::copyPCalTones(int index, int threadid, Mode ** modes)
 void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, double nswidth, Mode ** modes, threadscratchspace * scratchspace)
 {
   int maxproducts, resultindex, perr, status, bytecount, recordsize;
-  int freqindex, parentfreqindex, chans_to_avg, freqchannels;
+  int freqindex, localfreqindex, parentfreqindex, numrecordedbands, chans_to_avg, freqchannels;
   double minimumweight, stasamples;
   float renormvalue;
   bool datastreamsaveraged, writecrossautocorrs;
@@ -1192,10 +1191,10 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
       starecord = scratchspace->starecordbuffer;
       for (int j=0;j<config->getDNumRecordedBands(procslots[index].configindex, i);j++) {
         if(bytecount + recordsize > config->getMTU()) {
-          difxMessageSendBinary((const char *)(starecord), BINARY_STA, bytecount);
+          difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
           bytecount = 0;
         }
-        starecord = scratchspace->starecordbuffer + bytecount;
+        starecord = (DifxMessageSTARecord *)((char*)scratchspace->starecordbuffer + bytecount);
         starecord->messageType = STA_AUTOCORRELATION;
         starecord->dsindex = i;
         starecord->coreindex = mpiid - (config->getNumDataStreams()+1);
@@ -1214,8 +1213,9 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
         freqchannels = config->getFNumChannels(freqindex);
         stasamples = 0.001*nswidth*2*config->getFreqTableBandwidth(freqindex);
         minimumweight = MINIMUM_FILTERBANK_WEIGHT*stasamples/(2*freqchannels);
-        if(modes[i]->getWeight(false, j) < minimumweight)
+        if(modes[i]->getWeight(false, j) < minimumweight) {
           continue; //dodgy packet, less than 1/3 of normal data, so don't send it
+        }
 
         // normalise the STA data to maintain units of power spectral density. This means dividing by
         // the number of channels (since we use an un-normalised FFT) and the number of integrations (i.e. time)
@@ -1248,7 +1248,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
         //cout << "About to send the binary message" << endl;
         bytecount += sizeof(DifxMessageSTARecord) + sizeof(f32)*starecord->nChan;
       }
-      difxMessageSendBinary((const char *)(starecord), BINARY_STA, bytecount);
+      difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
     }
     //cout << "Finished doing some STA stuff" << endl;
   }
@@ -1315,14 +1315,16 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
     for(int k=0;k<config->getDNumTotalBands(procslots[index].configindex, j);k++)
     {
       freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
+      numrecordedbands = config->getDNumRecordedBands(procslots[index].configindex, j);
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex))
       {
-        if(k>=config->getDNumRecordedBands(procslots[index].configindex, j))
+        if(k>=numrecordedbands)
         {
           //need to get the weight from the parent band
-          parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, freqindex);
-          for(int l=0;l<config->getDNumRecordedBands(procslots[index].configindex, j);l++) {
-            if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l)) {
+          localfreqindex = config->getDLocalZoomFreqIndex(procslots[index].configindex, j, k-numrecordedbands);
+          parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, localfreqindex);
+          for(int l=0;l<numrecordedbands;l++) {
+            if(config->getDLocalRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-numrecordedbands) == config->getDRecordedBandPol(procslots[index].configindex, j, l)) {
               procslots[index].floatresults[resultindex] += modes[j]->getWeight(false, l);
             }
           }
@@ -1339,14 +1341,16 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
       for(int k=0;k<config->getDNumTotalBands(procslots[index].configindex, j);k++)
       {
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
+        numrecordedbands = config->getDNumRecordedBands(procslots[index].configindex, j);
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex)) {
-          if(k>=config->getDNumRecordedBands(procslots[index].configindex, j))
+          if(k>=numrecordedbands)
           {
             //need to get the weight from the parent band
-            parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, freqindex);
-            for(int l=0;l<config->getDNumRecordedBands(procslots[index].configindex, j);l++)
+            localfreqindex = config->getDLocalZoomFreqIndex(procslots[index].configindex, j, k-numrecordedbands);
+            parentfreqindex = config->getDZoomFreqParentFreqIndex(procslots[index].configindex, j, localfreqindex);
+            for(int l=0;l<numrecordedbands;l++)
             {
-              if(config->getDRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-config->getDNumRecordedBands(procslots[index].configindex, j)) == config->getDRecordedBandPol(procslots[index].configindex, j, l))
+              if(config->getDLocalRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-numrecordedbands) == config->getDRecordedBandPol(procslots[index].configindex, j, l))
               {
                 procslots[index].floatresults[resultindex] += modes[j]->getWeight(false, l);
               }
@@ -1386,10 +1390,10 @@ void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, doub
     if(valid[i]) {
       for (int j=0;j<config->getDNumRecordedBands(procslots[index].configindex, i);j++) {
         if(bytecount + recordsize > config->getMTU()) {
-          difxMessageSendBinary((const char *)(starecord), BINARY_STA, bytecount);
+          difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
           bytecount = 0;
         }
-        starecord = scratchspace->starecordbuffer + bytecount;
+        starecord = (DifxMessageSTARecord *)((char*)scratchspace->starecordbuffer + bytecount);
         starecord->messageType = STA_KURTOSIS;
         starecord->dsindex = i;
         starecord->coreindex = mpiid - (config->getNumDataStreams()+1);
@@ -1414,7 +1418,7 @@ void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, doub
           cerror << startl << "Problem copying kurtosis results from mode to sta record!" << endl;
         bytecount += sizeof(DifxMessageSTARecord) + sizeof(f32)*starecord->nChan;
       }
-      difxMessageSendBinary((const char *)(starecord), BINARY_STA, bytecount);
+      difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
     }
   }
 
@@ -1858,8 +1862,10 @@ void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, 
 {
   int status, freqchannels, localfreqindex;
 
+  cdebug << startl << "Just entering Core::createPulsarVaryingSpace" << endl;
   if(oldconfigindex >= 0 && config->pulsarBinOn(oldconfigindex))
   {
+    cdebug << startl << "Going to delete the old bins..." << endl;
     for(int i=0;i<config->getNumBufferedFFTs(oldconfigindex);i++)
     {
       for(int f=0;f<config->getFreqTableLength();f++)
@@ -1874,8 +1880,10 @@ void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, 
       delete [] (*bins)[i];
     }
     delete [] *bins;
+    cdebug << startl << "Finished deleting old bins..." << endl;
     if(config->scrunchOutputOn(oldconfigindex))
     {
+      cdebug << startl << "Going to delete old acc space" << endl;
       //need to delete the old pulsar accumulation space/bin space
       for(int f=0;f<config->getFreqTableLength();f++)
       {
@@ -1912,7 +1920,7 @@ void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, 
       }
     }
   }
-
+  cdebug << startl << "Finished deleting old pulsar scratch space" << endl;
   if(newconfigindex >= 0 && config->pulsarBinOn(newconfigindex))
   {
     *bins = new s32**[config->getNumBufferedFFTs(newconfigindex)];
@@ -1957,6 +1965,10 @@ void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, 
                     for(int k=0;k<config->getNumPulsarBins(newconfigindex);k++)
                     {
                       pulsaraccumspace[f][x][i][s][j][k] = vectorAlloc_cf32(freqchannels);
+                      if(pulsaraccumspace[f][x][i][s][j][k] == NULL) {
+                        cfatal << startl << "Could not allocate pulsar scratch space (out of memory?) - I must abort!" << endl;
+                        MPI_Abort(MPI_COMM_WORLD, 1);
+                      }
                       threadbytes[threadid] += 8*freqchannels;
                       status = vectorZero_cf32(pulsaraccumspace[f][x][i][s][j][k], freqchannels);
                       if(status != vecNoErr)
@@ -1971,11 +1983,12 @@ void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, 
       }
     }
   }
+  cdebug << startl << "Finished allocating new pulsar scratch space" << endl;
 }
 
 void Core::allocateConfigSpecificThreadArrays(f32 **** baselineweight, f32 *** baselineshiftdecorr, int newconfigindex, int oldconfigindex, int threadid)
 {
-  int localfreqindex, numstrides, binloop;
+  int localfreqindex, binloop;
 
   if(oldconfigindex >= 0)
   {
@@ -2013,10 +2026,6 @@ void Core::allocateConfigSpecificThreadArrays(f32 **** baselineweight, f32 *** b
             delete [] baselineshiftdecorr[i];
           }
         }
-        numstrides = config->getFNumChannels(i)/config->getXmacStrideLength(oldconfigindex);
-        if(config->getFNumChannels(i)%config->getXmacStrideLength(oldconfigindex) != 0)
-          numstrides++;
-        threadbytes[threadid] -= 4*numstrides;
       }
     }
   }
@@ -2094,14 +2103,18 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
     }
   }
 
+  cdebug << startl << "About to create some new modes..." << endl;
   //get the config to create the appropriate Modes for us
   for(int i=0;i<numdatastreams;i++) {
     modes[i] = config->getMode(configindex, i);
-    if(modes[i] == NULL || !modes[i]->initialisedOK())
+    if(modes[i] == NULL || !modes[i]->initialisedOK()) {
+      cfatal << startl << "Problem initialising a mode during a config change - aborting!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
+    }
     threadbytes[threadid] += modes[i]->getEstimatedBytes();
   }
 
+  cdebug << startl << "New modes created, now for pulsar stuff if applicable" << endl;
   pulsarbin = config->pulsarBinOn(configindex);
   if(pulsarbin)
   {
@@ -2116,5 +2129,6 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
     }
     //cinfo << startl << "Core " << mpiid << " thread " << threadid << ": polycos created/copied successfully!"  << endl;
   }
+  cdebug << startl << "Pulsar stuff dealt with" << endl;
 }
 // vim: shiftwidth=2:softtabstop=2:expandtab

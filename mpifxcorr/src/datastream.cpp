@@ -47,6 +47,7 @@ DataStream::DataStream(Configuration * conf, int snum, int id, int ncores, int *
   activesec = 0;
   activens = 0;
   switchedpower = 0;
+  datamuxer = 0;
 }
 
 
@@ -72,6 +73,8 @@ DataStream::~DataStream()
   delete [] confignumfiles;
   if(switchedpower)
     delete switchedpower;
+  if(datamuxer)
+    delete datamuxer;
 }
 
 
@@ -295,6 +298,13 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   }
   lastoffsetns = offsetns + int(dataspanns - 1000*delayus2 + 0.5);
   //cout << mpiid << ": delayus1 is " << delayus1 << ", delayus2 is " << delayus2 << endl;
+  if(lastoffsetns < 0)
+  {
+    offsetsec -= 1;
+    offsetns += 1000000000;
+    firstoffsetns += 1000000000;
+    lastoffsetns += 1000000000;
+  }
   if(lastoffsetns < 0)
   {
     offsetsec -= 1;
@@ -536,6 +546,7 @@ void DataStream::updateConfig(int segmentindex)
 
   //set everything as directed by the config object
   bufferinfo[segmentindex].sendbytes = int((((long long)config->getDataBytes(bufferinfo[segmentindex].configindex,streamnum))*((long long)(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex))))/ config->getSubintNS(bufferinfo[segmentindex].configindex));
+  //cout << "for datastream " << streamnum << ", getDataBytes is " << config->getDataBytes(bufferinfo[segmentindex].configindex,streamnum) << ", this is modified to " << bufferinfo[segmentindex].sendbytes << " for sendbytes" << endl;
   bufferinfo[segmentindex].blockspersend = config->getBlocksPerSend(bufferinfo[segmentindex].configindex);
   bufferinfo[segmentindex].controllength = bufferinfo[segmentindex].blockspersend/FLAGS_PER_INT + 3;
   if(bufferinfo[segmentindex].blockspersend%FLAGS_PER_INT > 0)
@@ -595,6 +606,15 @@ void DataStream::loopfileread()
       input.close();
   }
   if(keepreading) {
+    if(datamuxer) {
+      input.read((char*)datamuxer->getCurrentDemuxBuffer(), datamuxer->getSegmentBytes());
+      datamuxer->incrementReadCounter();
+      datamuxer->initialise();
+      datamuxer->deinterlace(input.gcount());
+      input.read((char*)datamuxer->getCurrentDemuxBuffer(), datamuxer->getSegmentBytes());
+      datamuxer->incrementReadCounter();
+      datamuxer->deinterlace(input.gcount());
+    }
     diskToMemory(numread++);
     diskToMemory(numread++);
     perr = pthread_mutex_lock(&(bufferlock[numread]));
@@ -1311,19 +1331,51 @@ void DataStream::initialiseFile(int configindex, int fileindex)
 
 void DataStream::diskToMemory(int buffersegment)
 {
-  int synccatchbytes, previoussegment, validns, nextns, status, bytestocopy;
+  int synccatchbytes, previoussegment, validns, nextns, status, bytestocopy, nbytes, caughtbytes;
+  char * readto;
+  bool valid;
 
   //do the buffer housekeeping
   waitForBuffer(buffersegment);
-  
+
+  //get the right place to read to
+  if(datamuxer) {
+    readto = (char*)datamuxer->getCurrentDemuxBuffer();
+    nbytes = datamuxer->getSegmentBytes();
+  }
+  else {
+    readto =  (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
+    nbytes = readbytes;
+  }
+
   //read some data
-  input.read((char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)], readbytes);
-  bufferinfo[buffersegment].validbytes = input.gcount();
+  input.read(readto, nbytes);
+
+  //deinterlace and mux if needed
+  if(datamuxer) {
+    datamuxer->incrementReadCounter();
+    readto = (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
+    valid = datamuxer->deinterlace(input.gcount());
+    if(!valid)
+      MPI_Abort(MPI_COMM_WORLD, 1);
+    bufferinfo[buffersegment].validbytes = datamuxer->multiplex((u8*)readto);
+  }
+  else {
+    bufferinfo[buffersegment].validbytes = input.gcount();
+  }
   bufferinfo[buffersegment].readto = true;
   synccatchbytes = testForSync(bufferinfo[buffersegment].configindex, buffersegment);
   if(synccatchbytes > 0) {
-    input.read((char*)&databuffer[(buffersegment+1)*(bufferbytes/numdatasegments) - synccatchbytes], synccatchbytes);
-    bufferinfo[buffersegment].validbytes -= (synccatchbytes - input.gcount());
+    if(datamuxer)
+      readto = (char*)(datamuxer->getCurrentDemuxBuffer() + datamuxer->getSegmentBytes() - synccatchbytes);
+    else
+      readto = (char*)&databuffer[(buffersegment+1)*(bufferbytes/numdatasegments) - synccatchbytes];
+    input.read(readto, synccatchbytes);
+    if(datamuxer)
+      caughtbytes = 0; // no way to easily do the multiplexing etc, so no we have realigned just reduce the validity of this segment
+    else
+      caughtbytes = input.gcount();
+    bufferinfo[buffersegment].validbytes -= (synccatchbytes - caughtbytes);
   }
   readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
   readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);

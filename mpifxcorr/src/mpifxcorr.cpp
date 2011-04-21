@@ -97,7 +97,7 @@ bool actOnCommand(Configuration * config, DifxMessageGeneric * difxmessage) {
 void * launchCommandMonitorThread(void * c) {
   Configuration * config = (Configuration*) c;
   int socket, bytesreceived = 1;
-  char message[DIFX_MESSAGE_LENGTH];
+  char message[DIFX_MESSAGE_LENGTH+1];
   char sendername[DIFX_MESSAGE_PARAM_LENGTH];
   bool keepacting = true;
   DifxMessageGeneric * genericmessage = (DifxMessageGeneric *)malloc(sizeof(DifxMessageGeneric));
@@ -118,6 +118,7 @@ void * launchCommandMonitorThread(void * c) {
   while (keepacting) {
     bytesreceived = difxMessageReceive(socket, message, DIFX_MESSAGE_LENGTH, sendername);
     if(bytesreceived > 0) {
+      message[bytesreceived] = 0;
       //cinfo << startl << "Received a message" << endl;
       difxMessageParse(genericmessage, message);
       keepacting = actOnCommand(config, genericmessage);

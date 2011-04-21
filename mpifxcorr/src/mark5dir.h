@@ -27,17 +27,13 @@
  *
  *==========================================================================*/
 
-#ifndef __MARK5ACCESS_H__
-#define __MARK5ACCESS_H__
+#ifndef __MARK5DIR_H__
+#define __MARK5DIR_H__
 
+#include <vector>
+#include <string>
+#include <sstream>
 #include <xlrapi.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#define MAX_SCANS_PER_MODULE  1024 /* Maximum number of scans in SDir */
-#define MAX_SCAN_NAME_LENGTH   64 /* Maximum length of a scan's extended name +1 */
 
 #ifndef MARK5_FILL_PATTERN
 #ifdef WORDS_BIGENDIAN
@@ -48,13 +44,15 @@ extern "C" {
 #endif
 
 
-#define DIRECTORY_NOT_CACHED	-7
-
-#define MODULE_STATUS_UNKNOWN	0x00
-#define MODULE_STATUS_ERASED	0x01
-#define MODULE_STATUS_PLAYED	0x02
-#define MODULE_STATUS_RECORDED	0x04
-#define MODULE_STATUS_BANK_MODE	0x08
+#define DIRECTORY_NOT_CACHED		-7
+#define MODULE_STATUS_UNKNOWN		0x00
+#define MODULE_STATUS_ERASED		0x01
+#define MODULE_STATUS_PLAYED		0x02
+#define MODULE_STATUS_RECORDED		0x04
+#define MODULE_STATUS_BANK_MODE		0x08
+#define MODULE_EXTENDED_VSN_LENGTH	32
+#define MODULE_SCAN_NAME_LENGTH		32
+#define MODULE_LEGACY_SCAN_LENGTH	64
 
 enum Mark5ReadMode
 {
@@ -71,60 +69,11 @@ typedef unsigned int streamstordatatype;
 typedef unsigned long streamstordatatype;
 #endif
 
-/* as implemented in Mark5A */
-struct Mark5Directory
-{
-	int nscans; /* Number of scans herein */
-	int n; /* Next scan to be accessed by "next_scan" */
-	char scanName[MAX_SCANS_PER_MODULE][MAX_SCAN_NAME_LENGTH]; /* Extended name */
-	unsigned long long start[MAX_SCANS_PER_MODULE]; /* Start byte position */
-	unsigned long long length[MAX_SCANS_PER_MODULE]; /* Length in bytes */
-	unsigned long long recpnt; /* Record offset, bytes (not a pointer) */
-	long long plapnt; /* Play offset, bytes */
-	double playRate; /* Playback clock rate, MHz */
-};
-
-/* first updated version as defined by Hastack Mark5 Memo #081 */
-struct Mark5DirectoryHeaderVer1
-{
-	int version;		/* should be 1 */
-	int status;		/* bit field: see MODULE_STATUS_xxx above */
-	char vsn[32];
-	char vsnPrev[32];	/* "continued from" VSN */
-	char vsnNext[32];	/* "continued to" VSN */
-	char zeros[24];
-};
-
-struct Mark5DirectoryScanHeaderVer1
-{
-	unsigned int typeNumber;	/* and scan number; see memo 81 */
-	unsigned short frameLength;
-	char station[2];
-	char scanName[32];
-	char expName[8];
-	long long startByte;
-	long long stopByte;
-};
-
-struct Mark5DirectoryLegacyBodyVer1
-{
-	unsigned char timeBCD[8];	/* version dependent time code. */
-	int firstFrame;
-	int byteOffset;
-	int trackRate;
-	int nTrack;
-	char zeros[40];
-};
-
-struct Mark5DirectoryVDIFBodyVer1
-{
-	unsigned short data[8][4];	/* packed bit fields for up to 8 thread groups */
-};
-
 /* Internal representation of .dir files */
-struct Mark5Scan
+class Mark5Scan
 {
-	char name[MAX_SCAN_NAME_LENGTH];
+public:
+	std::string name;
 	long long start;
 	long long length;
 	double duration;	/* scan duration in seconds */
@@ -135,19 +84,53 @@ struct Mark5Scan
 	int frameoffset;	/* bytes to start of first frame */
 	int tracks;
 	int format;
+
+	Mark5Scan();
+	~Mark5Scan();
+	void print() const;
+	void parseDirEntry(const char *line);
+	int writeDirEntry(FILE *out) const;
+	int sanityCheck() const;
+	int nsStart() const;
+	double secStart() const;
+	double mjdStart() const;
+	double mjdEnd() const;
 };
 
-struct Mark5Module
+bool operator<(const Mark5Scan &a, const Mark5Scan &b);
+
+class Mark5Module
 {
-	char label[XLR_LABEL_LENGTH];
+public:
+	std::vector<Mark5Scan> scans;
+	//char label[XLR_LABEL_LENGTH];
+	std::string label;
+	std::stringstream error;
 	int bank;
-	int nscans;
-	Mark5Scan scans[MAX_SCANS_PER_MODULE];
 	unsigned int signature;	/* a hash code used to determine if dir is current */
 	enum Mark5ReadMode mode;
 	int dirVersion;		/* directory version = 0 for pre memo 81 */
 	int fast;		/* if true, the directory came from the ModuleUserDirectory only */
+	
+
+	Mark5Module();
+	~Mark5Module();
+	void clear();
+	int nScans() const { return scans.size(); }
+	void print() const;
+	int load(const char *filename);
+	int save(const char *filename);
+	void sort();
+	int sanityCheck();
+	int uniquifyScanNames();
+	int readDirectory(SSHANDLE xlrDevice, int mjdref,
+		int (*callback)(int, int, int, void *), void *data,
+		float *replacedFrac, int cacheOnly, int startScan, int stopScan);
+	int getCachedDirectory(SSHANDLE xlrDevice, int mjdref, const char *vsn, 
+		const char *dir, int (*callback)(int, int, int, void *), void *data,
+		float *replacedFrac, int force, int optionFast, int cacheOnly, int startScan, int stopScan);
 };
+
 
 enum Mark5DirStatus
 {
@@ -175,44 +158,31 @@ extern char Mark5ReadModeName[][10];
 
 const char *moduleStatusName(int status);
 
+
 /* returns active bank: 0 or 1 for bank A or B, or -1 if none */
-int Mark5BankGet(SSHANDLE *xlrDevice);
+int Mark5BankGet(SSHANDLE xlrDevice);
+
+int Mark5GetActiveBankWriteProtect(SSHANDLE xlrDevice);
 
 /* returns 0 or 1 for bank A or B, or < 0 if module not found */
-int Mark5BankSetByVSN(SSHANDLE *xlrDevice, const char *vsn);
-
-int getMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, int mjdref,
-	int (*callback)(int, int, int, void *), void *data);
-
-void printMark5Module(const struct Mark5Module *module);
-
-int loadMark5Module(struct Mark5Module *module, const char *filename);
-
-int saveMark5Module(struct Mark5Module *module, const char *filename);
-
-int sanityCheckModule(const struct Mark5Module *module);
-
-int getCachedMark5Module(struct Mark5Module *module, SSHANDLE *xlrDevice, 
-	int mjdref, const char *vsn, const char *dir,
-	int (*callback)(int, int, int, void *), void *data,
-	float *replacedFrac, int force, int fast, int cacheOnly);
+int Mark5BankSetByVSN(SSHANDLE xlrDevice, const char *vsn);
 
 void countReplaced(const streamstordatatype *data, int len,
 	long long *wGood, long long *wBad);
 
 int getByteRange(const struct Mark5Scan *scan, long long *byteStart, long long *byteStop, double mjdStart, double mjdStop);
 
-int getModuleDirectoryVersion(SSHANDLE *xlrDevice, int *dirVersion, int *dirLength, int *moduleStatus);
+int getModuleDirectoryVersion(SSHANDLE xlrDevice, int *dirVersion, int *dirLength, int *moduleStatus);
 
 int isLegalModuleLabel(const char *label);
 
 int parseModuleLabel(const char *label, char *vsn, int *totalCapacity, int *rate, int *moduleStatus);
 
-int setModuleLabel(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirVersion, int totalCapacity, int rate);
+int setModuleLabel(SSHANDLE xlrDevice, const char *vsn, int newStatus, int dirVersion, int totalCapacity, int rate);
 
-int resetModuleDirectory(SSHANDLE *xlrDevice, const char *vsn, int newStatus, int dirVersion, int totalCapacity, int rate);
+int resetModuleDirectory(SSHANDLE xlrDevice, const char *vsn, int newStatus, int dirVersion, int totalCapacity, int rate);
 
-int getDriveInformation(SSHANDLE *xlrDevice, struct DriveInformation drive[8], int *totalCapacity);
+int getDriveInformation(SSHANDLE xlrDevice, struct DriveInformation drive[8], int *totalCapacity);
 
 int roundModuleSize(long long a);
 
@@ -220,9 +190,7 @@ int setDiscModuleStateLegacy(SSHANDLE xlrDevice, int newState);
 
 int setDiscModuleStateNew(SSHANDLE xlrDevice, int newState);
 
-#ifdef __cplusplus
-}
-#endif
+int setDiscModuleVSNNew(SSHANDLE xlrDevice, int newStatus, const char *newVSN, int capacity, int rate);
 
 
 #endif

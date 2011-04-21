@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007 by Walter Brisken and Adam Deller                  *
+ *   Copyright (C) 2007-2011 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -46,7 +46,7 @@ public:
 	virtual void openfile(int configindex, int fileindex);
 	virtual void loopfileread();
 	virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
-	int sendMark5Status(enum Mk5State state, int scanNumber, long long position, double dataMJD, float rate);
+	int sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate);
 
 protected:
 	void moduleToMemory(int buffersegment);
@@ -56,8 +56,9 @@ protected:
 
 private:
 #ifdef HAVE_XLRAPI_H
-	struct Mark5Module module;
-	struct Mark5Scan *scan;
+	Mark5Module module;
+        int scanNum;
+	const Mark5Scan *scanPointer;
 	long long readpointer;
 	SSHANDLE xlrDevice;
 #endif
