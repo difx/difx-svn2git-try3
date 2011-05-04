@@ -632,7 +632,9 @@ static DifxInput *parseDifxInputCommonTable(DifxInput *D,
 		"ACTIVE DATASTREAMS",
 		"ACTIVE BASELINES",
 		"VIS BUFFER LENGTH",
-		"OUTPUT FILENAME"
+		"OUTPUT FILENAME",
+		"RFI FILT TYPE",
+		"RFI FILT COEFFS"
 	};
 	const int N_COMMON_ROWS = sizeof(commonKeys)/sizeof(commonKeys[0]);
 	int N;
@@ -682,6 +684,20 @@ static DifxInput *parseDifxInputCommonTable(DifxInput *D,
 	if(v >= DIFXIO_FILENAME_LENGTH)
 	{
 		fprintf(stderr, "populateInput: OUTPUT FILENAME too long (%d > %d)\n", v, DIFXIO_FILENAME_LENGTH-1);
+
+		return 0;
+	}
+	v = snprintf(D->job->rfiFiltertype, DIFXIO_FILENAME_LENGTH, "%s", DifxParametersvalue(ip, rows[9]));
+	if(v >= DIFXIO_FILENAME_LENGTH)
+	{
+		fprintf(stderr, "populateInput: RFI FILT TYPE too long (%d > %d)\n", v, DIFXIO_FILENAME_LENGTH-1);
+
+		return 0;
+	}
+	v = snprintf(D->job->rfiFilterfile, DIFXIO_FILENAME_LENGTH, "%s", DifxParametersvalue(ip, rows[10]));
+	if(v >= DIFXIO_FILENAME_LENGTH)
+	{
+		fprintf(stderr, "populateInput: RFI FILT COEFFS too long (%d > %d)\n", v, DIFXIO_FILENAME_LENGTH-1);
 
 		return 0;
 	}

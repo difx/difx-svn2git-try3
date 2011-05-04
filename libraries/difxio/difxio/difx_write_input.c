@@ -79,6 +79,8 @@ static int writeCommonSettings(FILE *out, const DifxInput *D)
 	else
 	  writeDifxLine(out, "OUTPUT FORMAT", "ASCII");
 	writeDifxLine(out, "OUTPUT FILENAME", D->job->outputFile);
+	writeDifxLine(out, "RFI FILT TYPE",   D->job->rfiFiltertype);
+	writeDifxLine(out, "RFI FILT COEFFS", D->job->rfiFilterfile);
 	fprintf(out, "\n");
 
 	return 0;

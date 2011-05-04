@@ -462,6 +462,8 @@ typedef struct
 	char flagFile[DIFXIO_FILENAME_LENGTH];
 	char threadsFile[DIFXIO_FILENAME_LENGTH];
 	char outputFile[DIFXIO_FILENAME_LENGTH];
+	char rfiFiltertype[DIFXIO_FILENAME_LENGTH];
+	char rfiFilterfile[DIFXIO_FILENAME_LENGTH];
 
 	/* Remappings.  These are null arrays unless some renumbering from original values occurred */
 	int *jobIdRemap;	/* confusingly, not the same jobId as that in this structure, but rather index to DifxJob */
