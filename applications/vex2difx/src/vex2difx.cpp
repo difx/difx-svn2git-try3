@@ -449,6 +449,9 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, con
 	job->activeBaselines = nAntenna;
 	job->activeBaselines = nAntenna*(nAntenna-1)/2;
 	job->dutyCycle = J.dutyCycle;
+#warning "FIXME: JanW doRFI is in v2d but inaccessible here, CorrSetup::doRFI, setup = P.getCorrSetup(scan->corrSetupName)"
+	bool doRFI = false; 
+	snprintf(job->rfiFiltertype, DIFXIO_FILENAME_LENGTH, "%s", (doRFI ? "CHAIN" : "NONE"));
 
 	// The following line defines the format of the job filenames
 
@@ -488,6 +491,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, con
 	snprintf(job->flagFile,    DIFXIO_FILENAME_LENGTH, "%s.flag",  fileBase);
 	snprintf(job->imFile,      DIFXIO_FILENAME_LENGTH, "%s.im",    fileBase);
 	snprintf(job->outputFile,  DIFXIO_FILENAME_LENGTH, "%s.difx",  fileBase);
+	snprintf(job->rfiFilterfile, DIFXIO_FILENAME_LENGTH, "%s.coeff",  fileBase);
 	if(threadsFile != "")
 	{
 		v = snprintf(job->threadsFile, DIFXIO_FILENAME_LENGTH, "%s", threadsFile.c_str());

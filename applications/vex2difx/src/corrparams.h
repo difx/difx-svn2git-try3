@@ -162,6 +162,7 @@ public:
 	double tInt;		// integration time
 	bool doPolar;		// false for no cross pol, true for full pol
 	bool doAuto;		// write autocorrelations
+	bool doRFI;		// enable RFI filter chain
 	int subintNS;		// Duration of a subintegration in nanoseconds
 	int guardNS;		// Number of "guard" ns tacked on to end of a send
 	int nFFTChan;		// Pre-averaged number of channels for the narrowest band

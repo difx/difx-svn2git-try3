@@ -297,6 +297,7 @@ CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 	nOutputChan = 16;
 	doPolar = true;
 	doAuto = true;
+	doRFI = false;
 	fringeRotOrder = 1;
 	strideLength = 0;
 	xmacLength = 0;
@@ -354,6 +355,10 @@ int CorrSetup::setkv(const string &key, const string &value)
 	else if(key == "doAuto")
 	{
 		doAuto = isTrue(value);
+	}
+	else if(key == "doRFI")
+	{
+		doRFI = isTrue(value);
 	}
 	else if(key == "subintNS")
 	{
@@ -490,6 +495,12 @@ int CorrSetup::checkValidity() const
 	{
 		cerr << "XMAC stride length " << xmacLength << " is greater than the input number of channels " << nInputChan() << endl;
 		cerr << "Probably you need to reduce the xmacLength parameter" << endl;
+		nwarn++;
+	}
+
+	if (nInputChan() <= 0 || xmacLength <= 0)
+	{
+		cerr << "Non-positive number of input channels (channels=" << nInputChan() << ") or XMAC stride (stride=" << xmacLength << ")" << endl;
 		nwarn++;
 	}
 
@@ -2080,6 +2091,7 @@ ostream& operator << (ostream &os, const CorrSetup &x)
 	os << "  nFFTChan=" << x.nFFTChan << endl;
 	os << "  doPolar=" << x.doPolar << endl;
 	os << "  doAuto=" << x.doAuto << endl;
+	os << "  doRFI=" << x.doRFI << endl;
 	os << "  subintNS=" << x.subintNS << endl;
 	os << "  fringeRotOrder=" << x.fringeRotOrder << endl;
 	if(x.binConfigFile.size() > 0)
