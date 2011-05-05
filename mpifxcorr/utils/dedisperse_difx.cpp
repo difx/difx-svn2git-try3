@@ -48,10 +48,11 @@ int main(int argc, char *argv[])
   ifstream input;
   ofstream output;
   string savedir, reldifxfile, savedifxfile;
-  int lastslash, fchan, numfreqs, lastconfigindex, maxnumintegrations;
+  unsigned int lastslash;
+  int fchan, lastconfigindex, maxnumintegrations;
   int mindelayoffset, maxdelayoffset, poloffset;
-  int startmjd, currentmjd, currentfreq, baseline, offset;
-  double dm, dur, inttime, chanfreq, startseconds, currentseconds, lastseconds;
+  int startmjd, currentmjd, currentfreq, baseline, offset=0;
+  double dm, dur, inttime, chanfreq, startseconds, currentseconds, lastseconds=0;
   pol[2] = 0;
 
   if(argc != 4)
