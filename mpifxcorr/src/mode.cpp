@@ -329,8 +329,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     sk = 0;
     kscratch = 0;
   }
-
-
   // Phase cal stuff
   if(config->getDPhaseCalIntervalMHz(configindex, datastreamindex))
   {
@@ -348,6 +346,8 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
       extractor[i] = PCal::getNew(1e6*recordedbandwidth, 
                                   1e6*config->getDPhaseCalIntervalMHz(configindex, datastreamindex),
                                       pcalOffset, 0);
+      if (extractor[i]->getLength() != conf->getDRecordedFreqNumPCalTones(configindex, dsindex, localfreqindex))
+        csevere << startl << "Developer Error: configuration.cpp and pcal.cpp do not agree on the number of tones." << endl;
       pcalnbins[i] = extractor[i]->getNBins();
       cdebug << startl << "Band " << i << " phase cal extractor buffer length (N bins)" << pcalnbins[i] << endl;
     }
@@ -555,19 +555,11 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
     return 0.0; //don't process crap data
   }
 
-  if (index < 0)
-  {
-    csevere << startl << "Mode::process index=" << index << " < 0, I knew it!!" << endl;
-    return 0.0;
-  }
-
   fftcentre = index+0.5;
   averagedelay = interpolator[0]*fftcentre*fftcentre + interpolator[1]*fftcentre + interpolator[2];
   fftstartmicrosec = index*fftchannels*sampletime; //CHRIS CHECK
   starttime = (offsetseconds-datasec)*1000000.0 + double(offsetns - datans)/1000.0 + fftstartmicrosec - averagedelay;
-  //cout << "starttime for " << datastreamindex << " is " << starttime << endl;
   nearestsample = int(starttime/sampletime + 0.5);
-  //cout << "nearestsample for " << datastreamindex << " is " << nearestsample << endl; 
  walltimesecs  =model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds + ((double)offsetns)/1000000000.0 + fftstartmicrosec/1000000.0;
 
   //if we need to, unpack some more data - first check to make sure the pos is valid at all
@@ -661,8 +653,6 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
         csevere << startl << "Error in quadinterpolate, subval addition!!!" << endl;
       break;
   }
-
-  //cout << "Done initial fringe rotation stuff, subquadsin is now " << subquadsin << endl;
 
   for(int i=0;i<numrecordedfreqs;i++)
   {
@@ -833,8 +823,6 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
       if(config->matchingRecordedBand(configindex, datastreamindex, i, j))
       {
         indices[count++] = j;
-
-        //fringe rotation
         switch(fringerotationorder) {
           case 0: //post-F
             fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j][subloopindex]:fftoutputs[j][subloopindex];
@@ -1097,10 +1085,8 @@ void Mode::setOffsets(int scan, int seconds, int ns)
   currentscan = scan;
   offsetseconds = seconds;
   offsetns = ns;
-
   if(datasec <= INVALID_SUBINT)
     return; //there is no valid data - this whole subint will be ignored
-
   if(currentscan != datascan) {
     cerror << startl << "Received a request to process scan " << currentscan << " (" << seconds << "/" << ns << " but received data from scan " << datascan << " (" << datasec << "/" << datans << ") - I'm confused and will ignore this data!" << endl;
     datalengthbytes = 0; //torch the whole subint - can't work with different scans!
@@ -1139,7 +1125,7 @@ void Mode::setData(u8 * d, int dbytes, int dscan, int dsec, int dns)
   datasec = dsec;
   datans = dns;
   unpackstartsamples = -999999999;
-  datasamples = static_cast<int>(datans/(sampletime*1e3));
+  datasamples = static_cast<int>(datans/(sampletime*1e3) + 0.5);
 }
 
 void Mode::resetpcal()
@@ -1162,4 +1148,94 @@ void Mode::finalisepcal()
 }
 
 const float Mode::decorrelationpercentage[] = {0.63662, 0.88, 0.94, 0.96, 0.98, 0.99, 0.996, 0.998}; //note these are just approximate!!!
+
+
+LBAMode::LBAMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, const s16* unpackvalues)
+  : Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,(recordedbw<16.0)?recordedbw*2.0:32.0)
+{
+  int shift, outputshift;
+  int count = 0;
+  int numtimeshifts = (sizeof(u16)*bytesperblockdenominator)/bytesperblocknumerator;
+
+  //build the lookup table - NOTE ASSUMPTION THAT THE BYTE ORDER IS **LITTLE-ENDIAN**!!!
+  for(u16 i=0;i<MAX_U16;i++)
+  {
+    shift = 0;
+    for(int j=0;j<numtimeshifts;j++)
+    {
+      for(int k=0;k<numrecordedbands;k++)
+      {
+        for(int l=0;l<samplesperblock;l++)
+        {
+          if(samplesperblock > 1 && numrecordedbands > 1) //32 MHz or 64 MHz dual pol
+            if(samplesperblock == 4) //64 MHz
+              outputshift = 3*(2-l) - 3*k;
+            else
+              outputshift = -k*samplesperblock + k + l;
+          else if (samplesperblock == 4) //64 MHz single pol
+	    outputshift = -2*l + 3;
+	  else
+            outputshift = 0;
+
+          //if(samplesperblock > 1 && numinputbands > 1) //32 MHz or 64 MHz dual pol
+          //  outputshift = (2 - (k + l))*(samplesperblock-1);
+          //else
+          //  outputshift = 0;
+
+          //littleendian means that the shift, starting from 0, will go through the MS byte, then the LS byte, just as we'd like
+          lookup[count + outputshift] = unpackvalues[(i >> shift) & 0x03];
+          shift += 2;
+          count++;
+        }
+      }
+    }
+  }
+
+  //get the last values, i = 1111111111111111
+  for (int i=0;i<samplesperlookup;i++)
+  {
+    lookup[count + i] = unpackvalues[3]; //every sample is 11 = 3
+  }
+}
+
+LBA8BitMode::LBA8BitMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs)
+  : Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,recordedbw*2.0)
+{}
+
+float LBA8BitMode::unpack(int sampleoffset)
+{
+  unsigned char * packed = (unsigned char *)(&(data[((unpackstartsamples/samplesperblock)*bytesperblocknumerator)/bytesperblockdenominator]));
+
+  for(int i=0;i<unpacksamples;i++)
+  {
+    for(int j=0;j<numrecordedbands;j++)
+    {
+      unpackedarrays[j][i] = (float)(*packed) - 128.0;
+      packed++;
+    }
+  }
+  return 1.0;
+}
+
+LBA16BitMode::LBA16BitMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs)
+  : Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,recordedbw*2.0)
+{}
+
+float LBA16BitMode::unpack(int sampleoffset)
+{
+  unsigned short * packed = (unsigned short *)(&(data[((unpackstartsamples/samplesperblock)*bytesperblocknumerator)/bytesperblockdenominator]));
+
+  for(int i=0;i<unpacksamples;i++)
+  {
+    for(int j=0;j<numrecordedbands;j++)
+    {
+      unpackedarrays[j][i] = (float)(*packed) - 32768.0;
+      packed++;
+    }
+  }
+  return 1.0;
+}
+
+const s16 LBAMode::stdunpackvalues[] = {MAX_S16/4, -MAX_S16/4 - 1, 3*MAX_S16/4, -3*MAX_S16/4 - 1};
+const s16 LBAMode::vsopunpackvalues[] = {-3*MAX_S16/4 - 1, MAX_S16/4, -MAX_S16/4 - 1, 3*MAX_S16/4};
 // vim: shiftwidth=2:softtabstop=2:expandtab
