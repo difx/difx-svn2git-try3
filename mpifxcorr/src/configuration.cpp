@@ -24,7 +24,6 @@
 #include <climits>
 #include "mode.h"
 #include "mk5mode.h"
-#include "lbamode.h"
 #include "rawmode.h"
 #include "configuration.h"
 #include "visibility.h"
@@ -982,8 +981,20 @@ bool Configuration::processConfig(ifstream * input)
     configs[i].fringerotationorder = atoi(line.c_str());
     getinputline(input, &line, "ARRAY STRIDE LEN");
     configs[i].arraystridelen = atoi(line.c_str());
+    if(configs[i].arraystridelen <= 0)
+    {
+      if(mpiid == 0) //only write one copy of this error message
+        cfatal << startl << "Invalid value for arraystridelength: " << configs[i].arraystridelen << endl;
+      consistencyok = false;
+    }
     getinputline(input, &line, "XMAC STRIDE LEN");
     configs[i].xmacstridelen = atoi(line.c_str());
+    if(configs[i].xmacstridelen <= 0)
+    {
+      if(mpiid == 0) //only write one copy of this error message
+        cfatal << startl << "Invalid value for xmaclength: " << configs[i].xmacstridelen << endl;
+      consistencyok = false;
+    }
     getinputline(input, &line, "NUM BUFFERED FFTS");
     configs[i].numbufferedffts = atoi(line.c_str());
     if(configs[i].numbufferedffts > maxnumbufferedffts)
