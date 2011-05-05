@@ -366,7 +366,6 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
   mark5_stream_get_frame_time(syncteststream, &mjd, &sec, &ns);
 
   deltatime = 86400*(corrday - mjd) + (model->getScanStartSec(bufferinfo[buffersegment].scan, corrday, corrsec) + bufferinfo[buffersegment].scanseconds + corrsec - intclockseconds - sec) + double(bufferinfo[buffersegment].scanns-ns)/1e9;
-  //cout << "Received some data with a time " << mjd << ", " << sec << ", " << ns << endl;
 
   if(fabs(deltatime) > 1e-10) //oh oh, a problem
   {
