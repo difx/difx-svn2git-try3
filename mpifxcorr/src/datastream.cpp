@@ -436,7 +436,14 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   //if we had to skip some, make sure we account for the possibly changed delay
   if(count > 0) {
     //cout << "Datastream " << mpiid << " is realigning bufferindex - it was " << bufferindex << endl;
-    bufferindex -= (int(count*1000.0*(delayus2 - delayus1)/(bufferinfo[atsegment].sampletimens*bufferinfo[atsegment].blockspersend) + 0.5)*bufferinfo[atsegment].bytespersamplenum)/bufferinfo[atsegment].bytespersampledenom;
+    int tosubtract = (int(count*1000.0*(delayus2 - delayus1)/(bufferinfo[atsegment].sampletimens*bufferinfo[atsegment].blockspersend) + 0.5)*bufferinfo[atsegment].bytespersamplenum)/bufferinfo[atsegment].bytespersampledenom;
+    if(bufferindex - tosubtract < atsegment*readbytes) {
+      cwarn << startl << "Changing geometric delay means that segment start time is " << atsegment*readbytes - (bufferindex-tosubtract) << " samples to late" << endl;
+      bufferindex = atsegment*readbytes;
+    }
+    else {
+      bufferindex -= tosubtract;
+    }
     //re-align the index to nearest previous 16 bit boundary
     bufferindex -= bufferindex%2;
     //cout << "Datastream " << mpiid << " has realigned bufferindex to " << bufferindex << endl;
@@ -449,7 +456,6 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] += segoffns/1000000000;
   bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = bufferinfo[atsegment].scanns + segoffns%1000000000;
 
-  //cout << "Count for datastream " << mpiid << " is " << count << ", and at this stage the first controlbuffer value is " << bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][3] << endl;
   if((bufferinfo[atsegment].validbytes - segoffbytes >= bufferinfo[atsegment].sendbytes) || (bufferinfo[atsegment].validbytes == readbytes && ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 + bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns) == bufferinfo[atsegment].nsinc && (bufferinfo[atsegment].validbytes-segoffbytes+bufferinfo[(atsegment+1)%numdatasegments].validbytes) > bufferinfo[atsegment].sendbytes)) //they're all ok
   {
     for(int i=count;i<bufferinfo[atsegment].blockspersend;i++)
@@ -486,6 +492,10 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
       bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
       return 0;
     }
+  }
+
+  if(bufferindex < atsegment*readbytes) {
+    cerror << startl << "Developer error: bufferindex is " << bufferindex << ", shouldn't be before " <<       atsegment*readbytes << endl;
   }
 
   return bufferindex;
@@ -1324,9 +1334,7 @@ void DataStream::initialiseFile(int configindex, int fileindex)
     readscan++;
   while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
     readscan--;
-  //cout << "About to call model->getScanStartSec for scan " << readscan << endl;
   readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
-  //cout << "Datastream " << mpiid << " just set readseconds to be " << readseconds << endl;
 }
 
 void DataStream::diskToMemory(int buffersegment)
