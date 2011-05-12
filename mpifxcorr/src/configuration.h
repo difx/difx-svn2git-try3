@@ -678,6 +678,7 @@ private:
     string * datafilenames;
     int portnumber;
     int tcpwindowsizekb;
+    int maxnsslip;
   } datastreamdata;
 
  /**
