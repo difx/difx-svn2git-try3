@@ -83,8 +83,8 @@ void cout_precision_init() {
     cout.precision(10);
 }
 bool quite_equal(const double a, const double b) {
-    double m = std::min(abs(a)+0.5, abs(b)+0.5);
-    return (abs(a-b)<(m*1e-9));
+    double m = std::min(std::abs(a)+0.5, std::abs(b)+0.5);
+    return (std::abs(a-b)<(m*1e-9));
 }
 bool quite_equal(const Ipp32fc a, const Ipp32fc b) {
     return (quite_equal((double)a.re,(double)b.re) && quite_equal((double)a.im,(double)b.im));
