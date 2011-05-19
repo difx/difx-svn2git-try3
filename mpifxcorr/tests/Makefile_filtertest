@@ -1,5 +1,5 @@
 BASEDIR = ../src/
-BASEFILES = filter_test.cpp $(BASEDIR)/filters.cpp $(BASEDIR)/filter_dec.cpp $(BASEDIR)/filter_int.cpp $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
+BASEFILES = $(BASEDIR)/filters.cpp $(BASEDIR)/filter_dec.cpp $(BASEDIR)/filter_int.cpp $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
 BASEHEADERS = $(BASEDIR)/filter.h $(BASEDIR)/filters.h $(BASEDIR)/filterchain.h
 BASEOBJS = $(BASEFILES:.cpp=.o)
 
@@ -17,10 +17,10 @@ CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -m64
 # for 'oprofile' profiling:
 # CFLAGS = -pthread -g -O0 -fno-inline -fno-default-inline -c -Wall
 
-all: filter_test
+all: filter_test filter_parse
 
 clean:
-	rm -f filter_test filter_test.o
+	rm -f filter_test filter_test.o filter_parse filter_parse.o
 	rm -f $(BASEOBJS)
 
 intel_CFLAGS = $(CFLAGS) -DINTEL_IPP=1 -I${IPP_PATH}/include/ -I. -I./IA-32/
@@ -33,8 +33,11 @@ else
 	intel_LDINCL = -lm -lippcore -lipps -lguide -lippvm -lippm
 endif
 
-filter_test: $(BASEOBJS) $(BASEFILES) $(BASEHEADERS)
-	$(CC) $(intel_LDFLAGS) $(intel_LDINCL) $(BASEOBJS) -o filter_test
+filter_test: $(BASEOBJS) $(BASEFILES) $(BASEHEADERS) filter_test.cpp filter_test.o
+	$(CC) $(intel_LDFLAGS) $(intel_LDINCL) $(BASEOBJS) filter_test.o -o filter_test
+
+filter_parse: $(BASEOBJS) $(BASEFILES) $(BASEHEADERS) filter_parse.cpp filter_parse.o
+	$(CC) $(intel_LDFLAGS) $(intel_LDINCL) $(BASEOBJS) filter_parse.o -o filter_parse
 
 .cpp.o:
 	$(CC) $(intel_CFLAGS) $< -o $@
