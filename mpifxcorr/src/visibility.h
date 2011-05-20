@@ -25,6 +25,7 @@
 #include <string>
 #include "architecture.h"
 #include "datastream.h"
+#include "filters.h"
 
 /**
 @class Visibility 
@@ -189,6 +190,7 @@ private:
   f32 ***  baselineshiftdecorrs;
   std::string * telescopenames;
   cf32 * results;
+  DSVFFilter resultsfilter;
   char * todiskbuffer;
   int * todiskmemptrs;
   f32 * floatresults;

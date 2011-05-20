@@ -316,6 +316,9 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
           flt->buildFromFile(filterfile,recordedbandchannels);
           flt->setUserOutbuffer(autocorrelations[0][band]); 
           autocorrfilters[xx][band] = flt;
+          if (flt->length() <= 0) {
+            csevere << startl << "Filter chain init failed, check for correct syntax in your .coeff file!" << endl;
+          }
         }
       }
       rfiscratch = vectorAlloc_cf32(recordedbandchannels+1);

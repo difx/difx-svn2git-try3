@@ -103,6 +103,16 @@ Visibility::Visibility(Configuration * conf, int id, int numvis, char * dbuffer,
   }
   for(int i=0;i<visID;i++)
     updateTime();
+
+  //RFI: final lowpass filtering step
+  if (config->rfifilterEnabled()) {
+    double T_fs = config->getSubintNS(currentconfigindex);
+    double T_fc = config->getIntTime(currentconfigindex)*1e9;
+    double wcut = 2*M_PI*T_fc/T_fs;
+    resultsfilter.init(2, resultlength);
+    resultsfilter.generate_coeffs(wcut);
+    cinfo << startl << "Vis. " << visID << " has fc/fs = " << (T_fs/T_fc) << " Hz/Hz" << endl;
+  }
 }
 
 
@@ -152,9 +162,17 @@ bool Visibility::addData(cf32* subintresults)
 {
   int status;
 
-  status = vectorAdd_cf32_I(subintresults, results, resultlength);
-  if(status != vecNoErr)
-    csevere << startl << "Error copying results in Vis. " << visID << endl;
+  if (config->rfifilterEnabled()) {
+    status = vectorAdd_cf32_I(subintresults, results, resultlength);
+    if(status != vecNoErr)
+      csevere << startl << "Error accumulating results into Vis. " << visID << endl;
+    // TODO: use only the below, after adding DSVFFilter::setUserOutbuffer(results) to cstor
+    resultsfilter.filter(subintresults);
+  } else {
+    status = vectorAdd_cf32_I(subintresults, results, resultlength);
+    if(status != vecNoErr)
+      csevere << startl << "Error accumulating results into Vis. " << visID << endl;
+  }
   currentsubints++;
 
   if(currentsubints>subintsthisintegration)
