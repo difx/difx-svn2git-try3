@@ -114,6 +114,12 @@ double IntFilter::get_coeff(int index) {
     return (index < 2) ? 1.0f : 0.0f;
 }
 
+void IntFilter::generate_coeffs(double wcutoff) {
+   // does nothing
+}
+
+int IntFilter::get_num_coeffs() { return 1; }
+
 /**
  * Pass new data to filter
  * @arg x array of single samples from multiple channels
@@ -123,8 +129,6 @@ size_t IntFilter::filter(Ipp32fc* freqbins) {
     ippsAdd_32fc_I(freqbins, pD->accu, pD->N);
     return pD->N;
 }
-
-int IntFilter::get_num_coeffs() { return 1; }
 
 /**
  * Return current states

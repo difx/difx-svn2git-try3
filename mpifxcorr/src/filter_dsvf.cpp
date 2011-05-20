@@ -28,6 +28,7 @@
 
 #include "filters.h"
 
+#include <cmath>
 #include <cassert>
 #include <iostream>
 using std::cerr;
@@ -195,6 +196,17 @@ double DSVFFilter::get_coeff(int index) {
     if (index == 0) return pD->f;
     if (index == 1) return pD->q;
     return 0.0f;
+}
+
+/**
+ * Create and apply filter coefficients to get the
+ * specified corner frequency (wc=2pi*fcut/fsampling).
+ */
+void DSVFFilter::generate_coeffs(double wcutoff) {
+    if (pD == NULL) return;
+    double Q = 2.0;
+    pD->f =  2.0 * std::sin(wcutoff/2.0); // 2sin(pi*fcut/fs) = 2sin(wc/2)
+    pD->q = 1/Q;
 }
 
 /**

@@ -67,8 +67,11 @@ class FilterChain : public Filter {
         void setUserOutbuffer(Ipp32fc*);
     public:
         void summary(std::ostream& o);
+        int  length() { return fchain.size(); }
     private:
         std::vector<Filter*> fchain;
+    private:
+        void   generate_coeffs(double);
 };
 
 #endif // _FILTERCHAIN_H

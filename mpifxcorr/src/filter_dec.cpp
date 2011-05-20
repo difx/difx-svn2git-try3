@@ -165,6 +165,10 @@ double DecFilter::get_coeff(int index) {
     return 0.0f;
 }
 
+void DecFilter::generate_coeffs(double wcutoff) {
+   // does nothing
+}
+
 /**
  * Return number of coefficients used by the filter.
  */

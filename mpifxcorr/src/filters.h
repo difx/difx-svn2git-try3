@@ -56,6 +56,7 @@ class IntFilter : public Filter {
         double get_prescaling() { return 1.0f; }
         void   set_coeff(int, double);
         double get_coeff(int);
+        void   generate_coeffs(double);
         int get_num_coeffs();
    public:
         size_t filter(Ipp32fc*);
@@ -87,6 +88,7 @@ class IIRFilter : public Filter {
         double get_prescaling();
         void   set_coeff(int, double);
         double get_coeff(int);
+        void   generate_coeffs(double);
         int get_num_coeffs();
    public:
         size_t filter(Ipp32fc*);
@@ -118,6 +120,7 @@ class IIRSOSFilter : public Filter {
         double get_prescaling();
         void   set_coeff(int, double);
         double get_coeff(int);
+        void   generate_coeffs(double);
         int get_num_coeffs();
    public:
         size_t filter(Ipp32fc*);
@@ -149,6 +152,7 @@ class DSVFFilter : public Filter {
         double get_prescaling();
         void   set_coeff(int, double);
         double get_coeff(int);
+        void   generate_coeffs(double);
         int get_num_coeffs();
    public:
         size_t filter(Ipp32fc*);
@@ -180,6 +184,7 @@ class DecFilter : public Filter {
         double get_prescaling();
         void   set_coeff(int, double);
         double get_coeff(int);
+        void   generate_coeffs(double);
         int get_num_coeffs();
    public:
         size_t filter(Ipp32fc*);

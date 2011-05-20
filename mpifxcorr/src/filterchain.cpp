@@ -61,7 +61,7 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
     std::streamsize Nfloats;
     Helpers::parse_numerics_file(vec, cfgfile);
     Nfloats = vec.size();
-    if (Nfloats < (1 + 3)) { // Nstages, {type, decim, order}
+    if (Nfloats < (1 + 1)) { // Nstages, type{,order,...}
         cout << "Error: Too few values in " << cfgfile << endl;
         return;
     }    
@@ -176,6 +176,10 @@ double FilterChain::get_coeff(int) {
    return 0.0f;
 }
 
+void FilterChain::generate_coeffs(double wcutoff) {
+   // TODO(?)
+}
+
 int FilterChain::get_num_coeffs() {
    // TODO
    return 0;
@@ -212,7 +216,9 @@ Ipp32fc* FilterChain::y() {
  * Allow user to specify own result buffer.
  */
 void FilterChain::setUserOutbuffer(Ipp32fc* userY) {
-    fchain[fchain.size()-1]->setUserOutbuffer(userY);
+    if (fchain.size() > 0) {
+        fchain[fchain.size()-1]->setUserOutbuffer(userY);
+    }
 }
 
 /**

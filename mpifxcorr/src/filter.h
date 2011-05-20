@@ -61,6 +61,7 @@ class Filter {
         virtual void   set_coeff(int, double) = 0;
         virtual double get_coeff(int) = 0;
         virtual int    get_num_coeffs() = 0;
+        virtual void   generate_coeffs(double) = 0;
         virtual const char* name() = 0;
     public:
         virtual size_t filter(Ipp32fc*) = 0;

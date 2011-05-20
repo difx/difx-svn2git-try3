@@ -202,6 +202,14 @@ double IIRSOSFilter::get_coeff(int index) {
 }
 
 /**
+ * Create and apply filter coefficients to get the
+ * specified corner frequency (wc=2pi*fcut/fsampling).
+ */
+ void IIRSOSFilter::generate_coeffs(double wcutoff) {
+   // TODO
+}
+
+/**
  * Return number of coefficients used by the filter.
  */
 int IIRSOSFilter::get_num_coeffs() { 
