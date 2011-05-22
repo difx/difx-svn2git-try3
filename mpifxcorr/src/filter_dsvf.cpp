@@ -65,12 +65,9 @@ struct DSVFFilter::P {
     Ipp32f    prescaling;
     Ipp32f    f; // 2*sin(pi*fcutoff/fsampling)
     Ipp32f    q; // inverse of quality factor 1/Q
-    // data is comples, but due to real-valued filter coeffs we can use 2*Ipp32f
+    // data is complex, but due to real-valued filter coeffs we can use 2*Ipp32f
     Ipp32f*   z1;
-    Ipp32f*   z2;
     Ipp32f*   sum1;
-    Ipp32f*   sum2;
-    Ipp32f*   sum3;
     Ipp32f*   outputs;
     bool user_output;
 };
@@ -80,8 +77,8 @@ DSVFFilter::P::P() {
    N = numchannels = 0;
    f = 1e-3;
    q = 1/2.0;
-   z1 = z2 = 0;
-   sum1 = sum2 = sum3 = outputs = 0;
+   z1 = 0;
+   sum1 = outputs = 0;
    prescaling = 1.0f;
    user_output = false;
 }
@@ -95,10 +92,7 @@ DSVFFilter::P::~P() {
 void DSVFFilter::P::dealloc() {
     if (z1 != 0) {
         ippsFree(z1);
-        ippsFree(z2);
         ippsFree(sum1);
-        ippsFree(sum2);
-        ippsFree(sum3);
         if (!user_output) { ippsFree(outputs); }
         z1 = 0;
     }
@@ -111,10 +105,7 @@ void DSVFFilter::P::alloc(int channels) {
     numchannels = channels;
     N = 2*channels;
     z1 = ippsMalloc_32f(N);
-    z2 = ippsMalloc_32f(N);
     sum1 = ippsMalloc_32f(N);
-    sum2 = ippsMalloc_32f(N);
-    sum3 = ippsMalloc_32f(N);
     outputs = ippsMalloc_32f(N);
     zero();
 }
@@ -122,10 +113,7 @@ void DSVFFilter::P::alloc(int channels) {
 /** Clear internal filter state */
 void DSVFFilter::P::zero() {
     ippsZero_32f(z1, N);
-    ippsZero_32f(z2, N);
     ippsZero_32f(sum1, N);
-    ippsZero_32f(sum2, N);
-    ippsZero_32f(sum3, N);
     ippsZero_32f(outputs, N);
 }
 
@@ -244,11 +232,33 @@ size_t DSVFFilter::filter(Ipp32fc* freqbins) {
     if (DEBUG_V) { cerr << flush << "filter() in[0]=" << freqbins[0].re << endl; }
 
     // rearranging:
-    //   -sum1 = output + fb1*q - gain*input
-    //   sum2 = -f*(-sum1) + fb1
-    //   sum3 = output = f*fb1 + fb2
-    //   fb1 = copy2
-    //   fb2 = copy output
+    // 1)  -sum1 = output + z1*q - gain*input
+    //      sum2 = -f*(-sum1) + z1
+    // 2)  output = f*z1 + z2
+    // 3)  z1 = sum2, z2 = output
+
+    // -sum1[] = output[] + z1[]*q + (-gain)*input[]
+    ippsMulC_32f(pD->z1, pD->q, pD->sum1, pD->N); // z1[]*q => -sum1
+    ippsAdd_32f_I(pD->outputs, pD->sum1, pD->N);  // out+(-sum1) => -sum1
+    ippsAddProductC_32f(input, -(pD->prescaling), pD->sum1, pD->N); // -g*in[]+(-sum1) => (-sum1)
+
+    // sum1 = -f*(sum1[]) + z1[]
+    ippsMulC_32f_I(-(pD->f), pD->sum1, pD->N);
+    ippsAdd_32f_I(pD->z1, pD->sum1, pD->N);
+
+    // output = +f*z1[] + z2[]
+    //   ippsMulC_32f(pD->z1, pD->f, pD->outputs, pD->N);
+    //   ippsAdd_32f_I(pD->z2, pD->outputs, pD->N);
+    //   but can be combined into
+    // z2[] = output = +f*z1[] + z2[] => z2[] += f*z1[]
+    ippsAddProductC_32f(pD->z1, pD->f, pD->outputs, pD->N);   
+
+    // z1 = sum2(=sum1) via pointer swap
+    Ipp32f* swp = pD->z1;
+    pD->z1 = pD->sum1;
+    pD->sum1 = swp;
+ 
+#if 0 // --- old version
 
     // -sum1 = output + z1*q + (-gain)*input
     ippsCopy_32f(pD->outputs, /*dst*/pD->sum1, pD->N);
@@ -259,7 +269,7 @@ size_t DSVFFilter::filter(Ipp32fc* freqbins) {
        ippsSub_32f_I(/*src*/input, /*srcdst*/pD->sum1, pD->N);
     }
 
-    // sum2 = -f*(-sum1) + fb1
+    // sum2 = -f*(-sum1[]) + z1[]
     ippsCopy_32f(pD->z1, /*dst*/pD->sum2, pD->N);
     ippsAddProductC_32f(/*src*/pD->sum1, /*const*/-(pD->f), /*srcdst*/ pD->sum2, pD->N);
 
@@ -271,6 +281,8 @@ size_t DSVFFilter::filter(Ipp32fc* freqbins) {
     // fb2 = output
     ippsCopy_32f(pD->sum2, /*dst*/pD->z1, pD->N);
     ippsCopy_32f(pD->outputs, /*dst*/pD->z2, pD->N);
+
+#endif 
 
     return pD->numchannels;
 }
