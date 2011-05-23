@@ -975,12 +975,21 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     else
                     {
                       assert(rfifilterindex<scratchspace->numrfifilters);
-                      status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
-                      DUT_CHECK( vectorMul_cf32(vis1, vis2, scratchspace->rfiscratch, xmacmullength), csevere, "Error trying to xmul baseline. " );
-                      scratchspace->rfifilters[rfifilterindex]->filter(scratchspace->rfiscratch);
-                      rfifilterindex++;
-                      // filter not tied to  &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength])
-                      // and data needs to be copied later!
+                      // for debug when filtering autocorrelations only:
+                      if (0) {
+                        status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+                      } else {
+                      // for filtering auto and cross:
+                        cf32 * accu = &(scratchspace->threadcrosscorrs[resultindex+ /*outputoffset*/ +p*xmacstridelength]);
+                        cf32 * old = scratchspace->rfifilters[rfifilterindex]->y();
+                        if (accu != old) {
+                           std::cerr << "C" << mpiid << "/T" << threadid << " flt#" << rfifilterindex << " out=" << (void*)old << " != acc=" << (void*)accu << std::endl;
+                        }
+                        scratchspace->rfifilters[rfifilterindex]->setUserOutbuffer(accu);
+                        DUT_CHECK( vectorMul_cf32(vis1, vis2, scratchspace->rfiscratch, xmacmullength), csevere, "Error trying to xmul baseline. " );
+                        scratchspace->rfifilters[rfifilterindex]->filter(scratchspace->rfiscratch);
+                        rfifilterindex++;
+                      }
                     }
                   }
                 }
