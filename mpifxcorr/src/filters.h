@@ -196,4 +196,37 @@ class DecFilter : public Filter {
         P* pD;
 };
 
+
+/**
+ * Moving average (note memory requirements)
+ */
+class MAvgFilter : public Filter {
+    // C'stors
+    public:
+        MAvgFilter();
+        ~MAvgFilter();
+    // No copy c'stors
+    private:
+        MAvgFilter& operator= (const MAvgFilter& o);
+        MAvgFilter(const MAvgFilter& o);
+    public:
+        const char* name() { return "Moving Average"; }
+        void clear();
+        void init(size_t, size_t);
+        void   set_prescaling(double);
+        double get_prescaling();
+        void   set_coeff(int, double);
+        double get_coeff(int);
+        void   generate_coeffs(double);
+        int get_num_coeffs();
+   public:
+        size_t filter(Ipp32fc*);
+        Ipp32fc* y();
+        void setUserOutbuffer(Ipp32fc*);
+    // Data
+    private:
+        struct P;
+        P* pD;
+};
+
 #endif // _FILTERS_H

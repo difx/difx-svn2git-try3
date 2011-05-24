@@ -35,6 +35,7 @@ mpifxcorr_SOURCES = \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
 	filter_dsvf.cpp \
+	filter_mavg.cpp \
 	$(mark5_files)
 
 library_includedir = $(includedir)/mpifxcorr
@@ -89,6 +90,7 @@ libmpifxcorr_a_SOURCES = \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
 	filter_dsvf.cpp \
+	filter_mavg.cpp \
 	$(mark5_files)
 
 libfxcorr_a_SOURCES = \
@@ -110,6 +112,7 @@ libfxcorr_a_SOURCES = \
 	filter_iir.cpp \
 	filter_iirsos.cpp \
 	filter_dsvf.cpp \
+	filter_mavg.cpp \
 	alert.cpp
 
 neuteredmpifxcorr_SOURCES = \

@@ -1,5 +1,7 @@
 BASEDIR = ../src/
-BASEFILES = $(BASEDIR)/filters.cpp $(BASEDIR)/filter_dec.cpp $(BASEDIR)/filter_int.cpp $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
+BASEFILES = $(BASEDIR)/filters.cpp $(BASEDIR)/filter_dec.cpp $(BASEDIR)/filter_int.cpp \
+            $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp \
+            $(BASEDIR)/filter_mavg.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
 BASEHEADERS = $(BASEDIR)/filter.h $(BASEDIR)/filters.h $(BASEDIR)/filterchain.h
 BASEOBJS = $(BASEFILES:.cpp=.o)
 
@@ -11,8 +13,8 @@ IPP_PATH = $(IPPROOT)
 CC = g++
 
 # normal compile:
-#CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -DDEBUG_V=1 -m64
-CFLAGS = -pthread -g -O4 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -m64
+#CFLAGS = -pthread -g -O2 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -DDEBUG_V=1 -m64
+CFLAGS = -pthread -g -O2 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -m64
 
 # for 'oprofile' profiling:
 # CFLAGS = -pthread -g -O0 -fno-inline -fno-default-inline -c -Wall
