@@ -1316,8 +1316,6 @@ bool Configuration::processDatastreamTable(ifstream * input)
             dsdata->maxrecordedpcaltones = dsdata->numrecordedfreqpcaltones[j];
           datastreamtable[i].recordedfreqpcaltonefreqs[j] = new int[datastreamtable[i].numrecordedfreqpcaltones[j]];
           estimatedbytes += sizeof(int)*datastreamtable[i].numrecordedfreqpcaltones[j];
-                // unclear why tonefreq needs to be recomputed (just moves in the case of tonefreq == lofreq)
-          tonefreq = (int(lofreq)/dsdata->phasecalintervalmhz)*dsdata->phasecalintervalmhz;
           for(int k=0;k<datastreamtable[i].numrecordedfreqpcaltones[j];k++) {
             datastreamtable[i].recordedfreqpcaltonefreqs[j][k] = tonefreq - k*dsdata->phasecalintervalmhz;
           }
@@ -1334,9 +1332,6 @@ bool Configuration::processDatastreamTable(ifstream * input)
             dsdata->maxrecordedpcaltones = dsdata->numrecordedfreqpcaltones[j];
           datastreamtable[i].recordedfreqpcaltonefreqs[j] = new int[datastreamtable[i].numrecordedfreqpcaltones[j]];
           estimatedbytes += sizeof(int)*datastreamtable[i].numrecordedfreqpcaltones[j];
-          tonefreq = (int(lofreq)/dsdata->phasecalintervalmhz)*dsdata->phasecalintervalmhz;
-          if(tonefreq < lofreq)
-            tonefreq += dsdata->phasecalintervalmhz;
           for(int k=0;k<datastreamtable[i].numrecordedfreqpcaltones[j];k++) {
             datastreamtable[i].recordedfreqpcaltonefreqs[j][k] = tonefreq + k*dsdata->phasecalintervalmhz;
           }
