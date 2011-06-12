@@ -23,13 +23,9 @@ PKG_CHECK_MODULES(IPP, ipp)
 dnl **********************************************************
 
 # Checks for libraries.
-PKG_CHECK_MODULES(DIFXIO, difxio >= 3.01)
-PKG_CHECK_MODULES(FXCORR, fxcorr >= 2.01)
-dm_enabled=true
-PKG_CHECK_MODULES(DIFXMESSAGE, difxmessage >= 3.0.1,
-                  [AC_DEFINE([HAVE_DIFXMESSAGE], 1, [1=has DIFXMESSAGE])],
-                  dm_enabled=false)
-AM_CONDITIONAL(WITH_DIFXMESSAGE, $dm_enabled)
+PKG_CHECK_MODULES(DIFXIO, difxio >= 3.0.1)
+PKG_CHECK_MODULES(FXCORR, fxcorr >= 2.0.1)
+PKG_CHECK_MODULES(DIFXMESSAGE, difxmessage >= 2.0.1)
 
 # Checks for header files.
 
