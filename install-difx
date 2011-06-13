@@ -218,8 +218,7 @@ apptargets = [["calcif2",    difx_version, True,False,True,False],
               ["calcserver", difx_version, True,True,False,False],
               ["difx2fits",  difx_version, True,False,True,False],
               ["vex2difx",   difx_version, True,True,True,False],
-              ["difx2mark4", difx_version, True,True,True,False],
-              ["difxfilterbank", difx_version, True,False,False,True]]
+              ["difx2mark4", difx_version, True,True,True,False]]
 
 if dofb:
     apptargets.append(["difxfilterbank", difx_version, True,False,False,True])
