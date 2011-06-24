@@ -11,7 +11,7 @@ def main():
 Install DiFX
 
 Usage:
-    install-difx [-fh] [--force] [--help] [--noinstall] [--reconf] [--g77] [--clean] [--perl] [--withmonitor] [--withfb] [--withhops] [--noipp] [--ipp] [--nodoc]
+    install-difx [-fh] [--force] [--help] [--noinstall] [--reconf] [--g77] [--clean] [--withmonitor] [--withfb] [--withhops] [--noipp] [--ipp] [--nodoc]
 
 Builds and installs mpifxcorr and associated tools.
 
@@ -37,8 +37,6 @@ Options:
 
    --withmonitor   Try to build the difx_monitor application (requires pgplot)
 
-   --perl          Install some non-standard perl utilities (deprecated)
-
    --withfb        Build filterbank (which requires pgplot)
 
    --withhops      Build HOPS (which requires pgplot)
@@ -61,7 +59,7 @@ Options:
 #  * Make sure it is documented in main.__doc__
 ###############################################################################
 try:
-    opts, args = getopt.gnu_getopt(sys.argv[1:], "fh", ["help", "force", "reconf", "noinstall", "mk5daemon", "g77", "clean", "perl", "withmonitor", "withfb", "withhops", "noipp", "ipp"])
+    opts, args = getopt.gnu_getopt(sys.argv[1:], "fh", ["help", "force", "reconf", "noinstall", "mk5daemon", "g77", "clean", "withmonitor", "withfb", "withhops", "noipp", "ipp"])
 except getopt.GetoptError, err:
     print err
     print main.__doc__
@@ -78,7 +76,6 @@ reconf = False
 noinstall = False
 mk5d = False
 gfortran = True
-perl = False
 doclean = False
 domonitor = False
 dofb = False
@@ -105,8 +102,6 @@ if len(opts) > 0:
             mk5d = True
         if o == "--g77":
             gfortran = False
-        if o == "--perl":
-            perl = True
         if o == "--withmonitor":
             domonitor = True
         if o == "--withfb":
@@ -243,12 +238,6 @@ if not master_tag:
 topdir = os.getcwd()
 
 if doclean:
-    if perl:
-        print "**** Cleaning vexlib"
-        os.chdir("libraries/vex/"+difx_version+"/vexlib")
-        run("make clean")
-        os.chdir(topdir)
-
     os.chdir("libraries")
     thisdir = os.getcwd()
     for libtarget in libtargets:
@@ -336,38 +325,6 @@ if not noinstall:
             run(startdir+"/genipppc "+ipproot)
             run("mv ipp.pc "+pkgdir)
             print
-
-##### Compile non-standard libraries ####################
-if perl:
-    print
-    print "************************************"
-    print "Building vex"
-    print
-    os.chdir("libraries/vex/"+difx_version+"/vexlib")
-    if platform == "darwin":
-        run("make -f Makefile.osx")
-    else:
-        run("make")
-    if not noinstall:
-        run("mv -f libvex." + SHAREDPOSTFIX + " " + libdir)
-        run("mv -f libvex.a " + libdir)
-    os.chdir("../vexperl")
-    run("perl Makefile.PL PREFIX=" + difxroot)
-    run("make")
-    if not noinstall:
-        run("make install")
-    os.chdir(topdir)
-
-    print
-    print "************************************"
-    print "Building Astro Perl"
-    print
-    os.chdir("libraries/perl/"+difx_version+"/Astro")
-    run("perl Makefile.PL PREFIX="+difxroot)
-    run("make")
-    if not noinstall:
-        run("make install")
-        os.chdir(topdir)
 
 ##### Make standard (autotool'd) libraries ###############
 os.chdir("libraries")
