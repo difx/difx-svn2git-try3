@@ -168,6 +168,31 @@ void test_filterfactory()
 }
 
 ////////////////////////////////////////////////////////////////////
+// Filter moving average
+////////////////////////////////////////////////////////////////////
+void test_filter_mavg()
+{
+    const int NI2 = 10000;
+    cout << endl << "---- Test Filter::getFilter(FLT_MAVG)" << endl;
+    Ipp32fc* tvec = ippsMalloc_32fc(Nch);
+    Filter*  f = Filter::getFilter(FLT_MAVG);
+    f->init(/*windowsize*/128, Nch);
+    f->clear();
+    Ipp32fc c = {1, 0.5};
+    Ipp32fc ref = c;
+    ippsSet_32fc(c, tvec, Nch);
+    if (1) {
+        Timing T("Filter run with MAvg filter", Nch*NI*NI2);
+        for (int i=0; i<NI*NI2; i++) {
+            f->filter(tvec);
+        }
+    }
+    compare_to_ref(*(f->y()), ref);
+    delete f;
+    ippsFree(tvec);
+}
+
+////////////////////////////////////////////////////////////////////
 // Filter coeff file parser
 ////////////////////////////////////////////////////////////////////
 void test_filterloader()
@@ -184,12 +209,14 @@ void test_filterloader()
 ////////////////////////////////////////////////////////////////////
 void bench_filter_vs_chain()
 {
-    cout << endl << "---- Benchmark INT filter on its own and in a chain" << endl;
+    cout << endl << "---- Benchmark DSVF filter on its own and in a chain" << endl;
     FilterChain fc;
-    IntFilter* flt1 = new IntFilter();
-    IntFilter* flt2 = new IntFilter();
-    flt1->init(/*order ignored:*/0, Nch);
-    flt2->init(/*order ignored:*/0, Nch);
+    Filter* flt1 = new IntFilter();
+    Filter* flt2 = new IntFilter();
+    flt1->init(/*order ignored if DSVF, window if MAvg:*/0, Nch);
+    flt2->init(/*order ignored if DSVF, window if MAvg:*/0, Nch);
+    flt1->generate_coeffs(4e-3);
+    flt2->generate_coeffs(4e-3);
     fc.appendFilter(flt2);
 
     Ipp32fc c = {0, 0};
@@ -287,6 +314,7 @@ void test_filterloader_on_data(bool ownOutput)
         for (int i=0;i<NI;i++)
         for (int s=0;s<Nsamps;s++) {
             fc.filter(tvec);
+            if (0) cout << "Output[" << (s + i*Nsamps) << "] = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
         }
     }
     cout << "Output = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
@@ -326,6 +354,7 @@ void test_filterloader_on_data2(bool ownOutput)
         for (int i=0;i<NI;i++)
         for (int s=0;s<Nsamps;s++) {
             fc.filter(tvec);
+            if (0) cout << "Output[" << (s + i*Nsamps) << "] = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
         }
     }
     cout << "Output = {" << fc.y()->re << "," << fc.y()->im << "} " << endl;
@@ -348,6 +377,8 @@ int main(int argc, char** argv)
     test_helperclass();
 
     test_filterfactory();
+
+    test_filter_mavg();
 
     bench_filter_vs_chain();
 
