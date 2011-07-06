@@ -26,6 +26,7 @@
  * 02110-1301, USA
  *********************************************************************/
 
+#include "filter.h"
 #include "filters.h"
 
 #include <cassert>
@@ -46,14 +47,16 @@ using std::flush;
  */
 Filter* Filter::getFilter(FltType t) {
     switch (t) {
-        FLT_AVERAGING: 
+        case FLT_AVERAGING: 
             return new IntFilter();
-        FLT_CIC: 
-            return new IntFilter();
-        FLT_IIR_SOS: 
+        case FLT_MAVG: 
+            return new MAvgFilter();
+        case FLT_IIR_SOS: 
             return new IIRSOSFilter();
-        FLT_FIR: 
+        case FLT_FIR: 
             return new IntFilter();
+        case FLT_DSVF: 
+            return new DSVFFilter();
         default: 
             return new IntFilter();
     }
