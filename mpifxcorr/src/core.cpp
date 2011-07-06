@@ -377,7 +377,7 @@ void Core::loopprocess(int threadid)
   dumpingsta = false;
   maxpolycos = 0;
   maxchan = config->getMaxNumChannels();
-  maxbins = config->getMaxNumPulsarBins();
+  maxbins = config->getMaxNumPulsarBins();	/* FIXME: This value is never used! */
   slen = config->getArrayStrideLength(0);
   if(slen>config->getXmacStrideLength(0))
     slen = config->getXmacStrideLength(0);
@@ -703,7 +703,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       fftsize = 2*config->getFNumChannels(config->getDRecordedFreqIndex(procslots[index].configindex, j, 0));
       
       // Calculate the number of offset samples. The modulo PCal bins is done in the pcal object!
-      offsetsamples = static_cast<uint64_t>(starttimens/sampletimens) + startblock*fftsize;
+      offsetsamples = static_cast<uint64_t>(starttimens/sampletimens) + startblock*fftsize;	/* FIXME: This value is never used! */
       modes[j]->resetpcal();
     }
   }
@@ -1418,7 +1418,7 @@ void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, doub
         }
         starecord->nswidth = int(nswidth);
         freqindex = config->getDRecordedFreqIndex(procslots[index].configindex, i, j);
-        freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+        freqchannels = config->getFNumChannels(freqindex);
         if (freqchannels < starecord->nChan)
           starecord->nChan = freqchannels;
         starecord->bandindex = j;
@@ -1495,6 +1495,8 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
   //}
 
   startbaselinefreq = (threadid*baselinefreqs)/numprocessthreads;
+
+  /* FIXME: binloop calculated below is never used */
   binloop = 1;
   if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
     binloop = procslots[index].numpulsarbins;
@@ -1672,7 +1674,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   channelinc = config->getFChannelsToAverage(freqindex);
   bandwidth = config->getFreqTableBandwidth(freqindex);
   lofrequency = config->getFreqTableFreq(freqindex);
-  numaverages = freqchannels/channelinc;
+  numaverages = freqchannels/channelinc;	/* FIXME: This value is never used */
   stridestoaverage = channelinc/xmacstridelen;
   rotatesperstride = xmacstridelen/rotatestridelen;
   if(stridestoaverage == 0)

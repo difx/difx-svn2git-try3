@@ -557,13 +557,13 @@ int Configuration::getOppositeSidebandFreqIndex(int freqindex)
 int Configuration::getDataBytes(int configindex, int datastreamindex)
 {
   int validlength, payloadbytes, framebytes;
-  datastreamdata currentds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
-  freqdata arecordedfreq = freqtable[currentds.recordedfreqtableindices[0]]; 
+  const datastreamdata &currentds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
+  const freqdata &arecordedfreq = freqtable[currentds.recordedfreqtableindices[0]]; 
   validlength = (arecordedfreq.decimationfactor*configs[configindex].blockspersend*currentds.numrecordedbands*2*currentds.numbits*arecordedfreq.numchannels)/8;
   if(currentds.format == MKIV || currentds.format == VLBA || currentds.format == VLBN || currentds.format == MARK5B || currentds.format == VDIF || currentds.format == INTERLACEDVDIF)
   {
     //must be an integer number of frames, with enough margin for overlap on either side
-    validlength += (arecordedfreq.decimationfactor*(int)(configs[configindex].guardns/(1000.0/(freqtable[currentds.recordedfreqtableindices[0]].bandwidth*2.0))+0.5)*currentds.numrecordedbands*2*currentds.numbits*arecordedfreq.numchannels)/8;
+    validlength += (arecordedfreq.decimationfactor*(int)(configs[configindex].guardns/(1000.0/(freqtable[currentds.recordedfreqtableindices[0]].bandwidth*2.0))+1.0)*currentds.numrecordedbands*currentds.numbits)/8;
     payloadbytes = getFramePayloadBytes(configindex, datastreamindex);
     framebytes = currentds.framebytes;
     if(currentds.format == INTERLACEDVDIF) //account for change to larger packets after muxing
@@ -956,7 +956,6 @@ void Configuration::processCommon(ifstream * input)
 bool Configuration::processConfig(ifstream * input)
 {
   string line;
-  bool found;
 
   maxnumpulsarbins = 0;
   maxnumbufferedffts = 0;
@@ -967,7 +966,6 @@ bool Configuration::processConfig(ifstream * input)
   estimatedbytes += numconfigs*sizeof(configdata);
   for(int i=0;i<numconfigs;i++)
   {
-    found = false;
     configs[i].datastreamindices = new int[numdatastreams];
     configs[i].baselineindices = new int [numbaselines];
     getinputline(input, &(configs[i].name), "CONFIG NAME");
@@ -1034,7 +1032,7 @@ bool Configuration::processConfig(ifstream * input)
 bool Configuration::processDatastreamTable(ifstream * input)
 {
   datastreamdata * dsdata;
-  int configindex, freqindex, decimationfactor, tonefreq, bytespersecond;
+  int configindex, freqindex, decimationfactor, tonefreq;
   double lofreq, parentlowbandedge, parenthighbandedge, lowbandedge, highbandedge, recbandwidth;
   string line = "";;
   string key = "";
@@ -1494,9 +1492,9 @@ bool Configuration::processFreqTable(ifstream * input)
       maxnumchannels = freqtable[i].numchannels;
     getinputline(input, &line, "CHANS TO AVG ");
     freqtable[i].channelstoaverage = atoi(line.c_str());
-    if(freqtable[i].channelstoaverage <= 0 || (freqtable[i].channelstoaverage > 1 && freqtable[i].channelstoaverage%2 != 0)) {
+    if (freqtable[i].channelstoaverage <= 0 || (freqtable[i].channelstoaverage > 1 && freqtable[i].numchannels % freqtable[i].channelstoaverage != 0)) {
       if(mpiid == 0) //only write one copy of this error message
-        cerror << startl << "Channels to average must be positive and a power of two - not the case for frequency entry " << i << "(" << freqtable[i].channelstoaverage << ") - aborting!!!" << endl;
+        cerror << startl << "Channels to average must be positive and the number of channels must be divisible by channels to average - not the case for frequency entry " << i << "(" << freqtable[i].channelstoaverage << ","<<freqtable[i].numchannels<<") - aborting!!!" << endl;
       return false;
     }
     getinputline(input, &line, "OVERSAMPLE FAC. ");
@@ -1946,6 +1944,14 @@ bool Configuration::consistencyCheck()
   baselinedata bl;
   datastreamdata * dsdata;
 
+  //check length of the datastream table
+  if(numdatasegments < 5)
+  {
+    if(mpiid == 0) //only write one copy of this error message
+      cfatal << startl << "Databuffer must have a minimum of 5 segments; " << numdatasegments << " specified" << endl;
+    return false;
+  }
+
   //check entries in the datastream table
   for(int i=0;i<datastreamtablelength;i++)
   {
@@ -2124,6 +2130,7 @@ bool Configuration::consistencyCheck()
   //check entries in the config table, check that number of channels * sample time yields a whole number of nanoseconds and that the nanosecond increment is not too large for an int, and generate the ordered datastream indices array
   //also check that guardns is large enough
   int nchan, chantoav;
+  int globalmaxnsslip = 0;
   double samplens;
   for(int i=0;i<numconfigs;i++)
   {
@@ -2134,7 +2141,7 @@ bool Configuration::consistencyCheck()
       return false;
     }
 
-    //fill in the maxnsslip for each datastream
+    //fill in the maxnsslip for each datastream and calculate the maximum of these across all datastreams
     for(int j=0;j<numdatastreams;j++) {
       dsdata = &(datastreamtable[configs[i].datastreamindices[j]]);
       samplens = 1000.0/freqtable[dsdata->recordedfreqtableindices[0]].bandwidth;
@@ -2142,10 +2149,12 @@ bool Configuration::consistencyCheck()
       do {
         nsaccumulate += dsdata->bytespersampledenom*samplens;
       } while (!(fabs(nsaccumulate - int(nsaccumulate)) < Mode::TINY));
-      //cout << "NS accumulate is " << nsaccumulate << " and max geom slip is " << model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001 << endl;
+      cdebug << startl << "NS accumulate is " << nsaccumulate << " and max geom slip is " << model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001 << ", maxnsslip is " << dsdata->maxnsslip << endl;
       nsaccumulate += model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001;
       if(nsaccumulate > dsdata->maxnsslip)
         dsdata->maxnsslip = int(nsaccumulate + 0.99);
+      if(dsdata->maxnsslip > globalmaxnsslip)
+        globalmaxnsslip = dsdata->maxnsslip;
     }
 
     //check that arraystridelen is ok, and guardns is ok
@@ -2161,9 +2170,9 @@ bool Configuration::consistencyCheck()
           return false;
         }
       }
-      if(configs[i].guardns < dsdata->maxnsslip) {
+      if(configs[i].guardns < globalmaxnsslip) {
         if(mpiid == 0) //only write one copy of this error message
-          cfatal << startl << "Config[" << i << "] has a guard ns which is potentially too short (" << configs[i].guardns << ").  To be safe (against geometric rate slip and backwards shuffling of the start of a Datastream send to an integer nanosecond) guardns should be at least " << dsdata->maxnsslip << " - aborting!!!" << endl;
+          cfatal << startl << "Config[" << i << "] has a guard ns which is potentially too short (" << configs[i].guardns << ").  To be safe (against geometric rate slip and backwards shuffling of the start of a Datastream send to an integer nanosecond) guardns should be at least " << globalmaxnsslip << " - aborting!!!" << endl;
         return false;
       }
     }
@@ -2638,7 +2647,7 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 bool Configuration::setPolycoFreqInfo(int configindex)
 {
   bool ok = true;
-  datastreamdata d = datastreamtable[getMaxNumFreqDatastreamIndex(configindex)];
+  datastreamdata d = datastreamtable[getMaxNumFreqDatastreamIndex(configindex)];	/* FIXME: This value is never used */
   double * frequencies = new double[freqtablelength];
   double * bandwidths = new double[freqtablelength];
   int * numchannels = new int[freqtablelength];
