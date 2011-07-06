@@ -70,8 +70,10 @@ class FilterChain : public Filter {
         int  length() { return fchain.size(); }
     private:
         std::vector<Filter*> fchain;
+        Filter* fchainQuick[128];
+        int numchannels;
     private:
-        void   generate_coeffs(double);
+        void generate_coeffs(double);
 };
 
 #endif // _FILTERCHAIN_H

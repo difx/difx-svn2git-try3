@@ -21,6 +21,7 @@
 #include "filterchain.h"
 #include "filters.h"
 #include "filterhelpers.h"
+#include <math.h> //fpclassify()
 
 #ifndef DEBUG_V
 #define DEBUG_V 0
@@ -36,6 +37,8 @@ using std::endl;
 /** C'stor clear the chain */
 FilterChain::FilterChain() { 
     fchain.clear();
+    numchannels = 0;
+    for (int i=0; i<128; i++) fchainQuick[i]=NULL;
 }
 
 /** D'stor free interal allocs */
@@ -67,6 +70,7 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
     }    
     int Nstages = vec[0];
     int idx = 1;
+    this->numchannels = parallelism;
     std::streamsize old_prec = cout.precision();
     for (int stage=0; stage<Nstages; stage++) {
         FltType ftype = static_cast<FltType>((int)(vec[idx++]));
@@ -78,14 +82,14 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
                 DecFilter* flt = new DecFilter();
                 flt->init((size_t)0, (size_t)parallelism); // filter order is ignored
                 flt->set_coeff(0, R);
-                fchain.push_back(flt);
+                appendFilter(flt);
             } break;
             case FLT_AVERAGING:
             {
                 int c_idx = 0;
                 IntFilter* flt = new IntFilter();
                 flt->init((size_t)1, (size_t)parallelism); // filter order is ignored
-                fchain.push_back(flt);
+                appendFilter(flt);
             } break;
             case FLT_IIR_SOS: 
             {
@@ -102,7 +106,7 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
                     }
                     if (DEBUG_V) { cout << endl; }
                 }
-                fchain.push_back(flt);
+                appendFilter(flt);
             } break;
             case FLT_FIR:
             {
@@ -116,6 +120,7 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
                 }
                 if (DEBUG_V) { cout << endl; }
                 fchain.push_back(flt);
+                fchainQuick[stage] = flt;
             } break;
             case FLT_DSVF:
             {
@@ -124,7 +129,15 @@ void FilterChain::buildFromFile(const char* cfgfile, int parallelism) {
                 flt->set_prescaling(vec[idx++]);
                 flt->set_coeff(0, vec[idx++]); // f = 2*sin(pi*fc/fs)
                 flt->set_coeff(1, vec[idx++]); // q = 1/Q
-                fchain.push_back(flt);
+                appendFilter(flt);
+            } break;
+            case FLT_MAVG:
+            {
+                MAvgFilter* flt = new MAvgFilter();
+                size_t windowsize = (size_t)vec[idx++]; // "filter order" is size of moving window
+                flt->init(windowsize, (size_t)parallelism);
+                flt->set_prescaling(vec[idx++]);
+                appendFilter(flt);
             } break;
             default:
                 cout << " filterchain: unknown or not yet implemented type " << ftype << endl;
@@ -164,6 +177,7 @@ void FilterChain::init(size_t order, size_t N) {
  * Append external filter
  */
 void FilterChain::appendFilter(Filter* flt) {
+    fchainQuick[fchain.size()] = flt;
     fchain.push_back(flt);
 }
 
@@ -190,6 +204,20 @@ int FilterChain::get_num_coeffs() {
  * taking into account also the decimation factors.
  */
 size_t FilterChain::filter(Ipp32fc* in) {
+
+    size_t newsamps = fchainQuick[0]->filter(in);
+    if (!newsamps) return 0;
+
+    Ipp32fc *xin = fchainQuick[0]->y();
+    for (int i=1; i<fchain.size(); i++) {
+        newsamps = fchainQuick[i]->filter(xin);
+        if (!newsamps) break;
+        xin = fchainQuick[i]->y();
+    }
+
+    return newsamps;
+
+#if 0
     std::vector<Filter*>::iterator fitr = fchain.begin();
     int len = fchain.size();
     size_t newsamps = 0;
@@ -202,6 +230,26 @@ size_t FilterChain::filter(Ipp32fc* in) {
             break;
         fitr++;
     }
+#endif
+
+    // catch errors
+#if 0
+    Ipp32fc* yy = fchain.back()->y();
+    bool found_num_fault = false;
+    for (int i=1; i<(this->numchannels-1) && !found_num_fault; i++) {
+        int fp_re = fpclassify(yy[i].re);
+        int fp_im = fpclassify(yy[i].im);
+        if (fp_re != FP_ZERO && fp_re != FP_NORMAL) {
+            found_num_fault = true;
+            std::cout << "FilterChain numeric problem, ch#" << i << ".re fpclassify=" << fp_re << std::endl;
+        }
+        if (fp_im != FP_ZERO && fp_im != FP_NORMAL) {
+            found_num_fault = true;
+            std::cout << "FilterChain numeric problem, ch#" << i << ".im fpclassify=" << fp_im << std::endl;
+        }
+    }
+#endif
+
     return newsamps;
 }
 
