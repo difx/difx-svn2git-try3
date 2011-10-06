@@ -1495,7 +1495,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		}
 
 		//first test how big a single FFT is - if it is too big, fail with a warning and a suggestion
-		if(floatFFTDurNS*D->dataBufferFactor/D->nDataSegments > (1<<31) - 1)
+		if(floatFFTDurNS*D->dataBufferFactor/D->nDataSegments > (1ULL<<31) - 1ULL)
 		{
 			cerr << "A single FFT is too long (" << floatFFTDurNS << " ns)!" << endl;
 			cerr << "The maximum duration of an FFT is 2^31 - 1 nanoseconds" << endl;
