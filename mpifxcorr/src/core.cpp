@@ -660,6 +660,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   char papol;
   double offsetmins, blockns;
   f32 bweight;
+  f64 * binweights;
   Mode * m1, * m2;
   cf32 * vis1;
   cf32 * vis2;
@@ -677,6 +678,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   binloop = 1;
   if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
     binloop = procslots[index].numpulsarbins;
+  if(procslots[index].pulsarbin)
+    binweights = currentpolyco->getBinWeights();
 
   //set up the mode objects that will do the station-based processing
   for(int j=0;j<numdatastreams;j++)
@@ -937,13 +940,15 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     //if scrunching, add into temp accumulate space, otherwise add into normal space
                     if(procslots[index].scrunchoutput)
                     {
+                      bweight = scratchspace->dsweights[ds1index][fftsubloop]*scratchspace->dsweights[ds2index][fftsubloop]/(freqchannels);
                       destchan = xmacstart+outputoffset;
                       for(int l=0;l<xmacmullength;l++)
                       {
                         //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
                         destbin = scratchspace->bins[fftsubloop][f][destchan];
-                        scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][destchan].re += scratchspace->pulsarscratchspace[l].re;
-                        scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][destchan].im += scratchspace->pulsarscratchspace[l].im;
+                        scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][l+outputoffset].re += scratchspace->pulsarscratchspace[l].re;
+                        scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][l+outputoffset].im += scratchspace->pulsarscratchspace[l].im;
+                        scratchspace->baselineweight[f][0][j][p] += bweight*binweights[destbin];
                         destchan++;
                       }
                     }
@@ -955,7 +960,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                       {
                         destbin = scratchspace->bins[fftsubloop][f][destchan];
                         //cindex = resultindex + (scratchspace->bins[freqindex][destchan]*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*(freqchannels+1) + destchan;
-                        cindex = resultindex + (destbin*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*xmacstridelength + destchan;
+                        cindex = resultindex + (destbin*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*xmacstridelength + l + outputoffset;
                         scratchspace->threadcrosscorrs[cindex].re += scratchspace->pulsarscratchspace[l].re;
                         scratchspace->threadcrosscorrs[cindex].im += scratchspace->pulsarscratchspace[l].im;
                         scratchspace->baselineweight[f][destbin][j][p] += bweight;
@@ -983,7 +988,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                         cf32 * accu = &(scratchspace->threadcrosscorrs[resultindex+ /*outputoffset*/ +p*xmacstridelength]);
                         cf32 * old = scratchspace->rfifilters[rfifilterindex]->y();
                         if (accu != old) {
-                           std::cerr << "C" << mpiid << "/T" << threadid << " flt#" << rfifilterindex << " out=" << (void*)old << " != acc=" << (void*)accu << std::endl;
+                           std::cerr << "C" << mpiid << "/T" << threadid << " flt#" << rfifilterindex << " out=" << (void*)old << " != acc=" << (void*)accu << ", outoffset=" << outputoffset << std::endl;
                         }
                         scratchspace->rfifilters[rfifilterindex]->setUserOutbuffer(accu);
                         DUT_CHECK( vectorMul_cf32(vis1, vis2, scratchspace->rfiscratch, xmacmullength), csevere, "Error trying to xmul baseline. " );
@@ -1025,8 +1030,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         modes[j]->zeroAutocorrelations();
     }
 
-    //finally, update the baselineweight if not doing any pulsar stuff or if scrunching
-    if(!procslots[index].pulsarbin || procslots[index].scrunchoutput)
+    //finally, update the baselineweight if not doing any pulsar stuff
+    if(!procslots[index].pulsarbin)
     {
       for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);fftsubloop++)
       {
@@ -1631,6 +1636,8 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
     corebinloop = procslots[index].numpulsarbins;
 
+  if (localfreqindex<0) return;
+
   //allocate space for the phase centre delays if necessary, and calculate pointing centre delays
   if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
   {
@@ -1754,6 +1761,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
           csevere << startl << "Error in phase shift, real to complex!!!" << status << endl;
       }
     }
+
     threadstart = config->getThreadResultFreqOffset(procslots[index].configindex, freqindex) + config->getThreadResultBaselineOffset(procslots[index].configindex, freqindex, baseline);
     //cout << "Threadstart is " << threadstart << " since threadresultfreqoffset is " << config->getThreadResultFreqOffset(procslots[index].configindex, freqindex) << endl;
     for(int x=0;x<config->getNumXmacStrides(procslots[index].configindex, freqindex);x++)
@@ -1840,6 +1848,10 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
       {
         maxphasechange  = TWO_PI*differentialdelay[s][0]*(nswidth/1000.0)*config->getFreqTableFreq(freqindex);
         timesmeardecorr = sin(maxphasechange/2.0) / (maxphasechange/2.0);
+        if(timesmeardecorr < 0.0) {
+          cerror << startl << "UV shift integration time far too long for baseline " << baseline << ", source " << s << "; no correlation!" << endl;
+          timesmeardecorr = 0;
+        }
       }
       if(fabs(differentialdelay[s][1]) > 1e-18)
       {
@@ -1847,6 +1859,10 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
         //cout << "BW smearing: max phase change is " << maxphasechange << endl;
         //bwsmeardecorr   = sin(maxphasechange/2.0) / (maxphasechange/2.0);
         delaydecorr     = 1.0 - fabs(differentialdelay[s][1] / delaywindow);
+        if(delaydecorr < 0.0) {
+          cerror << startl << "FFT window is not wide enough for baseline " << baseline << ", source " << s << "; no correlation!" << endl;
+          delaydecorr = 0;
+        }
         //cout << "1.0 - Time smear decorr is " << 1.0-timesmeardecorr << ", 1.0 - bw smear decorr is " << 1.0-bwsmeardecorr << ", 1.0 - delaydecorr is " << 1.0-delaydecorr << "(diff. delay is " << differentialdelay[s][1] << ", delay window is " << delaywindow << ")" << endl;
       }
       //scratchspace->baselineshiftdecorr[freqindex][baseline][s] += nswidth*timesmeardecorr*bwsmeardecorr*delaydecorr;
@@ -1955,7 +1971,6 @@ void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, 
       {
         if(config->isFrequencyUsed(newconfigindex, f))
         {
-          freqchannels = config->getFNumChannels(f);
           pulsaraccumspace[f] = new cf32*****[config->getNumXmacStrides(newconfigindex, f)];
           for(int x=0;x<config->getNumXmacStrides(newconfigindex, f);x++)
           {
@@ -1975,13 +1990,13 @@ void Core::createPulsarVaryingSpace(cf32******* pulsaraccumspace, s32**** bins, 
                     pulsaraccumspace[f][x][i][s][j] = new cf32*[config->getNumPulsarBins(newconfigindex)];
                     for(int k=0;k<config->getNumPulsarBins(newconfigindex);k++)
                     {
-                      pulsaraccumspace[f][x][i][s][j][k] = vectorAlloc_cf32(freqchannels);
+                      pulsaraccumspace[f][x][i][s][j][k] = vectorAlloc_cf32(config->getXmacStrideLength(newconfigindex));
                       if(pulsaraccumspace[f][x][i][s][j][k] == NULL) {
                         cfatal << startl << "Could not allocate pulsar scratch space (out of memory?) - I must abort!" << endl;
                         MPI_Abort(MPI_COMM_WORLD, 1);
                       }
-                      threadbytes[threadid] += 8*freqchannels;
-                      status = vectorZero_cf32(pulsaraccumspace[f][x][i][s][j][k], freqchannels);
+                      threadbytes[threadid] += 8*config->getXmacStrideLength(newconfigindex);
+                      status = vectorZero_cf32(pulsaraccumspace[f][x][i][s][j][k], config->getXmacStrideLength(newconfigindex));
                       if(status != vecNoErr)
                         csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
                     }

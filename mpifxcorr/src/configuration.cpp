@@ -67,8 +67,8 @@ Configuration::Configuration(const char * configfile, int id)
   ifstream * input = new ifstream(configfile);
   if(input->fail() || !input->is_open())
   {
-    if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Cannot open file " << configfile << " - aborting!!!" << endl;
+    //need to write this message from all processes - sometimes it is visible to head node but no-one else...
+    cfatal << startl << "Cannot open file " << configfile << " - aborting!!!" << endl;
     consistencyok = false;
   }
   else
@@ -2100,6 +2100,18 @@ bool Configuration::consistencyCheck()
     }
   }
 
+  // check that if MODULE is the data source, that the data reads are not too large
+  // (otherwise a bug in the mk5 unit playback might be excited)
+  for(int i=0;i<numdatastreams;i++)
+  {
+    if(isNativeMkV(i))
+    {
+      int readbytes = (int)(((long long)databufferfactor)*getMaxDataBytes(i)/numdatasegments);
+      if(readbytes > 25000000 && mpiid == 0)
+        csevere << startl << "Read size for datastream " << i << " is " << readbytes/1000000 << "MB! Large read sizes (>25 MB) have been known to cause zero-weight playback from Mk5 modules, continuing but suggest you rerun with smaller readsize!" << endl;
+    }
+  }
+
   //check that for all configs, if a datastream is muxed in one it is muxed in all, and frame size / num bits stays the same
   for(int i=0;i<numdatastreams;i++)
   {
@@ -2144,7 +2156,9 @@ bool Configuration::consistencyCheck()
     //fill in the maxnsslip for each datastream and calculate the maximum of these across all datastreams
     for(int j=0;j<numdatastreams;j++) {
       dsdata = &(datastreamtable[configs[i].datastreamindices[j]]);
-      samplens = 1000.0/freqtable[dsdata->recordedfreqtableindices[0]].bandwidth;
+      samplens = 500.0/freqtable[dsdata->recordedfreqtableindices[0]].bandwidth;
+      if(dsdata->sampling == COMPLEX)
+        samplens *= 2;
       double nsaccumulate = 0.0;
       do {
         nsaccumulate += dsdata->bytespersampledenom*samplens;

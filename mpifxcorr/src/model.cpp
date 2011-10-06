@@ -355,6 +355,7 @@ bool Model::readInfoData(ifstream * input)
   config->getinputline(input, &line, "JOB STOP TIME");
   config->getinputline(input, &line, "DUTY CYCLE");
   config->getinputline(input, &line, "OBSCODE");
+  config->setObsCode(line);
   config->getinputline(input, &line, "DIFX VERSION");
   config->getinputline(input, &line, "SUBJOB ID");
   config->getinputline(input, &line, "SUBARRAY ID");
@@ -686,7 +687,9 @@ bool Model::readPolynomialSamples(ifstream * input)
           scantable[i].adj[j][k][l] = vectorAlloc_f64(polyorder+1);
           config->getinputline(input, &line, "SRC ", k);
           polyok = polyok && fillPolyRow(scantable[i].delay[j][k][l], line, polyorder+1);
-          if(fabs(scantable[i].delay[j][k][l][1]) > fabs(maxrate[l]))
+          if(fabs(scantable[i].delay[j][k][l][1]) > fabs(maxrate[l]) &&
+             (scantable[i].delay[j][k][l][0] > 0.0 || stationtable[l].mount == ORB))
+            //ignore rates from Earth-based antennas when the delay is negative - they are junk
             maxrate[l] = fabs(scantable[i].delay[j][k][l][1]);
           config->getinputkeyval(input, &key, &line);
           if(key.find("DRY") != string::npos) { //look for optional "DRY" delay subcomponent

@@ -27,6 +27,7 @@
 #include <dirent.h>
 #include <cmath>
 #include <string>
+#include <sstream>
 #include <string.h>
 #include <stdio.h>
 #include <iomanip>
@@ -364,6 +365,8 @@ void Visibility::writedata()
         for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) {
           if(binloop>1)
             baselineweights[i][j][b][k] = floatresults[resultindex]/(fftsperintegration*polyco->getBinWidth(b));
+          else if(config->pulsarBinOn(currentconfigindex))
+            baselineweights[i][j][b][k] = floatresults[resultindex]/(fftsperintegration*binweightdivisor[0]);
           else
             baselineweights[i][j][b][k] = floatresults[resultindex]/fftsperintegration;
           resultindex++;
@@ -454,8 +457,13 @@ void Visibility::writedata()
             {
               //We want normalised correlation coefficients, so scale by number of contributing
               //samples rather than datastream tsys and decorrelation correction
-              if(baselineweights[i][j][b][k] > 0.0)
+              if(baselineweights[i][j][b][k] > 0.0) {
                 scale = 1.0/(baselineweights[i][j][b][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels*config->getFChannelsToAverage(freqindex))));
+                if(config->getDataFormat(currentconfigindex, ds1) == Configuration::LBASTD || config->getDataFormat(currentconfigindex, ds1) == Configuration::LBAVSOP)
+                  scale *= 4.0;
+                if(config->getDataFormat(currentconfigindex, ds2) == Configuration::LBASTD || config->getDataFormat(currentconfigindex, ds2) == Configuration::LBAVSOP)
+                  scale *= 4.0;
+              }
               else
                 scale = 0.0;
             }
@@ -562,7 +570,7 @@ void Visibility::writeascii(int dumpmjd, double dumpseconds)
 {
   ofstream output;
   int binloop, freqchannels, freqindex;
-  char datetimestring[26];
+  char datetimestring[26], sbuf[10];
 
   int resultindex, atindex;
   int mjd = dumpmjd;
@@ -597,8 +605,13 @@ void Visibility::writeascii(int dumpmjd, double dumpseconds)
         {
           for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++)
           {
+	    stringstream fname;
             //write out to a naive filename
-            output.open(string(string("baseline_")+char('0' + i)+"_freq_"+char('0' + j)+"_product_"+char('0'+k)+"_"+datetimestring+"_source_"+char('0'+s)+"_bin_"+char('0'+b)+".output").c_str(), ios::out|ios::trunc);
+
+	    fname << "baseline_" << i << "_freq_" << j << "_product_" << k << "_" << datetimestring << "_source_" << s << "_bin_" << b << ".output";
+
+            //output.open(string(string("baseline_")+itoa(i,sbuf,10)+"_freq_"+char('0' + j)+"_product_"+char('0'+k)+"_"+datetimestring+"_source_"+char('0'+s)+"_bin_"+char('0'+b)+".output").c_str(), ios::out|ios::trunc);
+            output.open(fname.str().c_str(), ios::out|ios::trunc);
             for(int l=0;l<freqchannels;l++) {
               atindex = resultindex+l;
               output << l << " " << sqrt(results[atindex].re*results[atindex].re + results[atindex].im*results[atindex].im) << " " << atan2(results[atindex].im, results[atindex].re) << endl;
@@ -622,9 +635,12 @@ void Visibility::writeascii(int dumpmjd, double dumpseconds)
         {
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex)) {
+	    stringstream fname;
             freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
             //write out to naive filename
-            output.open(string(string("datastream_")+char('0' + i)+"_crosspolar_"+char('0' + j)+"_product_"+char('0'+k)+"_"+datetimestring+"_bin_"+char('0'+0)+".output").c_str(), ios::out|ios::trunc);
+            fname << "datastream_" << i << "_crosspolar_" << j << "_product_" << k << "_" << datetimestring << "_bin_" << 0 << ".output";
+            output.open(fname.str().c_str(), ios::out|ios::trunc);
+	    //            output.open(string(string("datastream_")+char('0' + i)+"_crosspolar_"+char('0' + j)+"_product_"+char('0'+k)+"_"+datetimestring+"_bin_"+char('0'+0)+".output").c_str(), ios::out|ios::trunc);
             for(int l=0;l<freqchannels;l++) {
               atindex = resultindex + l;
               output << l << " " << sqrt(results[atindex].re*results[atindex].re + results[atindex].im*results[atindex].im) << " " << atan2(results[atindex].im, results[atindex].re) << endl;
@@ -1106,13 +1122,15 @@ void Visibility::changeConfig(int configindex)
     }
     //polyco->setTime(expermjd + (experseconds + currentstartseconds)/86400, double((experseconds + currentstartseconds)%86400)/86400.0);
     if(config->scrunchOutputOn(configindex)) {
+      //binweightdivisor is redundant except for scrunching now - should clean it up
       binweightdivisor = vectorAlloc_f32(1);
       binweightdivisor[0] = 0.0;
       for (int i=0;i<config->getNumPulsarBins(configindex);i++)
       {
-        binweightdivisor[0] += polyco->getBinWeightTimesWidth(i)*fftsperintegration;
+        //binweightdivisor[0] += polyco->getBinWeightTimesWidth(i)*fftsperintegration;
+        binweightdivisor[0] += polyco->getBinWeightTimesWidth(i);
       }
-      binweightdivisor[0] /= double(config->getNumPulsarBins(configindex));
+      //binweightdivisor[0] /= double(config->getNumPulsarBins(configindex));
     }
     else {
       binweightdivisor = vectorAlloc_f32(config->getNumPulsarBins(configindex));

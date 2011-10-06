@@ -1,4 +1,14 @@
-Version 2.0.1
+Version 2.0.2
+~~~~~~~~~~~~~
+* Correctly scale LBA format visibilities, reducing the size of ACCOR corrections
+* Fix bug when pulsar binning/gating and xmaclength > nfftchan
+* Add collection of drive statistics to native Mark5
+* guardns was incorrectly (overzealously) calculated in mpifxcorr
+* "Mk5DataStream::calculateControlParams: bufferindex>=bufferbytes" bug fixed
+* Low weight reads could result in uninitialized memory
+* Streamstor XLRRead() bug work-around installed several places (read at position 0 before reading at position > 0)
+
+Version 2.0.1, 2011 June 12
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * Added new checkmpifxcorr utility
 * Updates to phase cal extraction
@@ -7,6 +17,7 @@ Version 2.0.1
 * Native Mark5: Swap order of fill pattern setting and bank mode setting to better work around certain module problems
 * Fix zoom-bands for all but special cases that just worked despite the logic in the code. (WFB paraphrasing for ATD)
 * Allow number of scans on a Mark5 module to exceed 1024
+* Fix calculation of bytes from guardns
 
 Version 2.0.0, 2010 July 14
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

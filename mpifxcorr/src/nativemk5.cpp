@@ -158,6 +158,60 @@ static int dirCallback(int scan, int nscan, int status, void *data)
 	return 0;
 }
 
+int NativeMk5DataStream::resetDriveStats()
+{
+	S_DRIVESTATS driveStats[XLR_MAXBINS];
+	const int defaultStatsRange[] = { 75000, 150000, 300000, 600000, 1200000, 2400000, 4800000, -1 };
+
+	WATCHDOGTEST( XLRSetOption(xlrDevice, SS_OPT_DRVSTATS) );
+	for(int b = 0; b < XLR_MAXBINS; b++)
+	{
+		driveStats[b].range = defaultStatsRange[b];
+		driveStats[b].count = 0;
+	}
+	WATCHDOGTEST( XLRSetDriveStats(xlrDevice, driveStats) );
+
+	return 0;
+}
+
+int NativeMk5DataStream::reportDriveStats()
+{
+	XLR_RETURN_CODE xlrRC;
+	S_DRIVESTATS driveStats[XLR_MAXBINS];
+	DifxMessageDriveStats driveStatsMessage;
+
+	snprintf(driveStatsMessage.moduleVSN, DIFX_MESSAGE_MARK5_VSN_LENGTH, "%s",  datafilenames[0][0].c_str());
+	driveStatsMessage.type = DRIVE_STATS_TYPE_READ;
+
+	/* FIXME: for now don't include complete information on drives */
+	strcpy(driveStatsMessage.serialNumber, "X");
+	strcpy(driveStatsMessage.modelNumber, "Y");
+	driveStatsMessage.diskSize = 0;
+
+	for(int d = 0; d < 8; d++)
+	{
+		for(int i = 0; i < DIFX_MESSAGE_N_DRIVE_STATS_BINS; i++)
+		{
+			driveStatsMessage.bin[i] = -1;
+		}
+		driveStatsMessage.moduleSlot = d;
+		WATCHDOG( xlrRC = XLRGetDriveStats(xlrDevice, d/2, d%2, driveStats) );
+		if(xlrRC == XLR_SUCCESS)
+		{
+			for(int i = 0; i < XLR_MAXBINS; i++)
+			{
+				if(i < DIFX_MESSAGE_N_DRIVE_STATS_BINS)
+				{
+					driveStatsMessage.bin[i] = driveStats[i].count;
+				}
+			}
+		}
+		difxMessageSendDriveStats(&driveStatsMessage);
+	}
+
+	resetDriveStats();
+}
+
 NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum, 
 	int id, int ncores, int * cids, int bufferfactor, int numsegments) :
 		Mk5DataStream(conf, snum, id, ncores, cids, bufferfactor, 
@@ -236,7 +290,7 @@ NativeMk5DataStream::NativeMk5DataStream(Configuration * conf, int snum,
                 MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-
+	resetDriveStats();
 }
 
 NativeMk5DataStream::~NativeMk5DataStream()
@@ -274,12 +328,13 @@ NativeMk5DataStream::~NativeMk5DataStream()
 	}
 	else
 	{
-		cinfo << startl << "Data recovery statistics: ninvalid=" << ninvalid << " nfill=" << nfill << " ngood=" <<     ngood << "." << endl;
+		cinfo << startl << "Data recovery statistics: ninvalid=" << ninvalid << " nfill=" << nfill << " ngood=" << ngood << "." << endl;
 	}
 
 	if(nError == 0)
 	{
 #ifdef HAVE_DIFXMESSAGE
+		reportDriveStats();
 		sendMark5Status(MARK5_STATE_CLOSE, 0, 0.0, 0.0);
 #endif
 #if HAVE_MARK5IPC
@@ -422,11 +477,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 			{
 				cerror << startl << "Cannot set Mark5 data replacement mode / fill pattern" << endl;
 			}
-			WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
-			if(xlrRC != XLR_SUCCESS)
-			{
-				cerror << startl << "Cannot put Mark5 unit in bank mode" << endl;
-			}
+			// NOTE: removed WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 			cwarn << startl << "Enabled realtime playback mode" << endl;
 		}
 	}
