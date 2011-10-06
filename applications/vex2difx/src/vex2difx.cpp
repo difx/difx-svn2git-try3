@@ -46,7 +46,7 @@
 
 const string version(VERSION);
 const string program("vex2difx");
-const string verdate("20101209");
+const string verdate("20110616");
 const string author("Walter Brisken/Adam Deller");
 
 const int defaultMaxNSBetweenACAvg = 2000000;	// 2ms, good default for use with transient detection
@@ -60,7 +60,7 @@ static double current_mjd()
 	return MJD_UNIX0 + t.tv_sec/SEC_DAY + t.tv_usec/MUSEC_DAY;
 }
 
-int calcDecimation(int overSamp)
+static int calcDecimation(int overSamp)
 {
 #warning "FIXME: handle non 2^n overSamp here"
 	if(overSamp > 2)
@@ -73,10 +73,24 @@ int calcDecimation(int overSamp)
 	}
 }
 
+static int calculateWorstcaseGuardNS(double samplerate, int subintNS)
+{
+	double sampleTimeNS = 1.0e9/samplerate;
+	double nsaccumulate = sampleTimeNS;
+	const double MaxEarthGeomSlitRate = 1600.0;	// ns/sec
+	
+	while(fabs(nsaccumulate - static_cast<int>(nsaccumulate)) > 1.0e-12)
+	{
+		nsaccumulate += sampleTimeNS;
+	}
+
+	return static_cast<int>(nsaccumulate + MaxEarthGeomSlitRate*subintNS*1.0e-9 + 1.0);
+}
+
 // A is assumed to be the first scan in time order
 static bool areScansCompatible(const VexScan *A, const VexScan *B, const CorrParams *P)
 {
-	if(((B->mjdStart < A->mjdStop) && (fabs(B->mjdStart-A->mjdStop)>0.00000001)) ||
+	if(((B->mjdStart < A->mjdStop) && (fabs(B->mjdStart-A->mjdStop) > 1.0e-8)) ||
 	   (B->mjdStart > A->mjdStop + P->maxGap))
 	{
 		return false;
@@ -320,7 +334,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 				cerr << "   " << *it << endl;
 			}
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 
 		// look for break with highest score
@@ -464,7 +478,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, con
 		{
 			cerr << "Developer error: makeDifxJob: format being truncated.  Needed " << v << " bytes." << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 		v = snprintf(fileBase, DIFXIO_FILENAME_LENGTH, format, directory.c_str(), J.jobSeries.c_str(), J.jobId, ext);
 	}
@@ -474,7 +488,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, con
 		{
 			cerr << "Warning: makeDifxJob: ext!=0 and making job names without extensions!" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 		v = snprintf(fileBase, DIFXIO_FILENAME_LENGTH, "%s/%s", directory.c_str(), J.jobSeries.c_str());
 	}
@@ -482,7 +496,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, con
 	{
 		cerr << "Developer error: makeDifxJob: fileBase needed " << v << " bytes." << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	snprintf(job->inputFile,   DIFXIO_FILENAME_LENGTH, "%s.input", fileBase);
@@ -590,6 +604,7 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 	DifxDatastream *datastreams;
 	DifxDatastream *dd;
 	map<string,string>::const_iterator a;
+	vector<string> antwithoutoverlap;
 	const VexAntenna *ant;
 	int nDatastream;
 	
@@ -622,6 +637,11 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 		}
 
 		int nFile = ant->basebandFiles.size();
+		if (nFile <= 0)
+		{
+			cerr << "Warning: antenna has no files!" << endl;
+		}
+
 		if(ant->dataSource == DataSourceFile)
 		{
 			int count = 0;
@@ -632,6 +652,11 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 				{
 					count++;
 				}
+			}
+
+			if (count <= 0)
+			{
+				antwithoutoverlap.push_back(ant->name);
 			}
 
 			DifxDatastreamAllocFiles(dd, count);
@@ -663,12 +688,20 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 
 	}
 
+	if (antwithoutoverlap.size() != 0)
+	{
+		cerr << "Warning: " << J.scans[0] << ": no matching files for ";
+		for (int an=0; an<antwithoutoverlap.size(); an++)
+			cerr << antwithoutoverlap[an] << " ";
+		cerr << endl;
+	}
+
 	return datastreams;
 }
 
 // round up to the next power of two
 // There must be a more elegant solution!
-int next2(int x)
+static int next2(int x)
 {
 	int n=0; 
 	int m=0;
@@ -780,7 +813,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	{
 		cerr << "Error: setFormat: antId=" << antId << " while nAntenna=" << D->nAntenna << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 	const VexFormat* format = mode->getFormat(antName);
 	const VexSetup* setup = mode->getSetup(antName);
@@ -790,14 +823,14 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	{
 		cerr << "Developer error: setFormat(ant=" << antName << ", mode=" << mode->defName << ") -> format=0" << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	if(setup == 0)
 	{
 		cerr << "Developer error: setFormat(ant=" << antName << ", mode=" << mode->defName << ") -> setup=0" << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	overSamp = mode->getOversampleFactor();
@@ -900,7 +933,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		{
 			cerr << "Error: setFormat: index to subband=" << i->subbandId << " is out of range" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 
 		int r = i->recordChan;
@@ -924,7 +957,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		{
 			cerr << "Error: setFormat: index to record channel = " << r << " is out of range" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 		D->datastream[dsId].recBandFreqId[r] = getBand(bandMap, fqId);
 		D->datastream[dsId].recBandPolName[r] = subband.pol;
@@ -939,7 +972,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	return n2;
 }
 
-void populateRuleTable(DifxInput *D, const CorrParams *P)
+static void populateRuleTable(DifxInput *D, const CorrParams *P)
 {
 	list<string>::const_iterator s;
 
@@ -972,7 +1005,7 @@ void populateRuleTable(DifxInput *D, const CorrParams *P)
 			{
 				cerr << "Cannot handle rules for more than one calCode simultaneously." << endl;
 
-				exit(0);
+				exit(EXIT_FAILURE);
 			}
 			D->rule[i].calCode[0] = P->rules[i].calCode.front();
 			D->rule[i].calCode[1] = 0;
@@ -983,7 +1016,7 @@ void populateRuleTable(DifxInput *D, const CorrParams *P)
 			{
 				cerr << "Cannot handle rules for more than one qualifier simultaneously." << endl;
 				
-				exit(0);
+				exit(EXIT_FAILURE);
 			}
 			D->rule[i].qual = P->rules[i].qualifier.front();
 		}
@@ -993,8 +1026,9 @@ void populateRuleTable(DifxInput *D, const CorrParams *P)
 
 static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vector<vector<int> > &toneSets)
 {
+	static int firstChanBWWarning=1;
 	DifxFreq *df;
-	int bw;
+	double chanBW;
 
 	D->nFreq = freqs.size();
 	D->freq = newDifxFreqArray(D->nFreq);
@@ -1009,6 +1043,13 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 		df->specAvg = freqs[f].specAvg();
 		df->overSamp = freqs[f].overSamp;
 		df->decimation = freqs[f].decimation;
+
+		chanBW = df->bw*df->specAvg/df->nChan;
+		if(chanBW > 0.51 && firstChanBWWarning)
+		{
+			firstChanBWWarning = 0;
+			cout << "Warning: channel bandwidth is " << chanBW << " MHZ, which is larger than the minimum recommended 0.5 MHz.  Consider increasing the number of output channels." << endl;
+		}
 
 		// This is to correct for the fact that mpifxcorr does not know about oversampling
 		if(df->overSamp > df->decimation)
@@ -1030,8 +1071,6 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 		}
 		const vector<int> &tones = toneSets[freqs[f].toneSetId];
 
-		bw = static_cast<int>(df->bw+0.1);
-
 		if(tones.size() > 0)
 		{
 			DifxFreqAllocTones(df, tones.size());
@@ -1045,7 +1084,7 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 }
 
 // warning: assumes same number of datastreams == antennas for each config
-void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *corrSetup, vector<set <int> > blockedfreqids)
+static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *corrSetup, vector<set <int> > blockedfreqids)
 {	
 	int n1, n2;
 	int npol;
@@ -1126,12 +1165,9 @@ void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *c
 					npol = 0;
 					for(int u = 0; u < n1; u++)
 					{
-						if(corrSetup->doPolar)
-						{
-							bl->bandA[nFreq][npol] = a1c[u];
-							bl->bandB[nFreq][npol] = a1c[u];
-							npol++;
-						}
+						bl->bandA[nFreq][npol] = a1c[u];
+						bl->bandB[nFreq][npol] = a1c[u];
+						npol++;
 					}
 					bl->nPolProd[nFreq] = npol;
 
@@ -1218,6 +1254,24 @@ void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *c
 									n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
 								}
 							}
+
+							if(n2 == 0)
+							{
+								//still no dice? Try the zoom bands of datastream 2
+								for(int f2 = 0; f2 < D->datastream[a2].nZoomFreq; f2++)
+								{
+									altFreqId = D->datastream[a2].zoomFreqId[f2];
+									altlowedgefreq = D->freq[altFreqId].freq;
+									if(D->freq[altFreqId].sideband == 'L')
+									{
+										altlowedgefreq -= D->freq[altFreqId].bw;
+									}
+									if(altlowedgefreq == lowedgefreq)
+									{
+										n2 = DifxDatastreamGetZoomBands(D->datastream+a2, altFreqId, a2p, a2c);
+									}
+								}
+							}
 						}
 
 						npol = 0;
@@ -1256,6 +1310,46 @@ void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *c
 
 						n1 = DifxDatastreamGetZoomBands(D->datastream+a1, freqId, a1p, a1c);
 						n2 = DifxDatastreamGetZoomBands(D->datastream+a2, freqId, a2p, a2c);
+						if(n2 == 0)
+						{
+							//look for another freqId which matches band but is opposite sideband
+							lowedgefreq = D->freq[freqId].freq;
+							if(D->freq[freqId].sideband == 'L')
+							{
+								lowedgefreq -= D->freq[freqId].bw;
+							}
+							for(int f2 = 0; f2 < D->datastream[a2].nZoomFreq; f2++)
+							{
+								altFreqId = D->datastream[a2].zoomFreqId[f2];
+								altlowedgefreq = D->freq[altFreqId].freq;
+								if(D->freq[altFreqId].sideband == 'L')
+								{
+									altlowedgefreq -= D->freq[altFreqId].bw;
+								}
+								if(altlowedgefreq == lowedgefreq)
+								{
+									n2 = DifxDatastreamGetZoomBands(D->datastream+a2, altFreqId, a2p, a2c);
+								}
+							}
+
+							if(n2 == 0)
+							{
+								//still no dice? Try recorded bands from datastream 1
+								for(int f2 = 0; f2 < D->datastream[a2].nRecFreq; f2++)
+								{
+									altFreqId = D->datastream[a2].recFreqId[f2];
+									altlowedgefreq = D->freq[altFreqId].freq;
+									if(D->freq[altFreqId].sideband == 'L')
+									{
+										altlowedgefreq -= D->freq[altFreqId].bw;
+									}
+									if(altlowedgefreq == lowedgefreq)
+									{
+										n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
+									}
+								}
+							}
+						}
 
 						npol = 0;
 						for(int u = 0; u < n1; u++)
@@ -1329,13 +1423,17 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	double minBW;		// [Hz]
 	double readTimeNS;
 	int f;
+	long long tintNS, testsubintNS, nscounter;
+	int max5div, max2div, nFFTsPerIntegration, divisor;
+	double msgSize, dataRate, readSize, floatFFTDurNS;
+
 
 	corrSetup = P->getCorrSetup(S->corrSetupName);
 	if(corrSetup == 0)
 	{
 		cerr << "Error: correlator setup[" << S->corrSetupName << "] == 0" << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	mode = V->getModeByDefName(S->modeDefName);
@@ -1343,7 +1441,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	{
 		cerr << "Error: mode[" << S->modeDefName << "] == 0" << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	for(unsigned int i = 0; i < configs.size(); i++)
@@ -1378,58 +1476,100 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		{
 			cerr << "Error: The provided subintNS (" << config->subintNS << ") is not an integer multiple of the FFT duration (" << fftDurNS << ")" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 	}
 	else
 	{
-		int divisors[] = {1, 2, 5, 10, 25, 50, 125, 250, 625, 0};	// Must be 0 terminated
-		bool ok = false;
+		tintNS = static_cast<long long>(1e9*corrSetup->tInt + 0.5);
+		floatFFTDurNS = corrSetup->fftSize()*(0.5/minBW)*1000000000.0;
+		nFFTsPerIntegration = static_cast<int>(1e9*corrSetup->tInt/floatFFTDurNS + 0.5);
 
-		for(int d = 0; divisors[d]; d++)
+		// check that integration time is an integer number of FFTs
+		if(fabs(1e9*corrSetup->tInt/floatFFTDurNS - nFFTsPerIntegration) > 1e-9)
 		{
-			double msgSize, dataRate, readSize;
-
-			if(corrSetup->tInt/divisors[d] > 2.14)
-			{
-				// This would make a subint > 2^31 seconds for any value of dataBufferSize
-				continue;
-			}
-
-			config->subintNS = static_cast<int>((corrSetup->tInt/divisors[d])*1000000000.0 + 0.5);
-			dataRate = (mode->sampRate*mode->getBits()*mode->subbands.size());
-			msgSize = (config->subintNS*1.0e-9)*dataRate/8.0;
-			readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
-
-			ok = true;
-
-			// stop when readSize falls below specifed maximum (default to 25MB)
-			if(readSize < P->readSize)
-			{
-				break;
-			}
+			cerr << "Integration time is not an integer number of FFTs!" << endl;
+			cerr << "Please change tInt to a multiple of " << floatFFTDurNS << " nanoseconds." << endl;
+			cerr << "Try to use a number of FFTs which is factorable entirely by 2 and/or 5" << endl;
+			exit(EXIT_FAILURE);
 		}
 
-		if(ok == false)
+		//first test how big a single FFT is - if it is too big, fail with a warning and a suggestion
+		if(floatFFTDurNS*D->dataBufferFactor/D->nDataSegments > (1<<31) - 1)
 		{
-			cerr << "Error: Integration time (" << corrSetup->tInt << " s) is too long for automatic subintNS determination.  You must manually set it in the .v2d file." << endl;
-
-			exit(0);
+			cerr << "A single FFT is too long (" << floatFFTDurNS << " ns)!" << endl;
+			cerr << "The maximum duration of an FFT is 2^31 - 1 nanoseconds" << endl;
+			cerr << "Please reduce nFFTChan accordingly" << endl;
+			exit(EXIT_FAILURE);
+		}
+		dataRate = (mode->sampRate*mode->getBits()*mode->subbands.size());
+		config->subintNS = fftDurNS;
+		msgSize = (config->subintNS*1.0e-9)*dataRate/8.0;
+		readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
+		if(readSize > P->maxReadSize)
+		{
+			cerr << "Warning - a single FFT gives a read size of " << readSize << " bytes" << endl;
+			cerr << "The maximum read size has been set (or defaulted) to " << P->maxReadSize << endl;
+			cerr << "There are known problems with Mark5 module playback at large read sizes" << endl;
+			cerr << "If you want to try with the large read size, set maxReadSize in the global area of the .v2d file" << endl;
+			exit(EXIT_FAILURE);
 		}
 
-		if(config->subintNS % fftDurNS != 0)
+		nscounter = tintNS/5;
+		max5div = 0;
+	 	while(nscounter > 0 && fabs(nscounter/floatFFTDurNS - static_cast<int>(nscounter/floatFFTDurNS + 0.5)) < 1e-9)
 		{
-			int origSubintNS = config->subintNS;
-			config->subintNS -= (config->subintNS % fftDurNS);
-			if(config->subintNS <= 0)
+			nscounter /= 5;
+			max5div++;
+		}
+
+		nscounter = tintNS/2;
+		max2div = 0;
+		while(nscounter > 0 && fabs(nscounter/floatFFTDurNS - static_cast<int>(nscounter/floatFFTDurNS + 0.5)) < 1e-9)
+		{
+			nscounter /= 2;
+			max2div++;
+		}
+
+		for(int i=max2div;i>=0;i--)
+		{
+			for(int j=max5div;j>=0;j--)
 			{
-				config->subintNS = fftDurNS;
+				divisor = 1;
+				for(int k=0;k<i;k++)
+				{
+					divisor *= 2;
+				}
+				for(int l=0;l<j;l++)
+				{
+					divisor *= 5;
+				}
+				testsubintNS = tintNS / divisor;
+				msgSize = (testsubintNS*1.0e-9)*dataRate/8.0;
+				readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
+				if(readSize > P->minReadSize && readSize < P->maxReadSize && 
+                                   testsubintNS <= 2140000000 && testsubintNS > config->subintNS && 
+				   fabs(testsubintNS/floatFFTDurNS - static_cast<int>(testsubintNS/floatFFTDurNS + 0.5)) < 1e-9)
+				{
+					config->subintNS = testsubintNS;
+				}
 			}
-			cout << "Adjusting subintNS(" << origSubintNS << ") to " << config->subintNS << " since it was a non-integer multiple of fftDurNS (" << fftDurNS << ")" << endl;
+		}
+		//refuse to run if the generated read size is too small
+		msgSize = (config->subintNS*1.0e-9)*dataRate/8.0;
+		readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
+		if(readSize < P->minReadSize)
+		{
+			cerr << "Automatic subint duration selection generated " << config->subintNS << " nanoseconds" << endl;
+			cerr << "This leads to a read size of " << readSize << " B" << endl;
+			cerr << "The minimum read size was set or defaulted to " << P->minReadSize << " B" << endl;
+			cerr << "Either decrease minReadSize (which may lead to slow correlation) or explicitly set subintNS" << endl;
+			cerr << "You may find it advantageous to tweak the tInt to a more power-of-2 friendly value" << endl;
+			exit(EXIT_FAILURE);
 		}
 	}
 
-	// change dataBufferFactor if needed to get send sizes under 2^31 nanoseconds
+	// change nDataSegments if needed to get send sizes under 2^31 nanoseconds
 	readTimeNS = static_cast<double>(config->subintNS)*D->dataBufferFactor/D->nDataSegments;
 	if(readTimeNS > 2140000000.0)
 	{
@@ -1438,10 +1578,17 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		{
 			cerr << "Error: There is no way to change dataBufferFactor to keep send sizes below 2^31 seconds" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
-		cout << "Changing dataBufferFactor from " << D->dataBufferFactor << " to " << (f*D->nDataSegments) << " in order to keep data send sizes below 2.14 seconds" << endl;
-		D->dataBufferFactor = f*D->nDataSegments;
+		cout << "Changing nDataSegments from " << D->nDataSegments << " to " << (D->dataBufferFactor/f) << " in order to keep data send sizes below 2.14 seconds" << endl;
+		D->nDataSegments = D->dataBufferFactor/f;
+		msgSize = (config->subintNS*1.0e-9)*dataRate/8.0;
+		readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
+		if(readSize < P->minReadSize)
+		{
+			cout << "This has lead to a read size smaller than the provided guideline: correlation may run more slowly" << endl;
+			cout << "But probably this is a low data rate experiment, so it won't matter" << endl;
+		}
 	}
 		
 	config->guardNS = corrSetup->guardNS;
@@ -1457,13 +1604,20 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	config->nAntenna = D->nAntenna;
 	config->nDatastream = D->nAntenna;
 	config->nBaseline = D->nAntenna*(D->nAntenna-1)/2;
+
+	//if guardNS was not set explicitly, change it to the right amount to allow for
+	//adjustment to get to an integer NS + geometric rate slippage (assumes Earth-based antenna)
+	if(!corrSetup->explicitGuardNS)
+	{
+		config->guardNS = calculateWorstcaseGuardNS(mode->sampRate, config->subintNS);
+	}
 	//config->overSamp = static_cast<int>(mode->sampRate/(2.0*mode->subbands[0].bandwidth) + 0.001);
 	//if(config->overSamp <= 0)
 	//{
 	//	cerr << "Error: configName=" << configName << " overSamp=" << config->overSamp << endl;
 	//	cerr << "samprate=" << mode->sampRate << " bw=" << 
 	//		mode->subbands[0].bandwidth << endl;
-	//	exit(0);
+	//	exit(EXIT_FAILURE);
 	//}
 	// try to get a good balance of oversampling and decim
 	//while(config->overSamp % 4 == 0)
@@ -1479,7 +1633,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		cerr << "Error: configName=" << configName << " overSamp=" << config->overSamp << endl;
 		cerr << "samprate=" << mode->sampRate << " bw=" << mode->subbands[0].bandwidth << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	if(config->overSamp > 2)
@@ -1558,7 +1712,7 @@ static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int
 	return false;
 }
 
-int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int verbose, ofstream *of, int nDigit, char ext)
+static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int verbose, ofstream *of, int nDigit, char ext, int strict)
 {
 	DifxInput *D;
 	DifxScan *scan;
@@ -1582,7 +1736,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 	double srcra, srcdec;
 	int pointingSrcIndex, foundSrcIndex, atSource;
 	int nZoomBands, fqId, zoomsrc, polcount, zoomChans, minChans;
-	int overSamp, decimation;
+	int overSamp, decimation, worstcaseguardns;
 	DifxDatastream *dd;
 	vector<set <int> > blockedfreqids;
 
@@ -1595,7 +1749,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 	{
 		cerr << "Developer error: writeJob(): J.scans.size() = 0" << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 	
 	S = V->getScanByDefName(J.scans.front());
@@ -1603,7 +1757,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 	{
 		cerr << "Developer error: writeJob() top: scan[" << J.scans.front() << "] = 0" << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 	corrSetupName = S->corrSetupName;
 	corrSetup = P->getCorrSetup(corrSetupName);
@@ -1611,7 +1765,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 	{
 		cerr << "Error: writeJob(): correlator setup " << corrSetupName << ": Not found!" << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	// make set of unique config names
@@ -1624,7 +1778,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 		{
 			cerr << "Developer error: writeJob() loop: scan[" << *si << "] = 0" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 		configName = S->modeDefName + string("_") + S->corrSetupName;
 		configSet.insert(configName);
@@ -1679,7 +1833,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 		{
 			cerr << "Developer error: source[" << *si << "] not found!  This cannot be!" << endl;
 			
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 
 		const VexSource *src = V->getSourceByDefName(S->sourceDefName);
@@ -1694,7 +1848,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 		{
 			cerr << "Error: no source setup for " << S->sourceDefName << ".  Aborting!" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 		pointingCentre = &(sourceSetup->pointingCentre);
 		scan->nPhaseCentres = sourceSetup->phaseCentres.size();
@@ -1840,7 +1994,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 			cout << corrSetup->maxNSBetweenUVShifts;
 			cout << "). Reduce FFT buffering or increase allowed interval!" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 
 		snprintf(scan->identifier, DIFXIO_NAME_LENGTH, "%s", S->defName.c_str());
@@ -1882,7 +2036,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 		{
 			cerr << "Developer error: writeJob: mode[" << configs[c].first << "] is null" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 
 		if(os < 0)
@@ -1900,7 +2054,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 		{
 			cerr << "Developer error: writeJob: correlator setup[" << configs[c].second << "] is null" << endl;
 
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 
 		if(corrSetup->binConfigFile.size() > 0)
@@ -1927,6 +2081,13 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 		}
 
 		int d = 0;
+
+		//first iterate over all antennas, making sure all recorded bands are allocated
+		for(int a = 0; a < D->nAntenna; a++)
+		{
+			string antName = antList[a];
+			setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, corrSetup, P->v2dMode);
+		}
 
 		minChans = corrSetup->nInputChan();
 		for(int a = 0; a < D->nAntenna; a++)
@@ -1976,13 +2137,14 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 							if(parentFreqIndices[i] < 0)
 							{
 								cerr << "Error: Cannot find a parent freq for zoom band " << i << " of datastream " << a << endl;
+								cerr << "Note: This might be caused by a frequency offset that is not a multiple of the spectral resolution" << endl;
 							
-								exit(0);
+								exit(EXIT_FAILURE);
 							}
 							zoomChans = static_cast<int>(corrSetup->nInputChan()*zf.bandwidth/freqs[dd->recFreqId[parentFreqIndices[i]]].bw);
 							fqId = getFreqId(freqs, zf.frequency, zf.bandwidth,
 									freqs[dd->recFreqId[parentFreqIndices[i]]].sideBand,
-									zoomChans, zoomChans*corrSetup->nFFTChan/corrSetup->nOutputChan, overSamp, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
+									zoomChans, zoomChans*(corrSetup->nOutputChan/corrSetup->nFFTChan), overSamp, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
 							if(zoomChans < minChans)
 							{
 								minChans = zoomChans;
@@ -2022,7 +2184,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 							{
 								cout << "Developer error: didn't find all zoom pols (was looking for " << dd->nZoomPol[i] << ", only found " << polcount << ")!!" << endl;
 								
-								exit(0);
+								exit(EXIT_FAILURE);
 							}
 						}
 						delete [] parentFreqIndices;
@@ -2036,14 +2198,14 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 							cerr << "Error: AntennaSetup for " << antName << " has only " << nFreqClockOffsets << 
 								" freqClockOffsets specified but " << dd->nRecFreq << " recorded frequencies" << endl;
 
-							exit(0);
+							exit(EXIT_FAILURE);
 						}
 						if(antennaSetup->freqClockOffs.front() != 0.0)
 						{
 							cerr << "Error: AntennaSetup for " << antName << " has a non-zero clock offset for the first" << 
 								" frequency offset. This is not allowed for model " << "accountability reasons." << endl;
 							
-							exit(0);
+							exit(EXIT_FAILURE);
 						}
 						for(int i = 0; i < nFreqClockOffsets; i++)
 						{
@@ -2060,7 +2222,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 							cerr << "Error: AntennaSetup for " << antName << " has only " << nLoOffsets <<
 								" loOffsets specified but " << dd->nRecFreq << " recorded frequencies" << endl;
 
-							exit(0);
+							exit(EXIT_FAILURE);
 						}
 						for(int i = 0; i < nLoOffsets; i++)
 						{
@@ -2079,11 +2241,25 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 			if(corrSetup->explicitXmacLength)
 			{
 				cerr << "Error: xmacLength set explicitly to " << corrSetup->xmacLength << ", but minChans (from a zoom freq) was " << minChans << endl;
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 			else
 			{
 				D->config[c].xmacLength = minChans;
+			}
+		}
+		worstcaseguardns = calculateWorstcaseGuardNS(mode->sampRate, D->config[c].subintNS);
+		if(D->config[c].guardNS < worstcaseguardns)
+		{
+			cerr << "vex2difx calculates the worst-case guardNS as " << worstcaseguardns << ", but you have explicitly set " << D->config[c].guardNS << ". It is possible that mpifxcorr will refuse to run! Unless you know what you are doing, you should probably set guardNS to " << worstcaseguardns << " or above, or just leave it unset!" << endl;
+			if(strict)
+			{
+				cerr << "\nExiting since strict mode was enabled" << endl;
+				exit(EXIT_FAILURE);
+			}
+			else
+			{
+				cerr << "\nContinuing since --force was specified" << endl;
 			}
 		}
 	}
@@ -2092,7 +2268,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 	{
 		cerr << "Error: nPulsar=" << nPulsar << " != D->nPulsar=" << D->nPulsar << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	// Populate spacecraft table
@@ -2115,14 +2291,14 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 			{
 				cerr << "Developer error: couldn't find " << *s << " in the spacecraft table, aborting!)" << endl;
 				
-				exit(0);
+				exit(EXIT_FAILURE);
 			}
 			mjdint = static_cast<int>(J.mjdStart);
 			fracday0 = J.mjdStart-mjdint;
 			deltat = phaseCentre->ephemDeltaT/86400.0;	// convert from seconds to days
-			n0 = static_cast<int>(fracday0/deltat - 2);	// start ephmemeris at least 2 points early
+			n0 = static_cast<int>(fracday0/deltat - 12);	// start ephmemeris at least 2 points early
 			mjd0 = mjdint + n0*deltat;			// always start an integer number of increments into day
-			nPoint = static_cast<int>(J.duration()/deltat) + 6; // make sure to extend beyond the end of the job
+			nPoint = static_cast<int>(J.duration()/deltat) + 28; // make sure to extend beyond the end of the job
 			if(verbose > 0)
 			{
 				cout << "Computing ephemeris:" << endl;
@@ -2141,7 +2317,7 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 			{
 				cerr << "Error: ephemeris calculation failed.  Must stop." << endl;
 				
-				exit(0);
+				exit(EXIT_FAILURE);
 			}
 
 			// give the spacecraft table the right name so it can be linked to the source
@@ -2159,10 +2335,6 @@ int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int
 					
 					break;
 				}
-			}
-			if(D->source[s].spacecraftId < 0)
-			{
-				cerr << "Developer error: For source=" << D->source[s].name << " spacecraftId=" << D->source[s].spacecraftId << endl; 
 			}
 		}
 	}
@@ -2415,7 +2587,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 	return nWarn;
 }
 
-int usage(int argc, char **argv)
+static void usage(int argc, char **argv)
 {
 	cout << endl;
 	cout << program << " version " << version << "  " << author << " " << verdate << endl;
@@ -2445,11 +2617,9 @@ int usage(int argc, char **argv)
 	cout << endl;
 	cout << "See http://cira.ivec.org/dokuwiki/doku.php/difx/vex2difx for more information" << endl;
 	cout << endl;
-
-	return 0;
 }
 
-void runCommand(const char *cmd, int verbose)
+static void runCommand(const char *cmd, int verbose)
 {
 	if(verbose > 0)
 	{
@@ -2460,7 +2630,7 @@ void runCommand(const char *cmd, int verbose)
 	{
 		cerr << "Error executing: " << cmd << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -2471,7 +2641,6 @@ int main(int argc, char **argv)
 	CorrParams *P;
 	const SourceSetup * sourceSetup;
 	vector<VexJob> J;
-	ifstream is;
 	string shelfFile;
 	int verbose = 0;
 	string v2dFile;
@@ -2485,7 +2654,9 @@ int main(int argc, char **argv)
 
 	if(argc < 2)
 	{
-		return usage(argc, argv);
+		usage(argc, argv);
+
+		return EXIT_FAILURE;
 	}
 
 	// force program to work in Univeral Time
@@ -2500,7 +2671,9 @@ int main(int argc, char **argv)
 			if(strcmp(argv[a], "-h") == 0 ||
 			   strcmp(argv[a], "--help") == 0)
 			{
-				return usage(argc, argv);
+				usage(argc, argv);
+
+				return EXIT_SUCCESS;
 			}
 			else if(strcmp(argv[a], "-v") == 0 ||
 			        strcmp(argv[a], "--verbose") == 0)
@@ -2532,7 +2705,7 @@ int main(int argc, char **argv)
 				cerr << "Error: unknown option " << argv[a] << endl;
 				cerr << "Run with -h for help information." << endl;
 				
-				exit(0);
+				exit(EXIT_FAILURE);
 			}
 		}
 		else
@@ -2542,7 +2715,7 @@ int main(int argc, char **argv)
 				cerr << "Error: multiple configuration files provided, only one expected." << endl;
 				cerr << "Run with -h for help information." << endl;
 				
-				exit(0);
+				exit(EXIT_FAILURE);
 			}
 			v2dFile = argv[a];
 		}
@@ -2560,7 +2733,7 @@ int main(int argc, char **argv)
 		cerr << "Error: configuration (.v2d) file expected." << endl;
 		cerr << "Run with -h for help information." << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	if(v2dFile.find("_") != string::npos)
@@ -2568,7 +2741,7 @@ int main(int argc, char **argv)
 		cerr << "Error: you cannot have an underscore (_) in the filename!" << endl;
 		cerr << "Please rename it and run again." << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	if(!isalpha(v2dFile[0]))
@@ -2576,7 +2749,7 @@ int main(int argc, char **argv)
 		cerr << "Error: pass name (.v2d file name) must start with a letter!" << endl;
 		cerr << "Please rename it and run again." << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	P = new CorrParams(v2dFile);
@@ -2584,7 +2757,7 @@ int main(int argc, char **argv)
 	{
 		cerr << "Error: vex file parameter (vex) not found in file." << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	nWarn = P->parseWarnings;
@@ -2601,7 +2774,7 @@ int main(int argc, char **argv)
 	{
 		cerr << "Error: cannot load vex file: " << P->vexFile << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	nWarn += P->sanityCheck();
@@ -2612,7 +2785,7 @@ int main(int argc, char **argv)
 		cerr << "Quitting since " << nWarn <<
 			" warnings were found and strict mode was enabled." << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 	else if(nWarn > 0)
 	{
@@ -2729,7 +2902,7 @@ int main(int argc, char **argv)
 		//{
 		//	nMulti++;
 		//}
-		nJob += writeJob(*j, V, P, -1, verbose, &of, nDigit, 0);
+		nJob += writeJob(*j, V, P, -1, verbose, &of, nDigit, 0, strict);
 	}
 	of.close();
 
@@ -2753,5 +2926,8 @@ int main(int argc, char **argv)
 
 	cout << endl;
 
-	return 0;
+	if (nJob>0)
+	  return EXIT_SUCCESS;
+	else
+	  return EXIT_FAILURE;
 }

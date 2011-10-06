@@ -157,6 +157,7 @@ void pystream::close()
 		{
 			double deltat = floor((lastValid-mjd0 + 1.0/86400.0)*86400.0 + 0.5);
 			*this << "array.wait(mjdStart + " << deltat << "*second)" << endl;
+			*this << "dbe0.shutdownPoller()" << endl;
 		}
 		else
 		{
@@ -248,6 +249,7 @@ int pystream::writeDbeInit(const VexData *V)
 {
 	if(currenttype == VLBA || currenttype == GBT)
 	{
+#warning "FIXME For now, set up single RDBE"
                 int m = 0;
 		const VexMode *mode = V->getMode(m);
 		const VexSetup *setup = mode->getSetup(ant);
@@ -268,7 +270,7 @@ int pystream::writeDbeInit(const VexData *V)
                     else {
                         cerr << "Incorrect number of channels: " << F.channels.size() << endl;
 
-                        exit(0);
+                        exit(EXIT_FAILURE);
                     }
 		}
                 // use PFB as default for now
@@ -318,10 +320,8 @@ int pystream::writeLoifTable(const VexData *V)
                         if(m == 0) {
                             init_channels = F.channels.size();
                         } else if( init_channels != F.channels.size() ) {
-                            cerr << "number of channels deviates from init" << init_channels
-                                 << " vs " << F.channels.size() << endl;
-
-                            exit(0);
+                            cerr << "number of channels from " << init_channels << " initially to " << F.channels.size() << " which is currently not supported." << endl; 
+                            exit(EXIT_FAILURE);
                         }
 
 			if(setup->ifs.size() > 2)
@@ -358,7 +358,7 @@ int pystream::writeLoifTable(const VexData *V)
 				{
 					cerr << "Developer error: setup->getIF(" << F.channels[i].ifname << ") returned NULL" << endl;
 
-					exit(0);
+					exit(EXIT_FAILURE);
 				}
 				double freq = F.channels[i].bbcFreq;
 				double tune = freq - vif->ifSSLO;
@@ -407,7 +407,7 @@ int pystream::writeLoifTable(const VexData *V)
                         {
 				cerr << "Error: mode " << mode->defName << " wants " << setup->ifs.size() << " IFs, and we can currently only use 4" << endl;
 
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 			//better be two dual pol, otherwise abort
 			for(it = setup->ifs.begin(); it != setup->ifs.end(); it++)
@@ -435,7 +435,7 @@ int pystream::writeLoifTable(const VexData *V)
 							{
 								cerr << "Error: More than 2 IF frequencies" << endl;
 
-								exit(1);
+								exit(EXIT_FAILURE);
 							}
 						}
 					}
@@ -625,9 +625,10 @@ int pystream::writeScans(const VexData *V)
 			double deltat3 = floor((lastValid-mjd0)*86400.0 + 0.5-5);
                         // just in case our setup scan caused the auto leveling to lock onto a bad value make
                         // it forget
+                        // TODO this only works for one RDBE now
                         if( s == 0 ) {
-                            *this << "loif" << modeId << ".setDBEForget(0)" << endl;
-                            *this << "loif" << modeId << ".setDBEForget(1)" << endl;
+                            *this << "dbe0.setDBEForget(0)" << endl;
+                            *this << "dbe0.setDBEForget(1)" << endl;
                         }
                         *this << "recorder0.setPacket(0, 0, 40, 5008)" << endl;
 			if( s != -1 ) {
@@ -674,7 +675,7 @@ void pystream::writeVCI(const VexData *V, int modeindex, string filename)
 	{
 		cout << "Could not open VCI file " << filename << " - aborting!" << endl;
 
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	subarrayid = 1;

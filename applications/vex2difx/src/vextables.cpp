@@ -32,6 +32,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <cassert>
 #include "vextables.h"
 
 const double RAD2ASEC=180.0*3600.0/M_PI;
@@ -60,11 +61,11 @@ const char VexEvent::eventName[][20] =
 
 bool operator<(const VexEvent &a, const VexEvent &b)
 {
-	if(a.mjd < b.mjd)
+	if(a.mjd < b.mjd - 0.000001)
 	{
 		return true;
 	}
-	else if(a.mjd > b.mjd)
+	else if(a.mjd > b.mjd + 0.000001)
 	{
 		return false;
 	}
@@ -96,6 +97,7 @@ void VexInterval::logicalAnd(double start, double stop)
 	{
 		mjdStop = stop;
 	}
+	assert(mjdStart<=mjdStop);
 }
 
 void VexInterval::logicalAnd(const VexInterval &v)
@@ -108,6 +110,7 @@ void VexInterval::logicalAnd(const VexInterval &v)
 	{
 		mjdStop = v.mjdStop;
 	}
+	assert(mjdStart<=mjdStop);
 }
 
 void VexInterval::logicalOr(double start, double stop)
@@ -120,6 +123,7 @@ void VexInterval::logicalOr(double start, double stop)
 	{
 		mjdStop = stop;
 	}
+	assert(mjdStart<=mjdStop);
 }
 
 void VexInterval::logicalOr(const VexInterval &v)
@@ -132,6 +136,7 @@ void VexInterval::logicalOr(const VexInterval &v)
 	{
 		mjdStop = v.mjdStop;
 	}
+	assert(mjdStart<=mjdStop);
 }
 
 void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, double guardBandMHz)
@@ -267,7 +272,7 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 	default:
 		cerr << "Error: selectTones: unexpected value of selection: " << selection << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -324,7 +329,7 @@ int VexMode::getPols(char *pols) const
 		{
 			cerr << "Error: VexMode::getPols: subband with illegal polarization (" << it->pol << ") encountered." << endl;
 			
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -372,7 +377,7 @@ int VexMode::getBits() const
 	{
 		if(it->second.format.nBit != nBit)
 		{
-			if(nBit != 0 && firstTime)
+			if(nBit != 0 && it->second.format.nBit != 0 && firstTime)
 			{
 				cerr << "Warning: getBits: differing number of bits: " << nBit << "," << it->second.format.nBit << endl;
 				cerr << "  Will proceed, but note that some metadata may be incorrect." << endl;
@@ -400,7 +405,7 @@ const VexSetup* VexMode::getSetup(const string &antName) const
 	{
 		cerr << "Error: VexMode::getSetup: antName=" << antName << " not found." << endl;
 		
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 	return &it->second;
@@ -415,7 +420,7 @@ const VexFormat* VexMode::getFormat(const string &antName) const
 	{
 		cerr << "Error: VexMode::getFormat: antName=" << antName << " not found." << endl;
 
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 
 
@@ -951,7 +956,7 @@ int VexJob::generateFlagFile(const VexData &V, const char *fileName, unsigned in
 		{
 			cerr << "Developer error: generateFlagFile: antenna " <<
 				a->first << " not found in antenna table." << endl;
-			exit(0);
+			exit(EXIT_FAILURE);
 		}
 
 		if(ant->basebandFiles.size() > 0)
@@ -987,7 +992,8 @@ int VexJob::generateFlagFile(const VexData &V, const char *fileName, unsigned in
 				if(!scan)
 				{
 					cerr << "Developer error: generateFlagFile: SCAN_START, scan=0" << endl;
-					exit(0);
+
+					exit(EXIT_FAILURE);
 				}
 				for(sa = scan->stations.begin(); sa != scan->stations.end(); sa++)
 				{
@@ -1008,7 +1014,8 @@ int VexJob::generateFlagFile(const VexData &V, const char *fileName, unsigned in
 				if(!scan)
 				{
 					cerr << "Developer error! generateFlagFile: SCAN_STOP, scan=0" << endl;
-					exit(0);
+
+					exit(EXIT_FAILURE);
 				}
 				for(sa = scan->stations.begin(); sa != scan->stations.end(); sa++)
 				{
@@ -1137,7 +1144,8 @@ void VexJobGroup::createJobs(vector<VexJob> &jobs, VexInterval &jobTimeRange, co
 			{
 				cerr << "Programming error: createJobs: id != e->name  (" << id << " != " << e->name << ")" << endl;
 				cerr << "Contact developer" << endl;
-				exit(0);
+
+				exit(EXIT_FAILURE);
 			}
 			VexInterval scanTimeRange(s->mjd, e->mjd);
 			scanTimeRange.logicalAnd(jobTimeRange);
@@ -1321,21 +1329,14 @@ const VexIF *VexSetup::getIF(const string &ifname) const
 
 bool operator ==(const VexChannel &c1, const VexChannel &c2)
 {
-	if( (c1.recordChan   != c2.recordChan)   ||
-	    (c1.subbandId    != c2.subbandId)    ||
-	    (c1.ifname       != c2.ifname)       ||
-	    (c1.bbcFreq      != c2.bbcFreq)      ||
-	    (c1.bbcSideBand  != c2.bbcSideBand)  ||
-	    (c1.tones.size() != c2.tones.size()) )
+	if( (c1.recordChan  != c2.recordChan)   ||
+	    (c1.subbandId   != c2.subbandId)    ||
+	    (c1.ifname      != c2.ifname)       ||
+	    (c1.bbcFreq     != c2.bbcFreq)      ||
+	    (c1.bbcSideBand != c2.bbcSideBand)  ||
+	    (c1.tones       != c2.tones) )
 	{
 		return false;
-	}
-	for(unsigned int i = 0; i < c1.tones.size(); i++)
-	{
-		if(c1.tones[i] != c2.tones[i])
-		{
-			return false;
-		}
 	}
 
 	return true;

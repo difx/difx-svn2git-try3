@@ -36,8 +36,8 @@ from os.path import isfile
 from os import umask
 
 program = 'oms2v2d'
-version = '0.7'
-verdate = '20110419'
+version = '1.0'
+verdate = '20110714'
 author = 'Walter Brisken'
 
 def usage(pgm):
@@ -137,12 +137,6 @@ def writev2d(oms, v2dFile):
 	out.write('vex = %s\n\n' % vexFile)
 	out.write('antennas =%s\n\n' % stnString)
 
-	if corr.has_key('TWEAK_INT_TIME'):
-		if corr['TWEAK_INT_TIME'][0] in ['YES', 'yes']:
-			out.write('tweakIntTime = True\n\n')
-		else:
-			out.write('tweakIntTime = False\n\n')
-
 	for s in oms['SOURCE_INFO']:
 		srcParams = ''
 		if s.has_key('CAL_CODE'):
@@ -154,7 +148,7 @@ def writev2d(oms, v2dFile):
 	out.write('\n')
 
 	for s in stations:
-		out.write('ANTENNA %s { phaseCalInt = 0 }\n' % (s))
+		out.write('ANTENNA %s {  }\n' % s)
 	out.write('\n')
 
 	out.write('SETUP default\n')
@@ -219,6 +213,10 @@ omsFile = prefix + '.oms'
 v2dFile = prefix + '.v2d'
 
 
+if not isfile(omsFile):
+	print 'oms2v2d: Input oms file %s not found.  Quitting.\n' % omsFile
+	exit(0)
+
 if isfile(prefix + '.skd') and isfile(prefix + '.vex'):
 	print 'Warning: Found both %s.skd and %s.vex .' % (prefix, prefix)
 	print 'Assuming %s.vex is the correct one!\n' % prefix
@@ -235,10 +233,6 @@ else:
 	else:
 		print 'Run with --force to continue anyway.\n'
 		exit(0)
-
-if not isfile(omsFile):
-	print 'oms2v2d: Input oms file %s not found.  Quitting.\n' % omsFile
-	exit(0)
 
 if isfile(v2dFile):
 	if force:
