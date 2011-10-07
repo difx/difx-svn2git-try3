@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "config.h"
 #include "difxio/difx_write.h"
 
@@ -141,7 +142,7 @@ int computeDifxSpacecraftEphemeris(DifxSpacecraft *ds, double mjd0, double delta
 		jd = mjd + 2400000.5;
 		sprintf(jdstr, "JD %18.12Lf", jd);
 		str2et_c(jdstr, &et);
-		spkezr_c(objectName, et, "J2000", "LT", "EARTH", state, &range);
+		spkezr_c(objectName, et, "J2000", "LT", "399", state, &range);	/* 399 is the earth geocenter */
 
 		ds->pos[p].mjd = mjd;
 		ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
@@ -313,6 +314,11 @@ int evaluateDifxSpacecraft(const DifxSpacecraft *sc, int mjd, double fracMjd,
 	deltat = t1 - t0;
 	t = (tMod - t0)/deltat; /* time, fraction of interval, between 0 and 1 */
 
+	if(fabs(t) > 0.01 && fabs(t-1) > 0.01)
+	{
+		fprintf(stderr, "WARNING: potentially unhealthy interpolation of state vector occuring\n");
+	}
+
 	xPoly[0] = pos[r0].X;
 	xPoly[1] = pos[r0].dX*deltat;
 	xPoly[2] = -3.0L*(pos[r0].X-pos[r1].X) - (2.0L*pos[r0].dX+pos[r1].dX)*deltat;
@@ -336,6 +342,14 @@ int evaluateDifxSpacecraft(const DifxSpacecraft *sc, int mjd, double fracMjd,
 	dX = pos[r0].dX + t*(pos[r1].dX - pos[r0].dX);
 	dY = pos[r0].dY + t*(pos[r1].dY - pos[r0].dY);
 	dZ = pos[r0].dZ + t*(pos[r1].dZ - pos[r0].dZ);
+
+	/* override interpolation with linear... */
+	X  = pos[r0].X*(1.0-t) + pos[r1].X*t;
+	Y  = pos[r0].Y*(1.0-t) + pos[r1].Y*t;
+	Z  = pos[r0].Z*(1.0-t) + pos[r1].Z*t;
+	dX = pos[r0].dX*(1.0-t) + pos[r1].dX*t;
+	dY = pos[r0].dY*(1.0-t) + pos[r1].dY*t;
+	dZ = pos[r0].dZ*(1.0-t) + pos[r1].dZ*t;
 
 	interpolatedPosition->mjd = mjd;
 	interpolatedPosition->fracDay = fracMjd;

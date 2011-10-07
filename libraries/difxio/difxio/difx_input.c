@@ -114,7 +114,7 @@ void deleteDifxInput(DifxInput *D)
 		}
 		if(D->job)
 		{
-			deleteDifxJobArray(D->job);
+			deleteDifxJobArray(D->job, D->nJob);
 		}
 		if(D->rule)
 		{
@@ -428,7 +428,6 @@ static int generateAipsIFs(DifxInput *D, int configId)
 	DifxBaseline *db;
 	DifxDatastream *ds;
 	int bl, blId, dsId, band, zb, fqId, localFqId;
-	int *freqIds;
 	int p, f, i;
 	int polValue;
 	char polName;
@@ -590,31 +589,54 @@ static int generateAipsIFs(DifxInput *D, int configId)
 	/* Actually construct the IF array */
 
 	/* First count IFs and make map to freqId */
-	freqIds = (int *)calloc(D->nFreq, sizeof(int));
+	/* This could be an overestimate if multiple frequencies map to one IF, as could happen if two otherwise identical FreqIds have different pulse cal extractions */
 	for(fqId = 0; fqId < D->nFreq; fqId++)
 	{
 		if(dc->freqIdUsed[fqId] > 0)
 		{
-			freqIds[dc->nIF] = fqId;
 			dc->nIF++;
 		}
 	}
 
 	/* Then actually build it */
 	dc->IF = newDifxIFArray(dc->nIF);
-	for(i = 0; i < dc->nIF; i++)
+	dc->nIF = 0;	/* zero and recount */
+	for(fqId = 0; fqId < D->nFreq; fqId++)
 	{
-		f = freqIds[i];
-		dc->freqId2IF[f]   = i;
-		dc->IF[i].freq     = D->freq[f].freq;
-		dc->IF[i].bw       = D->freq[f].bw;
-		dc->IF[i].sideband = D->freq[f].sideband;
-		dc->IF[i].nPol     = dc->nPol;
-		dc->IF[i].pol[0]   = dc->pol[0];
-		dc->IF[i].pol[1]   = dc->pol[1];
-	}
+		if(dc->freqIdUsed[fqId] <= 0)
+		{
+			continue;
+		}
+		for(i = 0; i < dc->nIF; i++)
+		{
+			
+			if(dc->IF[i].freq     == D->freq[fqId].freq &&
+			   dc->IF[i].bw       == D->freq[fqId].bw &&
+			   dc->IF[i].sideband == D->freq[fqId].sideband &&
+			   dc->IF[i].nPol     == dc->nPol &&
+			   dc->IF[i].pol[0]   == dc->pol[0] &&
+			   dc->IF[i].pol[1]   == dc->pol[1])
+			{
+				break;
+			}
+		}
+		if(i < dc->nIF)
+		{
+			dc->freqId2IF[fqId] = i;
+		}
+		else
+		{
+			dc->freqId2IF[fqId] = i;
+			dc->IF[i].freq      = D->freq[fqId].freq;
+			dc->IF[i].bw        = D->freq[fqId].bw;
+			dc->IF[i].sideband  = D->freq[fqId].sideband;
+			dc->IF[i].nPol      = dc->nPol;
+			dc->IF[i].pol[0]    = dc->pol[0];
+			dc->IF[i].pol[1]    = dc->pol[1];
 
-	free(freqIds);
+			dc->nIF++;
+		}
+	}
 
 	return 0;
 }
@@ -785,8 +807,7 @@ int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 
 			return -1;
 		}
-		r = loadPulsarPolycoFile(&dp->polyco, &dp->nPolyco,
-			DifxParametersvalue(pp, r));
+		r = loadPulsarPolycoFile(&dp->polyco, &dp->nPolyco, DifxParametersvalue(pp, r));
 		if(r < 0)
 		{
 			deleteDifxParameters(pp);
@@ -2575,7 +2596,7 @@ DifxInput *allocateSourceTable(DifxInput *D, int length)
 
 static DifxInput *deriveFitsSourceIds(DifxInput *D)
 {
-	int a, i, j, match, n=0, k, l;
+	int a, i, j, match, n=0, k, l, sc;
 	int *fs;
 	int *fc;
 
@@ -2627,6 +2648,18 @@ static DifxInput *deriveFitsSourceIds(DifxInput *D)
 			else
 			{
 				D->source[i].fitsSourceIds[k] = match;
+			}
+		}
+		if(D->nSpacecraft > 0)
+		{
+			for(sc = 0; sc < D->nSpacecraft; sc++)
+			{
+				if(strcmp(D->spacecraft[sc].name,
+					  D->source[i].name) == 0)
+				{
+					D->source[i].spacecraftId = sc;
+					break;
+				}
 			}
 		}
 	}
