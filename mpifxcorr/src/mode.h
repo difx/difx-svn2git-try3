@@ -249,6 +249,7 @@ protected:
   f32 **  weights;
   s32 *   validflags;
   cf32*** autocorrelations;
+  cf32 *  scratch;
   vecFFTSpecR_f32 * pFFTSpecR;
   vecFFTSpecC_cf32 * pFFTSpecC;
   vecDFTSpecR_f32 * pDFTSpecR;
@@ -257,8 +258,8 @@ protected:
   vecHintAlg hint;
   Model * model;
   f64 * interpolator;
-  FilterChain*** autocorrfilters; // [xpols=0..1][band]=>(FilterChain*)
-  cf32* rfiscratch;
+  FilterChain *** autocorrfilters; // [xpols=0..1][band]=>(FilterChain*)
+  cf32 * rfiscratch;
 
   //new arrays for strided complex multiply for fringe rotation and fractional sample correction
   cf32 * complexrotator;

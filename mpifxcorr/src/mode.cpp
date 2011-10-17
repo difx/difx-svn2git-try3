@@ -332,6 +332,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
           csevere << startl << "Couldn't find the parent band for autocorr of zoom band " << j << endl;
       }
     }
+    scratch = vectorAlloc_cf32(recordedbandchannels);
 
     //initialize rfi filtering in autocorrelations
     if (config->rfifilterEnabled())
@@ -354,8 +355,8 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
           }
         }
       }
-      rfiscratch = vectorAlloc_cf32(recordedbandchannels+1);
-      DUT_CHECK( vectorZero_cf32(rfiscratch, recordedbandchannels+1), csevere, "RFI scratch zeroing" );
+      rfiscratch = vectorAlloc_cf32(recordedbandchannels);
+      DUT_CHECK( vectorZero_cf32(rfiscratch, recordedbandchannels), csevere, "RFI scratch zeroing" );
     }
 
     //kurtosis-specific stuff
@@ -518,6 +519,7 @@ Mode::~Mode()
   }
   delete [] weights;
   delete [] autocorrelations;
+  vectorFree(scratch);
 
   if(config->getDPhaseCalIntervalMHz(configindex, datastreamindex))
   {
@@ -984,14 +986,17 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
         if (!config->rfifilterEnabled()) 
         {
           // skipping Nyquist channel - if any LSB * USB correlations, shift all LSB bands to appear as USB
-          DUT_CHECK( vectorAddProduct_cf32(fftoutputs[j][subloopindex]+acoffset, conjfftoutputs[j][subloopindex]+acoffset, autocorrelations[0][j]+acoffset, recordedbandchannels-acoffset), csevere, "Error in autocorrelation!!!" );
+          /* FIXME: once upgrading to IPP>6.1 check ippsAddProduct low precision (~1e-7) bug has been fixed */
+          //DUT_CHECK( vectorAddProduct_cf32(fftoutputs[j][subloopindex]+acoffset, conjfftoutputs[j][subloopindex]+acoffset, autocorrelations[0][j]+acoffset, recordedbandchannels-acoffset), csevere, "Error in autocorrelation!!!" );
+          DUT_CHECK( vectorMul_cf32(fftoutputs[j][subloopindex]+acoffset, conjfftoutputs[j][subloopindex]+acoffset, scratch+acoffset, recordedbandchannels-acoffset), csevere, "Error in autocorrelation scratch Mul!!!" );
+          DUT_CHECK( vectorAdd_cf32_I(scratch+acoffset, autocorrelations[0][j]+acoffset, recordedbandchannels-acoffset), csevere, "Error in autocorrelation scratch Acc!!!" );
         } 
         else 
         {
-          // do not skip any channels here, filter all
+          // filter all data - the Nyquist skip above seems ineffective, acoffset=1 means simply set auto[0][j][0]==0
           DUT_CHECK( vectorMul_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in autocorrelation scratch!!!" );
-          // filter operates into vector memory {autocorrelations[0][j]}
-          autocorrfilters[0][j]->filter(rfiscratch); 
+          DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in autocorr Nyquist blanking!!" );
+          autocorrfilters[0][j]->filter(rfiscratch); // writes final state into autocorrelations[0][j][0..]
         }
 
         //store the weight
@@ -1005,22 +1010,29 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
     {
       if (!config->rfifilterEnabled())
       {
-        status = vectorAddProduct_cf32(fftoutputs[indices[0]][subloopindex]+acoffset, conjfftoutputs[indices[1]][subloopindex]+acoffset, autocorrelations[1][indices[0]]+acoffset, recordedbandchannels-acoffset);
+        /* FIXME: once upgrading to IPP>6.1 check ippsAddProduct low precision (~1e-7) bug has been fixed */
+        //status = vectorAddProduct_cf32(fftoutputs[indices[0]][subloopindex]+acoffset, conjfftoutputs[indices[1]][subloopindex]+acoffset, autocorrelations[1][indices[0]]+acoffset, recordedbandchannels-acoffset);
+        status = vectorMul_cf32(fftoutputs[indices[0]][subloopindex]+acoffset, conjfftoutputs[indices[1]][subloopindex]+acoffset, scratch+acoffset, recordedbandchannels-acoffset);
+        status = vectorAdd_cf32_I(scratch+acoffset, autocorrelations[1][indices[0]]+acoffset, recordedbandchannels-acoffset);
         if(status != vecNoErr)
           csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-        status = vectorAddProduct_cf32(fftoutputs[indices[1]][subloopindex]+acoffset, conjfftoutputs[indices[0]][subloopindex]+acoffset, autocorrelations[1][indices[1]]+acoffset, recordedbandchannels-acoffset);
+        //status = vectorAddProduct_cf32(fftoutputs[indices[1]][subloopindex]+acoffset, conjfftoutputs[indices[0]][subloopindex]+acoffset, autocorrelations[1][indices[1]]+acoffset, recordedbandchannels-acoffset);
+        status = vectorMul_cf32(fftoutputs[indices[1]][subloopindex]+acoffset, conjfftoutputs[indices[0]][subloopindex]+acoffset, scratch+acoffset, recordedbandchannels-acoffset);
+        status = vectorAdd_cf32_I(scratch+acoffset, autocorrelations[1][indices[1]]+acoffset, recordedbandchannels-acoffset);
         if(status != vecNoErr)
           csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
       }
       else
       {
-        // set filters to operate into preallocated vector memory (done here because indices[] not known in c'stor)
+        // set filters to operate into preallocated vector memory (done here repeatedly because indices[] not known in c'stor)
         autocorrfilters[1][0]->setUserOutbuffer(autocorrelations[1][indices[0]]);
         autocorrfilters[1][1]->setUserOutbuffer(autocorrelations[1][indices[1]]);
         // finally, filter
         DUT_CHECK( vectorMul_cf32(fftoutputs[indices[0]][subloopindex], conjfftoutputs[indices[1]][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in cross-polar autocorrelation!!!" );
+        DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in cross-polar Nyquist blanking!!" );
         autocorrfilters[1][0]->filter(rfiscratch);
         DUT_CHECK( vectorMul_cf32(fftoutputs[indices[1]][subloopindex], conjfftoutputs[indices[0]][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in cross-polar autocorrelation!!!" );
+        DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in cross-polar Nyquist blanking!!" );
         autocorrfilters[1][1]->filter(rfiscratch);
       }
 
