@@ -117,7 +117,8 @@ private:
     cf32 * channelsums;
     f32 * argument;
     f32 ** dsweights;
-    cf32* rfiscratch;
+    cf32 * xcscratch;
+    cf32 * rfiscratch;
     int numrfifilters;
     FilterChain** rfifilters;
     DifxMessageSTARecord * starecordbuffer;

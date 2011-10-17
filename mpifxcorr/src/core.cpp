@@ -400,6 +400,7 @@ void Core::loopprocess(int threadid)
   scratchspace->channelsums = vectorAlloc_cf32(maxchan);
   scratchspace->argument = vectorAlloc_f32(3*maxrotatestrideplussteplength);
   threadbytes[threadid] += 20*maxchan + 100*maxrotatestrideplussteplength;
+  scratchspace->xcscratch = vectorAlloc_cf32(maxchan);
 
   //work out whether we'll need to do any pulsar binning, and work out the maximum # channels (and # polycos if applicable)
   for(int i=0;i<config->getNumConfigs();i++)
@@ -446,10 +447,10 @@ void Core::loopprocess(int threadid)
     for (int j=0;j<scratchspace->numrfifilters;j++)
     {
       scratchspace->rfifilters[j] = new FilterChain();
-      scratchspace->rfifilters[j]->buildFromFile(filterfile,maxchan+1); 
+      scratchspace->rfifilters[j]->buildFromFile(filterfile,maxchan);
     }
-    cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process created " << scratchspace->numrfifilters << " filter instances" << endl;
-    scratchspace->rfiscratch = vectorAlloc_cf32(maxchan+1);
+    cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process created " << scratchspace->numrfifilters << " filter instances with " << maxchan << " channels" << endl;
+    scratchspace->rfiscratch = vectorAlloc_cf32(maxchan);
   }
 
   //lock the end section
@@ -568,6 +569,7 @@ void Core::loopprocess(int threadid)
   vectorFree(scratchspace->rotated);
   vectorFree(scratchspace->channelsums);
   vectorFree(scratchspace->argument);
+  vectorFree(scratchspace->xcscratch);
   if(scratchspace->starecordbuffer != 0) {
     free(scratchspace->starecordbuffer);
   }
@@ -973,7 +975,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     //not pulsar binning, so this is nice and simple - just cross multiply, then integrate
                     if (!config->rfifilterEnabled())
                     {
-                      status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+                      /* FIXME: once upgrading to IPP>6.1 check ippsAddProduct low precision (~1e-7) bug has been fixed */
+                      //status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+                      status = vectorMul_cf32(vis1, vis2, scratchspace->xcscratch, xmacmullength);
+                      status = vectorAdd_cf32_I(scratchspace->xcscratch, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
                       if(status != vecNoErr)
                         csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
                     }
@@ -981,8 +986,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     {
                       assert(rfifilterindex<scratchspace->numrfifilters);
                       // for debug when filtering autocorrelations only:
-                      if (0) {
-                        status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+                      if (1) {
+                        //status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
+                        status = vectorMul_cf32(vis1, vis2, scratchspace->xcscratch, xmacmullength);
+                        status = vectorAdd_cf32_I(scratchspace->xcscratch, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
                       } else {
                       // for filtering auto and cross:
                         cf32 * accu = &(scratchspace->threadcrosscorrs[resultindex+ /*outputoffset*/ +p*xmacstridelength]);
