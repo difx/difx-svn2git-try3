@@ -212,6 +212,14 @@ public:
   { 
     return pcalresults[outputband][tone]; 
   }
+
+ /**
+  * Write fringe-rotated data into file
+  * for analysis in external tools.
+  * @param filename Output base file name and path
+  * @param id Some ID number to append to the file name
+  */
+  void dumpToFile(std::string filename, int id);
   
   ///constant indicating no valid data in a subint
   static const int INVALID_SUBINT = -99999999;

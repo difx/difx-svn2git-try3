@@ -30,6 +30,7 @@
 
 //using namespace std;
 const float Mode::TINY = 0.000000001;
+static const int do_dump = 0;
 
 Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, int unpacksamp, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, double bclock)
   : config(conf), configindex(confindex), datastreamindex(dsindex), recordedbandchannels(recordedbandchan), channelstoaverage(chanstoavg), blockspersend(bpersend), guardsamples(gsamples), fftchannels(recordedbandchan*2), numrecordedfreqs(nrecordedfreqs), numrecordedbands(nrecordedbands), numzoombands(nzoombands), numbits(nbits), unpacksamples(unpacksamp), fringerotationorder(fringerotorder), arraystridelength(arraystridelen), recordedbandwidth(recordedbw), blockclock(bclock), filterbank(fbank), calccrosspolautocorrs(cacorrs), recordedfreqclockoffsets(recordedfreqclkoffs), recordedfreqlooffsets(recordedfreqlooffs)
@@ -1004,6 +1005,12 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
       }
     }
 
+    // dump the processed data into files
+    if (do_dump)
+    {
+      dumpToFile("/Exps/rfi/ew014/debug/fftdump", subloopindex);
+    }
+
     //if we need to, do the cross-polar autocorrelations
     //JanW: potential BUG, why is xpol ac computed only for first pair of all numrecordedbands?
     if(calccrosspolautocorrs && count > 1)
@@ -1071,6 +1078,19 @@ void Mode::averageFrequency()
     }
   }
 }
+
+void Mode::dumpToFile(std::string filename, int id)
+{
+  for (int i=0; i<numrecordedbands && i<1; i++) // just band 0 (L? R?)
+  {
+    std::stringstream ss;
+    ss << filename << "_n" << config->getMPIId() << "_s" << datastreamindex << "_i" << int(0) << "_b" << i << ".bin";
+    std::ofstream of(ss.str().c_str(), std::fstream::out | std::fstream::app);
+    of.write((char*)(fftoutputs[i][id]), sizeof(cf32)*recordedbandchannels);
+    of.close();
+  }
+}
+
 
 bool Mode::calculateAndAverageKurtosis(int numblocks, int maxchannels)
 {
