@@ -984,23 +984,25 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     }
                     else
                     {
-                      assert(rfifilterindex<scratchspace->numrfifilters);
+                      int iflt = rfifilterindex + p;
+                      // csevere << startl << "C" << mpiid << "/T" << threadid << "/S" << fftsubloop << " RFI filter index " << iflt << "/" << (scratchspace->numrfifilters)
+                      //         << " xmStride=" << xmacstridelength << " xmMul=" << xmacmullength << endl;
+                      assert(iflt < scratchspace->numrfifilters);
                       // for debug when filtering autocorrelations only:
-                      if (1) {
+                      if (0) {
                         //status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
                         status = vectorMul_cf32(vis1, vis2, scratchspace->xcscratch, xmacmullength);
                         status = vectorAdd_cf32_I(scratchspace->xcscratch, &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]), xmacmullength);
                       } else {
                       // for filtering auto and cross:
-                        cf32 * accu = &(scratchspace->threadcrosscorrs[resultindex+ /*outputoffset*/ +p*xmacstridelength]);
-                        cf32 * old = scratchspace->rfifilters[rfifilterindex]->y();
+                        cf32 * accu = &(scratchspace->threadcrosscorrs[resultindex+outputoffset+p*xmacstridelength]);
+                        cf32 * old = scratchspace->rfifilters[iflt]->y();
                         if (accu != old) {
-                           std::cerr << "C" << mpiid << "/T" << threadid << " flt#" << rfifilterindex << " out=" << (void*)old << " != acc=" << (void*)accu << ", outoffset=" << outputoffset << std::endl;
+                           std::cerr << "Updated: C" << mpiid << "/T" << threadid << "/S" << fftsubloop << " flt#" << iflt << " out=" << (void*)old << " != acc=" << (void*)accu << ", outoffset=" << outputoffset << std::endl;
                         }
-                        scratchspace->rfifilters[rfifilterindex]->setUserOutbuffer(accu);
+                        scratchspace->rfifilters[iflt]->setUserOutbuffer(accu);
                         DUT_CHECK( vectorMul_cf32(vis1, vis2, scratchspace->rfiscratch, xmacmullength), csevere, "Error trying to xmul baseline. " );
-                        scratchspace->rfifilters[rfifilterindex]->filter(scratchspace->rfiscratch);
-                        rfifilterindex++;
+                        scratchspace->rfifilters[iflt]->filter(scratchspace->rfiscratch);
                       }
                     }
                   }
@@ -1009,7 +1011,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 	      if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
 	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*  procslots[index].numpulsarbins*xmacstridelength;
               else
-	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*xmacstridelength;
+              {
+                resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*xmacstridelength;
+                rfifilterindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex);
+              }
             }
           }
         }
