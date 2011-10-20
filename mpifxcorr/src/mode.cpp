@@ -994,9 +994,13 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
         } 
         else 
         {
+          std::stringstream ss;
           // filter all data - the Nyquist skip above seems ineffective, acoffset=1 means simply set auto[0][j][0]==0
           DUT_CHECK( vectorMul_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in autocorrelation scratch!!!" );
-          DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in autocorr Nyquist blanking!!" );
+          ss << "Error in autocorr Nyquist blanking!! , acoffset=" << acoffset;
+          if (acoffset>0)
+            DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, ss.str().c_str() );
+            //DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in autocorr Nyquist blanking!!" );
           autocorrfilters[0][j]->filter(rfiscratch); // writes final state into autocorrelations[0][j][0..]
         }
 
@@ -1036,10 +1040,12 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
         autocorrfilters[1][1]->setUserOutbuffer(autocorrelations[1][indices[1]]);
         // finally, filter
         DUT_CHECK( vectorMul_cf32(fftoutputs[indices[0]][subloopindex], conjfftoutputs[indices[1]][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in cross-polar autocorrelation!!!" );
-        DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in cross-polar Nyquist blanking!!" );
+        if (acoffset>0)
+          DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in cross-polar Nyquist blanking!!" );
         autocorrfilters[1][0]->filter(rfiscratch);
         DUT_CHECK( vectorMul_cf32(fftoutputs[indices[1]][subloopindex], conjfftoutputs[indices[0]][subloopindex], rfiscratch, recordedbandchannels), csevere, "Error in cross-polar autocorrelation!!!" );
-        DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in cross-polar Nyquist blanking!!" );
+        if (acoffset>0)
+          DUT_CHECK( vectorZero_cf32(rfiscratch, acoffset), csevere, "Error in cross-polar Nyquist blanking!!" );
         autocorrfilters[1][1]->filter(rfiscratch);
       }
 
