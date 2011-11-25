@@ -8,7 +8,7 @@ Issue: http://software.intel.com/en-us/forums/showthread.php?t=89013
 
 The test computes:
  accu = 3.653725000000000e+04;
- accu = accu + (3.360162734985352e+01 * 4.114639663696289e+01);
+ accu = accu + (3.360162734985352e+01)^2 + (4.114639663696289e+01)^2;
  which should be 39359.345316764694871 in double.
 
 :~/DiFX-trunk-rfi/mpifxcorr/trunk/tests/ippsbugs> ./fma_test
