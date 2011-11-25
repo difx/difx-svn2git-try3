@@ -1,0 +1,65 @@
+----------------------------------------------------------------------------------------------------------
+System: Intel Xeon E5430, IPP 6.1.2.051 EM64T, kernel 2.6.32
+----------------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------------
+Issue: http://software.intel.com/en-us/forums/showthread.php?t=89013
+----------------------------------------------------------------------------------------------------------
+
+The test computes:
+ accu = 3.653725000000000e+04;
+ accu = accu + (3.360162734985352e+01 * 4.114639663696289e+01);
+ which should be 39359.345316764694871 in double.
+
+:~/DiFX-trunk-rfi/mpifxcorr/trunk/tests/ippsbugs> ./fma_test
+Reference (double): 39359.345316764694871 + i*0.0                R1
+Reference (cast):   39359.343750000000000 + i*0.0                R2
+Reference (float):  39359.343750000000000 + i*0.0                R3
+ippsAddProduct:     39359.347656250000000 + i*0.000000000000000  R4
+ippsMul, ippsAdd_I: 39359.343750000000000 + i*0.000000000000000  R5
+
+The 32-bit addproduct result does not match with 32-bit "float(a)*float(b)+float(c)"
+nor does it match with 32-bit ippsAdd(ippsMul(a,b), c). I posted this on the Intel forum
+but there was no really satisfying answer (only that ~1e-7 data precision should be expected,
+and well, the relative erros (abs(R4-R1)/R1=5.94e-8) and (abs(R4-R1)/R1)=3.99e-8 are indeed 
+within the ~1e-7 precision ; yet it is still surprising to get a different result...)
+
+----------------------------------------------------------------------------------------------------------
+System details:
+----------------------------------------------------------------------------------------------------------
+
+:~/DiFX-trunk-rfi/mpifxcorr/trunk/tests/ippsbugs> uname -a
+Linux fxmanager 2.6.32-71.el6.x86_64 #1 SMP Tue Nov 23 06:49:13 CST 2010 x86_64 x86_64 x86_64 GNU/Linux
+
+:~/DiFX-trunk-rfi/mpifxcorr/trunk/tests/ippsbugs> export|grep -i IPPROOT
+declare -x IPPROOT="/cluster/intel/ipp/6.1.2.051/em64t"
+
+:~/DiFX-trunk-rfi/mpifxcorr/trunk/tests/ippsbugs> cat /proc/cpuinfo
+processor       : 0
+vendor_id       : GenuineIntel
+cpu family      : 6
+model           : 23
+model name      : Intel(R) Xeon(R) CPU           E5430  @ 2.66GHz
+stepping        : 6
+cpu MHz         : 2000.000
+cache size      : 6144 KB
+physical id     : 0
+siblings        : 4
+core id         : 0
+cpu cores       : 4
+apicid          : 0
+initial apicid  : 0
+fpu             : yes
+fpu_exception   : yes
+cpuid level     : 10
+wp              : yes
+flags           : fpu vme de pse tsc msr pae mce cx8 apic mtrr pge mca cmov pat pse36 
+                  clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx lm constant_tsc 
+                  arch_perfmon pebs bts rep_good aperfmperf pni dtes64 monitor ds_cpl vmx est 
+                  tm2 ssse3 cx16 xtpr pdcm dca sse4_1 lahf_lm tpr_shadow vnmi flexpriority
+bogomips        : 5333.88
+clflush size    : 64
+cache_alignment : 64
+address sizes   : 38 bits physical, 48 bits virtual
+power management:
+
