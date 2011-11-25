@@ -1,4 +1,4 @@
-BASEDIR = ../src/
+BASEDIR = ../../src/
 BASEFILES = $(BASEDIR)/filters.cpp $(BASEDIR)/filter_dec.cpp $(BASEDIR)/filter_int.cpp \
             $(BASEDIR)/filter_iir.cpp $(BASEDIR)/filter_iirsos.cpp $(BASEDIR)/filter_dsvf.cpp \
             $(BASEDIR)/filter_mavg.cpp $(BASEDIR)/filterchain.cpp $(BASEDIR)/filterhelpers.cpp
