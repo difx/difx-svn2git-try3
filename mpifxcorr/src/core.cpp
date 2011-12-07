@@ -664,8 +664,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   f32 bweight;
   f64 * binweights;
   Mode * m1, * m2;
-  cf32 * vis1;
-  cf32 * vis2;
+  const cf32 * vis1;
+  const cf32 * vis2;
   uint64_t offsetsamples;
   double sampletimens;
   int starttimens;
@@ -818,6 +818,13 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       if(config->phasedArrayOn(procslots[index].configindex)) //phased array processing
       {
         freqchannels = config->getFNumChannels(procslots[index].configindex);
+
+        //TODO: full data transpose
+        // {stations} x {pols} x {freqs} x {fftchannels}
+        // => PAfreqs set of matrices of {fftchannels set of matrices sized {stations x PApols}x{stations x PApols}}
+        // => covariance matrix size is NxN, N=stations*PApols
+        //    number of covariance matrices M, M=PAfreqs*fftchannels
+
         for(int j=0;j<config->getFPhasedArrayNumPols(procslots[index].configindex, f);j++)
         {
           papol = config->getFPhaseArrayPol(procslots[index].configindex, f, j);
