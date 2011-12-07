@@ -19,7 +19,7 @@ CFLAGS = -pthread -g -O2 -c -Wall -Wstrict-aliasing -I$(BASEDIR) -m64
 # for 'oprofile' profiling:
 # CFLAGS = -pthread -g -O0 -fno-inline -fno-default-inline -c -Wall
 
-all: filter_test filter_parse
+all: filter_test filter_parse filter_data
 
 clean:
 	rm -f filter_test filter_test.o filter_parse filter_parse.o
@@ -40,6 +40,9 @@ filter_test: $(BASEOBJS) $(BASEFILES) $(BASEHEADERS) filter_test.cpp filter_test
 
 filter_parse: $(BASEOBJS) $(BASEFILES) $(BASEHEADERS) filter_parse.cpp filter_parse.o
 	$(CC) $(intel_LDFLAGS) $(intel_LDINCL) $(BASEOBJS) filter_parse.o -o filter_parse
+
+filter_data: $(BASEOBJS) $(BASEFILES) $(BASEHEADERS) filter_data.cpp filter_data.o
+	$(CC) $(intel_LDFLAGS) $(intel_LDINCL) $(BASEOBJS) filter_data.o -o filter_data
 
 .cpp.o:
 	$(CC) $(intel_CFLAGS) $< -o $@
