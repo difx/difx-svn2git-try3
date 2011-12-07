@@ -2477,11 +2477,12 @@ static int populateFlags(DifxInput *D)
 	int nUndecoded = 0;
 	DifxJob *J;
 
-	J = D->job;
 	if(!D)
 	{
 		return 0;
 	}
+
+	J = D->job;
 
 	if(J->flagFile[0] == 0)
 	{

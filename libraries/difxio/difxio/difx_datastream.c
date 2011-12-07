@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "difxio/difx_write.h"
 
 /* Note: these values cannot have whitespace */
@@ -896,7 +897,7 @@ int DifxDatastreamGetRecBands(DifxDatastream *dd, int freqId, char *pols, int *r
 		}
 	}
 
-	/* check to see if a swap to cannonical polarization order is due */
+	/* check to see if a swap to canonical polarization order is due */
 	if(n == 2)
 	{
 		if(pols[0] == 'L' && pols[1] == 'R')
@@ -955,7 +956,7 @@ int DifxDatastreamGetZoomBands(DifxDatastream *dd, int freqId, char *pols, int *
                 }
         }
 
-	/* check to see if a swap to cannonical polarization order is due */
+	/* check to see if a swap to canonical polarization order is due */
 	if(n == 2)
         {
                 if(pols[0] == 'L' && pols[1] == 'R')
