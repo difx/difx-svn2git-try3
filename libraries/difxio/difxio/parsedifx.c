@@ -302,6 +302,20 @@ void printDifxParameters(const DifxParameters *dp)
 	}
 }
 
+int DifxParametersStringToEnum(const char* str, const char** lookuptable)
+{
+	int i = 0;
+	while (strlen(lookuptable[i]) > 0)
+	{
+		if (strcasecmp(str, lookuptable[i]) == 0)
+		{
+			return i;
+		}
+                ++i;
+	}
+	return -1;
+}
+
 int DifxParametersfind(const DifxParameters *dp, int start_row,
 	const char *key)
 {
