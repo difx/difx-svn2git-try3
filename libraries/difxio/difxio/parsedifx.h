@@ -111,8 +111,8 @@ int DifxStringArraycontains(const DifxStringArray *sa, const char *str);
 /* Print contents of structure to stdout */
 void printDifxParameters(const DifxParameters *dp);
 
-/* Find string in enum<->string table: return index if found, -1 otherwise */
-int DifxParametersStringToEnum(const char* str, const char** lookuptable);
+/* Find string in enum<->string table: return index if found, defaultvalue otherwise */
+int DifxParametersStringToEnum(const char* str, const char** lookuptable, int defaultvalue);
 
 /* Return index of first match to "key" starting from start_row */
 int DifxParametersfind(const DifxParameters *dp, int start_row,

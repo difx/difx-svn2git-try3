@@ -43,7 +43,8 @@ const char toneSelectionNames[][MAX_TONE_SELECTION_STRING_LENGTH] =
 	"all",
 	"smart",
 	"most",
-	"unknown"
+	"unknown",
+	"\0"
 };
 
 enum ToneSelection stringToToneSelection(const char *str)
@@ -188,6 +189,12 @@ void fprintDifxInput(FILE *fp, const DifxInput *D)
 	for(i = 0; i < D->nConfig; i++)
 	{
 		fprintDifxConfig(fp, D->config + i);
+	}
+
+	fprintf(fp, "  nPhasedArray = %d\n", D->nPhasedArray);
+	for(i = 0; i < D->nPhasedArray; i++)
+	{
+		fprintDifxPhasedArray(fp, D->phasedarray + i);
 	}
 
 	fprintf(fp, "  nFreq = %d\n", D->nFreq);
@@ -732,6 +739,7 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 {
 	DifxParameters *pp;
 	DifxPhasedArray *dpa;
+	const char* v;
 	int r;
 
 	pp = newDifxParametersfromfile(fileName);
@@ -747,19 +755,71 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 
 	/* Fill in the info about quantisation, format etc for this phased array output */
 	r = DifxParametersfind(pp, 0, "OUTPUT TYPE");
-	snprintf(dpa->outputType, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(pp, r));
+	if (r < 0) 
+	{
+		deleteDifxParameters(pp);
+		fprintf(stderr, "OUTPUT TYPE not found in %s\n", fileName);
+
+		return -1;
+	}
+	v = DifxParametersvalue(pp, r);
+	dpa->outputType = DifxParametersStringToEnum(v, phasedArrayOutputTypeNames, PAOutputTimeseries);
 	r = DifxParametersfind(pp, r, "OUTPUT FORMAT");
-	snprintf(dpa->outputFormat, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(pp, r));
+	if (r < 0) 
+	{
+		deleteDifxParameters(pp);
+		fprintf(stderr, "OUTPUT FORMAT not found in %s\n", fileName);
+
+		return -1;
+	}
+	v = DifxParametersvalue(pp, r);
+	dpa->outputFormat = DifxParametersStringToEnum(v, phasedArrayOutputFormatNames, PAOutputFormatDIFX);
 	r = DifxParametersfind(pp, r, "ACC TIME (NS)");
-	dpa->accTime = atoi(DifxParametersvalue(pp, r));
+	if (r < 0) 
+	{
+		deleteDifxParameters(pp);
+		fprintf(stderr, "ACC TIME (NS) not found in %s\n", fileName);
+
+		return -1;
+	}
+	v = DifxParametersvalue(pp, r);
+	dpa->accTime = 1000;
+	if (v)
+	{
+		dpa->accTime = atoi(v);
+	}
 	r = DifxParametersfind(pp, r, "COMPLEX OUTPUT");
+	if (r < 0) 
+	{
+		deleteDifxParameters(pp);
+		fprintf(stderr, "COMPLEX OUTPUT found in %s\n", fileName);
+
+		return -1;
+	}
+	v = DifxParametersvalue(pp, r);
 	dpa->complexOutput = 0;
-	if(strcasecmp(DifxParametersvalue(pp, r), "TRUE"))
+	if(v && strcasecmp(v, "TRUE"))
 	{
 		dpa->complexOutput = 1;
 	}
 	r = DifxParametersfind(pp, r, "OUTPUT BITS");
-	dpa->quantBits = atoi(DifxParametersvalue(pp, r));
+	if (r < 0) 
+	{
+		deleteDifxParameters(pp);
+		fprintf(stderr, "OUTPUT BITS not found in %s\n", fileName);
+
+		return -1;
+	}
+	v = DifxParametersvalue(pp, r);
+	dpa->quantBits = 2;
+	if (v)
+	{
+		dpa->quantBits = atoi(v);
+	}
+
+
+	D->nPhasedArray++;
+	deleteDifxParameters(pp);
 
 	return D->nPhasedArray-1;
 }
@@ -953,10 +1013,10 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D,
 		/* phased array stuff */
 		if(strcmp(DifxParametersvalue(ip, rows[10]), "TRUE") == 0)
 		{
-			r = DifxParametersfind(ip, rows[10], "PHASED ARRAY CONFIG FILE");
+			r = DifxParametersfind(ip, rows[10], "PHASED ARRAY CONFIG");
 			if(r <= 0)
 			{
-				fprintf(stderr, "input file row %d : PHASED ARRAY CONFIG FILE expected\n",
+				fprintf(stderr, "input file row %d : PHASED ARRAY CONFIG file name expected\n",
 					rows[10] + 2);
 
 				return 0;
@@ -1712,30 +1772,75 @@ static DifxInput *populateInput(DifxInput *D, const DifxParameters *ip)
 
 	/* COMMON SETTINGS */
 	D = parseDifxInputCommonTable(D, ip);
-	
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
+
 	/* CONFIGURATIONS */
 	D = parseDifxInputConfigurationTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 
 	/* RULES */
 	D = parseDifxInputRuleTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 	
 	/* FREQ TABLE */
 	D = parseDifxInputFreqTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 
 	/* TELESCOPE TABLE */
 	D = parseDifxInputTelescopeTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 	
 	/* DATASTREAM TABLE */
 	D = parseDifxInputDatastreamTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 
 	/* BASELINE TABLE */
 	D = parseDifxInputBaselineTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 
 	/* DATA TABLE */
 	D = parseDifxInputDataTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 
 	/* NETWORK TABLE */
 	D = parseDifxInputNetworkTable(D, ip);
+	if (!D)
+	{
+		fprintf(stderr, "populateInput: failed\n");
+		return 0;
+	}	
 
 	/* THREADS per CORE */
 	DifxInputLoadThreads(D);
@@ -2980,18 +3085,27 @@ DifxInput *loadDifxInput(const char *filePrefix)
 	}
 
 	D = populateInput(D, ip);
+	if (!D)
+	{
+		return D;
+	}
+
 	D = populateCalc(D, cp);
+	if (!D)
+	{
+		return D;
+	}
+
 	mp = newDifxParametersfromfile(D->job->imFile);
 	if(mp)
 	{
 		D = populateIM(D, mp);
 	}
-
 	if(!D)
 	{
 		deleteDifxInput(DSave);
 	}
-	
+
 	deleteDifxParameters(ip);
 	deleteDifxParameters(cp);
 	deleteDifxParameters(mp);
