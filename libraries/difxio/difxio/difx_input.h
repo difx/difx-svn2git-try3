@@ -39,6 +39,7 @@
 #define MAX_DATA_SOURCE_NAME_LENGTH	16
 #define MAX_ANTENNA_MOUNT_NAME_LENGTH	8
 #define MAX_SAMPLING_NAME_LENGTH	16
+#define MAX_PHASEDARRAY_NAME_LENGTH     16
 #define MAX_TONE_SELECTION_STRING_LENGTH 12
 
 #define DIFXIO_FILENAME_LENGTH		256
@@ -136,6 +137,20 @@ enum OutputFormatType
 	NumOutputFormat			/* must remain as last entry */
 };
 
+enum PhasedArrayOutputFormat
+{
+	PAOutputFormatDIFX = 0,
+	PAOutputFormatVDIF = 1,
+	PANumOutputFormat		/* must remain as last entry */
+};
+
+enum PhasedArrayOutputType
+{
+	PAOutputFilterbank = 0,
+	PAOutputTimeseries = 1,
+	PANumOutputType			/* must remain as last entry */
+};
+
 extern const char antennaMountTypeNames[][MAX_ANTENNA_MOUNT_NAME_LENGTH];
 
 /* keep this current with toneSelectionNames[] in difx_input.c */
@@ -205,14 +220,15 @@ typedef struct
 typedef struct
 {
 	char fileName[DIFXIO_FILENAME_LENGTH];	/* Phased array config filename */
-	/* FIXME: next two parameters should become enums */
-	char outputType[DIFXIO_NAME_LENGTH];	/* FILTERBANK or TIMESERIES */
-	char outputFormat[DIFXIO_NAME_LENGTH];	/* DIFX or VDIF */
+	enum PhasedArrayOutputFormat outputFormat;
+	enum PhasedArrayOutputType outputType;
 	double accTime;		/* Accumulation time in ns for phased array output */
-	/* FIXME: below should be part of an enum */
 	int complexOutput;	/* 1=true (complex output), 0=false (real output) */
 	int quantBits;		/* Bits to re-quantise to */
 } DifxPhasedArray;
+
+extern const char *phasedArrayOutputFormatNames[];
+extern const char *phasedArrayOutputTypeNames[];
 
 /* From DiFX config table, with additional derived information */
 typedef struct

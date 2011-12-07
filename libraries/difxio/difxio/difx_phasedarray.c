@@ -32,6 +32,19 @@
 #include <string.h>
 #include "difxio/difx_input.h"
 
+const char *phasedArrayOutputFormatNames[] =
+{
+	"DIFX",
+	"VDIF",
+	"\0"
+};
+const char *phasedArrayOutputTypeNames[] = 
+{
+	"FILTERBANK",
+	"TIMESERIES",
+	"\0"
+};
+
 
 DifxPhasedArray *newDifxPhasedarrayArray(int nPhasedArray)
 {
@@ -66,8 +79,8 @@ void fprintDifxPhasedArray(FILE *fp, const DifxPhasedArray *dpa)
 	if(dpa)
 	{
 		fprintf(fp, "    Filename = %s\n", dpa->fileName);
-		fprintf(fp, "    Output type = %s\n", dpa->outputType);
-		fprintf(fp, "    Output format = %s\n", dpa->outputFormat);
+		fprintf(fp, "    Output type = %s\n", phasedArrayOutputTypeNames[dpa->outputType]);
+		fprintf(fp, "    Output format = %s\n", phasedArrayOutputFormatNames[dpa->outputFormat]);
 		fprintf(fp, "    Accumulation time (ns) = %f\n", dpa->accTime);
 		fprintf(fp, "    Complex output: %d\n", dpa->complexOutput);
 		fprintf(fp, "    Output quantisation bits: %d\n", dpa->quantBits);
@@ -94,8 +107,8 @@ int isSameDifxPhasedArray(const DifxPhasedArray *dpa1, const DifxPhasedArray *dp
 void copyDifxPhasedArray(DifxPhasedArray *dest, const DifxPhasedArray *src)
 {
 	snprintf(dest->fileName, DIFXIO_NAME_LENGTH, "%s", src->fileName);
-	snprintf(dest->outputType, DIFXIO_NAME_LENGTH, "%s", src->outputType);
-	snprintf(dest->outputFormat, DIFXIO_NAME_LENGTH, "%s", src->outputFormat);
+	dest->outputType = src->outputType;
+	dest->outputFormat = src->outputFormat;
 	dest->accTime = src->accTime;
 	dest->complexOutput = src->complexOutput;
 	dest->quantBits = src->quantBits;
