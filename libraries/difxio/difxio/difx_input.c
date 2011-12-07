@@ -742,6 +742,11 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	const char* v;
 	int r;
 
+	if (!D)
+	{
+		return -1;
+	}
+
 	pp = newDifxParametersfromfile(fileName);
 	if(!pp) 
 	{
@@ -764,6 +769,7 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	}
 	v = DifxParametersvalue(pp, r);
 	dpa->outputType = DifxParametersStringToEnum(v, phasedArrayOutputTypeNames, PAOutputTimeseries);
+
 	r = DifxParametersfind(pp, r, "OUTPUT FORMAT");
 	if (r < 0) 
 	{
@@ -774,6 +780,7 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	}
 	v = DifxParametersvalue(pp, r);
 	dpa->outputFormat = DifxParametersStringToEnum(v, phasedArrayOutputFormatNames, PAOutputFormatDIFX);
+
 	r = DifxParametersfind(pp, r, "ACC TIME (NS)");
 	if (r < 0) 
 	{
@@ -788,6 +795,7 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	{
 		dpa->accTime = atoi(v);
 	}
+
 	r = DifxParametersfind(pp, r, "COMPLEX OUTPUT");
 	if (r < 0) 
 	{
@@ -802,24 +810,16 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	{
 		dpa->complexOutput = 1;
 	}
+
 	r = DifxParametersfind(pp, r, "OUTPUT BITS");
 	if (r < 0) 
 	{
 		deleteDifxParameters(pp);
 		fprintf(stderr, "OUTPUT BITS not found in %s\n", fileName);
-
-		return -1;
 	}
-	v = DifxParametersvalue(pp, r);
-	dpa->quantBits = 2;
-	if (v)
-	{
-		dpa->quantBits = atoi(v);
-	}
-
+        dpa->quantBits = atoi(DifxParametersvalue(pp, r));
 
 	D->nPhasedArray++;
-	deleteDifxParameters(pp);
 
 	return D->nPhasedArray-1;
 }
@@ -831,6 +831,11 @@ int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 	DifxPulsar *dp;
 	int i, r;
 	int nPolycoFiles;
+
+	if (!D)
+	{
+		return -1;
+	}
 
 	pp = newDifxParametersfromfile(fileName);
 	if(!pp)
@@ -1083,6 +1088,11 @@ static DifxInput *parseDifxInputRuleTable(DifxInput *D,
 	const DifxParameters *ip)
 {
 	int r, rule;
+
+	if (!D || !ip)
+	{
+		return 0;
+	}
 
 	r = DifxParametersfind(ip, 0, "NUM RULES");
 	if(r<0)
@@ -1907,7 +1917,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	//int nFound, nTel, nSrc, startsec, dursec;
 	int nFound, nTel, startsec, dursec;
 
-	if(!D)
+	if (!D || !cp)
 	{
 		return 0;
 	}
@@ -2350,7 +2360,7 @@ static DifxInput *parseCalcServerInfo(DifxInput *D, DifxParameters *p)
 {
 	int r;
 
-	if(!D)
+	if(!D || !p)
 	{
 		return 0;
 	}
@@ -3091,12 +3101,15 @@ DifxInput *loadDifxInput(const char *filePrefix)
 	}
 
 	D = populateCalc(D, cp);
-	if (!D)
+	if (D)
 	{
-		return D;
+		mp = newDifxParametersfromfile(D->job->imFile);
+	}
+	else
+	{
+		mp = NULL;
 	}
 
-	mp = newDifxParametersfromfile(D->job->imFile);
 	if(mp)
 	{
 		D = populateIM(D, mp);
@@ -3113,7 +3126,7 @@ DifxInput *loadDifxInput(const char *filePrefix)
 	/* read in flags, if any */
 	populateFlags(D);
 
-	for(c = 0; c < D->nConfig; c++)
+	for(c = 0; D && (c < D->nConfig); c++)
 	{
 		DifxConfigMapAntennas(D->config + c, D->datastream);
 	}
