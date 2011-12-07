@@ -689,7 +689,7 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		if(config->phasedArrayId >= 0 && phasedarray)
 		{
 			writeDifxLine(out, "PHASED ARRAY", "TRUE");
-			writeDifxLine(out, "PHASED ARRAY CONNFIG FILE", 
+			writeDifxLine(out, "PHASED ARRAY CONFIG", 
 				phasedarray[config->phasedArrayId].fileName);
 		}
 		else
