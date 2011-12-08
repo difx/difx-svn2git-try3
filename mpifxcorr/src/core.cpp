@@ -856,13 +856,29 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
               }
               if(vis1 != 0)
               {
+                //phased array operation:
+                //  vis1: 1) geometric delay and spectral doppler shift corrections applied in mode.cpp
+                //           effectively: fake spatial "2D plane" was synthesized containing all antennas,
+                //                        and was aligned with incoming plane wave from celestial source
+                //        2) FFT-transform along time domain; since not a spatial domain FFT, this rules 
+                //           out the quick FFT method of phased array beamforming. Each FFT bin value is
+                //           equal to the single, complex voltage sample from that frequency channel.
+                //  weights: beam weights vector; if several beams desired then need several weights vectors
+                //           weights vector contains one weight to be applied to one antenna each (complex; phase and gain)
+                //           weights steer the array electrical look direction off from original phase center
+                //           weights also allow introduction of spatial band-stops towards RFI directions if desired
+                //  output:  a single, complex, baseband time-domain voltage sample y(beamNr,chNr) for one beam in one freq channel
+                //
+                //           y(beamNr,chNr) = y(beamNr,chNr) + sum(ant=0...antennas-1: weight(beamNr,chNr,ant) * vis1(chNr,ant))
+                //
+                //     properties: 
+                //        average(y(b,ch), T=0...Inf) == 0
+                //        average(y(b,ch)*conj(y(b,ch))) == P(b,ch) = average true power in channel ch of beam b (~source flux)
+
                 //weight the data
                 status = vectorMulC_cf32(vis1, config->getFPhasedArrayDWeight(procslots[index].configindex, f, k), scratchspace->rotated, freqchannels);
                 if(status != vecNoErr)
                   cerror << startl << "Error trying to scale phased array results!" << endl;
-
-                //TODO: rfi filter for configurable integration/averaging?
-                rfifilterindex++;
 
                 //add it to the result
                 status = vectorAdd_cf32_I(scratchspace->rotated, &(scratchspace->threadcrosscorrs[resultindex]), freqchannels);
