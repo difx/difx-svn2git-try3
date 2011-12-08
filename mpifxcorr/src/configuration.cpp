@@ -2541,7 +2541,8 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
     configs[configindex].pacomplexoutput = false;
   getinputline(&phasedarrayinput, &line, "OUTPUT BITS");
   configs[configindex].pabits = atoi(line.c_str());
-  configs[configindex].paweights = new double*[freqtablelength];
+  configs[configindex].paweights_re = new double*[freqtablelength];
+  configs[configindex].paweights_im = new double*[freqtablelength];
   configs[configindex].numpafreqpols = new int[freqtablelength];
   configs[configindex].papols = new char*[freqtablelength];
   for(int i=0;i<freqtablelength;i++)
@@ -2550,7 +2551,8 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
     configs[configindex].numpafreqpols[i] = atoi(line.c_str());
     if(configs[configindex].numpafreqpols[i] > 0)
     {
-      configs[configindex].paweights[i] = new double[numdatastreams];
+      configs[configindex].paweights_re[i] = new double[numdatastreams];
+      configs[configindex].paweights_im[i] = new double[numdatastreams];
       configs[configindex].papols[i] = new char[configs[configindex].numpafreqpols[i]];
       for(int j=0;j<configs[configindex].numpafreqpols[i];j++)
       {
@@ -2560,13 +2562,11 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
       for(int j=0;j<numdatastreams;j++)
       {
         getinputline(&phasedarrayinput, &line, "FREQ");
-        configs[configindex].paweights[i][j] = atof(line.c_str());
-        if(configs[configindex].paweights[i][j] < 0.0)
-        {
-          if(mpiid == 0)
-            cfatal << startl << "All phased array weights must be >= 0 - aborting!!!" << endl;
-          return false;
-        }
+        configs[configindex].paweights_re[i][j] = 0.0;
+        configs[configindex].paweights_im[i][j] = 0.0;
+        std::stringstream ssReIm(line);
+        ssReIm >> configs[configindex].paweights_re[i][j];
+        ssReIm >> configs[configindex].paweights_im[i][j];
       }
     }
   }

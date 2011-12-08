@@ -857,7 +857,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
               if(vis1 != 0)
               {
                 //weight the data
-                status = vectorMulC_f32((f32*)vis1, config->getFPhasedArrayDWeight(procslots[index].configindex, f, k), (f32*)scratchspace->rotated, freqchannels*2);
+                status = vectorMulC_cf32(vis1, config->getFPhasedArrayDWeight(procslots[index].configindex, f, k), scratchspace->rotated, freqchannels);
                 if(status != vecNoErr)
                   cerror << startl << "Error trying to scale phased array results!" << endl;
 
