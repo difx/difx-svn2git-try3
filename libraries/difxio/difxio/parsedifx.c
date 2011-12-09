@@ -305,7 +305,7 @@ void printDifxParameters(const DifxParameters *dp)
 
 int DifxParametersStringToEnum(const char* str, const char** lookuptable, int defaultvalue)
 {
-	int i;
+	int i = 0;
 	if (!str || !lookuptable)
 	{
 		return defaultvalue;

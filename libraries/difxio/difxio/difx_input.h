@@ -219,12 +219,21 @@ typedef struct
 
 typedef struct
 {
+        int nWeights;           /* Number of weights per beam (should match product antennapols*numantennas) */
+        float *Wreim;           /* Classic Beamformer weights in {re1,im1, re2,im2, ..., reN,imN} layout */
+} DifxPhasedArrayWeights;
+
+typedef struct
+{
 	char fileName[DIFXIO_FILENAME_LENGTH];	/* Phased array config filename */
 	enum PhasedArrayOutputFormat outputFormat;
 	enum PhasedArrayOutputType outputType;
 	double accTime;		/* Accumulation time in ns for phased array output */
 	int complexOutput;	/* 1=true (complex output), 0=false (real output) */
 	int quantBits;		/* Bits to re-quantise to */
+        int nFreqs;             /* Number of frequencies */
+        int nBeams;             /* Number of beams */
+        DifxPhasedArrayWeights ** beamWeights;  /* The several (nFreqs*nBeams) structs with weights */
 } DifxPhasedArray;
 
 extern const char *phasedArrayOutputFormatNames[];
@@ -242,7 +251,7 @@ typedef struct
 	int xmacLength;         /* Must be integer divisor of number of channels */
 	int numBufferedFFTs;    /* The number of FFTs to do in a row before XMAC'ing */
 	int pulsarId;		/* -1 if not pulsar */
-	int phasedArrayId;	/* -1 if not phased array mode */
+	int phasedArrayId;	/* 0 if config successfully loaded */
 	int nPol;		/* number of pols in datastreams (1 or 2) */
 	char pol[2];		/* the polarizations */
 	int polMask;		/* bit field using DIFX_POL_x from above */

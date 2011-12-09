@@ -740,7 +740,7 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	DifxParameters *pp;
 	DifxPhasedArray *dpa;
 	const char* v;
-	int r;
+	int r, i;
 
 	if (!D)
 	{
@@ -816,8 +816,67 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	{
 		deleteDifxParameters(pp);
 		fprintf(stderr, "OUTPUT BITS not found in %s\n", fileName);
+
+		return -1;
 	}
         dpa->quantBits = atoi(DifxParametersvalue(pp, r));
+
+	r = DifxParametersfind(pp, r, "NUM FREQ");
+	if (r < 0) 
+	{
+		deleteDifxParameters(pp);
+		fprintf(stderr, "NUM FREQ not found in %s\n", fileName);
+
+		return -1;
+	}
+        dpa->nFreqs = atoi(DifxParametersvalue(pp, r));
+
+	r = DifxParametersfind(pp, r, "NUM BEAMS");
+	if (r < 0) 
+	{
+		deleteDifxParameters(pp);
+		fprintf(stderr, "NUM BEAMS not found in %s\n", fileName);
+
+		return -1;
+	}
+        dpa->nBeams = atoi(DifxParametersvalue(pp, r));
+
+	for (i = 0; i < dpa->nFreqs; i++)
+	{
+		r = DifxParametersfind(pp, r, "FREQ");
+		if (r < 0) 
+		{
+			deleteDifxParameters(pp);
+			fprintf(stderr, "FREQ not found in %s\n", fileName);
+
+			return -1;
+		}
+		// TODO: parse 'R','L','X','Y'
+	}
+
+	dpa->beamWeights = (DifxPhasedArrayWeights**)malloc((dpa->nBeams) * sizeof(DifxPhasedArrayWeights*));
+	for (i = 0; i < dpa->nBeams; i++)
+	{
+		int w;
+		dpa->beamWeights[i] = (DifxPhasedArrayWeights*)malloc(sizeof(DifxPhasedArrayWeights));
+		dpa->beamWeights[i]->nWeights = D->job->activeDatastreams;
+		dpa->beamWeights[i]->Wreim = (float*)malloc(dpa->beamWeights[i]->nWeights * sizeof(float)*2);
+
+		for (w = 0; w < dpa->beamWeights[i]->nWeights; w++)
+		{
+			r = DifxParametersfind(pp, r, "BEAMW");
+			if (r < 0) 
+			{
+				deleteDifxParameters(pp);
+				fprintf(stderr, "BEAMW for beam %d antenna %d not found in %s\n", i+1, w+1, fileName);
+
+				return -1;
+			}
+			dpa->beamWeights[i]->Wreim[2*w+0] = atof(DifxParametersvalue(pp, r));
+			dpa->beamWeights[i]->Wreim[2*w+1] = dpa->beamWeights[i]->Wreim[2*w+0]; // TODO
+			r++;
+		}
+	}
 
 	D->nPhasedArray++;
 
@@ -1015,6 +1074,7 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D,
 				return 0;
 			}
 		}
+
 		/* phased array stuff */
 		if(strcmp(DifxParametersvalue(ip, rows[10]), "TRUE") == 0)
 		{
@@ -1026,11 +1086,13 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D,
 
 				return 0;
 			}
+
 			dc->phasedArrayId = loadPhasedArrayConfigFile(D, DifxParametersvalue(ip, r));
 			if(dc->phasedArrayId < 0)
 			{
 				return 0;
 			}
+
 		}
 		N = strlen(dc->name);
 		dc->doPolar = -1;	/* to be calculated later */
@@ -1079,6 +1141,7 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D,
 			}
 			dc->baselineId[b] = atoi(DifxParametersvalue(ip, r));
 		}
+
 	}
 
 	return D;
