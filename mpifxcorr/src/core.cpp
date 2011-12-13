@@ -829,7 +829,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         {
           papol = config->getFPhaseArrayPol(procslots[index].configindex, f, j);
 
-          //weight and add the results for each baseline
+          //weight and add the results for each antenna
           for(int fftsubloop=0;fftsubloop<config->getNumBufferedFFTs(procslots[index].configindex);fftsubloop++)
           {
             for(int k=0;k<numdatastreams;k++)
@@ -876,18 +876,23 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                 //        average(y(b,ch)*conj(y(b,ch))) == P(b,ch) = average true power in channel ch of beam b (~source flux)
 
                 //weight the data
-                status = vectorMulC_cf32(vis1, config->getFPhasedArrayDWeight(procslots[index].configindex, f, k), scratchspace->rotated, freqchannels);
-                if(status != vecNoErr)
-                  cerror << startl << "Error trying to scale phased array results!" << endl;
+                for (int b=0;b<config->getFPhaseArrayNumBeams(procslots[index].configindex, f);b++)
+                {
+                  cf32 w32 = config->getFPhasedArrayDWeight(procslots[index].configindex, f, b, k);
+                  status = vectorMulC_cf32(vis1, w32, scratchspace->rotated, freqchannels);
+                  if(status != vecNoErr)
+                    cerror << startl << "Error trying to scale phased array results!" << endl;
 
-                //add it to the result
-                status = vectorAdd_cf32_I(scratchspace->rotated, &(scratchspace->threadcrosscorrs[resultindex]), freqchannels);
-                if(status != vecNoErr)
-                  cerror << startl << "Error trying to add phased array results!" << endl;
-              }
-            }
+                  //add it to the result
+                  int outindex = resultindex + (freqchannels * b);
+                  status = vectorAdd_cf32_I(scratchspace->rotated, &(scratchspace->threadcrosscorrs[outindex]), freqchannels);
+                  if(status != vecNoErr)
+                    cerror << startl << "Error trying to add phased array results!" << endl;
+                }//beams
+              }//vis1!=0
+            }//numdatastreams
+            resultindex += freqchannels * config->getFPhaseArrayNumBeams(procslots[index].configindex, f);
           }
-          resultindex += freqchannels;
         }
       }
       else if(config->isFrequencyUsed(procslots[index].configindex, f)) //normal processing

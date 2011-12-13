@@ -323,16 +323,18 @@ public:
   inline void setLTADumpChannels(int setval) { ltadumpchannels = setval; }
   inline int getSTADumpChannels() { return stadumpchannels; } //shared with kurtosis
   inline int getLTADumpChannels() { return ltadumpchannels; }
-  inline cf32 getFPhasedArrayDWeight(int configindex, int freqindex, int ordereddsindex)
+  inline cf32 getFPhasedArrayDWeight(int configindex, int freqindex, int beamindex, int ordereddsindex)
     { cf32 w; 
-      w.re = configs[configindex].paweights_re[freqindex][ordereddsindex];
-      w.im = configs[configindex].paweights_im[freqindex][ordereddsindex];
+      w.re = configs[configindex].paweights_re[freqindex][beamindex][ordereddsindex];
+      w.im = configs[configindex].paweights_im[freqindex][beamindex][ordereddsindex];
       return w;
     }
   inline int getFPhasedArrayNumPols(int configindex, int freqindex)
     { return configs[configindex].numpafreqpols[freqindex]; }
   inline char getFPhaseArrayPol(int configindex, int freqindex, int polindex)
     { return configs[configindex].papols[freqindex][polindex]; }
+  inline char getFPhaseArrayNumBeams(int configindex, int freqindex)
+    { return configs[configindex].numpabeams[freqindex]; }
 
 //@}
 
@@ -600,8 +602,9 @@ private:
     int pabits;
     bool pacomplexoutput;
     int paaccumulationns;
-    double ** paweights_re; //[freq][datastream]
-    double ** paweights_im; //[freq][datastream]
+    int * numpabeams; // [freq]
+    double *** paweights_re; //[freq][beam][datastream]
+    double *** paweights_im; //[freq][beam][datastream]
     char   ** papols;    //[freq][pol]
     int * numpafreqpols; //[freq]
     datadomain padomain;

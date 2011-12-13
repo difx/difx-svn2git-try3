@@ -1010,8 +1010,8 @@ bool Configuration::processConfig(ifstream * input)
     if(configs[i].phasedarray)
     {
       if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "PHASED ARRAY = TRUE but phased array mode is not yet supported!" << endl;
-      getinputline(input, &configs[i].phasedarrayconfigfilename, "PHASED ARRAY CONFIG FILE");
+        cwarn << startl << "PHASED ARRAY = TRUE, experimental phased array mode enabled" << endl;
+      getinputline(input, &configs[i].phasedarrayconfigfilename, "PHASED ARRAY CONFIG");
     }
     for(int j=0;j<numdatastreams;j++)
     {
@@ -1724,7 +1724,7 @@ bool Configuration::populateResultLengths()
       {
         for(int f=0;f<freqtablelength;f++)
         {
-          threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels;
+          threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels*configs[c].numpabeams[f];
           configs[c].threadresultveccount += configs[c].numpafreqpols[f];
         }
         configs[c].threadresultlength = threadfindex;
@@ -1733,7 +1733,7 @@ bool Configuration::populateResultLengths()
       {
         for(int f=0;f<freqtablelength;f++)
         {
-          threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels;
+          threadfindex += configs[c].numpafreqpols[f]*freqtable[f].numchannels*configs[c].numpabeams[f];
           configs[c].threadresultveccount += configs[c].numpafreqpols[f];
         }
         configs[c].threadresultlength = threadfindex;
@@ -2479,6 +2479,13 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 
   if(mpiid == 0) //only write one copy of this info message
     cinfo << startl << "About to process phased array file " << filename << endl;
+
+  configs[configindex].paweights_re = new double**[freqtablelength];
+  configs[configindex].paweights_im = new double**[freqtablelength];
+  configs[configindex].numpafreqpols = new int[freqtablelength];
+  configs[configindex].numpabeams = new int[freqtablelength];
+  configs[configindex].papols = new char*[freqtablelength];
+
   ifstream phasedarrayinput(filename.c_str(), ios::in);
   if(!phasedarrayinput.is_open() || phasedarrayinput.bad())
   {
@@ -2541,32 +2548,40 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
     configs[configindex].pacomplexoutput = false;
   getinputline(&phasedarrayinput, &line, "OUTPUT BITS");
   configs[configindex].pabits = atoi(line.c_str());
-  configs[configindex].paweights_re = new double*[freqtablelength];
-  configs[configindex].paweights_im = new double*[freqtablelength];
-  configs[configindex].numpafreqpols = new int[freqtablelength];
-  configs[configindex].papols = new char*[freqtablelength];
+  getinputline(&phasedarrayinput, &line, "NUM FREQ");
+  configs[configindex].numpafreqpols[0] = atoi(line.c_str());
+  getinputline(&phasedarrayinput, &line, "NUM BEAMS");
+  configs[configindex].numpabeams[0] = atoi(line.c_str());
+  for (int i=1; i<freqtablelength; i++)
+  {
+    configs[configindex].numpafreqpols[i] = configs[configindex].numpafreqpols[0];
+    configs[configindex].numpabeams[i] = configs[configindex].numpabeams[0];
+  }
   for(int i=0;i<freqtablelength;i++)
   {
-    getinputline(&phasedarrayinput, &line, "NUM FREQ");
-    configs[configindex].numpafreqpols[i] = atoi(line.c_str());
     if(configs[configindex].numpafreqpols[i] > 0)
     {
-      configs[configindex].paweights_re[i] = new double[numdatastreams];
-      configs[configindex].paweights_im[i] = new double[numdatastreams];
+      configs[configindex].paweights_re[i] = new double*[configs[configindex].numpabeams[i]];
+      configs[configindex].paweights_im[i] = new double*[configs[configindex].numpabeams[i]];
       configs[configindex].papols[i] = new char[configs[configindex].numpafreqpols[i]];
       for(int j=0;j<configs[configindex].numpafreqpols[i];j++)
       {
         getinputline(&phasedarrayinput, &line, "FREQ");
         configs[configindex].papols[i][j] = line.c_str()[0];
       }
-      for(int j=0;j<numdatastreams;j++)
+      for(int j=0;j<configs[configindex].numpabeams[i];j++)
       {
-        getinputline(&phasedarrayinput, &line, "FREQ");
-        configs[configindex].paweights_re[i][j] = 0.0;
-        configs[configindex].paweights_im[i][j] = 0.0;
-        std::stringstream ssReIm(line);
-        ssReIm >> configs[configindex].paweights_re[i][j];
-        ssReIm >> configs[configindex].paweights_im[i][j];
+        configs[configindex].paweights_re[i][j] = new double[numdatastreams];
+        configs[configindex].paweights_im[i][j] = new double[numdatastreams];
+        for(int k=0;k<numdatastreams;k++)
+        {
+          getinputline(&phasedarrayinput, &line, "BEAMW");
+          configs[configindex].paweights_re[i][j][k] = 0.0;
+          configs[configindex].paweights_im[i][j][k] = 0.0;
+          std::stringstream ssReIm(line);
+          ssReIm >> configs[configindex].paweights_re[i][j][k];
+          ssReIm >> configs[configindex].paweights_im[i][j][k];
+        }
       }
     }
   }
@@ -2798,37 +2813,40 @@ void Configuration::makeFortranString(string line, int length, char * destinatio
 
 void Configuration::getinputkeyval(ifstream * input, std::string * key, std::string * val)
 {
-  if(input->eof())
+  std::string line;
+  *key = std::string("");
+  *val = std::string("");
+  if(input->eof()) 
+  {
     cerror << startl << "Trying to read past the end of file!" << endl;
-  getline(*input, *key);
-  while(key->length() > 0 && key->at(0) == COMMENT_CHAR) { // a comment
-    //if(mpiid == 0) //only write one copy of this error message
-    //  cverbose << startl << "Skipping comment " << key << endl;
-    getline(*input, *key);
+    return;
   }
-  int keylength = key->find_first_of(':') + 1;
-  if(keylength < DEFAULT_KEY_LENGTH)
+  do
+  {
+    getline(*input, line);
+    if (input->eof())
+      return;
+  } while (line.length() <= 0 || line.at(0) == COMMENT_CHAR);
+  int keylength = line.find_first_of(':');
+  if(keylength == std::string::npos)
     keylength = DEFAULT_KEY_LENGTH;
-  *val = key->substr(keylength);
-  *key = key->substr(0, key->find_first_of(':'));
+  *key = line.substr(0, keylength);
+  *val = line.substr(keylength + 1);
+  val->erase(0, val->find_first_not_of(" \t\n"));
+  if (key->length() > DEFAULT_KEY_LENGTH)
+    key->resize(DEFAULT_KEY_LENGTH);
 }
 
 void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader)
 {
-  if(input->eof())
-    cerror << startl << "Trying to read past the end of file!" << endl;
-  getline(*input,*line);
-  while(line->length() > 0 && line->at(0) == COMMENT_CHAR) { // a comment
-    //if(mpiid == 0) //only write one copy of this error message
-    //  cverbose << startl << "Skipping comment " << line << endl;
-    getline(*input, *line);
-  }
-  int keylength = line->find_first_of(':') + 1;
-  if(keylength < DEFAULT_KEY_LENGTH)
-    keylength = DEFAULT_KEY_LENGTH;
-  if(startofheader.compare((*line).substr(0, startofheader.length())) != 0) //not what we expected
-    cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << (*line).substr(0, keylength) << "'" << endl;
-  *line = line->substr(keylength);
+  std::string key;
+  std::string val;
+  getinputkeyval(input, &key, &val);
+  if (startofheader.length() < key.length()) // allow shorter "notation"
+    key = key.substr(0, startofheader.length());
+  if(startofheader.compare(key) != 0)
+    cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << key << "'" << endl;
+  *line = val;
 }
 
 void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, int intval)
