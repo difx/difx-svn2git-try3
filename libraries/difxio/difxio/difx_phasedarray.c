@@ -89,19 +89,20 @@ void fprintDifxPhasedArray(FILE *fp, const DifxPhasedArray *dpa)
 		fprintf(fp, "    Output beams: %d\n", dpa->nBeams);
 		for (f = 0; f < dpa->nFreqs; f++)
 		{
-		}
-		for (b = 0; b < dpa->nBeams; b++)
-		{
-			int w;
-			DifxPhasedArrayWeights * bw = dpa->beamWeights[b];
-			fprintf(fp, "      Beam %d: ", b);
-			for (w = 0; w < bw->nWeights; w++)
+			fprintf(fp, "      Freq %d:\n", f);
+			for (b = 0; b < dpa->nBeams; b++)
 			{
-				float re = bw->Wreim[2*w+0];
-				float im = bw->Wreim[2*w+1];
-				fprintf(fp, "{%.2e,%.2e} ", re, im);
+				int w;
+				DifxPhasedArrayWeights * bw = dpa->beamWeights[f][b];
+				fprintf(fp, "        Beam %d: ", b);
+				for (w = 0; w < bw->nWeights; w++)
+				{
+					float re = bw->Wreim[2*w+0];
+					float im = bw->Wreim[2*w+1];
+					fprintf(fp, "{%.2e,%.2e} ", re, im);
+				}
+				fprintf(fp, "\n");
 			}
-			fprintf(fp, "\n");
 		}
 	}
 }

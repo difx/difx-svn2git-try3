@@ -841,8 +841,13 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 	}
         dpa->nBeams = atoi(DifxParametersvalue(pp, r));
 
+	dpa->beamWeights = (DifxPhasedArrayWeights***)malloc((dpa->nFreqs) * sizeof(DifxPhasedArrayWeights**));
+
 	for (i = 0; i < dpa->nFreqs; i++)
 	{
+		int b;
+		dpa->beamWeights[i] = (DifxPhasedArrayWeights**)malloc((dpa->nBeams) * sizeof(DifxPhasedArrayWeights*));
+
 		r = DifxParametersfind(pp, r, "FREQ");
 		if (r < 0) 
 		{
@@ -852,29 +857,28 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 			return -1;
 		}
 		// TODO: parse 'R','L','X','Y'
-	}
 
-	dpa->beamWeights = (DifxPhasedArrayWeights**)malloc((dpa->nBeams) * sizeof(DifxPhasedArrayWeights*));
-	for (i = 0; i < dpa->nBeams; i++)
-	{
-		int w;
-		dpa->beamWeights[i] = (DifxPhasedArrayWeights*)malloc(sizeof(DifxPhasedArrayWeights));
-		dpa->beamWeights[i]->nWeights = D->job->activeDatastreams;
-		dpa->beamWeights[i]->Wreim = (float*)malloc(dpa->beamWeights[i]->nWeights * sizeof(float)*2);
-
-		for (w = 0; w < dpa->beamWeights[i]->nWeights; w++)
+		for (b = 0; b < dpa->nBeams; b++)
 		{
-			r = DifxParametersfind(pp, r, "BEAMW");
-			if (r < 0) 
-			{
-				deleteDifxParameters(pp);
-				fprintf(stderr, "BEAMW for beam %d antenna %d not found in %s\n", i+1, w+1, fileName);
+			int w;
+			dpa->beamWeights[i][b] = (DifxPhasedArrayWeights*)malloc(sizeof(DifxPhasedArrayWeights));
+			dpa->beamWeights[i][b]->nWeights = D->job->activeDatastreams;
+			dpa->beamWeights[i][b]->Wreim = (float*)malloc(dpa->beamWeights[i][b]->nWeights * sizeof(double)*2);
 
-				return -1;
+			for (w = 0; w < dpa->beamWeights[i][b]->nWeights; w++)
+			{
+				r = DifxParametersfind(pp, r, "BEAMW");
+				if (r < 0) 
+				{
+					deleteDifxParameters(pp);
+					fprintf(stderr, "BEAMW for beam %d antenna %d not found in %s\n", i+1, w+1, fileName);
+
+					return -1;
+				}
+				dpa->beamWeights[i][b]->Wreim[2*w+0] = atof(DifxParametersvalue(pp, r));
+				dpa->beamWeights[i][b]->Wreim[2*w+1] = dpa->beamWeights[i][b]->Wreim[2*w+0]; // TODO
+				r++;
 			}
-			dpa->beamWeights[i]->Wreim[2*w+0] = atof(DifxParametersvalue(pp, r));
-			dpa->beamWeights[i]->Wreim[2*w+1] = dpa->beamWeights[i]->Wreim[2*w+0]; // TODO
-			r++;
 		}
 	}
 

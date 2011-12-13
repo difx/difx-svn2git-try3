@@ -220,7 +220,7 @@ typedef struct
 typedef struct
 {
         int nWeights;           /* Number of weights per beam (should match product antennapols*numantennas) */
-        float *Wreim;           /* Classic Beamformer weights in {re1,im1, re2,im2, ..., reN,imN} layout */
+        double *Wreim;          /* Classic Beamformer weights in {re1,im1, re2,im2, ..., reN,imN} layout */
 } DifxPhasedArrayWeights;
 
 typedef struct
@@ -233,7 +233,7 @@ typedef struct
 	int quantBits;		/* Bits to re-quantise to */
         int nFreqs;             /* Number of frequencies */
         int nBeams;             /* Number of beams */
-        DifxPhasedArrayWeights ** beamWeights;  /* The several (nFreqs*nBeams) structs with weights */
+        DifxPhasedArrayWeights *** beamWeights;  /* [freq][beam] pointing to [datastream] weights */
 } DifxPhasedArray;
 
 extern const char *phasedArrayOutputFormatNames[];
