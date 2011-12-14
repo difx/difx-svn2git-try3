@@ -101,6 +101,8 @@ void DataStream::initialise()
     cfatal << startl << "Datastream " << mpiid << " could not allocate databuffer (length " << bufferbytes + overflowbytes << ") - aborting!!!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
+  tempbuf = 0;
+  tempbytes = 0;
   int mindatabytes = config->getDataBytes(0, streamnum);
   for(int i=1;i<config->getNumConfigs();i++)
   {
@@ -224,7 +226,7 @@ void DataStream::execute()
 
     if(action == DS_PROCESS) //send the appropriate data to the core specified
     {
-      //work out the index from which to send data - if this overlsps with an existing send, call readdata
+      //work out the index from which to send data - if this overlaps with an existing send, call readdata
       //(waits until all sends in the zone have been received, then reads, and calculates the control array values)
       startpos = calculateControlParams(activescan, activesec, activens);
 
@@ -1438,6 +1440,19 @@ void DataStream::diskToMemory(int buffersegment)
     nbytes = readbytes;
   }
 
+  // Copy any saved bytes from the last segment, if a jump in time was detected
+  if (tempbytes>0) {
+    status = vectorCopy_u8(tempbuf, (Ipp8u*)readto, tempbytes);
+    if(status != vecNoErr) {
+      cerror << startl << "Error copying saved bytes from last segment in the DataStream data buffer!!!" << endl;
+      tempbytes = 0;
+    } else {
+      readto += tempbytes;
+      nbytes -= tempbytes;
+      // Don't increment consumed bytes as these were already counted from the last segment
+    }
+  } 
+
   //read some data
   input.read(readto, nbytes);
   consumedbytes += nbytes;
@@ -1452,9 +1467,10 @@ void DataStream::diskToMemory(int buffersegment)
     bufferinfo[buffersegment].validbytes = datamuxer->multiplex((u8*)readto);
   }
   else {
-    bufferinfo[buffersegment].validbytes = input.gcount();
+    bufferinfo[buffersegment].validbytes = input.gcount()+tempbytes;
   }
   bufferinfo[buffersegment].readto = true;
+  tempbytes = 0;
   synccatchbytes = testForSync(bufferinfo[buffersegment].configindex, buffersegment);
   if(synccatchbytes > 0) {
     if(datamuxer)
@@ -1481,6 +1497,10 @@ void DataStream::diskToMemory(int buffersegment)
     else
       keepreading = false;
   }
+
+  // Go through buffer checking for large data jumps past the end of the buffer.
+  // This does *not* correct for invalid data or dropped Mark5/VDIF frames. Does nothing for LBADR
+  checkData(buffersegment);
 
   previoussegment  = (buffersegment + numdatasegments - 1 )% numdatasegments;
   if(bufferinfo[previoussegment].readto && bufferinfo[previoussegment].validbytes < bufferinfo[previoussegment].sendbytes && bufferinfo[previoussegment].configindex == bufferinfo[buffersegment].configindex)
@@ -1511,9 +1531,16 @@ void DataStream::diskToMemory(int buffersegment)
     dataremaining = false;
   }
 }
+
 int DataStream::testForSync(int configindex, int buffersegment)
 {
   //can't test for sync with LBA files
+  return 0;
+}
+
+int DataStream::checkData(int buffersegment)
+{
+  //No need to test 
   return 0;
 }
 

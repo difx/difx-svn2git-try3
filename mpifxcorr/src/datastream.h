@@ -82,6 +82,8 @@ public:
   */
   inline int getEstimatedBytes() const { return estimatedbytes; }
 
+#define BUFOFFSET_T int   // Should eventually be changed to uint64_t to avoid 2 GB limit
+
 protected:
   /// Structure which maintains all information necessary for a segment of the databuffer, including the configuration parameters for
   /// that time interval and the MPI requests for the non-blocking communications that originated in this segment
@@ -90,7 +92,7 @@ protected:
     int scanseconds;
     int scanns;
     int configindex;
-    int validbytes;
+    BUFOFFSET_T validbytes;   // CJP 2 GB buffer limit - should be uint64_t, unless -1 is used as a flag somewhere
     int sendbytes;
     int controllength;
     int bytesbetweenintegerns;
@@ -106,7 +108,12 @@ protected:
     MPI_Request * datarequests;
     MPI_Request * controlrequests;
     s32 ** controlbuffer;
-  } readinfo;
+    // controlbuffer is an array of 32bit integers - one array for each "sends" worth of data in each data segment
+    // controlbuffer[][0] is scan ID
+    // controlbuffer[][1] is time of first sample in seconds
+    // controlbuffer[][2] is time of first sample in nanoseconds
+    // controlbuffer[][3..] is a packed bitfield of flags, one per "fft" with 30 (FLAGS_PER_INT) bits used per element
+} readinfo;
 
  /** 
   * Launches a new reading thread, that will read from a file on disk and populate the databuffer as fast as possible
@@ -241,6 +248,12 @@ protected:
   */
   virtual int testForSync(int configindex, int buffersegment);
 
+  /** 
+   * Checks a data stream is valid 
+   * @param buffersegment The segment of the data buffer that will be checked
+   */
+  virtual int checkData(int buffersegment);
+
  /**
   * Launches the read thread (whether from file or network) and waits until it has initialised itself
   */
@@ -272,7 +285,8 @@ protected:
   double a, b, c;
   long long consumedbytes, lastconsumedbytes;
   bool readthreadstarted, keepreading, readfromfile, tcp, isnewfile;
-  u8 * databuffer;
+  u8 * databuffer, *tempbuf;
+  BUFOFFSET_T tempbytes;
   pthread_t readerthread;
   pthread_cond_t readcond;
   pthread_cond_t initcond;
