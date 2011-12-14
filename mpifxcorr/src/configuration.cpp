@@ -31,8 +31,8 @@
 
 int Configuration::MONITOR_TCP_WINDOWBYTES;
 
-Configuration::Configuration(const char * configfile, int id)
-  : mpiid(id), consistencyok(true)
+Configuration::Configuration(const char * configfile, int id, double restartsec)
+  : mpiid(id), consistencyok(true), restartseconds(restartsec)
 {
   string configfilestring = configfile;
   size_t basestart = configfilestring.find_last_of('/');
@@ -160,6 +160,7 @@ Configuration::Configuration(const char * configfile, int id)
   delete input;
   //work out which frequencies are used in each config, and the minimum #channels
   freqdata freq;
+  int oppositefreqindex;
   for(int i=0;i<numconfigs;i++)
   {
     freq = freqtable[getBFreqIndex(i,0,0)];
@@ -176,6 +177,16 @@ Configuration::Configuration(const char * configfile, int id)
         configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)] = true;
         if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
           configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
+      }
+    }
+  }
+  //set any opposite sideband freqs to be "used", to ensure their autocorrelations are not lost
+  for(int i=0;i<numconfigs;i++) {
+    for(int j=0;j<freqtablelength;j++) {
+      if(configs[i].frequsedbybaseline[j]) {
+        oppositefreqindex = getOppositeSidebandFreqIndex(j);
+        if(oppositefreqindex >= 0)
+          configs[i].frequsedbybaseline[oppositefreqindex] = true;
       }
     }
   }
@@ -295,7 +306,7 @@ Configuration::~Configuration()
   delete [] numprocessthreads;
 }
 
-int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int numthreads, char *formatname)
+int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int numthreads, char *formatname) const
 {
   int fanout=1, mbps;
 
@@ -369,7 +380,7 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
   return fanout;
 }
 
-int Configuration::getFramePayloadBytes(int configindex, int configdatastreamindex)
+int Configuration::getFramePayloadBytes(int configindex, int configdatastreamindex) const
 {
   int payloadsize;
   int framebytes = getFrameBytes(configindex, configdatastreamindex);
@@ -395,7 +406,7 @@ int Configuration::getFramePayloadBytes(int configindex, int configdatastreamind
   return payloadsize;
 }
 
-void Configuration::getFrameInc(int configindex, int configdatastreamindex, int &sec, int &ns)
+void Configuration::getFrameInc(int configindex, int configdatastreamindex, int &sec, int &ns) const
 {
   int nchan, qb, decimationfactor;
   int payloadsize;
@@ -413,7 +424,7 @@ void Configuration::getFrameInc(int configindex, int configdatastreamindex, int 
   ns = int(1.0e9*(seconds - sec));
 }
 
-int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex)
+int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex) const
 {
   int nchan, qb, decimationfactor;
   int payloadsize;
@@ -429,7 +440,7 @@ int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex
   return int(samplerate*nchan*qb*decimationfactor/(8*payloadsize) + 0.5); // Works for complex data
 }
 
-int Configuration::getMaxDataBytes()
+int Configuration::getMaxDataBytes() const
 {
   int length;
   int maxlength = getDataBytes(0,0);
@@ -447,7 +458,7 @@ int Configuration::getMaxDataBytes()
   return maxlength;
 }
 
-int Configuration::getMaxDataBytes(int datastreamindex)
+int Configuration::getMaxDataBytes(int datastreamindex) const
 {
   int length;
   int maxlength = getDataBytes(0,datastreamindex);
@@ -462,7 +473,7 @@ int Configuration::getMaxDataBytes(int datastreamindex)
   return maxlength;
 }
 
-int Configuration::getMaxBlocksPerSend()
+int Configuration::getMaxBlocksPerSend() const
 {
   int length;
   int maxlength = configs[0].blockspersend;
@@ -477,7 +488,7 @@ int Configuration::getMaxBlocksPerSend()
   return maxlength;
 }
 
-int Configuration::getMaxNumRecordedFreqs()
+int Configuration::getMaxNumRecordedFreqs() const
 {
   int currentnumfreqs, maxnumfreqs = 0;
   
@@ -491,7 +502,7 @@ int Configuration::getMaxNumRecordedFreqs()
   return maxnumfreqs;
 }
 
-int Configuration::getMaxNumRecordedFreqs(int configindex)
+int Configuration::getMaxNumRecordedFreqs(int configindex) const
 {
   int maxnumfreqs = 0;
   
@@ -504,7 +515,7 @@ int Configuration::getMaxNumRecordedFreqs(int configindex)
   return maxnumfreqs;
 }
 
-int Configuration::getMaxNumFreqDatastreamIndex(int configindex)
+int Configuration::getMaxNumFreqDatastreamIndex(int configindex) const
 {
   int maxindex = 0;
   int maxnumfreqs = datastreamtable[configs[configindex].datastreamindices[0]].numrecordedfreqs;
@@ -521,7 +532,7 @@ int Configuration::getMaxNumFreqDatastreamIndex(int configindex)
   return maxindex;
 }
 
-int Configuration::getMaxPhaseCentres(int configindex)
+int Configuration::getMaxPhaseCentres(int configindex) const
 {
   int maxphasecentres = 1;
   for(int i=0;i<model->getNumScans();i++) {
@@ -533,7 +544,7 @@ int Configuration::getMaxPhaseCentres(int configindex)
   return maxphasecentres;
 }
 
-int Configuration::getOppositeSidebandFreqIndex(int freqindex)
+int Configuration::getOppositeSidebandFreqIndex(int freqindex) const
 {
   int toreturn = -1;
   freqdata f1 = freqtable[freqindex];
@@ -553,9 +564,9 @@ int Configuration::getOppositeSidebandFreqIndex(int freqindex)
   return toreturn;
 }
 
-int Configuration::getDataBytes(int configindex, int datastreamindex)
+int Configuration::getDataBytes(int configindex, int datastreamindex) const
 {
-  int validlength, payloadbytes, framebytes;
+  int validlength, payloadbytes, framebytes, numframes;
   const datastreamdata &currentds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
   const freqdata &arecordedfreq = freqtable[currentds.recordedfreqtableindices[0]]; 
   validlength = (arecordedfreq.decimationfactor*configs[configindex].blockspersend*currentds.numrecordedbands*2*currentds.numbits*arecordedfreq.numchannels)/8;
@@ -570,14 +581,18 @@ int Configuration::getDataBytes(int configindex, int datastreamindex)
       payloadbytes *= 2;
       framebytes = payloadbytes + VDIF_HEADER_BYTES;
     }
-    validlength = (validlength/payloadbytes + 2)*framebytes;
-
+    numframes = (validlength/payloadbytes + 2);
+    if(currentds.format == MARK5B) //be cautious in case the frame granularity is 2 (easier than checking)
+    {
+      numframes += numframes%2;
+    }
+    validlength = numframes*framebytes;
     //cout << "About to set databytes to " << validlength << " since currentds.framebytes is " << currentds.framebytes << " and blockspersend is " << configs[configindex].blockspersend << endl;
   }
   return validlength;
 }
 
-int Configuration::getMaxProducts(int configindex)
+int Configuration::getMaxProducts(int configindex) const
 {
   baselinedata current;
   int maxproducts = 0;
@@ -593,7 +608,7 @@ int Configuration::getMaxProducts(int configindex)
   return maxproducts;
 }
 
-int Configuration::getMaxProducts()
+int Configuration::getMaxProducts() const
 {
   int maxproducts = 0;
 
@@ -606,7 +621,7 @@ int Configuration::getMaxProducts()
   return maxproducts;
 }
 
-int Configuration::getDMatchingBand(int configindex, int datastreamindex, int bandindex)
+int Configuration::getDMatchingBand(int configindex, int datastreamindex, int bandindex) const
 {
   datastreamdata ds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
   if(bandindex >= ds.numrecordedbands) {
@@ -627,7 +642,7 @@ int Configuration::getDMatchingBand(int configindex, int datastreamindex, int ba
   return -1;
 }
 
-int Configuration::getCNumProcessThreads(int corenum)
+int Configuration::getCNumProcessThreads(int corenum) const
 {
   if(numcoreconfs == 0)
     return 1;
@@ -637,7 +652,7 @@ int Configuration::getCNumProcessThreads(int corenum)
   return numprocessthreads[numcoreconfs-1];
 }
 
-bool Configuration::stationUsed(int telescopeindex)
+bool Configuration::stationUsed(int telescopeindex) const
 {
   bool toreturn = false;
 
@@ -695,6 +710,8 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
     case VLBN:
     case MARK5B:
     case VDIF:
+    case K5VSSP:
+    case K5VSSP32:
     case INTERLACEDVDIF:
       framesamples = getFramePayloadBytes(configindex, datastreamindex)*8/(getDNumBits(configindex, datastreamindex)*getDNumRecordedBands(configindex, datastreamindex)*streamdecimationfactor);
       framebytes = getFrameBytes(configindex, datastreamindex);
@@ -909,6 +926,11 @@ void Configuration::processCommon(ifstream * input)
   getinputline(input, &line, "START SECONDS");
   startseconds = atoi(line.c_str());
   startns = (int)((atof(line.c_str()) - ((double)startseconds))*1000000000.0 + 0.5);
+  if(restartseconds > 0) {
+    startseconds = (int)(atof(line.c_str()) + restartseconds);
+    startns = (int)((atof(line.c_str()) + restartseconds - ((double)startseconds))*1000000000.0 + 0.5);
+    executeseconds -= int(restartseconds);
+  }
   getinputline(input, &line, "ACTIVE DATASTREAMS");
   numdatastreams = atoi(line.c_str());
   getinputline(input, &line, "ACTIVE BASELINES");
@@ -1080,7 +1102,11 @@ bool Configuration::processDatastreamTable(ifstream * input)
     else if(line == "LBA16BIT")
       datastreamtable[i].format = LBA16BIT;
     else if(line == "K5")
-      datastreamtable[i].format = K5;
+      datastreamtable[i].format = K5VSSP;
+    else if(line == "K5VSSP")
+      datastreamtable[i].format = K5VSSP;
+    else if(line == "K5VSSP32")
+      datastreamtable[i].format = K5VSSP32;
     else if(line == "MKIV")
       datastreamtable[i].format = MKIV;
     else if(line == "VLBA")
@@ -2753,7 +2779,8 @@ bool Configuration::fillHeaderData(ifstream * input, int & baselinenum, int & mj
   return true;
 }
 
-void Configuration::makeFortranString(string line, int length, char * destination)
+/* FIXME: should not be a member function? */
+void Configuration::makeFortranString(string line, int length, char * destination) const
 {
   int linelength = line.length();
   
@@ -2770,7 +2797,7 @@ void Configuration::makeFortranString(string line, int length, char * destinatio
   }
 }
 
-void Configuration::getinputkeyval(ifstream * input, std::string * key, std::string * val)
+void Configuration::getinputkeyval(ifstream * input, std::string * key, std::string * val) const
 {
   if(input->eof())
     cerror << startl << "Trying to read past the end of file!" << endl;
@@ -2787,7 +2814,7 @@ void Configuration::getinputkeyval(ifstream * input, std::string * key, std::str
   *key = key->substr(0, key->find_first_of(':'));
 }
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader)
+void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader) const
 {
   if(input->eof())
     cerror << startl << "Trying to read past the end of file!" << endl;
@@ -2805,21 +2832,21 @@ void Configuration::getinputline(ifstream * input, std::string * line, std::stri
   *line = line->substr(keylength);
 }
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, int intval)
+void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, int intval) const
 {
   char buffer[MAX_KEY_LENGTH+1];
   sprintf(buffer, "%s%i", startofheader.c_str(), intval);
   getinputline(input, line, string(buffer));
 }
 
-void Configuration::getMJD(int & d, int & s, int year, int month, int day, int hour, int minute, int second)
+void Configuration::getMJD(int & d, int & s, int year, int month, int day, int hour, int minute, int second) const
 {
   d = year*367 - int(7*(year + int((month + 9)/12))/4) + int(275*month/9) + day - 678987;
 
   s = 3600*hour + 60*minute + second;
 }
 
-void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day)
+void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day) const
 {
   int j = mjd + 32044 + 2400001;
   int g = j / 146097;
