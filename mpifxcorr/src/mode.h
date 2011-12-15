@@ -59,7 +59,7 @@ public:
   * @param recordedfreqclkoffs The time offsets in microseconds to be applied post-F for each of the frequencies
   * @param recordedfreqlooffs The LO offsets in Hz for each recorded frequency
   * @param nrecordedbands The total number of subbands recorded
-  * @param nzoombands The number of subbands to be taken from withing the recorded bands - can be zero
+  * @param nzoombands The number of subbands to be taken from within the recorded bands - can be zero
   * @param nbits The number of bits per sample
   * @param sampling The bit sampling type (real/complex)
   * @param unpacksamp The number of samples to unpack in one hit
@@ -137,20 +137,20 @@ public:
   * @param crosspol Whether to return the crosspolarisation autocorrelation for this band
   * @param outputband The band index
   */
-  inline cf32* getAutocorrelation(bool crosspol, int outputband) { return autocorrelations[(crosspol)?1:0][outputband]; }
+  inline cf32* getAutocorrelation(bool crosspol, int outputband) const { return autocorrelations[(crosspol)?1:0][outputband]; }
 
  /**
   * Grabs the pointer to a kurtosis array
   * @param outputband The band index
   */
-  inline f32* getKurtosis(int outputband) { return sk[outputband]; }
+  inline f32* getKurtosis(int outputband) const { return sk[outputband]; }
 
  /**
   * Grabs the weight for a given band
   * @param crosspol Whether to return the crosspolarisation autocorrelation for this band
   * @param outputband The band index
   */
-  inline f32 getWeight(bool crosspol, int outputband) { return weights[(crosspol)?1:0][outputband]; }
+  inline f32 getWeight(bool crosspol, int outputband) const { return weights[(crosspol)?1:0][outputband]; }
 
  /**
   * Gets the expected decorrelation ("van Vleck correction" ) for a given number of bits.

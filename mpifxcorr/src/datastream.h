@@ -61,7 +61,7 @@ public:
   * @param bufferfactor The size of the buffer, in terms of number of "max send sizes" - the biggest "blocks per send*numchannels" from the possible configurations
   * @param numsegments The number of separate segments this buffer will be divided into
   */
-  DataStream(Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
+  DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
 
   virtual ~DataStream();
 
@@ -158,7 +158,7 @@ protected:
   int streamnum, atsegment, readscan, readseconds, corrstartday, corrstartseconds, readbytes, bufferbytes, readnanoseconds, intclockseconds, estimatedbytes;
   bool dataremaining;
   readinfo * bufferinfo;
-  Configuration * config;
+  const Configuration * config;
   Model * model;
   string ** datafilenames;
   ifstream input;
@@ -258,12 +258,19 @@ protected:
   */
   virtual void waitForBuffer(int buffersegment);
 
+ /**
+  * Sends some diagnostics info using difxmessage
+  */
+  void sendDiagnostics();
+
+  //local variables
   string stationname;
-  int mpiid, filestartday, filestartseconds, numcores, numsent, delayincms, lastnearestindex, lastscan, lastvalidsegment, totaldelays, maxsendspersegment, waitsegment, portnumber, tcpwindowsizebytes, socketnumber;
+  int mpiid, filestartday, filestartseconds, numcores, numsent, delayincms, lastnearestindex, lastscan, lastvalidsegment, totaldelays, maxsendspersegment, waitsegment, portnumber, tcpwindowsizebytes, socketnumber, fullbuffersegments;
   int * coreids;
   int * filesread;
   int * confignumfiles;
   double a, b, c;
+  long long consumedbytes, lastconsumedbytes;
   bool readthreadstarted, keepreading, readfromfile, tcp, isnewfile;
   u8 * databuffer;
   pthread_t readerthread;
