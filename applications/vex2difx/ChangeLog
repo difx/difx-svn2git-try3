@@ -4,6 +4,10 @@ Post DiFX 2.0.1
 * Bug fix: when sorting events, round to nearest 0.1 second
 * Bug fix: order of operations in computing zoom channels: don't overflow integers
 * Change parameters to be better optimized for larger bandwidths (at marginal, if any, impact to small bandwidths)
+* Reimplement tweak integration time
+* Fix zoom bands when statting with different bandwidths.  WFB gets a beer for this one!
+* Start implementation of "global zoom bands" which can either be referenced
+from an ANTENNA or a SETUP
 
 Version 2.0.1
 ~~~~~~~~~~~~~
@@ -61,7 +65,7 @@ Version 2.0
 * Fix convergence problem when there is no time gap between modules
 * Force v2d file to start with a letter
 * oms2v2d: warn if both .skd and .vex are found; default to .vex
-* Source names were confused: no distiction was made between the vex "def" name and the source name.  Fixed.
+* Source names were confused: no distinction was made between the vex "def" name and the source name.  Fixed.
 * Check for sources with illegal names
 * Improved function/variable naming to indicate explicitly where some def names are used
 * Vex loading error messages are slightly more useful

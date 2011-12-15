@@ -38,6 +38,9 @@
 #include "../vex/vex.h"
 #include "../vex/vex_parse.h"
 
+// maximum number of defined IFs
+#define MAX_IF 4
+
 class Tracks
 {
 public:
@@ -68,7 +71,7 @@ static void fixOhs(string &str)
 {
 	unsigned int i;
 
-	for(i = 0; i < str.length(); i++)
+	for(i = 0; i < str.length(); ++i)
 	{
 		if(str[i] == '-' || str[i] == '+')
 		{
@@ -143,9 +146,13 @@ static int getRecordChannel(const string &antName, const string &chanName, const
 	{
 		return n;
 	}
-	else if (F.format.substr(0,4) == "VDIF" || F.format.substr(0,14) == "INTERLACEDVDIF")
+	else if(F.format.substr(0, 4) == "VDIF" || F.format.substr(0, 14) == "INTERLACEDVDIF")
 	{
 		return n;
+	}
+	else if(F.format == "NONE")
+	{
+		return 0;
 	}
 	else
 	{
@@ -168,11 +175,11 @@ double vexDate(char *value)
 	double mjd;
 	int n = 0;
 	
-	for(int i = 0; value[i]; i++)
+	for(int i = 0; value[i]; ++i)
 	{
 		if(isalpha(value[i]))
 		{
-			n++;
+			++n;
 		}
 	}
 
@@ -198,7 +205,7 @@ double vexDate(char *value)
 		double seconds = 0.0;
 		double x;
 
-		for(i = 0; value[i]; i++)
+		for(i = 0; value[i]; ++i)
 		{
 			if(isalpha(value[i]))
 			{
@@ -414,7 +421,7 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 
 			// As a last resort, look for unlinked clock blocks
 #warning: "FIXME: note: the following should eventually be removed once proper linking in vex files is in place"
-			if(A->clocks.size() == 0 && block)
+			if(A->clocks.empty() && block)
 			{
 				defs = ((struct block *)block->ptr)->items;
 				if(defs)
@@ -536,7 +543,7 @@ static int getSources(VexData *V, Vex *v, const CorrParams &params)
 		{
 			cerr << "Source name " << src << " is longer than " << 
 			VexSource::MAX_SRCNAME_LENGTH << "  characters!" << endl;
-			nWarn++;
+			++nWarn;
 		}
 
 		for(p = (char *)get_source_lowl(src, T_SOURCE_NAME, v);
@@ -548,7 +555,7 @@ static int getSources(VexData *V, Vex *v, const CorrParams &params)
 			{
 				cerr << "Source name " << src << " is longer than " <<
 				VexSource::MAX_SRCNAME_LENGTH << "  characters!" << endl;
-				nWarn++;
+				++nWarn;
 			}
 		}
 
@@ -624,14 +631,14 @@ static VexInterval adjustTimeRange(map<string, double> &antStart, map<string, do
 		return VexInterval(1, 0);
 	}
 
-	for(it = antStart.begin(); it != antStart.end(); it++)
+	for(it = antStart.begin(); it != antStart.end(); ++it)
 	{
 		start.push_back(it->second);
 	}
 	start.sort();
 	// Now the start times are sorted chronologically
 
-	for(it = antStop.begin(); it != antStop.end(); it++)
+	for(it = antStop.begin(); it != antStop.end(); ++it)
 	{
 		stop.push_back(it->second);
 	}
@@ -642,7 +649,7 @@ static VexInterval adjustTimeRange(map<string, double> &antStart, map<string, do
 	// If these are in the wrong order (i.e., no such interval exists)
 	// Then these will form an acausal interval which will be caught by
 	// the caller.
-	for(unsigned int i = 0; i < minSubarraySize-1; i++)
+	for(unsigned int i = 0; i < minSubarraySize-1; ++i)
 	{
 		start.pop_front();
 		stop.pop_back();
@@ -651,7 +658,7 @@ static VexInterval adjustTimeRange(map<string, double> &antStart, map<string, do
 	mjdStop = stop.back();
 
 	// Adjust start times where needed
-	for(it = antStart.begin(); it != antStart.end(); it++)
+	for(it = antStart.begin(); it != antStart.end(); ++it)
 	{
 		if(it->second < mjdStart)
 		{
@@ -659,7 +666,7 @@ static VexInterval adjustTimeRange(map<string, double> &antStart, map<string, do
 		}
 	}
 
-	for(it = antStop.begin(); it != antStop.end(); it++)
+	for(it = antStop.begin(); it != antStop.end(); ++it)
 	{
 		if(it->second > mjdStop)
 		{
@@ -693,7 +700,6 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 	    L = (Llist *)get_scan_next(&scanId))
 	{
 		map<string, double> antStart, antStop;
-		map<string, double>::const_iterator it;
 
 		p = get_scan_start(L);
 		vex_field(T_START, p, 1, &link, &name, &value, &units);
@@ -782,7 +788,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 
 		if(params.mjdStart > stopScan || params.mjdStop < startScan)
 		{
-			nScanSkip++;
+			++nScanSkip;
 			continue;
 		}
 
@@ -809,11 +815,11 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 		// Add to event list
 		V->addEvent(S->mjdStart, VexEvent::SCAN_START, scanId, scanId);
 		V->addEvent(S->mjdStop,  VexEvent::SCAN_STOP,  scanId, scanId);
-		for(it = antStart.begin(); it != antStart.end(); it++)
+		for(map<string, double>::const_iterator it = antStart.begin(); it != antStart.end(); ++it)
 		{
 			V->addEvent(max(it->second, startScan), VexEvent::ANT_SCAN_START, it->first, scanId);
 		}
-		for(it = antStop.begin(); it != antStop.end(); it++)
+		for(map<string, double>::const_iterator it = antStop.begin(); it != antStop.end(); ++it)
 		{
 			V->addEvent(min(it->second, stopScan), VexEvent::ANT_SCAN_STOP, it->first, scanId);
 		}
@@ -830,7 +836,10 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 static int getModes(VexData *V, Vex *v, const CorrParams &params)
 {
 	VexMode *M;
-	void *p;
+	void *p, *p2;
+    // p2 will hold pointers to the special comments attached to if_def; max of 4
+    void *p2array[MAX_IF];
+    int p2count;
 	char *modeDefName;
 	int link, name;
 	char *value, *units;
@@ -863,7 +872,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 		M->defName = modeDefName;
 
 		// get FREQ info
-		for(unsigned int a = 0; a < V->nAntenna(); a++)
+		for(unsigned int a = 0; a < V->nAntenna(); ++a)
 		{
 			const string &antName = V->getAntenna(a)->defName;
 			string antName2 = V->getAntenna(a)->defName;
@@ -882,7 +891,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 			antennaSetup = params.getAntennaSetup(antName2);
 			if(antennaSetup)
 			{
-				if(antennaSetup->format.size() > 0)
+				if(!antennaSetup->format.empty())
 				{
 					cout << "Setting antenna format to " << antennaSetup->format << " for antenna " << antName << endl;
 				}
@@ -900,6 +909,25 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 
 			M->sampRate = sampRate;
 
+            // init array to all zeroes
+            for( p2count = 0; p2count < MAX_IF; p2count++ )
+                p2array[p2count] = 0;
+			// read all comment fields into array for later processing
+			// NOTE - need to do it this way as the *_lowl_* functions use static vars and we
+			// we can't run this where we actually process the comments as that would mess up
+			// the IF_DEF loop
+			// TODO we assign the comments below to vif.comment; should check if there is a way
+			// to do so here instead of going through this temp array
+            p2count = 0;
+			for(p = get_all_lowl(antName.c_str(), modeDefName, T_COMMENT_TRAILING, B_IF, v);
+			    p;
+			    p = get_all_lowl_next())
+			{
+			    p2array[p2count++] = p;
+            }
+
+            // the collected comments and ifdef fields will always line up, so just run a count
+            p2count = 0;
 			// Derive IF map
 			for(p = get_all_lowl(antName.c_str(), modeDefName, T_IF_DEF, B_IF, v);
 			    p;
@@ -948,8 +976,43 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 				else
 				{
 					cerr << "Warning: Unsupported pulse cal interval of " << (phaseCal/1000000.0) << " MHz requested for antenna " << antName << "." << endl;
-					nWarn++;
+					++nWarn;
 					vif.phaseCalIntervalMHz = static_cast<int>((phaseCal + 0.5)/1000000.0);
+				}
+
+                p2 = p2array[p2count++];
+				if( !p2 )
+				{
+					// check if this is a VLBA antenna; these require the comments for proper
+					// operation, so exit in that case
+					if( strcmp(antName.c_str(), "Sc") == 0 ||
+						strcmp(antName.c_str(), "Hn") == 0 ||
+						strcmp(antName.c_str(), "Nl") == 0 ||
+						strcmp(antName.c_str(), "Fd") == 0 ||
+						strcmp(antName.c_str(), "La") == 0 ||
+						strcmp(antName.c_str(), "Pt") == 0 ||
+						strcmp(antName.c_str(), "Kp") == 0 ||
+						strcmp(antName.c_str(), "Ov") == 0 ||
+						strcmp(antName.c_str(), "Br") == 0 ||
+						strcmp(antName.c_str(), "Mk") == 0 )
+					{
+						static bool first = true;
+						if(first)
+						{
+							cerr << "Warning: VLBA antenna detected, but no comment for if_def; can't do switching" << endl;
+							first = false;
+						}
+					}
+				}
+				// carry comment forward as it might contain information about IF
+				vex_field(T_COMMENT, p2, 1, &link, &name, &value, &units);
+				if(value)
+				{
+					vif.comment = value;
+				} 
+				else
+				{
+					vif.comment = "\0";
 				}
 			}
 
@@ -969,7 +1032,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 			// Get datastream assignments and formats
 
 			// Is it a Mark5 mode?
-			if(F.format == "")
+			if(F.format == "") // Enter here if no format has been specified in the .v2d file
 			{
 				p = get_all_lowl(antName.c_str(), modeDefName, T_TRACK_FRAME_FORMAT, B_TRACKS, v);
 				if(p)
@@ -984,12 +1047,17 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 					{
 						F.format = "MARK5B";
 					}
+					else if(F.format == "NONE")
+					{
+						F.format = "NONE";
+					}
 				}
 				else
 				{
 					cerr << "Unable to determine data format for antenna " << antName << endl;
 
-					exit(EXIT_FAILURE);
+					//exit(EXIT_FAILURE);
+					F.format = "NONE";
 				}
 			}
 
@@ -1006,13 +1074,13 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 					vex_field(T_FANOUT_DEF, p, 4, &link, &name, &value, &units);
 					sscanf(value, "%d", &dasNum);
 
-					for(int k = 5; k < 9; k++)
+					for(int k = 5; k < 9; ++k)
 					{
 						if(vex_field(T_FANOUT_DEF, p, k, &link, &name, &value, &units) < 0)
 						{
 							break;
 						}
-						nTrack++;
+						++nTrack;
 						sscanf(value, "%d", &chanNum);
 						chanNum += 32*(dasNum-1);
 						if(sign)
@@ -1065,8 +1133,6 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 			p = get_all_lowl(antName.c_str(), modeDefName, T_S2_RECORDING_MODE, B_TRACKS, v);
 			if(p)
 			{
-				size_t f, g;
-
 				vex_field(T_S2_RECORDING_MODE, p, 1, &link, &name, &value, &units);
 				string s2mode(value);
 				if(F.format == "")
@@ -1076,10 +1142,10 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 
 				if (s2mode != "none")
 				{
-					f = s2mode.find_last_of("x");
-					g = s2mode.find_last_of("-");
+					size_t f = s2mode.find_last_of("x");
+					size_t g = s2mode.find_last_of("-");
 
-					if(f < 0 || g < 0 || f > g)
+					if(f == string::npos || g == string::npos || f > g)
 					{
 						cerr << "Error: Antenna=" << antName << " malformed S2 mode : " << string(value) << endl;
 					
@@ -1108,7 +1174,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 				vex_field(T_PHASE_CAL_DETECT, p, 1, &link, &name, &value, &units);
 				vector<int> &Q = pcalMap[string(value)];
 				
-				for(int q = 2; ; q++)
+				for(int q = 2; ; ++q)
 				{
 					int y = vex_field(T_PHASE_CAL_DETECT, p, q, &link, &name, &value, &units);
 					if(y < 0)
@@ -1119,7 +1185,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 					if(v == 0)
 					{
 						// zero value implies next value indicates state counting
-						q++;
+						++q;
 					}
 					else
 					{
@@ -1186,7 +1252,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 					}
 				}
 
-				i++;
+				++i;
 			}
 
 			if(i != F.nRecordChan)
@@ -1202,7 +1268,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 			}
 		} // End of antenna loop
 
-		for(vector<VexSubband>::iterator it = M->subbands.begin(); it != M->subbands.end(); it++)
+		for(vector<VexSubband>::iterator it = M->subbands.begin(); it != M->subbands.end(); ++it)
 		{
 			int overSamp = static_cast<int>(M->sampRate/(2.0*it->bandwidth) + 0.001);
 			if(params.overSamp > 0)
@@ -1212,7 +1278,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 					cerr << "Warning: Mode=" << M->defName << " subband=" << M->overSamp.size() << 
 						": requested oversample factor " << params.overSamp << 
 						" is greater than the observed oversample factor " << overSamp << endl;
-					nWarn++;
+					++nWarn;
 				}
 				overSamp = params.overSamp;
 			}
@@ -1341,14 +1407,12 @@ static int getEOPs(VexData *V, Vex *v, const CorrParams &params)
 	llist *block;
 	Llist *defs;
 	Llist *lowls, *refs;
-	int statement;
 	int link, name;
 	char *value, *units;
 	void *p;
 	dvalue *r;
 	double tai_utc, ut1_utc, x_wobble, y_wobble;
-	int nEop;
-	double refEpoch, interval;
+	double interval;
 	VexEOP *E;
 	int N = 0;
 	int nWarn = 0;
@@ -1361,7 +1425,12 @@ static int getEOPs(VexData *V, Vex *v, const CorrParams &params)
 	   	    defs;
 	    	    defs=defs->next)
 		{
+			int nEop;
+			int statement;
+			double refEpoch;
+			
 			statement = ((Lowl *)defs->ptr)->statement;
+
 			if(statement == T_COMMENT || statement == T_COMMENT_TRAILING)
 			{
 				continue;
@@ -1390,7 +1459,7 @@ static int getEOPs(VexData *V, Vex *v, const CorrParams &params)
 			r = (struct dvalue *)(((Lowl *)lowls->ptr)->item);
 			fvex_double(&r->value, &r->units, &interval);
 
-			for(int i = 0; i < nEop; i++)
+			for(int i = 0; i < nEop; ++i)
 			{	
 				lowls = find_lowl(refs, T_UT1_UTC);
 				vex_field(T_UT1_UTC, ((Lowl *)lowls->ptr)->item, i+1, &link, &name, &value, &units);
@@ -1414,18 +1483,18 @@ static int getEOPs(VexData *V, Vex *v, const CorrParams &params)
 		}
 	}
 
-	if(params.eops.size() > 0)
+	if(!params.eops.empty())
 	{
 		if(N > 0)
 		{
 			cerr << "Warning: Mixing EOP values from vex and v2d files.  Your mileage may vary!" << endl;
-			nWarn++;
+			++nWarn;
 		}
-		for(vector<VexEOP>::const_iterator e = params.eops.begin(); e != params.eops.end(); e++)
+		for(vector<VexEOP>::const_iterator e = params.eops.begin(); e != params.eops.end(); ++e)
 		{
 			E = V->newEOP();
 			*E = *e;
-			N++;
+			++N;
 		}
 	}
 
@@ -1493,7 +1562,7 @@ static int getExper(VexData *V, Vex *v, const CorrParams &params)
 }
 
 // Note: this is approximate, assumes all polarizations matched and no IFs being selected out
-void calculateScanSizes(VexData *V, const CorrParams &P)
+static void calculateScanSizes(VexData *V, const CorrParams &P)
 {
 	int nScan, nSubband, nBaseline;
 	const VexScan *scan;
@@ -1502,7 +1571,7 @@ void calculateScanSizes(VexData *V, const CorrParams &P)
 
 	nScan = V->nScan();
 
-	for(int s = 0; s < nScan; s++)
+	for(int s = 0; s < nScan; ++s)
 	{
 		scan = V->getScan(s);
 		mode = V->getModeByDefName(scan->modeDefName);

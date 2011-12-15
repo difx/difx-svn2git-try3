@@ -46,7 +46,7 @@
 
 const string version(VERSION);
 const string program("vex2difx");
-const string verdate("20110616");
+const string verdate("20111212");
 const string author("Walter Brisken/Adam Deller");
 
 const int defaultMaxNSBetweenACAvg = 2000000;	// 2ms, good default for use with transient detection
@@ -137,7 +137,7 @@ static void genJobGroups(vector<VexJobGroup> &JGs, const VexData *V, const CorrP
 			// Skip any scans that don't overlap with .v2d mjdStart and mjdStop
 			if(P->overlap(*scan2) <= 0.0)
 			{
-				it++;
+				++it;
 				continue;
 			}
 
@@ -153,13 +153,13 @@ static void genJobGroups(vector<VexJobGroup> &JGs, const VexData *V, const CorrP
 			}
 			else
 			{	
-				it++;
+				++it;
 			}
 		}
 	}
 
 	const list<VexEvent> *events = V->getEvents();
-	for(vector<VexJobGroup>::iterator jg = JGs.begin(); jg != JGs.end(); jg++)
+	for(vector<VexJobGroup>::iterator jg = JGs.begin(); jg != JGs.end(); ++jg)
 	{
 		jg->genEvents(*events);
 		jg->logicalAnd(*P);		// possibly shrink job group to requested range
@@ -190,11 +190,11 @@ static int nGap(const list<MediaChange> &m, double mjd)
 	list<MediaChange>::const_iterator it;
 	int n = 0;
 
-	for(it = m.begin(); it != m.end(); it++)
+	for(it = m.begin(); it != m.end(); ++it)
 	{
 		if(mjd >= it->mjdStart && mjd <= it->mjdStop)
 		{
-			n++;
+			++n;
 		}
 	}
 
@@ -225,7 +225,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 	nEvent = JG.events.size();
 
 	// first initialize recordStop and usage
-	for(e = JG.events.begin(); e != JG.events.end(); e++)
+	for(e = JG.events.begin(); e != JG.events.end(); ++e)
 	{
 		if(e->eventType == VexEvent::RECORD_START)
 		{
@@ -248,7 +248,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 	scanRange.logicalAnd(*P);	// Shrink time range to v2d start / stop interval
 
 	// populate changes, times, and usage
-	for(e = JG.events.begin(); e != JG.events.end(); e++)
+	for(e = JG.events.begin(); e != JG.events.end(); ++e)
 	{
 		if(mjdLast > 0.0 && e->mjd > mjdLast)
 		{
@@ -292,11 +292,11 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 		}
 		else if(e->eventType == VexEvent::ANT_SCAN_START)
 		{
-			usage[e->mjd]++;
+			++usage[e->mjd];
 		}
 		else if(e->eventType == VexEvent::ANT_SCAN_STOP)
 		{
-			usage[e->mjd]--;
+			--usage[e->mjd];
 		}
 		else if(e->eventType == VexEvent::CLOCK_BREAK ||
 			e->eventType == VexEvent::LEAP_SECOND ||
@@ -304,8 +304,8 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 		{
 			if(JG.containsAbsolutely(e->mjd))
 			{
-				clockBreaks[e->mjd]++;
-				nClockBreaks++;
+				++clockBreaks[e->mjd];
+				++nClockBreaks;
 			}
 		}
 	}
@@ -313,14 +313,14 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 	// now go through and set breakpoints
 	while(!changes.empty() || nClockBreaks > 0)
 	{
-		nLoop++;
+		++nLoop;
 		if(nLoop > nEvent+3) // There is clearly a problem converging!
 		{
 			cerr << "Developer error: jobs not converging after " << nLoop << " tries.\n" << endl;
 
 			cerr << "Events:" << endl;
 			list<VexEvent>::const_iterator iter;
-			for(iter = JG.events.begin(); iter != JG.events.end(); iter++)
+			for(iter = JG.events.begin(); iter != JG.events.end(); ++iter)
 			{
 				cerr << "   " << *iter << endl;
 			}
@@ -329,7 +329,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 
 			cerr << "Media Changes remaining were:" << endl;
 			list<MediaChange>::const_iterator it;
-			for(it = changes.begin(); it != changes.end(); it++)
+			for(it = changes.begin(); it != changes.end(); ++it)
 			{
 				cerr << "   " << *it << endl;
 			}
@@ -340,7 +340,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 		// look for break with highest score
 		// Try as hard as possible to minimize number of breaks
 		scoreBest = -1;
-		for(t = times.begin(); t != times.end(); t++)
+		for(t = times.begin(); t != times.end(); ++t)
 		{
 			score = nGap(changes, *t) * (nAnt-usage[*t]+1) + 100*clockBreaks[*t];
 			if(score > scoreBest)
@@ -363,7 +363,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 			}
 			else
 			{
-				c++;
+				++c;
 			}
 		}
 	}
@@ -374,7 +374,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 
 	// form jobs
 	start = JG.mjdStart;
-	for(t = breaks.begin(); t != breaks.end(); t++)
+	for(t = breaks.begin(); t != breaks.end(); ++t)
 	{
 		VexInterval jobTimeRange(start, *t);
 		if(jobTimeRange.duration() > P->minLength)
@@ -392,8 +392,6 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 static void makeJobs(vector<VexJob>& J, VexData *V, const CorrParams *P, int verbose)
 {
 	vector<VexJobGroup> JG;
-	vector<VexJob>::iterator j;
-	int k;
 
 	// Do splitting of jobs
 	genJobGroups(JG, V, P, verbose);
@@ -401,31 +399,34 @@ static void makeJobs(vector<VexJob>& J, VexData *V, const CorrParams *P, int ver
 	if(verbose > 0)
 	{
 		cout << JG.size() << " job groups created:" << endl;
-		for(unsigned int i = 0; i < JG.size(); i++)
+		for(vector<VexJobGroup>::const_iterator jg = JG.begin(); jg != JG.end(); ++jg)
 		{
-			cout << "  " << JG[i];
+			cout << "  " << *jg;
 		}
 	}
 
-	for(unsigned int i = 0; i < JG.size(); i++)
+	for(vector<VexJobGroup>::const_iterator jg = JG.begin(); jg != JG.end(); ++jg)
 	{
-		genJobs(J, JG[i], V, P, verbose);
+		genJobs(J, *jg, V, P, verbose);
 	}
 
 	// Finalize all the new job structures
-	for(j = J.begin(), k = P->startSeries; j != J.end(); j++, k++)
+	int jobId = P->startSeries;
+	for(vector<VexJob>::iterator j = J.begin(); j != J.end(); ++j)
 	{
 		ostringstream name;
 		j->jobSeries = P->jobSeries;
-		j->jobId = k;
+		j->jobId = jobId;
 
-		// note -- this is an internal name only, not the job prefix that 
+		// note: this is an internal name only, not the job prefix that 
 		// becomes part of the filenames
 		name << j->jobSeries << "_" << j->jobId;
 
 		V->addEvent(j->mjdStart, VexEvent::JOB_START, name.str());
 		V->addEvent(j->mjdStop,  VexEvent::JOB_STOP,  name.str());
 		j->assignVSNs(*V);
+
+		jobId++;
 	}
 	V->sortEvents();
 }
@@ -537,7 +538,7 @@ static DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const Co
 
 	A = newDifxAntennaArray(*n);
 
-	for(i = 0, a = J.vsns.begin(); a != J.vsns.end(); i++, a++)
+	for(i = 0, a = J.vsns.begin(); a != J.vsns.end(); ++i, ++a)
 	{
 		ant = V->getAntenna(a->first);
 		snprintf(A[i].name, DIFXIO_NAME_LENGTH, "%s", a->first.c_str());
@@ -575,7 +576,7 @@ static DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const Co
 			{
 				A[i].Z = antSetup->Z;
 			}
-			if(antSetup->difxName.size() > 0)
+			if(!antSetup->difxName.empty())
 			{
 				snprintf(A[i].name, DIFXIO_NAME_LENGTH, "%s", antSetup->difxName.c_str());
 			}
@@ -611,7 +612,7 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 	nDatastream = J.vsns.size() * nSet;
 	a = J.vsns.begin();
 	datastreams = newDifxDatastreamArray(nDatastream);
-	for(int i = 0; i < nDatastream; i++)
+	for(int i = 0; i < nDatastream; ++i)
 	{
 		dd = datastreams + i;
 
@@ -646,11 +647,11 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 		{
 			int count = 0;
 
-			for(int j = 0; j < nFile; j++)
+			for(int j = 0; j < nFile; ++j)
 			{
 				if(J.overlap(ant->basebandFiles[j]) > 0.0)
 				{
-					count++;
+					++count;
 				}
 			}
 
@@ -663,12 +664,12 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 
 			count = 0;
 
-			for(int j = 0; j < nFile; j++)
+			for(int j = 0; j < nFile; ++j)
 			{
 				if(J.overlap(ant->basebandFiles[j]) > 0.0)
 				{
 					dd->file[count] = strdup(ant->basebandFiles[j].filename.c_str());
-					count++;
+					++count;
 				}
 			}
 		}
@@ -679,7 +680,7 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 			dd->file[0] = strdup(a->second.c_str());
 		}
 
-		a++;
+		++a;
 		// Keep recycling through...
 		if(a == J.vsns.end())
 		{
@@ -706,11 +707,11 @@ static int next2(int x)
 	int n=0; 
 	int m=0;
 	
-	for(int i=0; i < 31; i++)
+	for(int i=0; i < 31; ++i)
 	{
 		if(x & (1 << i))
 		{
-			n++;
+			++n;
 			m = i;
 		}
 	}
@@ -728,60 +729,59 @@ static int next2(int x)
 class freq
 {
 public:
-	freq(double f=0.0, double b=0.0, char s=' ', int nI=0, int nO=0, int os=0, int d=0, int iz=0, unsigned int t=0) 
-		: fq(f), bw(b), sideBand(s), nInputChan(nI), nOutputChan(nO), overSamp(os), decimation(d), isZoomFreq(iz), toneSetId(t) {};
-	double fq;
-	double bw;
-	char sideBand;
-	int nInputChan;	// number of input channels (channels in FFT)
-	int nOutputChan; // number of channels to give the astronomer
+	freq(double f=0.0, double b=0.0, char s=' ', double isr=0.0, double osr=0.0, int os=0, int d=0, int iz=0, unsigned int t=0) 
+		: fq(f), bw(b), inputSpecRes(isr), outputSpecRes(osr), overSamp(os), decimation(d), isZoomFreq(iz), toneSetId(t), sideBand(s) {};
+	double fq;		// Hz
+	double bw;		// Hz
+	double inputSpecRes;	// Hz
+	double outputSpecRes;	// Hz
 	int overSamp;
 	int decimation;
 	int isZoomFreq;
 	unsigned int toneSetId;
+	char sideBand;
 
-	int specAvg() const { return nInputChan/nOutputChan; }
+	int specAvg() const { return static_cast<int>(outputSpecRes/inputSpecRes + 0.5); }
 };
 
-static int getFreqId(vector<freq>& freqs, double fq, double bw, char sb, int nI,
-		int nO, int os, int d, int iz, unsigned int t)
+static int getFreqId(vector<freq>& freqs, double fq, double bw, char sb, double isr, double osr, int os, int d, int iz, unsigned int t)
 {
-	for(unsigned int i = 0; i < freqs.size(); i++)
+	for(vector<freq>::const_iterator it = freqs.begin(); it != freqs.end(); ++it)
 	{
-		if(fq == freqs[i].fq &&
-		   bw == freqs[i].bw &&
-		   sb == freqs[i].sideBand &&
-		   nI == freqs[i].nInputChan &&
-		   nO == freqs[i].nOutputChan &&
-		   os == freqs[i].overSamp &&
-		   d  == freqs[i].decimation &&
-		   iz == freqs[i].isZoomFreq &&
-		   t  == freqs[i].toneSetId)
+		if(fq  == it->fq &&
+		   bw  == it->bw &&
+		   sb  == it->sideBand &&
+		   isr == it->inputSpecRes &&
+		   osr == it->outputSpecRes &&
+		   os  == it->overSamp &&
+		   d   == it->decimation &&
+		   iz  == it->isZoomFreq &&
+		   t   == it->toneSetId)
 		{
-			return i;
+			// use iterator math to get index
+			return it - freqs.begin();
 		}
 	}
 
-	freqs.push_back(freq(fq, bw, sb, nI, nO, os, d, iz, t));
+	// not in list yet, so add
+	freqs.push_back(freq(fq, bw, sb, isr, osr, os, d, iz, t));
 
 	return freqs.size() - 1;
 }
 
 static int getBand(vector<pair<int,int> >& bandMap, int fqId)
 {
-	vector<pair<int,int> >::iterator it;
-	int i;
-
-	for(i = 0, it = bandMap.begin(); it != bandMap.end(); i++, it++)
+	for(vector<pair<int,int> >::iterator it = bandMap.begin(); it != bandMap.end(); ++it)
 	{
 		if(it->first == fqId)
 		{
-			it->second++;
+			++it->second;
 
-			return i;
+			return it - bandMap.begin();
 		}
 	}
 
+	// not in list yet, so add
 	bandMap.push_back(pair<int,int>(fqId, 1));
 
 	return bandMap.size() - 1;
@@ -789,24 +789,31 @@ static int getBand(vector<pair<int,int> >& bandMap, int fqId)
 
 static int getToneSetId(vector<vector<int> > &toneSets, const vector<int> &tones)
 {
-	for(unsigned int i = 0; i < toneSets.size(); i++)
+	for(vector<vector<int> >::const_iterator it = toneSets.begin(); it != toneSets.end(); ++it)
 	{
-		if(toneSets[i] == tones)
+		if(*it == tones)
 		{
-			return i;
+			return it - toneSets.begin();
 		}
 	}
 
+	// not in list yet, so add
 	toneSets.push_back(tones);
 
 	return toneSets.size() - 1;
 }
 	
-static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<int> >& toneSets, const VexMode *mode, 
-			const string &antName, const CorrSetup *corrSetup, enum V2D_Mode v2dMode)
+static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<int> >& toneSets, const VexMode *mode, const string &antName, const CorrSetup *corrSetup, enum V2D_Mode v2dMode)
 {
 	vector<pair<int,int> > bandMap;
 	int overSamp, decimation;
+
+	if(mode == 0)
+	{
+		cerr << "Developer error: setFormat: mode is NULL" << endl;
+
+		exit(EXIT_FAILURE);
+	}
 
 	int antId = D->datastream[dsId].antennaId;
 	if(antId < 0 || antId >= D->nAntenna)
@@ -817,7 +824,6 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	}
 	const VexFormat* format = mode->getFormat(antName);
 	const VexSetup* setup = mode->getSetup(antName);
-	int n2 = next2(format->nRecordChan);
 
 	if(format == 0)
 	{
@@ -832,6 +838,8 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 
 		exit(EXIT_FAILURE);
 	}
+
+	int n2 = next2(format->nRecordChan);
 
 	overSamp = mode->getOversampleFactor();
 	decimation = calcDecimation(overSamp);
@@ -927,7 +935,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	D->datastream[dsId].quantBits = format->nBit;
 	DifxDatastreamAllocBands(D->datastream + dsId, n2);
 
-	for(vector<VexChannel>::const_iterator i = format->channels.begin(); i != format->channels.end(); i++)
+	for(vector<VexChannel>::const_iterator i = format->channels.begin(); i != format->channels.end(); ++i)
 	{
 		if(i->subbandId < 0 || i->subbandId >= static_cast<int>(mode->subbands.size()))
 		{
@@ -951,7 +959,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		}
 		
 		fqId = getFreqId(freqs, subband.freq, subband.bandwidth, subband.sideBand,
-				corrSetup->nInputChan(), corrSetup->nOutputChan, overSamp, decimation, 0, toneSetId);	// 0 means not zoom band
+				corrSetup->FFTSpecRes, corrSetup->outputSpecRes, overSamp, decimation, 0, toneSetId);	// 0 means not zoom band
 		
 		if(r < 0 || r >= D->datastream[dsId].nRecBand)
 		{
@@ -963,7 +971,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		D->datastream[dsId].recBandPolName[r] = subband.pol;
 	}
 	DifxDatastreamAllocFreqs(D->datastream + dsId, bandMap.size());
-	for(unsigned int j = 0; j < bandMap.size(); j++)
+	for(unsigned int j = 0; j < bandMap.size(); ++j)
 	{
 		D->datastream[dsId].recFreqId[j] = bandMap[j].first;
 		D->datastream[dsId].nRecPol[j]   = bandMap[j].second;
@@ -978,28 +986,28 @@ static void populateRuleTable(DifxInput *D, const CorrParams *P)
 
 	D->nRule = P->rules.size();
 	D->rule = newDifxRuleArray(D->nRule);
-	for(int i = 0; i < D->nRule; i++)
+	for(int i = 0; i < D->nRule; ++i)
 	{
-		if(P->rules[i].scanName.size() > 0)
+		if(!P->rules[i].scanName.empty())
 		{
-			for(s = (P->rules[i].scanName).begin(); s != (P->rules[i].scanName).end(); s++)
+			for(s = (P->rules[i].scanName).begin(); s != (P->rules[i].scanName).end(); ++s)
 			{
 				DifxStringArrayadd(&D->rule[i].scanId, s->c_str(), 0);
 			}
 		}
-		if(P->rules[i].sourceName.size() > 0)
+		if(!P->rules[i].sourceName.empty())
 		{
-			for(s = (P->rules[i].sourceName).begin(); s != (P->rules[i].sourceName).end(); s++)
+			for(s = (P->rules[i].sourceName).begin(); s != (P->rules[i].sourceName).end(); ++s)
 			{
 				DifxStringArrayadd(&D->rule[i].sourceName, s->c_str(), 0);
 			}
 		}
-		if(P->rules[i].modeName.size() > 0)
+		if(!P->rules[i].modeName.empty())
 		{
 			// Note: this is not a problem as the mode selection is being done by vex2difx
 			//cerr << "Cannot rule on modeName at this time; ignoring." << endl;
 		}
-		if(P->rules[i].calCode.size() > 0)
+		if(!P->rules[i].calCode.empty())
 		{
 			if(P->rules[i].calCode.size() > 1)
 			{
@@ -1010,7 +1018,7 @@ static void populateRuleTable(DifxInput *D, const CorrParams *P)
 			D->rule[i].calCode[0] = P->rules[i].calCode.front();
 			D->rule[i].calCode[1] = 0;
 		}
-		if(P->rules[i].qualifier.size() > 0)
+		if(!P->rules[i].qualifier.empty())
 		{
 			if(P->rules[i].qualifier.size() > 1)
 			{
@@ -1032,23 +1040,23 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 
 	D->nFreq = freqs.size();
 	D->freq = newDifxFreqArray(D->nFreq);
-	for(unsigned int f = 0; f < freqs.size(); f++)
+	for(int f = 0; f < D->nFreq; ++f)
 	{
 		df = D->freq + f;
 
 		df->freq = freqs[f].fq/1.0e6;
 		df->bw   = freqs[f].bw/1.0e6;
 		df->sideband = freqs[f].sideBand;
-		df->nChan = freqs[f].nInputChan;	// df->nChan is the number of pre-averaged channels
+		df->nChan = static_cast<int>(freqs[f].bw/freqs[f].inputSpecRes + 0.5);	// df->nChan is the number of pre-averaged channels
 		df->specAvg = freqs[f].specAvg();
 		df->overSamp = freqs[f].overSamp;
 		df->decimation = freqs[f].decimation;
 
-		chanBW = df->bw*df->specAvg/df->nChan;
+		chanBW = freqs[f].outputSpecRes*1e-6;
 		if(chanBW > 0.51 && firstChanBWWarning)
 		{
 			firstChanBWWarning = 0;
-			cout << "Warning: channel bandwidth is " << chanBW << " MHZ, which is larger than the minimum recommended 0.5 MHz.  Consider increasing the number of output channels." << endl;
+			cout << "Warning: channel bandwidth is " << chanBW << " MHZ, which is larger than the minimum recommended 0.5 MHz.  Consider decreasing the output spectral resolution." << endl;
 		}
 
 		// This is to correct for the fact that mpifxcorr does not know about oversampling
@@ -1071,11 +1079,11 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 		}
 		const vector<int> &tones = toneSets[freqs[f].toneSetId];
 
-		if(tones.size() > 0)
+		if(!tones.empty())
 		{
 			DifxFreqAllocTones(df, tones.size());
 		
-			for(unsigned int t = 0; t < tones.size(); t++)
+			for(unsigned int t = 0; t < tones.size(); ++t)
 			{
 				df->tone[t] = tones[t];
 			}
@@ -1083,11 +1091,11 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 	}
 }
 
-// warning: assumes same number of datastreams == antennas for each config
+#warning "FIXME: populateBaselineTable assumes nAntenna == nDatastream!"
 static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *corrSetup, vector<set <int> > blockedfreqids)
 {	
 	int n1, n2;
-	int npol;
+	int nPol;
 	int a1c[2], a2c[2];
 	char a1p[2], a2p[2];
 	int nFreq;
@@ -1099,11 +1107,10 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 	// Calculate maximum number of possible baselines based on list of configs
 	D->nBaseline = 0;
 
-#warning "FIXME: below assumes nAntenna == nDatastream!"
 	if(P->v2dMode == V2D_MODE_PROFILE)
 	{
 		// Here use nAntenna as nBaseline
-		for(configId = 0; configId < D->nConfig; configId++)
+		for(configId = 0; configId < D->nConfig; ++configId)
 		{
 			int nD = D->config[configId].nDatastream;
 
@@ -1113,7 +1120,7 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 	else
 	{
 		// This is the normal configuration, assume n*(n-1)/2
-		for(configId = 0; configId < D->nConfig; configId++)
+		for(configId = 0; configId < D->nConfig; ++configId)
 		{
 			int nD = D->config[configId].nDatastream;
 			
@@ -1126,7 +1133,7 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 	bl = D->baseline;
 	blId = 0;	// baseline table index
 
-	for(configId = 0; configId < D->nConfig; configId++)
+	for(configId = 0; configId < D->nConfig; ++configId)
 	{
 		config = D->config + configId;
 
@@ -1139,7 +1146,7 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 			config->doAutoCorr = 0;
 
 			// Instead, make autocorrlations from scratch
-			for(int a1 = 0; a1 < config->nDatastream; a1++)
+			for(int a1 = 0; a1 < config->nDatastream; ++a1)
 			{
 				bl->dsA = config->datastreamId[a1];
 				bl->dsB = config->datastreamId[a1];
@@ -1149,7 +1156,7 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 				nFreq = 0; // this counts the actual number of freqs
 
 				// Note: here we need to loop over all datastreams associated with this antenna!
-				for(int f = 0; f < D->datastream[a1].nRecFreq; f++)
+				for(int f = 0; f < D->datastream[a1].nRecFreq; ++f)
 				{
 					freqId = D->datastream[a1].recFreqId[f];
 
@@ -1162,16 +1169,16 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 
 					n1 = DifxDatastreamGetRecBands(D->datastream+a1, freqId, a1p, a1c);
 
-					npol = 0;
-					for(int u = 0; u < n1; u++)
+					nPol = 0;
+					for(int u = 0; u < n1; ++u)
 					{
-						bl->bandA[nFreq][npol] = a1c[u];
-						bl->bandB[nFreq][npol] = a1c[u];
-						npol++;
+						bl->bandA[nFreq][nPol] = a1c[u];
+						bl->bandB[nFreq][nPol] = a1c[u];
+						++nPol;
 					}
-					bl->nPolProd[nFreq] = npol;
+					bl->nPolProd[nFreq] = nPol;
 
-					if(npol == 0)
+					if(nPol == 0)
 					{
 						// This deallocates
 						DifxBaselineAllocPolProds(bl, nFreq, 0);
@@ -1179,7 +1186,7 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 						continue;
 					}
 
-					nFreq++;
+					++nFreq;
 				}
 
 				bl->nFreq = nFreq;
@@ -1187,44 +1194,66 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 				if(bl->nFreq > 0)
 				{
 					config->baselineId[config->nBaseline] = blId;
-					config->nBaseline++;
-					bl++;
-					blId++;
+					++config->nBaseline;
+					++bl;
+					++blId;
 				}
 			}
 		}
-		else
+		else // Not profile mode
 		{
-			for(int a1 = 0; a1 < config->nDatastream-1; a1++)
+			// Beware those who try to follow the logic below!
+			// Its actually not to tricky.  There are 8 cases of matching between 
+			// sub-bands to consider.
+			// First all antenna 1 recorded bands to be correlated are considered.  Pairing
+			// with sub-bands from antenna 2 is done with the following priority:
+			// 1. a recorded band with same sideband
+			// 2. a recorded band with opposite sideband
+			// 3. a zoom band with same sideband
+			// 4. a zoom band with opposite sideband
+			//
+			// Further down, the antenna 1 zoom bands are considered with priority
+			// 5. a recorded band with same sideband
+			// 6. a recorded band with opposite sideband
+			// 7. a zoom band with same sideband
+			// 8. a zoom band with opposite sideband
+
+			// Needless to say, this logic can probably be simplified some, but it seems to work!
+
+			for(int a1 = 0; a1 < config->nDatastream-1; ++a1)
 			{
-				for(int a2 = a1+1; a2 < config->nDatastream; a2++)
+				for(int a2 = a1+1; a2 < config->nDatastream; ++a2)
 				{
 					bl->dsA = config->datastreamId[a1];
 					bl->dsB = config->datastreamId[a2];
 
+					// Excape if this baseline is not requested
 					if(!P->useBaseline(D->antenna[a1].name, D->antenna[a2].name))
 					{
 						continue;
 					}
 
+					// Allocate enough space for worst case possibility
 					DifxBaselineAllocFreqs(bl, D->datastream[a1].nRecFreq + D->datastream[a1].nZoomFreq);
 
 					nFreq = 0; // this counts the actual number of freqs
 
-					// Note: here we need to loop over all datastreams associated with this antenna!
-					for(int f = 0; f < D->datastream[a1].nRecFreq; f++)
+					// Note: eventually we need to loop over all datastreams associated with this antenna!
+					for(int f = 0; f < D->datastream[a1].nRecFreq; ++f)
 					{
+						bool zoom2 = false;	// did antenna 2 zoom band make match? 
+
 						freqId = D->datastream[a1].recFreqId[f];
 
 						if(!corrSetup->correlateFreqId(freqId))
 						{
 							continue;
 						}
-						if(blockedfreqids[a1].size() > 0 && blockedfreqids[a1].find(freqId) != blockedfreqids[a1].end())
+						if(!blockedfreqids[a1].empty() && blockedfreqids[a1].find(freqId) != blockedfreqids[a1].end())
 						{
 							continue;
 						}
-						if(blockedfreqids[a2].size() > 0 && blockedfreqids[a2].find(freqId) != blockedfreqids[a2].end())
+						if(!blockedfreqids[a2].empty() && blockedfreqids[a2].find(freqId) != blockedfreqids[a2].end())
 						{
 							continue;
 						}
@@ -1233,15 +1262,17 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 
 						n1 = DifxDatastreamGetRecBands(D->datastream+a1, freqId, a1p, a1c);
 						n2 = DifxDatastreamGetRecBands(D->datastream+a2, freqId, a2p, a2c);
+
+						lowedgefreq = D->freq[freqId].freq;
+						if(D->freq[freqId].sideband == 'L')
+						{
+							lowedgefreq -= D->freq[freqId].bw;
+						}
+
 						if(n2 == 0)
 						{
 							//look for another freqId which matches band but is opposite sideband
-							lowedgefreq = D->freq[freqId].freq;
-							if(D->freq[freqId].sideband == 'L')
-							{
-								lowedgefreq -= D->freq[freqId].bw;
-							}
-							for(int f2 = 0; f2 < D->datastream[a2].nRecFreq; f2++)
+							for(int f2 = 0; f2 < D->datastream[a2].nRecFreq; ++f2)
 							{
 								altFreqId = D->datastream[a2].recFreqId[f2];
 								altlowedgefreq = D->freq[altFreqId].freq;
@@ -1249,76 +1280,31 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 								{
 									altlowedgefreq -= D->freq[altFreqId].bw;
 								}
-								if(altlowedgefreq == lowedgefreq)
+								if(altlowedgefreq     == lowedgefreq &&
+								   D->freq[freqId].bw == D->freq[altFreqId].bw)
 								{
 									n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
 								}
 							}
-
-							if(n2 == 0)
-							{
-								//still no dice? Try the zoom bands of datastream 2
-								for(int f2 = 0; f2 < D->datastream[a2].nZoomFreq; f2++)
-								{
-									altFreqId = D->datastream[a2].zoomFreqId[f2];
-									altlowedgefreq = D->freq[altFreqId].freq;
-									if(D->freq[altFreqId].sideband == 'L')
-									{
-										altlowedgefreq -= D->freq[altFreqId].bw;
-									}
-									if(altlowedgefreq == lowedgefreq)
-									{
-										n2 = DifxDatastreamGetZoomBands(D->datastream+a2, altFreqId, a2p, a2c);
-									}
-								}
-							}
 						}
-
-						npol = 0;
-						for(int u = 0; u < n1; u++)
-						{
-							for(int v = 0; v < n2; v++)
-							{
-								if(corrSetup->doPolar || a1p[u] == a2p[v])
-								{
-									bl->bandA[nFreq][npol] = a1c[u];
-									bl->bandB[nFreq][npol] = a2c[v];
-									npol++;
-								}
-							}
-						}
-						bl->nPolProd[nFreq] = npol;
-
-						if(npol == 0)
-						{
-							// This deallocates
-							DifxBaselineAllocPolProds(bl, nFreq, 0);
-
-							continue;
-						}
-
-						nFreq++;
-					}
-
-					for(int f = 0; f < D->datastream[a1].nZoomFreq; f++)
-					{
-						freqId = D->datastream[a1].zoomFreqId[f];
-
-						// Unlike for recbands, don't query corrSetup->correlateFreqId as all defined zoom bands should be correlated
-
-						DifxBaselineAllocPolProds(bl, nFreq, 4);
-
-						n1 = DifxDatastreamGetZoomBands(D->datastream+a1, freqId, a1p, a1c);
-						n2 = DifxDatastreamGetZoomBands(D->datastream+a2, freqId, a2p, a2c);
 						if(n2 == 0)
 						{
-							//look for another freqId which matches band but is opposite sideband
-							lowedgefreq = D->freq[freqId].freq;
-							if(D->freq[freqId].sideband == 'L')
+							//still no dice? Try the zoom bands of datastream 2
+							for(int f2 = 0; f2 < D->datastream[a2].nZoomFreq; ++f2)
 							{
-								lowedgefreq -= D->freq[freqId].bw;
+								altFreqId = D->datastream[a2].zoomFreqId[f2];
+								if(D->freq[freqId].freq == D->freq[altFreqId].freq &&
+								   D->freq[freqId].bw   == D->freq[altFreqId].bw)
+								{
+									n2 = DifxDatastreamGetZoomBands(D->datastream+a2, altFreqId, a2p, a2c);
+									zoom2 = true;
+								}
 							}
-							for(int f2 = 0; f2 < D->datastream[a2].nZoomFreq; f2++)
+						}
+						if(n2 == 0)
+						{
+							//still no dice? Try the opposite sidebands of zoom bands of datastream 2
+							for(int f2 = 0; f2 < D->datastream[a2].nZoomFreq; ++f2)
 							{
 								altFreqId = D->datastream[a2].zoomFreqId[f2];
 								altlowedgefreq = D->freq[altFreqId].freq;
@@ -1326,47 +1312,35 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 								{
 									altlowedgefreq -= D->freq[altFreqId].bw;
 								}
-								if(altlowedgefreq == lowedgefreq)
+								if(altlowedgefreq == lowedgefreq &&
+								   D->freq[freqId].bw == D->freq[altFreqId].bw)
 								{
 									n2 = DifxDatastreamGetZoomBands(D->datastream+a2, altFreqId, a2p, a2c);
-								}
-							}
-
-							if(n2 == 0)
-							{
-								//still no dice? Try recorded bands from datastream 1
-								for(int f2 = 0; f2 < D->datastream[a2].nRecFreq; f2++)
-								{
-									altFreqId = D->datastream[a2].recFreqId[f2];
-									altlowedgefreq = D->freq[altFreqId].freq;
-									if(D->freq[altFreqId].sideband == 'L')
-									{
-										altlowedgefreq -= D->freq[altFreqId].bw;
-									}
-									if(altlowedgefreq == lowedgefreq)
-									{
-										n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
-									}
+									zoom2 = true;
 								}
 							}
 						}
 
-						npol = 0;
-						for(int u = 0; u < n1; u++)
+						nPol = 0;
+						for(int u = 0; u < n1; ++u)
 						{
-							for(int v = 0; v < n2; v++)
+							for(int v = 0; v < n2; ++v)
 							{
 								if(corrSetup->doPolar || a1p[u] == a2p[v])
 								{
-									bl->bandA[nFreq][npol] = D->datastream[a1].nRecBand + a1c[u];
-									bl->bandB[nFreq][npol] = D->datastream[a2].nRecBand + a2c[v];
-									npol++;
+									bl->bandA[nFreq][nPol] = a1c[u];
+									bl->bandB[nFreq][nPol] = a2c[v];
+									if(zoom2)
+									{
+										bl->bandB[nFreq][nPol] += D->datastream[a2].nRecBand;
+									}
+									++nPol;
 								}
 							}
 						}
-						bl->nPolProd[nFreq] = npol;
+						bl->nPolProd[nFreq] = nPol;
 
-						if(npol == 0)
+						if(nPol == 0)
 						{
 							// This deallocates
 							DifxBaselineAllocPolProds(bl, nFreq, 0);
@@ -1374,7 +1348,111 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 							continue;
 						}
 
-						nFreq++;
+						++nFreq;
+					}
+
+					for(int f = 0; f < D->datastream[a1].nZoomFreq; ++f)
+					{
+						bool zoom2 = false;	// did antenna 2 zoom band make match? 
+
+						freqId = D->datastream[a1].zoomFreqId[f];
+
+						// Unlike for recbands, don't query corrSetup->correlateFreqId as all defined zoom bands should be correlated
+
+						DifxBaselineAllocPolProds(bl, nFreq, 4);
+
+						n1 = DifxDatastreamGetZoomBands(D->datastream+a1, freqId, a1p, a1c);
+
+						lowedgefreq = D->freq[freqId].freq;
+						if(D->freq[freqId].sideband == 'L')
+						{
+							lowedgefreq -= D->freq[freqId].bw;
+						}
+
+						for(int f2 = 0; f2 < D->datastream[a2].nRecFreq; ++f2)
+						{
+							altFreqId = D->datastream[a2].recFreqId[f2];
+							if(D->freq[freqId].freq == D->freq[altFreqId].freq &&
+							   D->freq[freqId].bw   == D->freq[altFreqId].bw)
+							{
+								n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
+							}
+						}
+
+						if(n2 == 0)
+						{
+							//look for another freqId which matches band but is opposite sideband
+							for(int f2 = 0; f2 < D->datastream[a2].nRecFreq; ++f2)
+							{
+								altFreqId = D->datastream[a2].recFreqId[f2];
+								altlowedgefreq = D->freq[altFreqId].freq;
+								if(D->freq[altFreqId].sideband == 'L')
+								{
+									altlowedgefreq -= D->freq[altFreqId].bw;
+								}
+								if(altlowedgefreq     == lowedgefreq &&
+								   D->freq[freqId].bw == D->freq[altFreqId].bw)
+								{
+									n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
+								}
+							}
+						}
+						if(n2 == 0)
+						{
+							n2 = DifxDatastreamGetZoomBands(D->datastream+a2, freqId, a2p, a2c);
+							if(n2 > 0)
+							{
+								zoom2 = true;
+							}
+						}
+						if(n2 == 0)
+						{
+							//still no dice? Try the opposite sidebands of zoom bands of datastream 2
+							for(int f2 = 0; f2 < D->datastream[a2].nZoomFreq; ++f2)
+							{
+								altFreqId = D->datastream[a2].zoomFreqId[f2];
+								altlowedgefreq = D->freq[altFreqId].freq;
+								if(D->freq[altFreqId].sideband == 'L')
+								{
+									altlowedgefreq -= D->freq[altFreqId].bw;
+								}
+								if(altlowedgefreq == lowedgefreq &&
+								   D->freq[freqId].bw == D->freq[altFreqId].bw)
+								{
+									n2 = DifxDatastreamGetZoomBands(D->datastream+a2, altFreqId, a2p, a2c);
+									zoom2 = true;
+								}
+							}
+						}
+
+						nPol = 0;
+						for(int u = 0; u < n1; ++u)
+						{
+							for(int v = 0; v < n2; ++v)
+							{
+								if(corrSetup->doPolar || a1p[u] == a2p[v])
+								{
+									bl->bandA[nFreq][nPol] = D->datastream[a1].nRecBand + a1c[u];
+									bl->bandB[nFreq][nPol] = a2c[v];
+									if(zoom2)
+									{
+										bl->bandB[nFreq][nPol] += D->datastream[a2].nRecBand;
+									}
+									++nPol;
+								}
+							}
+						}
+						bl->nPolProd[nFreq] = nPol;
+
+						if(nPol == 0)
+						{
+							// This deallocates
+							DifxBaselineAllocPolProds(bl, nFreq, 0);
+
+							continue;
+						}
+
+						++nFreq;
 					}
 	
 					bl->nFreq = nFreq;
@@ -1382,9 +1460,9 @@ static void populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrS
 					if(bl->nFreq > 0)
 					{
 						config->baselineId[config->nBaseline] = blId;
-						config->nBaseline++;
-						bl++;
-						blId++;
+						++config->nBaseline;
+						++bl;
+						++blId;
 					}
 				}
 			}
@@ -1403,7 +1481,7 @@ static void populateEOPTable(DifxInput *D, const vector<VexEOP>& E)
 	nEOP = E.size();
 	D->nEOP = nEOP;
 	D->eop = newDifxEOPArray(D->nEOP);
-	for(int e = 0; e < nEOP; e++)
+	for(int e = 0; e < nEOP; ++e)
 	{
 		D->eop[e].mjd = static_cast<int>(E[e].mjd);
 		D->eop[e].tai_utc = static_cast<int>(E[e].tai_utc);
@@ -1415,18 +1493,16 @@ static void populateEOPTable(DifxInput *D, const vector<VexEOP>& E)
 
 static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, const VexData *V, const CorrParams *P, const VexScan *S)
 {
-	int c, fftDurNS;
+	int nConfig, nFFTsPerIntegration, nSubintsPerIntegration;
+	int max5div, max2div;
+	int fftDurNS;
 	DifxConfig *config;
 	const CorrSetup *corrSetup;
 	const VexMode *mode;
 	string configName;
-	double minBW;		// [Hz]
-	double readTimeNS;
-	int f;
-	long long tintNS, testsubintNS, nscounter;
-	int max5div, max2div, nFFTsPerIntegration, divisor;
-	double msgSize, dataRate, readSize, floatFFTDurNS;
-
+	double floatReadTimeNS, floatFFTDurNS, floatSubintDurNS;
+	double msgSize, dataRate, readSize;
+	long long tintNS;
 
 	corrSetup = P->getCorrSetup(S->corrSetupName);
 	if(corrSetup == 0)
@@ -1444,7 +1520,8 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		exit(EXIT_FAILURE);
 	}
 
-	for(unsigned int i = 0; i < configs.size(); i++)
+	nConfig = configs.size();
+	for(int i = 0; i < nConfig; ++i)
 	{
 		if(configs[i].first  == S->modeDefName &&
 		   configs[i].second == S->corrSetupName)
@@ -1455,54 +1532,83 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 
 	configName = S->modeDefName + string("_") + S->corrSetupName;
 
-	c = configs.size();
 	configs.push_back(pair<string,string>(S->modeDefName, S->corrSetupName));
-	config = D->config + c;
+	config = D->config + nConfig;
 	snprintf(config->name, DIFXIO_NAME_LENGTH, "%s", configName.c_str());
-	for(int i = 0; i < D->nRule; i++)
+	for(int i = 0; i < D->nRule; ++i)
 	{
-		if(strcmp(D->rule[i].configName, S->corrSetupName.c_str()) == 0)
+		if(S->corrSetupName == D->rule[i].configName)
 		{
 			snprintf(D->rule[i].configName, DIFXIO_NAME_LENGTH, "%s", configName.c_str());
 		}
 	}
 	config->tInt = corrSetup->tInt;
-	minBW = mode->sampRate/2.0;
-	fftDurNS = static_cast<int>(corrSetup->fftSize()*(0.5/minBW)*1000000000.0 + 0.5);
-	dataRate = (mode->sampRate*mode->getBits()*mode->subbands.size());
-	if(corrSetup->subintNS > 0)
+	tintNS = static_cast<long long>(1e9*corrSetup->tInt + 0.5);
+	floatFFTDurNS = 500000000.0/corrSetup->FFTSpecRes;  // FIXME: check for factor of 2!
+	fftDurNS = static_cast<int>(floatFFTDurNS);
+	dataRate = mode->sampRate*mode->getBits()*mode->subbands.size();
+	nFFTsPerIntegration = static_cast<int>(1e9*corrSetup->tInt/floatFFTDurNS + 0.5);
+
+	//first test how big a single FFT is - if it is too big, fail with a warning and a suggestion
+	if(floatFFTDurNS > (1LL<<31) - 1)
+	{
+		cerr << "A single FFT is too long (" << floatFFTDurNS << " ns)!" << endl;
+		cerr << "The maximum duration of an FFT is 2^31 - 1 nanoseconds" << endl;
+		cerr << "Please reduce nFFTChan accordingly" << endl;
+
+		exit(EXIT_FAILURE);
+	}
+
+	if(corrSetup->subintNS > 0) //This is relatively easy - just see if the provided values are reasonable
 	{
 		config->subintNS = corrSetup->subintNS;
 		if(config->subintNS % fftDurNS != 0)
 		{
 			cerr << "Error: The provided subintNS (" << config->subintNS << ") is not an integer multiple of the FFT duration (" << fftDurNS << ")" << endl;
+			cerr << "You should adjust your subint time, or leave subint unset and vex2difx will set it for you" << endl;
 
 			exit(EXIT_FAILURE);
 		}
+		if(tintNS % config->subintNS != 0)
+		{
+			if(P->tweakIntTime)
+			{
+				//leave it - we will adjust the int time later
+			}
+			else
+			{
+				cerr << "Error: The provided tInt (" << config->tInt << ") is not an integer multiple of the provided subint (" << corrSetup->subintNS/1.0e9 << ")" << endl;
+				cerr << "You should adjust your subint and/or int time, or leave subint unset and vex2difx will set it for you" << endl;
+
+				exit(EXIT_FAILURE);
+			}
+		}
 	}
-	else
+	else //first try to set a reasonable subintNS
 	{
-		tintNS = static_cast<long long>(1e9*corrSetup->tInt + 0.5);
-		floatFFTDurNS = corrSetup->fftSize()*(0.5/minBW)*1000000000.0;
+		long long nscounter;
+
 		nFFTsPerIntegration = static_cast<int>(1e9*corrSetup->tInt/floatFFTDurNS + 0.5);
 
 		// check that integration time is an integer number of FFTs
 		if(fabs(1e9*corrSetup->tInt/floatFFTDurNS - nFFTsPerIntegration) > 1e-9)
 		{
-			cerr << "Integration time is not an integer number of FFTs!" << endl;
-			cerr << "Please change tInt to a multiple of " << floatFFTDurNS << " nanoseconds." << endl;
-			cerr << "Try to use a number of FFTs which is factorable entirely by 2 and/or 5" << endl;
-			exit(EXIT_FAILURE);
+			//it is not - no chance of a reasonable subintNS unless we tweak intTime
+			if(P->tweakIntTime)
+			{
+				cout << "Requested integration time (" << corrSetup->tInt << ") is not an integer multiple of the FFT time (" << floatFFTDurNS << " ns)" << endl;
+				cout << "Will attempt to nudge the int time to a more appropriate value" << endl;
+			}
+			else
+			{
+				cerr << "Integration time is not an integer number of FFTs!" << endl;
+				cerr << "Please change tInt to a multiple of " << floatFFTDurNS << " nanoseconds, or set tweakIntTime = true" << endl;
+				cerr << "Try to use a number of FFTs which is factorable entirely by 2 and/or 5" << endl;
+			
+				exit(EXIT_FAILURE);
+			}
 		}
 
-		//first test how big a single FFT is - if it is too big, fail with a warning and a suggestion
-		if(floatFFTDurNS*D->dataBufferFactor/D->nDataSegments > (1LL<<31) - 1)
-		{
-			cerr << "A single FFT is too long (" << floatFFTDurNS << " ns)!" << endl;
-			cerr << "The maximum duration of an FFT is 2^31 - 1 nanoseconds" << endl;
-			cerr << "Please reduce nFFTChan accordingly" << endl;
-			exit(EXIT_FAILURE);
-		}
 		config->subintNS = fftDurNS;
 		msgSize = (config->subintNS*1.0e-9)*dataRate/8.0;
 		readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
@@ -1512,39 +1618,41 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 			cerr << "The maximum read size has been set (or defaulted) to " << P->maxReadSize << endl;
 			cerr << "There are known problems with Mark5 module playback at large read sizes" << endl;
 			cerr << "If you want to try with the large read size, set maxReadSize in the global area of the .v2d file" << endl;
+
 			exit(EXIT_FAILURE);
 		}
 
-		nscounter = tintNS/5;
 		max5div = 0;
+		max2div = 0;
+		nscounter = tintNS/5;
 	 	while(nscounter > 0 && fabs(nscounter/floatFFTDurNS - static_cast<int>(nscounter/floatFFTDurNS + 0.5)) < 1e-9)
 		{
 			nscounter /= 5;
-			max5div++;
+			++max5div;
 		}
 
 		nscounter = tintNS/2;
-		max2div = 0;
 		while(nscounter > 0 && fabs(nscounter/floatFFTDurNS - static_cast<int>(nscounter/floatFFTDurNS + 0.5)) < 1e-9)
 		{
 			nscounter /= 2;
-			max2div++;
+			++max2div;
 		}
 
-		for(int i=max2div;i>=0;i--)
+		for(int i = max2div; i >= 0; --i)
 		{
-			for(int j=max5div;j>=0;j--)
+			for(int j = max5div; j >= 0; --j)
 			{
-				divisor = 1;
-				for(int k=0;k<i;k++)
+				int divisor = 1;
+				for(int k = 0; k < i; ++k)
 				{
 					divisor *= 2;
 				}
-				for(int l=0;l<j;l++)
+				for(int l = 0; l < j; ++l)
 				{
 					divisor *= 5;
 				}
-				testsubintNS = tintNS / divisor;
+
+				long long testsubintNS = tintNS / divisor;
 				msgSize = (testsubintNS*1.0e-9)*dataRate/8.0;
 				readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
 				if(readSize > P->minReadSize && readSize < P->maxReadSize && 
@@ -1560,20 +1668,31 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
 		if(readSize < P->minReadSize)
 		{
-			cerr << "Automatic subint duration selection generated " << config->subintNS << " nanoseconds" << endl;
-			cerr << "This leads to a read size of " << readSize << " B" << endl;
-			cerr << "The minimum read size was set or defaulted to " << P->minReadSize << " B" << endl;
-			cerr << "Either decrease minReadSize (which may lead to slow correlation) or explicitly set subintNS" << endl;
-			cerr << "You may find it advantageous to tweak the tInt to a more power-of-2 friendly value" << endl;
-			exit(EXIT_FAILURE);
+			if(P->tweakIntTime)
+			{
+				while(((config->subintNS*1.0e-9)*dataRate/8.0)*(D->dataBufferFactor/D->nDataSegments) < P->minReadSize)
+				{
+					config->subintNS *= 2;
+				}
+			}
+			else
+			{
+				cerr << "Automatic subint duration selection generated " << config->subintNS << " nanoseconds" << endl;
+				cerr << "This leads to a read size of " << readSize << " B" << endl;
+				cerr << "The minimum read size was set or defaulted to " << P->minReadSize << " B" << endl;
+				cerr << "Either decrease minReadSize (which may lead to slow correlation) or explicitly set subintNS" << endl;
+				cerr << "You may find it advantageous to tweak the tInt to a more power-of-2 friendly value" << endl;
+
+				exit(EXIT_FAILURE);
+			}
 		}
 	}
 
 	// change nDataSegments if needed to get send sizes under 2^31 nanoseconds
-	readTimeNS = static_cast<double>(config->subintNS)*D->dataBufferFactor/D->nDataSegments;
-	if(readTimeNS > 2140000000.0)
+	floatReadTimeNS = static_cast<double>(config->subintNS)*D->dataBufferFactor/D->nDataSegments;
+	if(floatReadTimeNS > 2140000000.0)
 	{
-		f = static_cast<int>(2140000000.0/config->subintNS);
+		int f = static_cast<int>(2140000000.0/config->subintNS);
 		if(f < 1)
 		{
 			cerr << "Error: There is no way to change dataBufferFactor to keep send sizes below 2^31 seconds" << endl;
@@ -1590,7 +1709,48 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 			cout << "But probably this is a low data rate experiment, so it won't matter" << endl;
 		}
 	}
-		
+
+	//now check that the int time is an integer number of subints, and tweak if necessary
+        floatSubintDurNS = (double)config->subintNS;
+        nSubintsPerIntegration = static_cast<int>(1e9*corrSetup->tInt/floatSubintDurNS + 0.5);
+	if(fabs(1e9*corrSetup->tInt/floatSubintDurNS - nSubintsPerIntegration) > 1e-9)
+	{
+		if(P->tweakIntTime)
+		{
+			int best5div = 0;
+			int best2div = 0;
+			double bestfractionaldiff;
+
+			cout << "The provided tInt (" << config->tInt << ") is not an integer multiple of the subint (" << floatSubintDurNS/1.0e9 << ")" << endl;
+			max5div = static_cast<int>(config->tInt/(5*floatSubintDurNS/1.0e9)) + 1;
+			max2div = static_cast<int>(config->tInt/(2*floatSubintDurNS/1.0e9)) + 1;
+			bestfractionaldiff = fabs(1.0 - (floatSubintDurNS/1.0e9)/config->tInt);
+			for(int i = 0; i <= max5div; ++i)
+			{
+				for(int j = 0; j <= max5div; ++j)
+				{
+					double test_tint = (floatSubintDurNS/1.0e9)*pow(5.0,i)*pow(2.0,j);
+					if(fabs(1.0 - (test_tint)/config->tInt) < bestfractionaldiff)
+					{
+						bestfractionaldiff = fabs(1.0 - (test_tint)/config->tInt);
+						best5div = i;
+						best2div = j;
+					}
+				}
+			}
+			cout << "tInt has been updated from " << config->tInt << " to " << (floatSubintDurNS/1.0e9)*pow(5.0,best5div)*pow(2.0,best2div) << endl;
+			cout << "(You could also try modifying the subintNS if you want to try harder to get your desired integration time)" << endl;
+			config->tInt = (floatSubintDurNS/1.0e9)*pow(5.0,best5div)*pow(2.0,best2div);
+		}
+		else
+		{
+			cerr << "Error: The provided tInt (" << config->tInt << ") is not an integer multiple of the subint (" << floatSubintDurNS/1.0e9 << ")" << endl; 
+			cerr << "Either change your integration time to a more friendly value, or tweak number of channels or subint time, or set tweakIntTime = true" << endl;
+
+			exit(EXIT_FAILURE);
+		}
+	}
+
 	config->guardNS = corrSetup->guardNS;
 	config->fringeRotOrder = corrSetup->fringeRotOrder;
 	config->strideLength = corrSetup->strideLength;
@@ -1649,20 +1809,19 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	//	config->decimation *= 2;
 	//}
 	
-	DifxConfigAllocDatastreamIds(config, config->nDatastream, c*config->nDatastream);
-	DifxConfigAllocBaselineIds(config, config->nBaseline, c*config->nBaseline);
+	DifxConfigAllocDatastreamIds(config, config->nDatastream, nConfig*config->nDatastream);
+	DifxConfigAllocBaselineIds(config, config->nBaseline, nConfig*config->nBaseline);
 
 	config->nPol = mode->getPols(config->pol);
 	config->quantBits = mode->getBits();
 
-
-	return c;
+	return nConfig;
 }
 
-static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int dfreqindex, const vector<freq> freqs)
+static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int dfreqIndex, const vector<freq> freqs)
 {
 	double channeloffset;
-	const freq &f = freqs[dd->recFreqId[dfreqindex]];
+	const freq &f = freqs[dd->recFreqId[dfreqIndex]];
 
 	if(f.sideBand == 'L')
 	{
@@ -1678,7 +1837,7 @@ static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int
 		{
 			return false;
 		}
-		channeloffset = ((f.fq - zoomfreq.frequency)/f.bw)*f.nInputChan;
+		channeloffset = (f.fq - zoomfreq.frequency)/f.inputSpecRes;
 		if(fabs(channeloffset - static_cast<int>(channeloffset+0.5)) > 0.000001)
 		{
 			return false;
@@ -1700,7 +1859,7 @@ static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int
 		{
 			return false;
 		}
-		channeloffset = ((zoomfreq.frequency - f.fq)/f.bw)*f.nInputChan;
+		channeloffset = (zoomfreq.frequency - f.fq)/f.inputSpecRes;
 		if(fabs(channeloffset - static_cast<int>(channeloffset+0.5)) > 0.000001)
 		{
 			return false;
@@ -1745,9 +1904,9 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	toneSets.push_back(noTones);
 
 	// Assume same correlator setup for all scans
-	if(J.scans.size() == 0)
+	if(J.scans.empty())
 	{
-		cerr << "Developer error: writeJob(): J.scans.size() = 0" << endl;
+		cerr << "Developer error: writeJob(): J.scans is empty" << endl;
 
 		exit(EXIT_FAILURE);
 	}
@@ -1769,7 +1928,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	}
 
 	// make set of unique config names
-	for(vector<string>::const_iterator si = J.scans.begin(); si != J.scans.end(); si++)
+	for(vector<string>::const_iterator si = J.scans.begin(); si != J.scans.end(); ++si)
 	{
 		string configName;
 
@@ -1808,7 +1967,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	maxPulsarBins = 0;
 	maxScanPhaseCentres = 0;
 	nTotalPhaseCentres = 0;
-	for(vector<SourceSetup>::const_iterator ss=P->sourceSetups.begin(); ss != P->sourceSetups.end(); ss++)
+	for(vector<SourceSetup>::const_iterator ss=P->sourceSetups.begin(); ss != P->sourceSetups.end(); ++ss)
 	{
 		nTotalPhaseCentres += ss->phaseCentres.size()+1;
 		pointingCentre = &(ss->pointingCentre);
@@ -1816,7 +1975,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		   (pointingCentre->ra > PhaseCentre::DEFAULT_RA) ||
 		   (pointingCentre->dec > PhaseCentre::DEFAULT_DEC))
 		{
-			nTotalPhaseCentres++;
+			++nTotalPhaseCentres;
 		}
 	}
 	allocateSourceTable(D, nTotalPhaseCentres);
@@ -1826,7 +1985,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 	// now run through all scans, populating things as we go
 	scan = D->scan;
-	for(vector<string>::const_iterator si = J.scans.begin(); si != J.scans.end(); si++, scan++)
+	for(vector<string>::const_iterator si = J.scans.begin(); si != J.scans.end(); ++si, ++scan)
 	{
 		S = V->getScanByDefName(*si);
 		if(!S)
@@ -1854,7 +2013,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		scan->nPhaseCentres = sourceSetup->phaseCentres.size();
 		if(sourceSetup->doPointingCentre)
 		{
-			scan->nPhaseCentres++;
+			++scan->nPhaseCentres;
 		}
 		if(scan->nPhaseCentres > maxScanPhaseCentres)
 		{
@@ -1872,7 +2031,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		{
 			srcdec = pointingCentre->dec;
 		}
-		for(int i = 0; i < D->nSource; i++)
+		for(int i = 0; i < D->nSource; ++i)
 		{
 			if(D->source[i].ra == srcra && D->source[i].dec == srcdec &&
 			   D->source[i].calCode[0] == src->calCode &&
@@ -1921,17 +2080,18 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			{
 				D->source[pointingSrcIndex].dec = pointingCentre->dec;
 			}
-			D->nSource++;
+			++D->nSource;
 		}
 		scan->pointingCentreSrc = pointingSrcIndex;
 		if(sourceSetup->doPointingCentre)
 		{
-			scan->phsCentreSrcs[atSource++] = pointingSrcIndex;
+			scan->phsCentreSrcs[atSource] = pointingSrcIndex;
+			++atSource;
 		}
-		for(vector<PhaseCentre>::const_iterator p=sourceSetup->phaseCentres.begin(); p != sourceSetup->phaseCentres.end(); p++)
+		for(vector<PhaseCentre>::const_iterator p=sourceSetup->phaseCentres.begin(); p != sourceSetup->phaseCentres.end(); ++p)
 		{
 			foundSrcIndex = -1;
-			for(int i = 0; i < D->nSource; i++)
+			for(int i = 0; i < D->nSource; ++i)
 			{
 				if(D->source[i].ra == p->ra && D->source[i].dec == p->dec &&
 					D->source[i].calCode[0] == p->calCode &&
@@ -1950,9 +2110,10 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				D->source[foundSrcIndex].dec = p->dec;
 				D->source[foundSrcIndex].calCode[0] = p->calCode;
 				D->source[foundSrcIndex].qual = p->qualifier;
-				D->nSource++;
+				++D->nSource;
 			}
-			scan->phsCentreSrcs[atSource++] = foundSrcIndex; 
+			scan->phsCentreSrcs[atSource] = foundSrcIndex; 
+			++atSource;
 		}
 
 		scan->mjdStart = scanInterval.mjdStart;
@@ -1966,7 +2127,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		scan->configId = getConfigIndex(configs, D, V, P, S);
 		scan->maxNSBetweenUVShifts = corrSetup->maxNSBetweenUVShifts;
 		mode = V->getModeByDefName(configs[scan->configId].first);
-		fftDurNS = static_cast<int>(corrSetup->fftSize()*1000000000.0/mode->sampRate + 0.5);
+		fftDurNS = static_cast<int>(500000000.0/corrSetup->FFTSpecRes);  // FIXME: check for factor of 2!
 		if(corrSetup->maxNSBetweenACAvg > 0)
 		{
 			scan->maxNSBetweenACAvg = corrSetup->maxNSBetweenACAvg;
@@ -2000,25 +2161,25 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		snprintf(scan->identifier, DIFXIO_NAME_LENGTH, "%s", S->defName.c_str());
 		snprintf(scan->obsModeName, DIFXIO_NAME_LENGTH, "%s", S->modeDefName.c_str());
 
-		if(sourceSetup->pointingCentre.ephemFile.size() > 0)
+		if(!sourceSetup->pointingCentre.ephemFile.empty())
 		{
 			spacecraftSet.insert(sourceSetup->pointingCentre.difxName);
 		}
-		for(vector<PhaseCentre>::const_iterator p=sourceSetup->phaseCentres.begin(); p != sourceSetup->phaseCentres.end(); p++)
+		for(vector<PhaseCentre>::const_iterator p=sourceSetup->phaseCentres.begin(); p != sourceSetup->phaseCentres.end(); ++p)
 		{
-			if(p->ephemFile.size() > 0)
+			if(!p->ephemFile.empty())
 			{
 				spacecraftSet.insert(p->difxName);
 			}
 		}
 	}
 
-	for(int c = 0; c < D->nConfig; c++)
+	for(int c = 0; c < D->nConfig; ++c)
 	{
 		corrSetup = P->getCorrSetup(configs[c].second);
-		if(corrSetup->binConfigFile.size() > 0)
+		if(!corrSetup->binConfigFile.empty())
 		{
-			nPulsar++;
+			++nPulsar;
 		}
 	}
 	if(nPulsar > 0)
@@ -2029,7 +2190,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	// configure datastreams
 	D->datastream = makeDifxDatastreams(J, V, P, D->nConfig);
 	D->nDatastream = 0;
-	for(int c = 0; c < D->nConfig; c++)
+	for(int c = 0; c < D->nConfig; ++c)
 	{
 		mode = V->getModeByDefName(configs[c].first);
 		if(mode == 0)
@@ -2057,7 +2218,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			exit(EXIT_FAILURE);
 		}
 
-		if(corrSetup->binConfigFile.size() > 0)
+		if(!corrSetup->binConfigFile.empty())
 		{
 			D->config[c].pulsarId = D->nPulsar;
 			loadPulsarConfigFile(D, corrSetup->binConfigFile.c_str());
@@ -2072,25 +2233,24 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			}
 		}
 
-		if(corrSetup->phasedArrayConfigFile.size() > 0)
+		if(!corrSetup->phasedArrayConfigFile.empty())
 		{
 			D->config[c].phasedArrayId = D->nPhasedArray;
-			snprintf(D->phasedarray[D->nPhasedArray].fileName, DIFXIO_FILENAME_LENGTH, "%s",
-				corrSetup->phasedArrayConfigFile.c_str());
-			D->nPhasedArray++;
+			snprintf(D->phasedarray[D->nPhasedArray].fileName, DIFXIO_FILENAME_LENGTH, "%s", corrSetup->phasedArrayConfigFile.c_str());
+			++D->nPhasedArray;
 		}
 
 		int d = 0;
 
 		//first iterate over all antennas, making sure all recorded bands are allocated
-		for(int a = 0; a < D->nAntenna; a++)
+		for(int a = 0; a < D->nAntenna; ++a)
 		{
 			string antName = antList[a];
 			setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, corrSetup, P->v2dMode);
 		}
 
-		minChans = corrSetup->nInputChan();
-		for(int a = 0; a < D->nAntenna; a++)
+		minChans = corrSetup->minInputChans();
+		for(int a = 0; a < D->nAntenna; ++a)
 		{
 			string antName = antList[a];
 			int v = setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, corrSetup, P->v2dMode);
@@ -2122,12 +2282,12 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 						DifxDatastreamAllocZoomFreqs(dd, nZoomFreqs);
 						
-						for(int i = 0; i < nZoomFreqs; i++)
+						for(int i = 0; i < nZoomFreqs; ++i)
 						{
 							const ZoomFreq &zf = antennaSetup->zoomFreqs[i];
 
 							parentFreqIndices[i] = -1;
-							for(int j = 0; j < dd->nRecFreq; j++)
+							for(int j = 0; j < dd->nRecFreq; ++j)
 							{
 								if(matchingFreq(zf, dd, j, freqs))
 								{
@@ -2141,10 +2301,10 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 							
 								exit(EXIT_FAILURE);
 							}
-							zoomChans = static_cast<int>(corrSetup->nInputChan()*zf.bandwidth/freqs[dd->recFreqId[parentFreqIndices[i]]].bw);
+							zoomChans = static_cast<int>(corrSetup->FFTSpecRes*zf.bandwidth);
 							fqId = getFreqId(freqs, zf.frequency, zf.bandwidth,
 									freqs[dd->recFreqId[parentFreqIndices[i]]].sideBand,
-									zoomChans, zoomChans*(corrSetup->nOutputChan/corrSetup->nFFTChan), overSamp, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
+									corrSetup->FFTSpecRes, corrSetup->outputSpecRes, overSamp, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
 							if(zoomChans < minChans)
 							{
 								minChans = zoomChans;
@@ -2160,25 +2320,25 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 						DifxDatastreamAllocZoomBands(dd, nZoomBands);
 						
 						nZoomBands = 0;
-						for(int i = 0; i < nZoomFreqs; i++)
+						for(int i = 0; i < nZoomFreqs; ++i)
 						{
 							zoomsrc = 0;
 							polcount = 0;
-							for(int j = 0; j < dd->nZoomPol[i]; j++)
+							for(int j = 0; j < dd->nZoomPol[i]; ++j)
 							{
 								dd->zoomBandFreqId[nZoomBands] = i;
-								for(int k = zoomsrc; k < dd->nRecBand; k++)
+								for(int k = zoomsrc; k < dd->nRecBand; ++k)
 								{
 									if(dd->recBandFreqId[k] == parentFreqIndices[i])
 									{
 										dd->zoomBandPolName[nZoomBands] = dd->recBandPolName[k];
 										zoomsrc = k + 1;
-										polcount++;
+										++polcount;
 
 										break;
 									}
 								}
-								nZoomBands++;
+								++nZoomBands;
 							}
 							if(polcount != dd->nZoomPol[i])
 							{
@@ -2207,7 +2367,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 							
 							exit(EXIT_FAILURE);
 						}
-						for(int i = 0; i < nFreqClockOffsets; i++)
+						for(int i = 0; i < nFreqClockOffsets; ++i)
 						{
 							D->datastream[D->nDatastream].clockOffset[i] = 
 								antennaSetup->freqClockOffs.at(i);
@@ -2224,7 +2384,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 							exit(EXIT_FAILURE);
 						}
-						for(int i = 0; i < nLoOffsets; i++)
+						for(int i = 0; i < nLoOffsets; ++i)
 						{
 							D->datastream[D->nDatastream].freqOffset[i] = 
 								antennaSetup->loOffsets.at(i);
@@ -2232,8 +2392,8 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					}
 				}
 				D->config[c].datastreamId[d] = D->nDatastream;
-				D->nDatastream++;
-				d++;
+				++D->nDatastream;
+				++d;
 			}
 		}
 		if(corrSetup->xmacLength > minChans)
@@ -2241,6 +2401,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			if(corrSetup->explicitXmacLength)
 			{
 				cerr << "Error: xmacLength set explicitly to " << corrSetup->xmacLength << ", but minChans (from a zoom freq) was " << minChans << endl;
+				
 				exit(EXIT_FAILURE);
 			}
 			else
@@ -2255,6 +2416,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			if(strict)
 			{
 				cerr << "\nExiting since strict mode was enabled" << endl;
+				
 				exit(EXIT_FAILURE);
 			}
 			else
@@ -2284,7 +2446,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		
 		ds = D->spacecraft;
 
-		for(set<string>::const_iterator s = spacecraftSet.begin(); s != spacecraftSet.end(); s++, ds++)
+		for(set<string>::const_iterator s = spacecraftSet.begin(); s != spacecraftSet.end(); ++s, ++ds)
 		{
 			phaseCentre = P->getPhaseCentre(*s);
 			if(!phaseCentre)
@@ -2325,9 +2487,9 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		}
 
 		//Fill in the spacecraft IDs in the DifxInput object
-		for(int s = 0; s < D->nSource; s++)
+		for(int s = 0; s < D->nSource; ++s)
 		{
-			for(int sc = 0; sc < D->nSpacecraft; sc++)
+			for(int sc = 0; sc < D->nSpacecraft; ++sc)
 			{
 				if(strcmp(D->spacecraft[sc].name, D->source[s].name) == 0)
 				{
@@ -2403,7 +2565,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 			generateDifxJobFileBase(D->job, fileBase);
 
-			tops = J.calcOps(V, corrSetup->fftSize(), corrSetup->doPolar) * 1.0e-12;
+			tops = J.calcOps(V, 2*corrSetup->maxInputChans(), corrSetup->doPolar) * 1.0e-12;
 
 			*of << fileBase << " " << J.mjdStart << " " << J.mjdStop << " " << D->nAntenna << " ";
 			*of << maxPulsarBins << " " << maxScanPhaseCentres << " ";
@@ -2413,8 +2575,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			*of << (J.dataSize/1000000) << "  #";
 			of->precision(p);
 
-
-			for(vector<string>::const_iterator ai = antList.begin(); ai != antList.end(); ai++)
+			for(vector<string>::const_iterator ai = antList.begin(); ai != antList.end(); ++ai)
 			{
 				*of << " " << *ai;
 			}
@@ -2476,16 +2637,16 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 
 	int nWarn = 0;
 
-	for(s = P->sourceSetups.begin(); s != P->sourceSetups.end(); s++)
+	for(s = P->sourceSetups.begin(); s != P->sourceSetups.end(); ++s)
 	{
 		if(V->getSourceBySourceName(s->vexName) == 0)
 		{
 			cerr << "Warning: source " << s->vexName << " referenced in .v2d file but is not in vex file" << endl;
-			nWarn++;
+			++nWarn;
 		}
 	}
 
-	for(a = P->antennaSetups.begin(); a != P->antennaSetups.end(); a++)
+	for(a = P->antennaSetups.begin(); a != P->antennaSetups.end(); ++a)
 	{
 		if(a->vexName == "DEFAULT")
 		{
@@ -2493,58 +2654,58 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 		}
 	}
 
-	for(r = P->rules.begin(); r != P->rules.end(); r++)
+	for(r = P->rules.begin(); r != P->rules.end(); ++r)
 	{
-		for(l = r->scanName.begin(); l != r->scanName.end(); l++)
+		for(l = r->scanName.begin(); l != r->scanName.end(); ++l)
 		{
 			if(V->getScanByDefName(*l) == 0)
 			{
 				cerr << "Warning: scan " << *l << " referenced in RULE " << r->ruleName << " in .v2d file but is not in vex file" << endl;
-				nWarn++;
+				++nWarn;
 			}
 		}
-		for(l = r->sourceName.begin(); l != r->sourceName.end(); l++)
+		for(l = r->sourceName.begin(); l != r->sourceName.end(); ++l)
 		{
 			if(V->getSourceBySourceName(*l) == 0)
 			{
 				cerr << "Warning: source " << *l << " referenced in RULE " << r->ruleName << " in .v2d file but is not in vex file" << endl;
-				nWarn++;
+				++nWarn;
 			}
 		}
-		for(l = r->modeName.begin(); l != r->modeName.end(); l++)
+		for(l = r->modeName.begin(); l != r->modeName.end(); ++l)
 		{
 			if(V->getModeByDefName(*l) == 0)
 			{
 				cerr << "Warning: mode " << *l << " referenced in RULE " << r->ruleName << " in .v2d file but is not in vex file" << endl;
-				nWarn++;
+				++nWarn;
 			}
 		}
 	}
 
 	// Verify that final source names are legal
-	for(unsigned int s = 0; s < V->nSource(); s++)
+	for(unsigned int s = 0; s < V->nSource(); ++s)
 	{
 		const VexSource *S = V->getSource(s);
 
-		if(S->sourceNames.size() == 0)
+		if(S->sourceNames.empty())
 		{
 			cout << "Warning: vex source def block " << S->defName << " has no source names!" << endl;
-			nWarn++;
+			++nWarn;
 			continue;
 		}
 		else if(S->sourceNames.size() > 1)
 		{
 			cout << "Warning: vex source def block " << S->defName << " has more than 1 source names.  Only the first is being considered!" << endl;
-			nWarn++;
+			++nWarn;
 		}
 
-		const SourceSetup *sourceSetup=P->getSourceSetup(S->sourceNames);
-		if(sourceSetup && sourceSetup->pointingCentre.difxName.size() > 0)
+		const SourceSetup *sourceSetup = P->getSourceSetup(S->sourceNames);
+		if(sourceSetup && !sourceSetup->pointingCentre.difxName.empty())
 		{
 			if(illegalSourceName(sourceSetup->pointingCentre.difxName))
 			{
 				cerr << "Warning: illegal source name (" << sourceSetup->pointingCentre.difxName << ") provided in SOURCE section for source " << S->defName << endl;
-				nWarn++;
+				++nWarn;
 			}
 		}
 		else
@@ -2552,7 +2713,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 			if(illegalSourceName(S->sourceNames[0]))
 			{
 				cerr << "Warning: illegal source name (" << S->sourceNames[0] << ") in vex file.  Please correct by renaming in the SOURCE section of the .v2d file" << endl;
-				nWarn++;
+				++nWarn;
 			}
 		}
 #warning "FIXME: check phase center names for legality"
@@ -2561,22 +2722,24 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 	// warn on two VexSources with the same sourceNames[] entries
 	if(V->nSource() > 1)
 	{
-		for(unsigned int s2 = 1; s2 < V->nSource(); s2++) 
+		for(unsigned int s2 = 1; s2 < V->nSource(); ++s2) 
 		{
 			const VexSource *S2 = V->getSource(s2);
-			for(unsigned int s1 = 0; s1 < s2; s1++)
+			unsigned int ns2 = S2->sourceNames.size();
+			for(unsigned int s1 = 0; s1 < s2; ++s1)
 			{
 				const VexSource *S1 = V->getSource(s1);
-				for(unsigned int n2 = 0; n2 < S2->sourceNames.size(); n2++)
+				unsigned int ns1 = S1->sourceNames.size();
+				for(unsigned int n2 = 0; n2 < ns2; ++n2)
 				{
-					for(unsigned int n1 = 0; n1 < S1->sourceNames.size(); n1++)
+					for(unsigned int n1 = 0; n1 < ns1; ++n1)
 					{
 						if(S1->sourceNames[n1] == S2->sourceNames[n2])
 						{
 							cerr << "Warning: two sources with the same name:" << endl;
 							cerr << "  " << S1->defName << "[" << n1 << "] = " << S1->sourceNames[n1] << endl;
 							cerr << "  " << S2->defName << "[" << n2 << "] = " << S2->sourceNames[n2] << endl;
-							nWarn++;
+							++nWarn;
 						}
 					}
 				}
@@ -2659,12 +2822,12 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	// force program to work in Univeral Time
+	// force program to work in Universal Time
 	setenv("TZ", "", 1);
 	tzset();
 
 
-	for(int a = 1; a < argc; a++)
+	for(int a = 1; a < argc; ++a)
 	{
 		if(argv[a][0] == '-')
 		{
@@ -2678,7 +2841,7 @@ int main(int argc, char **argv)
 			else if(strcmp(argv[a], "-v") == 0 ||
 			        strcmp(argv[a], "--verbose") == 0)
 			{
-				verbose++;
+				++verbose;
 			}
 			else if(strcmp(argv[a], "-o") == 0 ||
 			        strcmp(argv[a], "--output") == 0)
@@ -2710,7 +2873,7 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			if(v2dFile.size() > 0)
+			if(!v2dFile.empty())
 			{
 				cerr << "Error: multiple configuration files provided, only one expected." << endl;
 				cerr << "Run with -h for help information." << endl;
@@ -2728,7 +2891,7 @@ int main(int argc, char **argv)
 		cout << "You are strongly suggested to choose a shorter .v2d name (root shorter than 26 characters)" << endl;
 	}
 
-	if(v2dFile.size() == 0)
+	if(v2dFile.empty())
 	{
 		cerr << "Error: configuration (.v2d) file expected." << endl;
 		cerr << "Run with -h for help information." << endl;
@@ -2753,7 +2916,7 @@ int main(int argc, char **argv)
 	}
 
 	P = new CorrParams(v2dFile);
-	if(P->vexFile.size() == 0)
+	if(P->vexFile.empty())
 	{
 		cerr << "Error: vex file parameter (vex) not found in file." << endl;
 		
@@ -2777,13 +2940,28 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	// set min and max bandwidths for each setup
+	for(int s = 0; s < V->nScan(); ++s)
+	{
+		const VexScan *scan = V->getScan(s);
+		CorrSetup *corrSetup = P->getNonConstCorrSetup(scan->corrSetupName);
+		const VexMode *mode = V->getModeByDefName(scan->modeDefName);
+		for(map<string,VexSetup>::const_iterator sp = mode->setups.begin(); sp != mode->setups.end(); ++sp)
+		{
+			const VexFormat *format = mode->getFormat(sp->first);
+			for(vector<VexChannel>::const_iterator cp = format->channels.begin(); cp != format->channels.end(); ++cp)
+			{
+				corrSetup->addRecordedBandwidth(cp->bbcBandwidth);
+			}
+		}
+	}
+	
 	nWarn += P->sanityCheck();
 	nWarn += V->sanityCheck();
 	nWarn += sanityCheckConsistency(V, P);
 	if(strict && nWarn > 0)
 	{
-		cerr << "Quitting since " << nWarn <<
-			" warnings were found and strict mode was enabled." << endl;
+		cerr << "Quitting since " << nWarn << " warnings were found and strict mode was enabled." << endl;
 		
 		exit(EXIT_FAILURE);
 	}
@@ -2794,7 +2972,7 @@ int main(int argc, char **argv)
 
 	//run through all the scans once, creating source setups for any sources
 	//that don't have one
-	for(unsigned int i = 0; i < V->nScan(); i++)
+	for(unsigned int i = 0; i < V->nScan(); ++i)
 	{
 		SourceSetup * added;
 		S = V->getScan(i);
@@ -2876,10 +3054,10 @@ int main(int argc, char **argv)
 	nDigit=0;
 	for(int l = J.size()+P->startSeries-1; l > 0; l /= 10)
 	{
-		nDigit++;
+		++nDigit;
 	}
 	
-	for(vector<VexJob>::iterator j = J.begin(); j != J.end(); j++)
+	for(vector<VexJob>::iterator j = J.begin(); j != J.end(); ++j)
 	{
 		if(verbose > 0)
 		{
@@ -2888,7 +3066,7 @@ int main(int argc, char **argv)
 		//const VexScan *S = V->getScanByDefName(j->scans[0]);
 		//const VexMode *M = V->getModeByDefName(S->modeDefName);
 		//int n = 0;
-		//for(list<int>::const_iterator k = M->overSamp.begin(); k != M->overSamp.end(); k++)
+		//for(list<int>::const_iterator k = M->overSamp.begin(); k != M->overSamp.end(); ++k)
 		//{
 		//	char ext=0;
 		//	if(M->overSamp.size() > 1)
@@ -2896,11 +3074,11 @@ int main(int argc, char **argv)
 		//		ext='a'+n;
 		//	}
 		//	nJob += writeJob(*j, V, P, *k, verbose, &of, nDigit, ext);
-		//	n++;
+		//	++n;
 		//}
 		//if(M->overSamp.size() > 1)
 		//{
-		//	nMulti++;
+		//	++nMulti;
 		//}
 		nJob += writeJob(*j, V, P, -1, verbose, &of, nDigit, 0, strict);
 	}
@@ -2926,8 +3104,12 @@ int main(int argc, char **argv)
 
 	cout << endl;
 
-	if (nJob>0)
-	  return EXIT_SUCCESS;
+	if(nJob>0)
+	{
+		return EXIT_SUCCESS;
+	}
 	else
-	  return EXIT_FAILURE;
+	{
+		return EXIT_FAILURE;
+	}
 }

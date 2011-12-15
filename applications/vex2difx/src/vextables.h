@@ -88,6 +88,8 @@ public:
 	double duration_seconds() const { return 86400.0*(mjdStop-mjdStart); }
 	double overlap(const VexInterval &v) const;
 	double overlap_seconds(const VexInterval &v) const { return 86400.0*overlap(v); }
+	double center() const { return 0.5*(mjdStart+mjdStop); }
+	void shift(double deltaT) { mjdStart += deltaT; mjdStop += deltaT; }
 	void setTimeRange(double start, double stop) { mjdStart = start; mjdStop = stop; }
 	void setTimeRange(const VexInterval &v) { mjdStart = v.mjdStart; mjdStop = v.mjdStop; }
 	void logicalAnd(double start, double stop);
@@ -156,7 +158,7 @@ public:
 class VexChannel		// Antenna-specific baseband channel details
 {
 public:
-	VexChannel() : recordChan(0), subbandId(-1) {}
+	VexChannel() : recordChan(0), subbandId(-1), bbcFreq(0.0), bbcBandwidth(0.0), bbcSideBand(' ') {}
 	void selectTones(int toneIntervalMHz, enum ToneSelection selection, double guardBandMHz);
 	friend bool operator ==(const VexChannel &c1, const VexChannel &c2);
 
@@ -183,7 +185,7 @@ public:
 	friend bool operator ==(const VexFormat &f1, const VexFormat &f2);
 };
 
-class VexIF	// Note: the old "VexIF" is now called "VexChannel"
+class VexIF
 {
 public:
 	VexIF() : ifSSLO(0.0), ifSideBand(' '), pol(' '), phaseCalIntervalMHz(0) {}
@@ -195,6 +197,9 @@ public:
 	char ifSideBand;	// U or L
 	char pol;		// R or L
 	int phaseCalIntervalMHz; // MHz, typically 1 or 5 (or 0 if none)
+
+        // special values needed for VLBA, extracted from comment line
+        string comment;
 };
 
 class VexSetup	// Container for all antenna-specific settings
@@ -246,7 +251,7 @@ public:
 class VexAntenna
 {
 public:
-	VexAntenna() : x(0.0), y(0.0), z(0.0), axisOffset(0.0), dataSource(DataSourceNone) {}
+	VexAntenna() : x(0.0), y(0.0), z(0.0), dx(0.0), dy(0.0), dz(0.0), posEpoch(0.0), axisOffset(0.0), dataSource(DataSourceNone) {}
 
 	double getVexClocks(double mjd, double * coeffs) const;
 
@@ -287,7 +292,7 @@ public:
 class VexJob : public VexInterval
 {
 public:
-	VexJob() : VexInterval(0.0, 1000000.0), jobSeries("Bogus"), jobId(-1), dataSize(0.0) {}
+	VexJob() : VexInterval(0.0, 1000000.0), jobSeries("Bogus"), jobId(-1), dutyCycle(1.0), dataSize(0.0) {}
 
 	void assignVSNs(const VexData &V);
 	string getVSN(const string &antName) const;
@@ -313,7 +318,7 @@ public:
 	static const unsigned int JOB_FLAG_POINT  = 1 << 1;
 	static const unsigned int JOB_FLAG_TIME   = 1 << 2;
 	static const unsigned int JOB_FLAG_SCAN   = 1 << 3;
-	VexJobFlag() {}
+	VexJobFlag() : antId(-1) {}
 	VexJobFlag(double start, double stop, int ant) : VexInterval(start, stop), antId(ant) {}
 
 	int antId;
@@ -428,6 +433,6 @@ ostream& operator << (ostream &os, const VexJobGroup &x);
 ostream& operator << (ostream &os, const VexEvent &x);
 ostream& operator << (ostream &os, const VexJobFlag &x);
 ostream& operator << (ostream &os, const VexData &x);
-bool operator == (VexSubband &s1, VexSubband &s2);
+bool operator == (const VexSubband &s1, const VexSubband &s2);
 
 #endif

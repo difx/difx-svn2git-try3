@@ -92,7 +92,6 @@ double parseTime(const string &timeStr)
 	double mjd;
 	char str[TimeLength];
 	char *p;
-	double t;
 	int n;
 	struct tm tm;
 	char dummy;
@@ -113,10 +112,7 @@ double parseTime(const string &timeStr)
 	}
 	if(p)
 	{
-		t = mktime(&tm);
-		mjd = t/86400.0 + MJD_UNIX0;
-
-		return mjd;
+		return mktime(&tm)/86400.0 + MJD_UNIX0;
 	}
 
 	n = sscanf(str, "%lf%c", &mjd, &dummy);
@@ -156,11 +152,11 @@ double parseCoord(const char *str, char type)
 	if(str[0] == '-')
 	{
 		sign = -1;
-		str++;
+		++str;
 	}
 	else if(str[0] == '+')
 	{
-		str++;
+		++str;
 	}
 
 	l = strlen(str);
@@ -254,7 +250,7 @@ int loadBasebandFilelist(const string &fileName, vector<VexBasebandFile> &baseba
 		exit(EXIT_FAILURE);
 	}
 
-	for(int line=1; ; line++)
+	for(unsigned int line = 1; ; ++line)
 	{
 		is.getline(s, MaxLineLength);
 		if(is.eof())
@@ -262,7 +258,7 @@ int loadBasebandFilelist(const string &fileName, vector<VexBasebandFile> &baseba
 			break;
 		}
 
-		for(int i = 0; s[i]; i++)
+		for(int i = 0; s[i]; ++i)
 		{
 			if(s[i] == '#')
 			{
@@ -283,14 +279,14 @@ int loadBasebandFilelist(const string &fileName, vector<VexBasebandFile> &baseba
 		else if(l == 1)
 		{
 			basebandFiles.push_back(VexBasebandFile(tokens[0]));
-			n++;
+			++n;
 		}
 		else if(l == 3)
 		{
 			basebandFiles.push_back(VexBasebandFile(tokens[0],
 				parseTime(tokens[1]),
 				parseTime(tokens[2]) ));
-			n++;
+			++n;
 		}
 		else
 		{
@@ -308,9 +304,11 @@ int loadBasebandFilelist(const string &fileName, vector<VexBasebandFile> &baseba
 CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 {
 	tInt = 2.0;
-	specAvgDontUse = 0;		// If set, this will trigger a bail out condition
-	nFFTChan = 128;
-	nOutputChan = 16;
+	suppliedSpecAvg = 0;
+	FFTSpecRes = 250000.0;		// Hz; spectral resolution at FFT stage
+	outputSpecRes = 500000.0;	// Hz; spectral resolution in Output
+	nFFTChan = 0;			// If this or nOutputChan != 0, these override SpecAvg params
+	nOutputChan = 0;
 	doPolar = true;
 	doAuto = true;
 	doRFI = false;
@@ -318,23 +316,29 @@ CorrSetup::CorrSetup(const string &name) : corrSetupName(name)
 	strideLength = 0;
 	xmacLength = 0;
 	explicitXmacLength = false;
-	explicitnFFTChan = false;
+	explicitFFTSpecRes = false;
+	explicitOutputSpecRes = false;
 	explicitGuardNS = false;
 	numBufferedFFTs = 10;
 	subintNS = 0;
 	guardNS = 1000;
 	maxNSBetweenUVShifts = 2000000000;
 	maxNSBetweenACAvg = 0;		// zero means set to default in vex2difx.cpp
+	minRecordedBandwidth = 0.0;
+	maxRecordedBandwidth = 0.0;
 }
 
-int CorrSetup::fftSize() const
+void CorrSetup::addRecordedBandwidth(double bw)
 {
-	return nFFTChan*2;
-}
-
-int CorrSetup::nInputChan() const
-{
-	return nFFTChan;
+	recordedBandwidths.insert(bw);
+	if(bw < minRecordedBandwidth || minRecordedBandwidth == 0.0)
+	{
+		minRecordedBandwidth = bw;
+	}
+	if(bw > maxRecordedBandwidth)
+	{
+		maxRecordedBandwidth = bw;
+	}
 }
 
 int CorrSetup::setkv(const string &key, const string &value)
@@ -363,7 +367,18 @@ int CorrSetup::setkv(const string &key, const string &value)
 	else if(key == "nFFTChan")
 	{
 		ss >> nFFTChan;
-		explicitnFFTChan = true;
+	}
+	else if(key == "outputSpecRes" || key == "specRes")
+	{
+		ss >> outputSpecRes;
+		outputSpecRes *= 1e6;	// Users use MHz, vex2difx uses Hz
+		explicitOutputSpecRes = true;
+	}
+	else if(key == "FFTSpecRes")
+	{
+		ss >> FFTSpecRes;
+		FFTSpecRes *= 1e6;	// Users use MHz, vex2difx uses Hz
+		explicitFFTSpecRes = true;
 	}
 	else if(key == "doPolar")
 	{
@@ -396,7 +411,7 @@ int CorrSetup::setkv(const string &key, const string &value)
 	}
 	else if(key == "specAvg")
 	{
-		ss >> specAvgDontUse;
+		ss >> suppliedSpecAvg;
 	}
 	else if(key == "fringeRotOrder")
 	{
@@ -468,7 +483,7 @@ int CorrSetup::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: SETUP: Unknown parameter '" << key << "'." << endl; 
-		nWarn++;
+		++nWarn;
 	}
 
 	return nWarn;
@@ -481,7 +496,7 @@ void CorrSetup::addFreqId(int freqId)
 
 bool CorrSetup::correlateFreqId(int freqId) const
 {
-	if(freqIds.size() == 0)
+	if(freqIds.empty())
 	{
 		return true;
 	}
@@ -491,85 +506,110 @@ bool CorrSetup::correlateFreqId(int freqId) const
 	}
 }
 
-int CorrSetup::checkValidity() const
+// Returns ratio of output to input spectral resolution
+int CorrSetup::specAvg() const
 {
-	int nwarn = 0;
+	double x = outputSpecRes / FFTSpecRes;
+	int n = static_cast<int>(x + 0.5);
 
-	if(!isPower2(nFFTChan))
+	if(fabs(x - n) > 0.0001)
 	{
-		cerr << "nFFTChan=" << nFFTChan << ". Non power of 2 FFTs are an experimental feature. Caution is advised." << endl;
-		cerr << "   Setting xmaclength and stridelength manually is also recommended" << endl;
+		n = -1;	// Signal illegal averaging
 	}
-	if(nInputChan() < strideLength)
-	{
-		cerr << "Array stride length " << strideLength << " is greater than the input number of channels " << nInputChan() << endl;
-		cerr << "Probably you need to reduce the strideLength parameter" << endl;
-		nwarn++;
-	}
+	
+	return n;
+}
 
-	if(strideLength > 0 && nInputChan() % strideLength != 0)
-	{
-		cerr << "Array stride length " << strideLength << " does not divide evenly into input number of channels " << nInputChan() << endl;
-		cerr << "Probably you need to reduce the strideLength parameter" << endl;
-		nwarn++;
-	}
+int CorrSetup::testSpectralResolution() const
+{
+	int nError = 0;
 
-	if(nInputChan() < xmacLength)
+	for(set<double>::const_iterator it = recordedBandwidths.begin(); it != recordedBandwidths.end(); ++it)
 	{
-		cerr << "XMAC stride length " << xmacLength << " is greater than the input number of channels " << nInputChan() << endl;
-		cerr << "Probably you need to reduce the xmacLength parameter" << endl;
-		nwarn++;
-	}
-
-	if (nInputChan() <= 0 || xmacLength <= 0)
-	{
-		cerr << "Non-positive number of input channels (channels=" << nInputChan() << ") or XMAC stride (stride=" << xmacLength << ")" << endl;
-		nwarn++;
-	}
-
-	if(specAvgDontUse != 0)
-	{
-		cerr << "Paramaeter specAvg is no longer supported starting with DiFX 2.0.1.  Instead use combinations of nChan and nFFTChan to achieve your goals." << endl;
-		if(specAvgDontUse == 1)
+		double x = *it/FFTSpecRes;
+		if(fabs(x - static_cast<int>(x + 0.5)) > 0.0001)
 		{
-			cerr << "For cases like this where the desired specAvg parameter is 1, please instead set nFFTChan to be the same as nChan (which is " << nOutputChan << " in this case" << endl;
+			cerr << "Error: FFT spectral resolution (" << (FFTSpecRes*1.0e-6) << " MHz) does not divide nicely into sub-band bandwidth (" << (*it*1.0e-6) << " MHz)" << endl;
+			
+			++nError;
 		}
-		else
-		{
-			cerr << "If you meant nChan to be the number of output channels (after spectral averaging), then you should set nFFTChan=" << nOutputChan*specAvgDontUse << " and nChan=" << nOutputChan << "; if you meant for nChan to be the number of input channels (before spectral averaging), then you should set nFFTChan=" << nOutputChan << " and nChan=" << nOutputChan/specAvgDontUse << endl;
-		}
-		
-		exit(EXIT_FAILURE);
-
 	}
 
-	if(nInputChan() % nOutputChan != 0)
-	{
-		cerr << "Error: nFFTChan must be an integer multiple of nChan.  Values found were nFFTChan=" << nFFTChan << " nChan=" << nOutputChan << endl;
+	return nError;
+}
 
-		exit(EXIT_FAILURE);
-	}
+int CorrSetup::testXMACLength() const
+{
+	int nWarn = 0;
 
 	if(xmacLength > 0)
 	{
-		if(nInputChan() % xmacLength != 0)
+		for(set<double>::const_iterator it = recordedBandwidths.begin(); it != recordedBandwidths.end(); ++it)
 		{
-			cerr << "XMAC stride length " << xmacLength << " does not divide evenly into input number of channels " << nInputChan() << endl;
-			cerr << "Probably you need to reduce the xmacLength parameter" << endl;
-			nwarn++;
+			if(nInputChans(*it) % xmacLength != 0)
+			{
+				cerr << "Warning: XMAC length " << xmacLength << " does not divide evenly into " << minInputChans() << " which are requested for sub-bands with bandwidth " << (*it * 1.0e-6) << " MHz" << endl;
+				cerr << "Probably you need to reduce the xmacLength parameter" << endl;
+
+				++nWarn;
+			}
 		}
 	}
 
-	return nwarn;
+	return nWarn;
 }
 
+int CorrSetup::testStrideLength() const
+{
+	int nWarn = 0;
+
+	if(xmacLength > 0)
+	{
+		for(set<double>::const_iterator it = recordedBandwidths.begin(); it != recordedBandwidths.end(); ++it)
+		{
+			if(nInputChans(*it) % strideLength != 0)
+			{
+				cerr << "Warning: stride length " << strideLength << " does not divide evenly into " << minInputChans() << " which are requested for sub-bands with bandwidth " << (*it * 1.0e-6) << " MHz" << endl;
+				cerr << "Probably you need to reduce the strideLength parameter" << endl;
+				++nWarn;
+			}
+		}
+	}
+
+	return nWarn;
+}
+
+int CorrSetup::checkValidity() const
+{
+	int nWarn = 0;
+
+	if(specAvg() < 0)
+	{
+		cerr << "Error: The FFT Spectral Resolution ( " << FFTSpecRes << " Hz) must be an integral multiple of the Output Spectral Resolution (" << outputSpecRes << " Hz)" << endl;
+
+		exit(EXIT_FAILURE);
+	}
+
+	if(testSpectralResolution() > 0)
+	{
+		exit(EXIT_FAILURE);
+	}
+
+	nWarn += testXMACLength();
+
+	nWarn += testStrideLength();
+
+	return nWarn;
+}
+
+#warning "FIXME: this assumes worst case bandwidth here"
 double CorrSetup::bytesPerSecPerBLPerBand() const
 {
 	int pols = doPolar ? 2 : 1;
 
 	// assume 8 bytes per complex
 
-	return 8*nOutputChan*pols/tInt;
+	return 8*maxOutputChans()*pols/tInt;
 }
 
 CorrRule::CorrRule(const string &name) : ruleName(name)
@@ -647,7 +687,7 @@ int CorrRule::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: RULE: Unknown parameter '" << key << "'." << endl; 
-		nWarn++;
+		++nWarn;
 	}
 
 	return nWarn;
@@ -703,7 +743,7 @@ int SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc)
 		if(pc->ra > PhaseCentre::DEFAULT_RA)
 		{
 			cerr << "Warning: Source " << vexName << " has multiple RA assignments" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		pc->ra = parseCoord(value.c_str(), 'R');
 	}
@@ -712,7 +752,7 @@ int SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc)
 		if(pc->dec > PhaseCentre::DEFAULT_DEC)
 		{
 			cerr << "Warning: Source " << vexName << " has multiple Dec assignments" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		pc->dec = parseCoord(value.c_str(), 'D');
 	}
@@ -767,7 +807,7 @@ int SourceSetup::setkv(const string &key, const string &value, PhaseCentre * pc)
 	else
 	{
 		cerr << "Warning: SOURCE: Unknown parameter '" << key << "'." << endl; 
-		nWarn++;
+		++nWarn;
 	}
 
 	return nWarn;
@@ -807,10 +847,10 @@ AntennaSetup::AntennaSetup(const string &name) : vexName(name)
 	toneSelection = ToneSelectionSmart;
 	tcalFrequency = -1;
 	dataSource = DataSourceNone;
-	dataSampling = NumSamplingTypes;	/* flag that no sampling is is identified here */
+	dataSampling = NumSamplingTypes;	// flag that no sampling is is identified here
 }
 
-int AntennaSetup::setkv(const string &key, const string &value, ZoomFreq * zoomFreq)
+int AntennaSetup::setkv(const string &key, const string &value, ZoomFreq *zoomFreq)
 {
 	int nWarn = 0;
 
@@ -825,9 +865,13 @@ int AntennaSetup::setkv(const string &key, const string &value, ZoomFreq * zoomF
 	else if(key == "noparent" || key == "NOPARENT")
         {
 		if(value == "TRUE" || value == "True" || value == "true")
+		{
 	                zoomFreq->correlateparent = false;
+		}
 		else
+		{
 			zoomFreq->correlateparent = true;
+		}
         }
 	else if(key == "specAvg" || key == "SPECAVG" || key == "specavg")
         {
@@ -836,7 +880,7 @@ int AntennaSetup::setkv(const string &key, const string &value, ZoomFreq * zoomF
 	else
 	{
 		cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << endl; 
-		nWarn++;
+		++nWarn;
 	}
 
 	return nWarn;
@@ -870,7 +914,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(clock.offset != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple clockOffset definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		ss >> clock.offset;
 		clock.offset /= 1.0e6;	// convert from us to sec
@@ -891,18 +935,19 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(clock.rate != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple clockRate definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		ss >> clock.rate;
 		clock.rate /= 1.0e6;	// convert from us/sec to sec/sec
 		clock.mjdStart = 1;
 	}
+#warning "FIXME: this section of code could be made much nicer"
 	else if(key == "clock2")
 	{
 		if(clock2 != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple clock2 definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 
 		ss >> clock2;
@@ -917,7 +962,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(clock3 != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple clock3 definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 
 		ss >> clock3;
@@ -932,7 +977,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(clock4 != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple clock4 definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 
 		ss >> clock4;
@@ -947,7 +992,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(clock5 != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple clock5 definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 
 		ss >> clock5;
@@ -962,7 +1007,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(clock.offset_epoch > 50001.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple clockEpoch definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		clock.offset_epoch = parseTime(value);
 		clock.mjdStart = 1;
@@ -972,7 +1017,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(deltaClock != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple deltaClock definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		ss >> deltaClock;
 		deltaClock /= 1.0e6;	// convert from us to sec
@@ -982,7 +1027,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(deltaClockRate != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple deltaClockRate definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		ss >> deltaClockRate;
 		deltaClockRate /= 1.0e6;	// convert from us/sec to sec/sec
@@ -992,7 +1037,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(X != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple X definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		ss >> X;
 	}
@@ -1001,7 +1046,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(Y != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple Y definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		ss >> Y;
 	}
@@ -1010,7 +1055,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(Z != 0.0)
 		{
 			cerr << "Warning: antenna " << vexName << " has multiple Z definitions" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		ss >> Z;
 	}
@@ -1032,7 +1077,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
 		{
 			cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << endl;
-			nWarn++;
+			++nWarn;
 		}
 		dataSource = DataSourceFile;
 		basebandFiles.push_back(VexBasebandFile(value));
@@ -1042,7 +1087,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
 		{
 			cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << endl;
-			nWarn++;
+			++nWarn;
 		}
 		dataSource = DataSourceFile;
 		loadBasebandFilelist(value, basebandFiles);
@@ -1052,7 +1097,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
 		{
 			cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << endl;
-			nWarn++;
+			++nWarn;
 		}
 		dataSource = DataSourceNetwork;
 		ss >> networkPort;
@@ -1062,7 +1107,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
 		{
 			cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << endl;
-			nWarn++;
+			++nWarn;
 		}
 		dataSource = DataSourceNetwork;
 		ss >> windowSize;
@@ -1072,7 +1117,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
 		{
 			cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << endl;
-			nWarn++;
+			++nWarn;
 		}
 		dataSource = DataSourceNetwork;
 		ss >> windowSize;
@@ -1087,7 +1132,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		else if(dataSource != DataSourceNone)
 		{
 			cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << endl;
-			nWarn++;
+			++nWarn;
 		}
 		dataSource = DataSourceModule;
 		basebandFiles.clear();
@@ -1109,7 +1154,7 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		if(toneSelection == ToneSelectionUnknown)
 		{
 			cerr << "Error: antenna " << vexName << " unsupported value of toneSelection (" << ts << ") provided." << endl;
-			nWarn++;
+			++nWarn;
 			toneSelection = ToneSelectionVex;
 		}
 	}
@@ -1131,8 +1176,25 @@ int AntennaSetup::setkv(const string &key, const string &value)
 		ss >> d;
 		loOffsets.push_back(d);
 	}
+	else if(key == "zoom")
+	{
+		if(!zoomFreqs.empty())
+		{
+			cerr << "Error: cannot specify both ANTENNA-based and ZOOM-based zoom freqs for an antenna" << endl;
+
+			exit(EXIT_FAILURE);
+		}
+		ss >> globalZoom;
+	}
 	else if(key == "addZoomFreq")
 	{
+		if(!globalZoom.empty())
+		{
+			cerr << "Error: cannot specify both ANTENNA-based and ZOOM-based zoom freqs for an antenna" << endl;
+
+			exit(EXIT_FAILURE);
+		}
+
 		// This is a bit tricky.  All parameters must be together, with @ replacing =, and separated by /
                 // e.g., addZoomFreq = freq@1649.99/bw@1.0/correlateparent@TRUE/specAvg@8
 		// only freq and bw are compulsory; default is parent values and don't correlate parent
@@ -1152,7 +1214,88 @@ int AntennaSetup::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << endl; 
-		nWarn++;
+		++nWarn;
+	}
+
+	return nWarn;
+}
+
+void AntennaSetup::copyGlobalZoom(const GlobalZoom &globalZoom)
+{
+	for(vector<ZoomFreq>::const_iterator it = globalZoom.zoomFreqs.begin(); it != globalZoom.zoomFreqs.end(); ++it)
+	{
+		zoomFreqs.push_back(*it);
+	}
+}
+
+int GlobalZoom::setkv(const string &key, const string &value, ZoomFreq *zoomFreq)
+{
+	int nWarn = 0;
+
+	if(key == "freq" || key == "FREQ")
+        {
+                zoomFreq->frequency = atof(value.c_str())*1000000; //convert to Hz
+        }
+	else if(key == "bw" || key == "BW")
+        {
+                zoomFreq->bandwidth = atof(value.c_str())*1000000; //convert to Hz
+        }
+	else if(key == "noparent" || key == "NOPARENT")
+        {
+		if(value == "TRUE" || value == "True" || value == "true")
+		{
+	                zoomFreq->correlateparent = false;
+		}
+		else
+		{
+			cerr << "Warning: Currently correlation of rec bands that are parents to globally defined zoom bands is not supported.  Results will be unpredictable." << endl;
+			++nWarn;
+
+			zoomFreq->correlateparent = true;
+		}
+        }
+	else if(key == "specAvg" || key == "SPECAVG" || key == "specavg")
+        {
+                zoomFreq->spectralaverage = atoi(value.c_str());
+        }
+	else
+	{
+		cerr << "Warning: ZOOM: Unknown parameter '" << key << "'." << endl; 
+		++nWarn;
+	}
+
+	return nWarn;
+	
+}
+
+int GlobalZoom::setkv(const string &key, const string &value)
+{
+	int nWarn = 0;
+
+	if(key == "addZoomFreq" || key == "zoom" || key == "zoomFreq")
+	{
+		// This is a bit tricky.  All parameters must be together, with @ replacing =, and separated by /
+                // e.g., addZoomFreq = freq@1649.99/bw@1.0/correlateparent@TRUE/specAvg@8
+		// only freq and bw are compulsory; default is parent values and don't correlate parent
+                zoomFreqs.push_back(ZoomFreq());
+                ZoomFreq * newfreq = &(zoomFreqs.back());
+                string::size_type last = 0;
+                string::size_type at = 0;
+		string::size_type splitat = 0;
+        	string nestedkeyval;
+                while(at != string::npos)
+                {
+                        at = value.find_first_of('/', last);
+                        nestedkeyval = value.substr(last, at-last);
+                        splitat = nestedkeyval.find_first_of('@');
+                        nWarn += setkv(nestedkeyval.substr(0,splitat), nestedkeyval.substr(splitat+1), newfreq);
+                        last = at+1;
+                }
+	}
+	else
+	{
+		cerr << "Warning: ZOOM: Unknown parameter '" << key << "'." << endl; 
+		++nWarn;
 	}
 
 	return nWarn;
@@ -1161,6 +1304,8 @@ int AntennaSetup::setkv(const string &key, const string &value)
 CorrParams::CorrParams()
 {
 	defaults();
+
+	parseWarnings = 0;
 }
 
 CorrParams::CorrParams(const string &fileName)
@@ -1213,6 +1358,7 @@ void CorrParams::defaults()
 	outputFormat = OutputFormatDIFX;
 	nCore = 0;
 	nThread = 0;
+	tweakIntTime = false;
 }
 
 void pathify(string &filename)
@@ -1321,7 +1467,8 @@ int CorrParams::setkv(const string &key, const string &value)
 	}
 	else if(key == "jobSeries" || key == "pass")
 	{
-		for(unsigned int i = 0; i < value.size(); i++)
+		unsigned int l = value.size();
+		for(unsigned int i = 0; i < l; ++i)
 		if(!isalnum(value[i]))
 		{
 			cerr << "Error: jobSeries must be purely alphanumeric" << endl;
@@ -1377,8 +1524,7 @@ int CorrParams::setkv(const string &key, const string &value)
 	}
 	else if(key == "tweakIntTime")
 	{
-		/* No longer does anything */
-		cerr << "tweakIntTime is deprecated - no effect" << endl;
+		tweakIntTime = isTrue(value);
 	}
 	else if(key == "antennas")
 	{
@@ -1410,7 +1556,7 @@ int CorrParams::setkv(const string &key, const string &value)
 		else
 		{
 			cerr << "Warning: Illegal value " << value << " for mode" << endl;
-			nWarn++;
+			++nWarn;
 		}
 	}
 	else if(key == "outputFormat")
@@ -1430,7 +1576,7 @@ int CorrParams::setkv(const string &key, const string &value)
 	else
 	{
 		cerr << "Warning: Unknown keyword " << key << " with value " << value << endl;
-		nWarn++;
+		++nWarn;
 	}
 
 	return nWarn;
@@ -1452,14 +1598,14 @@ void CorrParams::addBaseline(const string &baselineName)
 
 	if(pos == string::npos)
 	{
-		cerr << "Error in baseline designation: " << baselineName << " -- a hyphen is required." << endl;
+		cerr << "Error in baseline designation: " << baselineName << " : a hyphen is required." << endl;
 
 		exit(EXIT_FAILURE);
 	}
 
 	if(pos == 0 || pos == baselineName.length()-1)
 	{
-		cerr << "Error in baseline designation: " << baselineName << " -- need characters before and after the hyphen." << endl;
+		cerr << "Error in baseline designation: " << baselineName << " : need characters before and after the hyphen." << endl;
 		
 		exit(EXIT_FAILURE);
 	}
@@ -1478,6 +1624,7 @@ int CorrParams::load(const string &fileName)
 		PARSE_MODE_RULE,
 		PARSE_MODE_SOURCE,
 		PARSE_MODE_ANTENNA,
+		PARSE_MODE_GLOBAL_ZOOM,
 		PARSE_MODE_EOP
 	};
 
@@ -1490,6 +1637,7 @@ int CorrParams::load(const string &fileName)
 	CorrRule    *rule=0;
 	SourceSetup *sourceSetup=0;
 	AntennaSetup *antennaSetup=0;
+	GlobalZoom  *globalZoom=0;
 	VexEOP       *eop=0;
 	Parse_Mode parseMode = PARSE_MODE_GLOBAL;
 	int nWarn = 0;
@@ -1515,7 +1663,7 @@ int CorrParams::load(const string &fileName)
 		int l = ss.size();
 		int t = 0;
 		char last = ' ';
-		for(int i = 0; i <= l; i++)
+		for(int i = 0; i <= l; ++i)
 		{
 			// comment
 			if(last <= ' ' && s[i] == '#')
@@ -1546,9 +1694,7 @@ int CorrParams::load(const string &fileName)
 
 	bool keyWaiting=false, keyWaitingTemp;
 	string key(""), value, last("");
-	for(vector<string>::const_iterator i = tokens.begin(); 
-	    i != tokens.end();
-	    i++)
+	for(vector<string>::const_iterator i = tokens.begin(); i != tokens.end(); ++i)
 	{
 		keyWaitingTemp = false;
 		if(*i == "SETUP")
@@ -1559,10 +1705,10 @@ int CorrParams::load(const string &fileName)
 				
 				exit(EXIT_FAILURE);
 			}
-			i++;
+			++i;
 			corrSetups.push_back(CorrSetup(*i));
 			corrSetup = &corrSetups.back();
-			i++;
+			++i;
 			if(*i != "{")
 			{
 				cerr << "Error: '{' expected." << endl;
@@ -1580,10 +1726,10 @@ int CorrParams::load(const string &fileName)
 				
 				exit(EXIT_FAILURE);
 			}
-			i++;
+			++i;
 			rules.push_back(CorrRule(*i));
 			rule = &rules.back();
-			i++;
+			++i;
 			if(*i != "{")
 			{
 				cerr << "Error: '{' expected." << endl;
@@ -1601,19 +1747,16 @@ int CorrParams::load(const string &fileName)
 				
 				exit(EXIT_FAILURE);
 			}
-			i++;
-			for(unsigned int j=0;j<sourceSetups.size();j++)
+			++i;
+			if(getSourceSetup(*i) != 0)
 			{
-				if(sourceSetups[j].vexName.compare(*i) == 0)
-				{
-					cerr << "Error: Trying to add a setup for source " << *i << " which already has one!" << endl;
-					
-					exit(EXIT_FAILURE);
-				}
+				cerr << "Error: Trying to add a setup for source " << *i << " which already has one!" << endl;
+
+				exit(EXIT_FAILURE);
 			}
 			sourceSetups.push_back(SourceSetup(*i));
 			sourceSetup = &sourceSetups.back();
-			i++;
+			++i;
 			if(*i != "{")
 			{
 				cerr << "Error: '{' expected." << endl;
@@ -1631,12 +1774,12 @@ int CorrParams::load(const string &fileName)
 				
 				exit(EXIT_FAILURE);
 			}
-			i++;
+			++i;
 			string antName(*i);
 			Upper(antName);
 			antennaSetups.push_back(AntennaSetup(antName));
 			antennaSetup = &antennaSetups.back();
-			i++;
+			++i;
 			if(*i != "{")
 			{
 				cerr << "Error: '{' expected." << endl;
@@ -1646,6 +1789,28 @@ int CorrParams::load(const string &fileName)
 			key = "";
 			parseMode = PARSE_MODE_ANTENNA;
 		}
+		else if(*i == "ZOOM")
+		{
+			if(parseMode != PARSE_MODE_GLOBAL)
+			{
+				cerr << "Error: ZOOM out of place." << endl;
+				
+				exit(EXIT_FAILURE);
+			}
+			++i;
+			string zoomName(*i);
+			globalZooms.push_back(GlobalZoom(zoomName));
+			globalZoom = &globalZooms.back();
+			++i;
+			if(*i != "{")
+			{
+				cerr << "Error: '{' expected." << endl;
+
+				exit(EXIT_FAILURE);
+			}
+			key = "";
+			parseMode = PARSE_MODE_GLOBAL_ZOOM;
+		}
 		else if(*i == "EOP")
 		{
 			if(parseMode != PARSE_MODE_GLOBAL)
@@ -1654,12 +1819,12 @@ int CorrParams::load(const string &fileName)
 
                                 exit(EXIT_FAILURE);
                         }
-                        i++;
+                        ++i;
                         string eopDate(*i);
                         eops.push_back(VexEOP());
                         eop = &eops.back();
                         eop->mjd = parseTime(eopDate);
-                        i++;
+                        ++i;
                         if(*i != "{")
                         {
                                 cerr << "Error: '{' expected." << endl;
@@ -1681,7 +1846,7 @@ int CorrParams::load(const string &fileName)
 		else if(*i == "{" || *i == "}")
 		{
 			cerr << "Warning: unexpected character '" << *i << "'." << endl;
-			nWarn++;
+			++nWarn;
 		}
 		else if(last == "=" || last == ",")
 		{
@@ -1712,6 +1877,9 @@ int CorrParams::load(const string &fileName)
                         case PARSE_MODE_EOP:
                                 nWarn += eop->setkv(key, value);
                                 break;
+			case PARSE_MODE_GLOBAL_ZOOM:
+				nWarn += globalZoom->setkv(key, value);
+				break;
                         }
 		}
 		else
@@ -1739,50 +1907,193 @@ int CorrParams::load(const string &fileName)
 	is.close();
 
 	// if no setups or rules declared, make the default setup
-	if(corrSetups.size() == 0)
+	if(corrSetups.empty())
 	{
 		defaultSetup();
 	}
 
-	if(rules.size() == 0)
+	if(rules.empty())
 	{
 		defaultRule();
 	}
 
-	if(baselineList.size() == 0)
+	if(baselineList.empty())
 	{
 		addBaseline("*-*");
 	}
 
-	// update nFFTChan if needed
-	for(vector<CorrSetup>::iterator c = corrSetups.begin(); c != corrSetups.end(); c++)
+	if(v2dMode == V2D_MODE_PROFILE)
+	{
+		for(vector<CorrSetup>::iterator c = corrSetups.begin(); c != corrSetups.end(); ++c)
+		{
+			c->doPolar = false;
+		}
+	}
+
+	// populate global zoom bands into antennas that want them
+	for(vector<AntennaSetup>::iterator it = antennaSetups.begin(); it != antennaSetups.end(); ++it)
+	{
+		if(!it->globalZoom.empty())
+		{
+			const GlobalZoom *z = getGlobalZoom(it->globalZoom);
+
+			if(!z)
+			{
+				cerr << "Error: referenced ZOOM " << it->globalZoom << " is not defined!" << endl;
+
+				exit(EXIT_FAILURE);
+			}
+
+			it->copyGlobalZoom(*z);
+		}
+	}
+
+	return nWarn;
+}
+
+int CorrParams::checkSetupValidity()
+{
+	int nWarn = 0;
+
+	// if specAvg was used
+	for(vector<CorrSetup>::iterator c = corrSetups.begin(); c != corrSetups.end(); ++c)
+	{
+		bool nChanSpecAvgOK = false;
+		bool specAvgUsed = false;
+		double minBW = c->getMinRecordedBandwidth();
+		double maxBW = c->getMaxRecordedBandwidth();
+
+		if(!c->nFFTChan && !c->nOutputChan && !c->explicitFFTSpecRes && !c->explicitOutputSpecRes)
+		{
+			cerr << "WARNING: No information was provided regarding spectral resolution.  Basic defaults WILL be used.  Please check that this suits your needs." << endl;
+			++nWarn;
+		}
+
+		if(c->suppliedSpecAvg)
+		{
+			if(c->explicitFFTSpecRes)
+			{
+				if(!c->explicitOutputSpecRes)
+				{
+					specAvgUsed = true;
+					c->outputSpecRes = c->FFTSpecRes * c->suppliedSpecAvg;
+				}
+			}
+			else
+			{
+				if(c->explicitOutputSpecRes)
+				{
+					specAvgUsed = true;
+					c->FFTSpecRes = c->outputSpecRes / c->suppliedSpecAvg;
+				}
+				else
+				{
+					nChanSpecAvgOK = true;
+				}
+			}
+		}
+	
+
+		// if user wants to set channels explicitly
+
+		if(c->nFFTChan || c->nOutputChan)
+		{
+			if(c->suppliedSpecAvg != 0)
+			{
+				if(c->nFFTChan && c->nOutputChan)
+				{
+					cerr << "Error: number of channels is overspecified.  Please don't use all three of: nFFTChan, nOutputChan and specAvg" << endl;
+
+					exit(EXIT_FAILURE);
+				}
+				if(nChanSpecAvgOK)
+				{
+					specAvgUsed = true;
+					if(c->nFFTChan)
+					{
+						c->nOutputChan = static_cast<int>(c->nFFTChan / c->suppliedSpecAvg + 0.5);
+					}
+					else
+					{
+						c->nFFTChan = static_cast<int>(c->nOutputChan * c->suppliedSpecAvg + 0.5);
+					}
+				}
+			}
+
+			if(c->explicitFFTSpecRes)
+			{
+				cerr << "Warning: number of channels and spectral resolutions provided!  Ignoring number of channels\n";
+				++nWarn;
+			}
+			else if(minBW != maxBW)
+			{
+				cerr << "Warning: cannot specify number of channels when different sub-band bandwidths exist within one setup\n";
+				++nWarn;
+			}
+			else
+			{
+				if(c->nFFTChan)
+				{
+					c->FFTSpecRes = minBW/c->nFFTChan;
+					if(c->nOutputChan)
+					{
+						if(c->nFFTChan % c->nOutputChan != 0)
+						{
+							cerr << "Error: supplied number of FFT channels " << c->nFFTChan << " is not a multiple of number of supplied output channels " << c->nOutputChan << endl;
+
+							exit(EXIT_FAILURE);
+						}
+						c->outputSpecRes = minBW/c->nOutputChan;
+					}
+					else
+					{
+						c->outputSpecRes = c->nFFTChan;
+					}
+				}
+				else // here only nOutputChan is defined
+				{
+					int n = (c->nOutputChan < 128) ? 128 : c->nOutputChan;
+					c->outputSpecRes = minBW/c->nOutputChan;
+					c->FFTSpecRes = minBW/n;
+				}
+			}
+		}
+		if(c->suppliedSpecAvg && !specAvgUsed)
+		{
+			cerr << "Warning: the value 'specAvg' supplied in the .v2d file was not used because the averaging was already over specified.  Please verify the spectral resolutions being used are appropriate for this project!" << endl;
+			++nWarn;
+		}
+	}
+
+	// update spectral resolution and channels if needed
+	for(vector<CorrSetup>::iterator c = corrSetups.begin(); c != corrSetups.end(); ++c)
 	{
 #warning "FIXME: This logic should consider number of antennas and possibly number of sub-bands"
-		if(c->nFFTChan < c->nOutputChan)
+		if(c->FFTSpecRes > c->outputSpecRes)
 		{
-			if(c->explicitnFFTChan)
+			if(c->explicitFFTSpecRes)
 			{
-				cerr << "You have explicitly requested " << c->nFFTChan << " channels in the FFT, but the number of output channels is set to " << c->nOutputChan << ".  This cannot be accommodated! If --force used, nFFTChan will be set to " << c->nOutputChan << endl;
-				nWarn++;
+				cerr << "You have explicitly requested an FFT resolution of " << c->FFTSpecRes << " Hz, but the output spectral resolution is set to " << c->outputSpecRes << " Hz.  This cannot be accommodated! If --force used, FFTSpecRes will be set to " << c->outputSpecRes << endl;
+				++nWarn;
 			}
-			c->nFFTChan = c->nOutputChan;
+			c->FFTSpecRes = c->outputSpecRes;
 		}
 
 		if(c->xmacLength == 0)
 		{
-			if(c->nInputChan() > 128)
+			if(c->minInputChans() > 128)
 			{
 				c->xmacLength = 128;
 			}
 			else
 			{
-				c->xmacLength = c->nInputChan();
+				c->xmacLength = c->minInputChans();
 			}
 		}
 		if(c->strideLength == 0)
 		{
 			c->strideLength = 1;
-			int tempcount = c->nInputChan();
+			int tempcount = c->minInputChans();
 			while(c->strideLength < tempcount)
 			{
 				c->strideLength *= 2;
@@ -1791,18 +2102,10 @@ int CorrParams::load(const string &fileName)
 		}
 	}
 
-	//check that all setups are sensible
-	for(vector<CorrSetup>::const_iterator c = corrSetups.begin(); c != corrSetups.end(); c++)
+	// check that all setups are sensible
+	for(vector<CorrSetup>::const_iterator c = corrSetups.begin(); c != corrSetups.end(); ++c)
 	{
 		nWarn += c->checkValidity();
-	}
-
-	if(v2dMode == V2D_MODE_PROFILE)
-	{
-		for(vector<CorrSetup>::iterator c = corrSetups.begin(); c != corrSetups.end(); c++)
-		{
-			c->doPolar = false;
-		}
 	}
 
 	return nWarn;
@@ -1826,8 +2129,8 @@ void CorrParams::example()
 	singleSetup = false;
 	corrSetups.push_back(CorrSetup("1413+15"));
 	corrSetups.back().tInt = 1.0;
-	corrSetups.back().nOutputChan = 16;
-	corrSetups.back().nFFTChan = 128;
+	corrSetups.back().FFTSpecRes = 250000.0;
+	corrSetups.back().outputSpecRes = 500000.0;
 	corrSetups.push_back(CorrSetup("default"));
 	rules.push_back(CorrRule("1413+15"));
 	rules.back().sourceName.push_back(string("1413+15"));
@@ -1843,26 +2146,27 @@ void CorrParams::example()
 int CorrParams::sanityCheck()
 {
 	int nWarn = 0;
-	const AntennaSetup *a = 0;
 
-	if(minSubarraySize > antennaList.size() && antennaList.size() > 0)
+	nWarn += checkSetupValidity();
+
+	if(minSubarraySize > antennaList.size() && !antennaList.empty())
 	{
 		cerr << "Warning: the antenna list has fewer than minSubarray antennas.  No jobs will be made." << endl;
-		nWarn++;
+		++nWarn;
 	}
 
-	a = getAntennaSetup("DEFAULT");
+	const AntennaSetup *a = getAntennaSetup("DEFAULT");
 	if(a)
 	{
 		if(a->X != 0.0 || a->Y != 0 || a->Z != 0)
 		{
 			cerr << "Warning: the default antenna's coordinates are set!" << endl;
-			nWarn++;
+			++nWarn;
 		}
 		if(a->clock.offset != 0 || a->clock.rate != 0 || a->clock2 != 0 || a->clock3 != 0 || a->clock4 != 0 || a->clock5 != 0 || a->clock.offset_epoch != 0 || a->deltaClock != 0 || a->deltaClockRate != 0)
 		{
 			cerr << "Warning: the default antenna's clock parameters are set!" << endl;
-			nWarn++;
+			++nWarn;
 		}
 	}
 
@@ -1871,7 +2175,7 @@ int CorrParams::sanityCheck()
 		if(nThread <= 0 || nCore <= 0)
 		{
 			cerr << "Warning: nThreads and nCore must either both or neither be set." << endl;
-			nWarn++;
+			++nWarn;
 		}
 	}
 
@@ -1916,7 +2220,7 @@ bool CorrParams::useAntenna(const string &antName) const
 		return true;
 	}
 
-	for(it = antennaList.begin(); it != antennaList.end(); it++)
+	for(it = antennaList.begin(); it != antennaList.end(); ++it)
 	{
 		if(antennaMatch(*it, antName))
 		{
@@ -1936,7 +2240,7 @@ bool CorrParams::useBaseline(const string &ant1, const string &ant2) const
 		return true;
 	}
 
-	for(it = baselineList.begin(); it != baselineList.end(); it++)
+	for(it = baselineList.begin(); it != baselineList.end(); ++it)
 	{
 		if(baselineMatch(*it, ant1, ant2) ||
 		   baselineMatch(*it, ant2, ant1))
@@ -1952,7 +2256,7 @@ bool CorrParams::swapPol(const string &antName) const
 {
 	vector<AntennaSetup>::const_iterator a;
 
-	for(a = antennaSetups.begin(); a != antennaSetups.end(); a++)
+	for(a = antennaSetups.begin(); a != antennaSetups.end(); ++a)
 	{
 		if(a->vexName == antName)
 		{
@@ -1967,7 +2271,7 @@ const VexClock *CorrParams::getAntennaClock(const string &antName) const
 {
 	vector<AntennaSetup>::const_iterator a;
 
-	for(a = antennaSetups.begin(); a != antennaSetups.end(); a++)
+	for(a = antennaSetups.begin(); a != antennaSetups.end(); ++a)
 	{
 		if(a->vexName == antName)
 		{
@@ -1987,20 +2291,18 @@ const VexClock *CorrParams::getAntennaClock(const string &antName) const
 
 const AntennaSetup *CorrParams::getAntennaSetup(const string &name) const
 {
-	int i, n;
 	const AntennaSetup *a = 0;
 
-	n = antennaSetups.size();
-	for(i = 0; i < n; i++)
+	for(vector<AntennaSetup>::const_iterator it = antennaSetups.begin(); it != antennaSetups.end(); ++it)
 	{
-		if(antennaSetups[i].vexName == "DEFAULT")
+		if(it->vexName == "DEFAULT")
 		{
 			// keep this as a placeholder in case nothing better is found
-			a = &antennaSetups[i];
+			a = &(*it);
 		}
-		if(name == antennaSetups[i].vexName)
+		if(it->vexName == name)
 		{
-			a = &antennaSetups[i];
+			a = &(*it);
 			break;
 		}
 	}
@@ -2008,30 +2310,56 @@ const AntennaSetup *CorrParams::getAntennaSetup(const string &name) const
 	return a;
 }
 
-void CorrParams::addSourceSetup(SourceSetup toadd)
+const GlobalZoom *CorrParams::getGlobalZoom(const string &name) const
 {
-	for(unsigned int i=0;i<sourceSetups.size();i++)
+	const GlobalZoom *z = 0;
+
+	for(vector<GlobalZoom>::const_iterator it = globalZooms.begin(); it != globalZooms.end(); ++it)
 	{
-		if(toadd.vexName.compare(sourceSetups[i].vexName) == 0)
+		if(it->difxName == name)
 		{
-			cerr << "Error: Trying to add a setup for source " << toadd.vexName << " which already has one!" << endl;
+			z = &(*it);
+			break;
+		}
+	}
+
+	return z;
+}
+
+void CorrParams::addSourceSetup(const SourceSetup &toAdd)
+{
+	for(vector<SourceSetup>::const_iterator it = sourceSetups.begin(); it != sourceSetups.end(); ++it)
+	{
+		if(it->vexName == toAdd.vexName)
+		{
+			cerr << "Error: Trying to add a setup for source " << toAdd.vexName << " which already has one!" << endl;
 
 			exit(EXIT_FAILURE);
 		}
 	}
-	sourceSetups.push_back(toadd);
+	sourceSetups.push_back(toAdd);
 }
 
 const CorrSetup *CorrParams::getCorrSetup(const string &name) const
 {
-	int i, n;
-
-	n = corrSetups.size();
-	for(i = 0; i < n; i++)
+	for(vector<CorrSetup>::const_iterator it = corrSetups.begin(); it != corrSetups.end(); ++it)
 	{
-		if(name == corrSetups[i].corrSetupName)
+		if(it->corrSetupName == name)
 		{
-			return &corrSetups[i];
+			return &(*it);
+		}
+	}
+
+	return 0;
+}
+
+CorrSetup *CorrParams::getNonConstCorrSetup(const string &name)
+{
+	for(vector<CorrSetup>::iterator it = corrSetups.begin(); it != corrSetups.end(); ++it)
+	{
+		if(it->corrSetupName == name)
+		{
+			return &(*it);
 		}
 	}
 
@@ -2040,14 +2368,11 @@ const CorrSetup *CorrParams::getCorrSetup(const string &name) const
 
 const SourceSetup *CorrParams::getSourceSetup(const string &name) const
 {
-	int i, n;
-
-	n = sourceSetups.size();
-	for(i = 0; i < n; i++)
+	for(vector<SourceSetup>::const_iterator it = sourceSetups.begin(); it != sourceSetups.end(); ++it)
 	{
-		if(name == sourceSetups[i].vexName)
+		if(it->vexName == name)
 		{
-			return &sourceSetups[i];
+			return &(*it);
 		}
 	}
 
@@ -2056,34 +2381,31 @@ const SourceSetup *CorrParams::getSourceSetup(const string &name) const
 
 const SourceSetup *CorrParams::getSourceSetup(const vector<string> &names) const
 {
-	vector<string>::const_iterator s;
-	int i, n;
-
-	n = sourceSetups.size();
-	for(i = 0; i < n; i++)
+	for(vector<SourceSetup>::const_iterator it = sourceSetups.begin(); it != sourceSetups.end(); ++it)
 	{
-		for(s = names.begin(); s != names.end(); s++)
+		if(find(names.begin(), names.end(), it->vexName) != names.end())
 		{
-			if(*s == sourceSetups[i].vexName)
-			{
-				return &sourceSetups[i];
-			}
+			return &(*it);
 		}
 	}
 
 	return 0;
 }
 
-const PhaseCentre * CorrParams::getPhaseCentre(const string  &difxName) const
+const PhaseCentre *CorrParams::getPhaseCentre(const string &difxName) const
 {
-	for(unsigned int i=0;i<sourceSetups.size();i++)
+	for(vector<SourceSetup>::const_iterator ss = sourceSetups.begin(); ss != sourceSetups.end(); ++ss)
 	{
-		if(difxName == sourceSetups[i].pointingCentre.difxName)
-			return &(sourceSetups[i].pointingCentre);
-		for(unsigned int j=0;j<sourceSetups[i].phaseCentres.size();j++)
+		if(ss->pointingCentre.difxName == difxName)
 		{
-			if(difxName == sourceSetups[i].phaseCentres[j].difxName)
-				return &(sourceSetups[i].phaseCentres[j]);
+			return &(ss->pointingCentre);
+		}
+		for(vector<PhaseCentre>::const_iterator pc = ss->phaseCentres.begin(); pc != ss->phaseCentres.end(); ++pc)
+		{
+			if(pc->difxName == difxName)
+			{
+				return &(*pc);
+			}
 		}
 	}
 
@@ -2096,7 +2418,7 @@ const string &CorrParams::findSetup(const string &scan, const string &source, co
 	static const string def("default");
 	static const string none("");
 
-	for(it = rules.begin(); it != rules.end(); it++)
+	for(it = rules.begin(); it != rules.end(); ++it)
 	{
 		if(it->match(scan, source, mode, cal, qual))
 		{
@@ -2123,14 +2445,14 @@ ostream& operator << (ostream &os, const CorrSetup &x)
 	os << "SETUP " << x.corrSetupName << endl;
 	os << "{" << endl;
 	os << "  tInt=" << x.tInt << endl;
-	os << "  nChan=" << x.nOutputChan << endl;
-	os << "  nFFTChan=" << x.nFFTChan << endl;
+	os << "  FFTSpecRes=" << (x.FFTSpecRes*1e-6) << endl;
+	os << "  outputSpecRes=" << (x.outputSpecRes*1e-6) << endl;
 	os << "  doPolar=" << x.doPolar << endl;
 	os << "  doAuto=" << x.doAuto << endl;
 	os << "  doRFI=" << x.doRFI << endl;
 	os << "  subintNS=" << x.subintNS << endl;
 	os << "  fringeRotOrder=" << x.fringeRotOrder << endl;
-	if(x.binConfigFile.size() > 0)
+	if(!x.binConfigFile.empty())
 	{
 		os << "  binConfig=" << x.binConfigFile << endl;
 	}
@@ -2151,7 +2473,7 @@ ostream& operator << (ostream &os, const CorrRule &x)
 		list<string>::const_iterator it;
 
 		os << "  scan=";
-		for(it = x.scanName.begin(); it != x.scanName.end(); it++)
+		for(it = x.scanName.begin(); it != x.scanName.end(); ++it)
 		{
 			os << " " << *it;
 		}
@@ -2163,7 +2485,7 @@ ostream& operator << (ostream &os, const CorrRule &x)
 		list<string>::const_iterator it;
 
 		os << "  source=";
-		for(it = x.sourceName.begin(); it != x.sourceName.end(); it++)
+		for(it = x.sourceName.begin(); it != x.sourceName.end(); ++it)
 		{
 			os << " " << *it;
 		}
@@ -2175,7 +2497,7 @@ ostream& operator << (ostream &os, const CorrRule &x)
 		list<string>::const_iterator it;
 
 		os << "  mode=";
-		for(it = x.modeName.begin(); it != x.modeName.end(); it++)
+		for(it = x.modeName.begin(); it != x.modeName.end(); ++it)
 		{
 			os << " " << *it;
 		}
@@ -2198,7 +2520,7 @@ ostream& operator << (ostream &os, const SourceSetup &x)
 {
 	os << "SOURCE " << x.vexName << endl;
 	os << "{" << endl;
-	if(x.pointingCentre.difxName.size() > 0)
+	if(!x.pointingCentre.difxName.empty())
 	{
 		os << "  pointing centre name=" << x.pointingCentre.difxName << endl;
 	}
@@ -2232,7 +2554,7 @@ ostream& operator << (ostream &os, const AntennaSetup &x)
 {
         os << "ANTENNA " << x.vexName << endl;
         os << "{" << endl;
-        if(x.difxName.size() > 0)
+        if(!x.difxName.empty())
         {
                 os << "  name=" << x.difxName << endl;
         }
@@ -2247,7 +2569,7 @@ ostream& operator << (ostream &os, const AntennaSetup &x)
                 os << "  clockEpoch=" << x.clock.offset_epoch << endl;
         }
         os << "  polSwap=" << x.polSwap << endl;
-        if(x.format.size() > 0)
+        if(!x.format.empty())
         {
                 os << "  format=" << x.format << endl;
         }
@@ -2286,10 +2608,9 @@ ostream& operator << (ostream &os, const CorrParams &x)
 	}
 	os << "mjdStart=" << x.mjdStart << endl;
 	os << "mjdStop=" << x.mjdStop << endl;
-	int n = x.manualBreaks.size();
-	for(int i = 0; i < n; i++)
+	for(vector<double>::const_iterator mb = x.manualBreaks.begin(); mb != x.manualBreaks.end(); ++mb)
 	{
-		os << "break=" << x.manualBreaks[i] << endl;
+		os << "break=" << *mb << endl;
 	}
 	os << "minSubarray=" << x.minSubarraySize << endl;
 	os << "visBufferLength=" << x.visBufferLength << endl;
@@ -2324,44 +2645,38 @@ ostream& operator << (ostream &os, const CorrParams &x)
 	
 	if(!x.antennaList.empty())
 	{
-		list<string>::const_iterator it;
-		
 		os << "antennas=";
-		for(it = x.antennaList.begin(); it != x.antennaList.end(); it++)
+		for(list<string>::const_iterator a = x.antennaList.begin(); a != x.antennaList.end(); ++a)
 		{
-			if(it != x.antennaList.begin())
+			if(a != x.antennaList.begin())
 			{
 				os << ",";
 			}
-			os << *it;
+			os << *a;
 		}
 		os << endl;
 	}
 	
 	if(!x.baselineList.empty())
 	{
-		list<pair<string,string> >::const_iterator it;
-		
 		os << "baselines=";
-		for(it = x.baselineList.begin(); it != x.baselineList.end(); it++)
+		for(list<pair<string,string> >::const_iterator bl = x.baselineList.begin(); bl != x.baselineList.end(); ++bl)
 		{
-			if(it != x.baselineList.begin())
+			if(bl != x.baselineList.begin())
 			{
 				os << ",";
 			}
-			os << it->first << '-' << it->second;
+			os << bl->first << '-' << bl->second;
 		}
 		os << endl;
 	}
 
 	if(!x.antennaSetups.empty())
         {
-                vector<AntennaSetup>::const_iterator it;
-
-                for(it = x.antennaSetups.begin(); it != x.antennaSetups.end(); it++)
+                for(vector<AntennaSetup>::const_iterator as = x.antennaSetups.begin(); as != x.antennaSetups.end(); ++as)
                 {
                         os << endl;
-                        os << *it;
+                        os << *as;
                 }
         }
 
@@ -2369,48 +2684,40 @@ ostream& operator << (ostream &os, const CorrParams &x)
         {
                 os << endl;
 
-                vector<VexEOP>::const_iterator it;
-
-                for(it = x.eops.begin(); it != x.eops.end(); it++)
+                for(vector<VexEOP>::const_iterator ve = x.eops.begin(); ve != x.eops.end(); ++ve)
                 {
-                        os << "EOP " << it->mjd << " { ";
-                        os << "tai_utc=" << it->tai_utc << " ";
-                        os << "ut1_utc=" << it->ut1_utc << " ";
-                        os << "xPole=" << it->xPole*RAD2ASEC << " ";
-                        os << "yPole=" << it->yPole*RAD2ASEC << " }" << endl;
+                        os << "EOP " << ve->mjd << " { ";
+                        os << "tai_utc=" << ve->tai_utc << " ";
+                        os << "ut1_utc=" << ve->ut1_utc << " ";
+                        os << "xPole=" << ve->xPole*RAD2ASEC << " ";
+                        os << "yPole=" << ve->yPole*RAD2ASEC << " }" << endl;
                 }
         }
 
 	if(!x.sourceSetups.empty())
 	{
-		vector<SourceSetup>::const_iterator it;
-
-		for(it = x.sourceSetups.begin(); it != x.sourceSetups.end(); it++)
+		for(vector<SourceSetup>::const_iterator ss = x.sourceSetups.begin(); ss != x.sourceSetups.end(); ++ss)
 		{
 			os << endl;
-			os << *it;
+			os << *ss;
 		}
 	}
 
 	if(!x.corrSetups.empty())
 	{
-		vector<CorrSetup>::const_iterator it;
-
-		for(it = x.corrSetups.begin(); it != x.corrSetups.end(); it++)
+		for(vector<CorrSetup>::const_iterator cs = x.corrSetups.begin(); cs != x.corrSetups.end(); ++cs)
 		{
 			os << endl;
-			os << *it;
+			os << *cs;
 		}
 	}
 
 	if(!x.rules.empty())
 	{
-		vector<CorrRule>::const_iterator it;
-
-		for(it = x.rules.begin(); it != x.rules.end(); it++)
+		for(vector<CorrRule>::const_iterator cr = x.rules.begin(); cr != x.rules.end(); ++cr)
 		{
 			os << endl;
-			os << *it;
+			os << *cr;
 		}
 	}
 
@@ -2425,12 +2732,13 @@ bool areCorrSetupsCompatible(const CorrSetup *A, const CorrSetup *B, const CorrP
 	{
 		return false;
 	}
-	if(C->singleSetup)
+	else if(C->singleSetup)
 	{
-		if(A->tInt        == B->tInt        &&
-		   A->nOutputChan == B->nOutputChan &&
-		   A->doPolar     == B->doPolar     &&
-		   A->doAuto      == B->doAuto      &&
+		if(A->tInt          == B->tInt          &&
+		   A->FFTSpecRes    == B->FFTSpecRes    &&
+		   A->outputSpecRes == B->outputSpecRes &&
+		   A->doPolar       == B->doPolar       &&
+		   A->doAuto        == B->doAuto        &&
 		   A->binConfigFile.compare(B->binConfigFile) == 0)
 		{
 			return true;
@@ -2440,10 +2748,8 @@ bool areCorrSetupsCompatible(const CorrSetup *A, const CorrSetup *B, const CorrP
 			return false;
 		}
 	}
-	else
-	{
-		return true;
-	}
+
+	return true;
 }
 
 int CorrParams::loadShelves(const string &fileName)
@@ -2462,16 +2768,17 @@ int CorrParams::loadShelves(const string &fileName)
 		return 0;
 	}
 
-	doAntennas = (antennaList.size() == 0);
+	// only change antenna selection if the antenna list is empty to start with
+	doAntennas = antennaList.empty();
 
-	for(int lineNum = 1; ; lineNum++)
+	for(int lineNum = 1; ; ++lineNum)
 	{
 		is.getline(s, 1024);
 		if(is.eof())
 		{
 			break;
 		}
-		for(int i = 0; s[i]; i++)
+		for(int i = 0; s[i]; ++i)
 		{
 			if(s[i] == '#')
 			{
@@ -2485,7 +2792,7 @@ int CorrParams::loadShelves(const string &fileName)
 			continue;
 		}
 
-		if(sscanf(s, "%s%s%s", a, v, ms) != 3)
+		if(sscanf(s, "%31s%31s%31s", a, v, ms) != 3)
 		{
 			cerr << "Error: line " << lineNum << " of " << fileName << " not parsable." << endl;
 
@@ -2522,10 +2829,10 @@ int CorrParams::loadShelves(const string &fileName)
 
 	is.close();
 
-	if(noShelf.size() > 0)
+	if(!noShelf.empty())
 	{
 		cerr << "Warning: " << noShelf.size() << " modules have no shelf location:";
-		for(vector<string>::const_iterator s = noShelf.begin(); s != noShelf.end(); s++)
+		for(vector<string>::const_iterator s = noShelf.begin(); s != noShelf.end(); ++s)
 		{
 			cerr << " " << *s;
 		}
