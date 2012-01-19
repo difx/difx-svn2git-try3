@@ -77,6 +77,8 @@ DifxTcal *newDifxTcal()
 		return 0;
 	}
 
+	dt->verbose = 1;
+
 	return dt;
 }
 
@@ -721,6 +723,11 @@ static int loadDifxTcalVLBA(DifxTcal *dt, const char *antenna, const char *recei
 		}
 		fclose(in);
 		
+		if(dt->verbose > 0)
+		{
+			printf("Loaded Tcal file: %s\n", fileName);
+		}
+
 		return 0;
 	}
 	else
@@ -769,13 +776,13 @@ int setDifxTcalDIFX(DifxTcal *dt, const char *tcalFile)
 static int loadDifxTcalDIFX(DifxTcal *dt)
 {
 	FILE *in;
-	int g0;
 
 	if(!dt)
 	{
 		return -1;
 	}
 
+	in = fopen(dt->path, "r");
 	if(!in)
 	{
 		return -2;
