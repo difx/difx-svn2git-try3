@@ -1153,10 +1153,12 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].source = MK5MODULE;
     else if(line == "NETWORK")
       datastreamtable[i].source = NETWORKSTREAM;
+    else if(line == "FAKE")
+      datastreamtable[i].source = FAKESTREAM;
     else
     {
       if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Unknown data source " << line << " (case sensitive choices are FILE, MODULE and NETWORK)" << endl;
+        cfatal << startl << "Unknown data source " << line << " (case sensitive choices are FILE, MODULE, NETWORK and FAKE)" << endl;
       return false;
     }
     getinputline(input, &line, "FILTERBANK USED");

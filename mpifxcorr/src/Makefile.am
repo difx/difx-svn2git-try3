@@ -7,9 +7,9 @@ mark5_files = \
 	nativemk5_stubs.cpp
 endif
 
-bin_PROGRAMS = mpifxcorr neuteredmpifxcorr
+bin_PROGRAMS = mpifxcorrfake 
 
-mpifxcorr_SOURCES = \
+mpifxcorrfake_SOURCES = \
 	mpifxcorr.cpp \
 	fxmanager.cpp \
 	core.cpp \
@@ -27,70 +27,3 @@ mpifxcorr_SOURCES = \
 	datamuxer.cpp \
 	$(mark5_files)
 
-library_includedir = $(includedir)/mpifxcorr
-library_include_HEADERS = \
-	fxmanager.h \
-	pcal.h \
-	core.h \
-	datastream.h \
-	architecture.h \
-	visibility.h \
-	configuration.h \
-	mk5.h \
-	mk5mode.h \
-        model.h \
-        mode.h \
-	polyco.h \
-	mark5dir.h \
-	nativemk5.h \
-	watchdog.h \
-	mpifxcorr.h \
-	switchedpower.h \
-	datamuxer.h \
-	alert.h 
-
-# historically these have been in both $(includedir)/{.,mpifxcorr}
-include_HEADERS = $(library_include_HEADERS)
-
-lib_LIBRARIES = libmpifxcorr.a libfxcorr.a
-libmpifxcorr_a_SOURCES = \
-	pcal.cpp \
-	configuration.cpp \
-	mode.cpp \
-	core.cpp \
-	datastream.cpp \
-	polyco.cpp \
-	mk5.cpp \
-	mk5mode.cpp \
-	fxmanager.cpp \
-        model.cpp \
-	visibility.cpp \
-	alert.cpp \
-	switchedpower.cpp \
-	datamuxer.cpp \
-	$(mark5_files)
-
-libfxcorr_a_SOURCES = \
-	configuration.cpp \
-	pcal.cpp \
-	mode.cpp \
-	mk5mode.cpp \
-	polyco.cpp \
-	visibility.cpp \
-        model.cpp \
-	datamuxer.cpp \
-	alert.cpp
-
-neuteredmpifxcorr_SOURCES = \
-	mpifxcorr.cpp \
-	fxmanager.cpp \
-	core.cpp \
-	datastream.cpp \
-	mk5.cpp \
-	switchedpower.cpp \
-	datamuxer.cpp \
-	$(mark5_files)
-
-neuteredmpifxcorr_CXXFLAGS = -DNEUTERED_DIFX $(AM_CXXFLAGS)
-
-neuteredmpifxcorr_LDADD = $(top_builddir)/src/libfxcorr.a
