@@ -393,6 +393,8 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
 
 void Mk5DataStream::initialiseFake(int configindex)
 {
+  DataStream::initialiseFake(configindex);
+
   deriveFormatName(configindex);
 
   cwarn << startl << "Correlating fake data with format " << formatname << endl;
@@ -645,7 +647,7 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
     unsigned long long sequence;
     struct msghdr msg;
     struct iovec iov[2];
-    int headerpackets;
+    unsigned int headerpackets;
 
     memset(&msg, 0, sizeof(msg));
     msg.msg_iov        = &iov[0];

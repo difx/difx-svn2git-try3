@@ -1951,7 +1951,7 @@ bool Configuration::populateResultLengths()
 void Configuration::setDatastreamMuxInfo(int datastreamindex, string muxinfo)
 {
   int threadindices[500];
-  int at = muxinfo.find_first_of(":");
+  size_t at = muxinfo.find_first_of(":");
   datastreamtable[datastreamindex].nummuxthreads = 0;
 
   while(at != string::npos) {

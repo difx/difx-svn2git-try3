@@ -836,6 +836,9 @@ void DataStream::loopfileread()
 
 void DataStream::initialiseFake(int configindex)
 {
+  readseconds = 0;
+  readnanoseconds = 0;
+  readscan = 0;
 }
 
 void DataStream::loopfakeread()
