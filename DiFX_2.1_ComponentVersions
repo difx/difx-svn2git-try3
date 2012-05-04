@@ -1,0 +1,19 @@
+The following component package versions make up DiFX-2.1:
+
+calcif2		2.1.0
+calcserver	1.4
+difx2fits	3.1.0
+difx2mark4	1.1
+difx2profile	0.3
+difxdb		1.15	(sites/NRAO)
+difxfilterbank	0.4
+difxio		3.1.0
+difxmessage	2.1.0
+hops		3.7
+mark5access	1.4.3
+misc		2.1
+mk5daemon	2.1.0
+mpifxcorr	2.1
+vdifio		0.3
+vex2difx	2.1.0
+vis2screen	0.2
