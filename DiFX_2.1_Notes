@@ -1,0 +1,161 @@
+--------------------------
+Release notes for DiFX 2.1
+--------------------------
+
+Draft 2012 May 04
+
+The DiFX developers from around the planet are happy to note the release of
+DiFX version 2.1.  Along with a number of bug fixes, new features, and 
+other improvements come a new versioning system which should make it easier
+to handle incremental version improvements (e.g., important fixes isolated
+in a small number of components).
+
+The list of new features and bug fixes below is likely far from complete.
+
+
+Version numbering change
+------------------------
+
+With DiFX 2.1 comes a new version numbering scheme.  The collection of 
+libraries, utilities and applications comprising the DiFX system will be
+given a 2-part version number with a major release.  This version number
+refers to a particular set of versioned components.  Incremental improvements
+to components can be made along the way.  When improvements worthy of a new
+version are in place, the DiFX version number acquires a third digit, 
+indicating a revision number.  This digit would be incremented with each
+incremental revision.  These minor releases should be restricted to bug
+fixes or new features that are both significant and deemed very unlikely to
+affect other portions of code.  Binary compatibility of components should not
+change within a major (2-part version) DiFX release.
+
+Version numbering of individual components is really up to the maintainers
+themselves.  A convenient numbering scheme expected to be adopted by many
+such components is to use a 3-part version number where the first two digits
+match that of the DiFX release they do or will belong to upon stabilization.
+After a major (2-part version) DiFX release is made, the components are
+branched so that new development happens with an incremented second part and
+bug fixes destined for minor DiFX releases (3-part versions) can be made on
+the other branch.
+
+
+Bug Fixes
+---------
+
+* LBA format data now scaled roughly correctly (removing the need for
+  large ACCOR corrections).
+
+* There was a bug when xmaclength was > nfftchan for pulsar processing.
+  This has been corrected.
+
+* guardns was incorrectly (overzealously) calculated in mpifxcorr.
+
+* Mk5DataStream::calculateControlParams: bufferindex>=bufferbytes bug fixed.
+
+* Low weight reads could result in uninitialized memory; fixed.
+
+* Streamstor XLRRead() bug work-around installed several places (read at
+  position 0 before reading at position > 0).  This is thought not to be 
+  needed with Conduant SDK 9.2 but the work-around has no performance impact.
+
+* Fix to pulse calibration data ordering for LSB or reordered channels.
+
+* Pulse Cal amplitude now divided by pulse cal averaging time in seconds.
+
+* Pulse cal system would cause crash if no tones in narrow channel.  Fixed.
+
+* Zoom band support across mixed bandwidths (see caveat below).
+
+* Fix for spurious weights at end of jobs (untested...)
+
+* Mixed 1 and 2 bit data are handled more cleanly
+
+* mpifxcorr terminates correctly for all short jobs.  Previously it
+  hung for jobs with a number of subints between nCores and 4 x nCores
+
+* Correctly scale cross-correlation amplitudes for pulsar binning when using
+  Tsys>0 (accounts for varying # samples per bin c.f. nominal)
+
+* Lower side-band pulse cal tones had sign error.  Fixed.
+  
+
+New Features
+------------
+
+* Mark5-based correlation: easy access to SMART data (can be viewed with 
+  getsmart)
+
+* Mark5-based correlation: emit multicast message containing drive
+  statistics after each scan
+
+* VSIS interface added to mk5daemon
+
+* Support for non power-of-2 FFT lengths
+
+* New utilities: mk5map (limited functionality), fileto5c, record5c
+
+* Remote running of vex2difx from mk5daemon
+
+* Multithread VDIF support enabled for the data sources FILE and
+  MODULE, including stripping of non-VDIF packets
+
+* New features added to existing utilities:
+
+  - mk5cp: copy without reference to a module directory
+
+  - mk5cp: ability to send data over ssh connection
+
+  - vsn: get SMART data from disk drives
+
+* e-Control source code analysis (Martin Ettl, Wettzell)
+
+* Restart of correlation is now possible
+
+* difx2fits: -0 option to write minimal number of visibilities to FITS
+
+* difx2fits: write new RAOBS, DECOBS columns in source table
+
+* tweakIntTime has been re-enabled
+
+* diffDiFX.py can now cope with two files that don't have exactly the
+  same visibilities (i.e., some visibilities are missing from one file)
+
+* plotDiFX.py and plotDynamicSpectrum.py now have better plotting and
+  more options
+
+* new FAKE datastream type for performance testing
+
+* Espresso, a lightweight system for managing disk-based correlation,
+  has been added to the DiFX repository. 
+
+* Option to correlate only one polarization has been added.
+
+* mk5dir can now produce .dir file information for VDIF formatted data.
+
+
+Caveats
+-------
+
+* To support zoom bands across mixed bandwidths (and other unnusual modes),
+  "number of channels" becomes a poorly defined quantity.  There is a 
+  general change to use spectral resolution rather than number of channels 
+  when specifying correlation parameters.  nChan still should work for
+  simple cases.
+
+* There is currently no clean way to specify different zoom bands for
+  different observing modes in one .v2d file.
+
+* difx2fits no longer copies autocorrelations to output FITS files except
+  for phase centre 0 and pulsar bin 0 unless the -a option is used.
+
+* When running difx2fits on jobs that were restarted mid-way, the oldest 
+  data is used preferentially over newer data.  It would make sense 
+  someday to change that.
+ 
+
+Known Bugs
+----------
+
+* There is a problem in some cases (believed to be restricted to very high 
+  output data rates) where visibilities start getting dropped, likely as
+  a result of the visibility buffer filling up.  Increasing the size of
+  that buffer and perhaps using single-scan jobs limits the problems.
