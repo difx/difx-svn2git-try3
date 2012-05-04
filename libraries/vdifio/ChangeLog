@@ -1,0 +1,15 @@
+Version 0.3
+~~~~~~~~~~~
+* Version for DiFX-2.1, May 4, 2012
+
+Version 0.2
+~~~~~~~~~~~
+* Post DiFX-2.0.0
+* Ability to make RPM files
+* Version for DiFX-2.0.1, June 10, 2011
+
+Version 0.1
+~~~~~~~~~~~
+* Initial implementation of vdifio
+* Serves multiple VDIF threads from one source to multiple sinks
+* Version for DiFX-2.0.0
