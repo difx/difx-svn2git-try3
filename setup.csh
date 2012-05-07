@@ -20,11 +20,11 @@ setenv USEGFORTRAN "yes"
 set IPPLIB32="-lipps -lippvm -lippcore"
 set IPPLIB64="-lippsem64t -lippvmem64t -lippcoreem64t"
 #Comment out the following for very new IPP (version > 6)
-set IPPLIB32="${IPPLIB32} -lguide"
-set IPPLIB64="${IPPLIB64} -lguide"
+#set IPPLIB32="${IPPLIB32} -lguide"
+#set IPPLIB64="${IPPLIB64} -lguide"
 #Comment out the following for older (pre version 6) IPP
-set IPPLIB32="${IPPLIB32} -liomp5"
-set IPPLIB64="${IPPLIB64} -liomp5"
+#set IPPLIB32="${IPPLIB32} -liomp5"
+#set IPPLIB64="${IPPLIB64} -liomp5"
 #Uncomment the following for very old (pre version 5) IPP
 #PREPEND LD_LIBRARY_PATH  ${IPPROOT}/sharedlib/linux
 
@@ -35,10 +35,10 @@ PREPEND PERL5LIB         ${DIFXROOT}/share/perl/$perlver
 
 ####### PORTS FOR DIFXMESSAGE ###############
 # Uncomment these to enable DIFX_MESSAGES
-#setenv DIFX_MESSAGE_GROUP 224.2.2.1
-#setenv DIFX_MESSAGE_PORT 50201
-#setenv DIFX_BINARY_GROUP 224.2.2.1
-#setenv DIFX_BINARY_PORT 50202
+setenv DIFX_MESSAGE_GROUP 224.2.2.1
+setenv DIFX_MESSAGE_PORT 50201
+setenv DIFX_BINARY_GROUP 224.2.2.1
+setenv DIFX_BINARY_PORT 50202
 
 ####### CALC SERVER NAME - HARMLESS ######### 
 setenv CALC_SERVER swc000
