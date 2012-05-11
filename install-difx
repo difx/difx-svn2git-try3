@@ -224,12 +224,12 @@ libtargets = [["difxio",     difx_version, True,True,True,False],
               ["mark5access",difx_version, True,True,True,False],
               ["vdifio",     difx_version, True,True,True,False]]
 
-utiltargets = [["calcif2",   difx_version, True,False,True,False], 
-               ["pulsar/difx2profile", difx_version, True,False,True,True],
+utiltargets = [["difx2profile", difx_version, True,False,True,True],
 	       ["misc",      difx_version, True,False,False,False],
                ["vis2screen",difx_version, True,False,False,True]]
 
 apptargets = [["calcserver", difx_version, True,True,False,False],
+              ["calcif2",    difx_version, True,False,True,False],
               ["difx2fits",  difx_version, True,False,True,False],
               ["vex2difx",   difx_version, True,True,True,False],
               ["difx2mark4", difx_version, True,True,True,False]]
