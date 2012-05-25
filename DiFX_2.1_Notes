@@ -131,6 +131,9 @@ New Features
 
 * mk5dir can now produce .dir file information for VDIF formatted data.
 
+* m5spec now supports a -dbbc option, to assume dBBC polarisation order
+  (all Rcp then all Lcp)
+
 
 Caveats
 -------
@@ -159,3 +162,5 @@ Known Bugs
   output data rates) where visibilities start getting dropped, likely as
   a result of the visibility buffer filling up.  Increasing the size of
   that buffer and perhaps using single-scan jobs limits the problems.
+
+* Mark5access mark5_stream_seek does not allow to seek to the start of a file
