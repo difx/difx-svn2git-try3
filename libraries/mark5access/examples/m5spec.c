@@ -27,6 +27,9 @@
 //
 //============================================================================
 
+// Change this to configure detection, if possible
+#define USEGETOPT 1
+
 #include <stdio.h>
 #include <complex.h>
 #include <stdlib.h>
@@ -36,12 +39,18 @@
 #include <signal.h>
 #include "../mark5access/mark5_stream.h"
 
+#if USEGETOPT
+#include <getopt.h>
+#endif
+
 const char program[] = "m5spec";
 const char author[]  = "Walter Brisken, Chris Phillips";
-const char version[] = "1.3";
-const char verdate[] = "20120501";
+const char version[] = "1.3.1";
+const char verdate[] = "20120508";
 
 int die = 0;
+
+typedef enum {VLBA=1, DBBC, NOPOL} polmodetype;
 
 typedef void (*sighandler_t)(int);
 
@@ -73,6 +82,12 @@ static void usage(const char *pgm)
 	printf("  <nint> is the number of FFT frames to spectrometize\n\n");
 	printf("  <outfile> is the name of the output file\n\n");
 	printf("  <offset> is number of bytes into file to start decoding\n\n");
+	printf("\n\n\n");
+	printf("The following options are supported\n\n");
+	printf("    -dbbc      Assume dBBC polarisation order (all Rcp then all Lcp)\n\n");
+	printf("    -nopol     Do not compute cross pol terms\n\n");
+	printf("    -help      This list\n\n");
+	printf("The folllowing options are supported\n\n");
 }
 
 int harvestComplexData(struct mark5_stream *ms, double **spec, fftw_complex **zdata, fftw_complex **zx, int nchan, int nint, int chunk, long long *total, long long *unpacked)
@@ -157,7 +172,7 @@ int harvestComplexData(struct mark5_stream *ms, double **spec, fftw_complex **zd
 	return 0;
 }
 
-int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata, fftw_complex **zx, int nchan, int nint, int chunk, long long *total, long long *unpacked)
+int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata, fftw_complex **zx, int nchan, int nint, int chunk, long long *total, long long *unpacked, polmodetype polmode)
 {
 	fftw_plan *plan;
 	double **data;
@@ -216,14 +231,29 @@ int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata
 			}
 		}
 
-		for(i = 0; i < ms->nchan/2; ++i)
+		if (polmode==VLBA) 
 		{
+		  for(i = 0; i < ms->nchan/2; ++i)
+		  {
 			int c;
 
 			for(c = 0; c < nchan; ++c)
 			{
 				zx[i][c] += zdata[2*i][c]*~zdata[2*i+1][c];
 			}
+		  }
+		} 
+		else if (polmode==DBBC) 
+		{
+		  for(i = 0; i < ms->nchan/2; ++i)
+		  {
+			int c;
+
+			for(c = 0; c < nchan; ++c)
+			{
+				zx[i][c] += zdata[i][c]*~zdata[i+ms->nchan/2][c];
+			}
+		  }
 		}
 	}
 	for(j = 0; j < ms->nchan; ++j)
@@ -238,7 +268,7 @@ int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata
 }
 
 
-int spec(const char *filename, const char *formatname, int nchan, int nint, const char *outfile, long long offset)
+int spec(const char *filename, const char *formatname, int nchan, int nint, const char *outfile, long long offset, polmodetype polmode)
 {
 	struct mark5_stream *ms;
 	double **spec;
@@ -306,7 +336,7 @@ int spec(const char *filename, const char *formatname, int nchan, int nint, cons
 	} 
 	else
 	{
-		harvestRealData(ms, spec, zdata, zx, nchan, nint, chunk, &total, &unpacked);
+	  harvestRealData(ms, spec, zdata, zx, nchan, nint, chunk, &total, &unpacked, polmode);
 	}
 
 	fprintf(stderr, "%Ld / %Ld samples unpacked\n", unpacked, total);
@@ -363,10 +393,42 @@ int main(int argc, char **argv)
 	long long offset = 0;
 	int nchan, nint;
 	int retval;
+	polmodetype polmode = VLBA;
+#if USEGETOPT
+	int opt;
+	struct option options[] = {
+	  {"dbbc", 0, 0, 'B'},
+	  {"nopol", 0, 0, 'P'},
+	  {"help", 0, 0, 'h'},
+	  {0, 0, 0, 0}
+	};
+
+	while ((opt = getopt_long_only(argc, argv, "h", options, NULL)) != EOF)
+	  switch (opt) {
+	  case 'B': // DBBC Pol mode (all Rcp then all LCP)
+	    polmode = DBBC;
+	    printf("Assuming DBBC polarisation order\n");
+	    break;
+	    
+	  case 'P': // Don't compute cross pols
+	    polmode = NOPOL;
+	    printf("Not computing cross pol terms\n");
+	    break;
+	    
+	  case 'h': // help
+	    usage(argv[0]);
+	    return EXIT_SUCCESS;
+	    break;
+	  }
+
+#else
+	int optind=1;
+#endif
 
 	oldsiginthand = signal(SIGINT, siginthand);
 
-	if(argc == 2)
+
+	if (argc-optind == 1)
 	{
 		struct mark5_format *mf;
 		int bufferlen = 1<<11;
@@ -421,26 +483,26 @@ int main(int argc, char **argv)
 		return EXIT_SUCCESS;
 	}
 
-	else if(argc < 6)
+	else if(argc-optind < 5)
 	{
 		usage(argv[0]);
 
 		return EXIT_FAILURE;
 	}
 
-	nchan = atol(argv[3]);
-	nint  = atol(argv[4]);
+	nchan = atol(argv[optind+2]);
+	nint  = atol(argv[optind+3]);
 	if(nint <= 0)
 	{
 		nint = 2000000000L;
 	}
 
-	if(argc > 6)
+	if(argc-optind > 5)
 	{
-		offset=atoll(argv[6]);
+		offset=atoll(argv[optind+5]);
 	}
 
-	retval = spec(argv[1], argv[2], nchan, nint, argv[5], offset);
+	retval = spec(argv[optind], argv[optind+1], nchan, nint, argv[optind+4], offset, polmode);
 
 	return retval;
 }
