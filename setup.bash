@@ -1,5 +1,5 @@
 ####### DIFX VERSION ########################
-export DIFX_VERSION=DiFX-2.1
+export DIFX_VERSION=DiFX-2.1.1
 
 ####### ROOT PATHS ##########################
 export DIFXROOT=/usr/local/difx
