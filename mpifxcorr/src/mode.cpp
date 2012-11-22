@@ -30,17 +30,25 @@
 //using namespace std;
 const float Mode::TINY = 0.000000001;
 
-Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, int unpacksamp, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, double bclock)
+Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, Configuration::complextype tcomplex, int unpacksamp, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, double bclock)
   : config(conf), configindex(confindex), datastreamindex(dsindex), recordedbandchannels(recordedbandchan), channelstoaverage(chanstoavg), blockspersend(bpersend), guardsamples(gsamples), fftchannels(recordedbandchan*2), numrecordedfreqs(nrecordedfreqs), numrecordedbands(nrecordedbands), numzoombands(nzoombands), numbits(nbits), unpacksamples(unpacksamp), fringerotationorder(fringerotorder), arraystridelength(arraystridelen), recordedbandwidth(recordedbw), blockclock(bclock), filterbank(fbank), calccrosspolautocorrs(cacorrs), recordedfreqclockoffsets(recordedfreqclkoffs), recordedfreqlooffsets(recordedfreqlooffs)
 {
   int status, localfreqindex, parentfreqindex;
   int decimationfactor = config->getDDecimationFactor(configindex, datastreamindex);
   estimatedbytes = 0;
 
-  if (sampling==Configuration::COMPLEX) 
+  if (sampling==Configuration::COMPLEX) {
     usecomplex=1;
-  else
+    if (tcomplex==Configuration::DOUBLE) 
+      usedouble=1;
+    else
+      usedouble=0;
+  }  else {
     usecomplex=0;
+    usedouble=0;
+  }
+
+
   //Uses bitwise test to check if numchannels is power of 2
   if(!(fftchannels & (fftchannels - 1)))
   {
@@ -907,16 +915,25 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
               if(status != vecNoErr)
                 csevere << startl << "Error doing the DFT!!!" << endl;
             }
+
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
 	      if (usecomplex) {
-		status = vectorFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
+		if (usedouble) {
+		  status = vectorFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2);
+		  status = vectorFlip_cf32(&fftd[recordedbandchannels/2], &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels);
+		} else
+		  status = vectorFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
 	      } else {
 		status = vectorCopy_cf32(&(fftd[recordedbandchannels + 1]), fftoutputs[j][subloopindex], recordedbandchannels - 1);
 		fftoutputs[j][subloopindex][recordedbandchannels - 1] = fftd[0];
 	      }
             }
             else {
-              status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
+	      if (usecomplex && usedouble) {
+		status = vectorCopy_cf32(fftd, &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels/2);
+		status = vectorCopy_cf32(&fftd[recordedbandchannels/2], fftoutputs[j][subloopindex], recordedbandchannels/2);
+	      } else 
+		status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
             }
             if(status != vecNoErr)
               csevere << startl << "Error copying FFT results!!!" << endl;
@@ -1181,7 +1198,7 @@ const float Mode::decorrelationpercentage[] = {0.63662, 0.88, 0.94, 0.96, 0.98, 
 
 
 LBAMode::LBAMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, const s16* unpackvalues)
-  : Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,(recordedbw<16.0)?recordedbw*2.0:32.0)
+  : Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,Configuration::DOUBLE,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,(recordedbw<16.0)?recordedbw*2.0:32.0)
 {
   int shift, outputshift;
   int count = 0;
@@ -1229,7 +1246,7 @@ LBAMode::LBAMode(Configuration * conf, int confindex, int dsindex, int recordedb
 }
 
 LBA8BitMode::LBA8BitMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs)
-  : Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,recordedbw*2.0)
+: Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,Configuration::DOUBLE,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,recordedbw*2.0)
 {}
 
 float LBA8BitMode::unpack(int sampleoffset)
@@ -1248,7 +1265,7 @@ float LBA8BitMode::unpack(int sampleoffset)
 }
 
 LBA16BitMode::LBA16BitMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs)
-  : Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,recordedbw*2.0)
+: Mode(conf,confindex,dsindex,recordedbandchan,chanstoavg,bpersend,gsamples,nrecordedfreqs,recordedbw,recordedfreqclkoffs,recordedfreqlooffs,nrecordedbands,nzoombands,nbits,Configuration::REAL,Configuration::SINGLE, recordedbandchan*2,fbank,fringerotorder,arraystridelen,cacorrs,recordedbw*2.0)
 {}
 
 float LBA16BitMode::unpack(int sampleoffset)

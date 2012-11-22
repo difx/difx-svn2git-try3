@@ -49,6 +49,7 @@ class Mk5Mode : public Mode
    * @param nzoombands The number of subbands to be taken from within the recorded bands - can be zero
    * @param nbits The number of bits per sample
    * @param sampling The sampling type (REAL, COMPLEX)
+   * @param tcomplex Type of complex sampling (single or double sideband)
    * @param fbank Whether to use a polyphase filterbank to channelise (instead of FFT)
    * @param fringerotorder The interpolation order across an FFT (Oth, 1st or 2nd order; 0th = post-F)
    * @param arraystridelen The number of samples to stride when doing complex multiplies to implement sin/cos operations efficiently
@@ -57,7 +58,7 @@ class Mk5Mode : public Mode
    * @param framesamples The number of samples in a frame per channel
    * @param format The data format type e.g. MARK5B, VDIF, VLBA etc
   */
-  Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format);
+  Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, Configuration::complextype tcomplex, bool fbank, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format);
     virtual ~Mk5Mode();
 
   protected:
