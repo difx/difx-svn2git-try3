@@ -719,6 +719,14 @@ float Mode::process(int index, int subloopindex)  //frac sample error, fringedel
 
     //get ready to apply fringe rotation, if its pre-F
     lofreq = config->getDRecordedFreq(configindex, datastreamindex, i);
+    if (usecomplex && usedouble) {
+      if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i);
+      } else {
+	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i);
+      }
+    }
+
     switch(fringerotationorder) {
       case 1: // linear
         status = vectorMulC_f64(subxval, lofreq, subphase, arraystridelength);
