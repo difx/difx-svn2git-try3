@@ -1663,10 +1663,9 @@ void DataStream::diskToMemory(int buffersegment)
     nbytes = readbytes;
   }
 
+#if 0
   // Copy any saved bytes from the last segment, if a jump in time was detected
   if (tempbytes>0) {
-
-
     nbytes -= tempbytes;
     // Don't increment consumbed bytes as these were already counted from the last segment
     tempbytes=0;
@@ -1675,6 +1674,7 @@ void DataStream::diskToMemory(int buffersegment)
   //read some data
   input.read(readto, nbytes);
   consumedbytes += nbytes;
+#endif
 
   //deinterlace and mux if needed
   if(datamuxer) {
@@ -1715,9 +1715,11 @@ void DataStream::diskToMemory(int buffersegment)
       keepreading = false;
   }
 
+#if 0
   // Go through buffer checking for large data jumps past the end of the buffer.
   // This does *not* correct for invalid data or dropped Mark5/VDIF frames. Does nothing for LBADR
   checkData(buffersegment);
+#endif
 
   previoussegment  = (buffersegment + numdatasegments - 1 )% numdatasegments;
   if(bufferinfo[previoussegment].readto && bufferinfo[previoussegment].validbytes < bufferinfo[previoussegment].sendbytes && bufferinfo[previoussegment].configindex == bufferinfo[buffersegment].configindex)
