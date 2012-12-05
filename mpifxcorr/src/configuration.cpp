@@ -158,89 +158,92 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
   }
   input->close();
   delete input;
-  //work out which frequencies are used in each config, and the minimum #channels
-  freqdata freq;
-  int oppositefreqindex;
-  for(int i=0;i<numconfigs;i++)
-  {
-    freq = freqtable[getBFreqIndex(i,0,0)];
-    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
-    configs[i].frequsedbybaseline = new bool[freqtablelength];
-    for(int j=0;j<freqtablelength;j++)
-      configs[i].frequsedbybaseline[j] = false;
-    for(int j=0;j<numbaselines;j++)
+
+  if (consistencyok) {
+
+    //work out which frequencies are used in each config, and the minimum #channels
+    freqdata freq;
+    int oppositefreqindex;
+    for(int i=0;i<numconfigs;i++)
     {
-      for(int k=0;k<baselinetable[configs[i].baselineindices[j]].numfreqs;k++)
+      freq = freqtable[getBFreqIndex(i,0,0)];
+      configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
+      configs[i].frequsedbybaseline = new bool[freqtablelength];
+      for(int j=0;j<freqtablelength;j++)
+	configs[i].frequsedbybaseline[j] = false;
+      for(int j=0;j<numbaselines;j++)
       {
-        //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
-        freq = freqtable[getBFreqIndex(i,j,k)];
-        configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)] = true;
-        if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
-          configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
+	for(int k=0;k<baselinetable[configs[i].baselineindices[j]].numfreqs;k++)
+        {
+	  //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
+	  freq = freqtable[getBFreqIndex(i,j,k)];
+	  configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)] = true;
+	  if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
+	    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
+	}
       }
     }
-  }
-  //set any opposite sideband freqs to be "used", to ensure their autocorrelations are not lost
-  for(int i=0;i<numconfigs;i++) {
-    for(int j=0;j<freqtablelength;j++) {
-      if(configs[i].frequsedbybaseline[j]) {
-        oppositefreqindex = getOppositeSidebandFreqIndex(j);
-        if(oppositefreqindex >= 0)
-          configs[i].frequsedbybaseline[oppositefreqindex] = true;
+    //set any opposite sideband freqs to be "used", to ensure their autocorrelations are not lost
+    for(int i=0;i<numconfigs;i++) {
+      for(int j=0;j<freqtablelength;j++) {
+	if(configs[i].frequsedbybaseline[j]) {
+	  oppositefreqindex = getOppositeSidebandFreqIndex(j);
+	  if(oppositefreqindex >= 0)
+	    configs[i].frequsedbybaseline[oppositefreqindex] = true;
+	}
       }
     }
-  }
-  //process the pulsar configuration files
-  for(int i=0;i<numconfigs;i++)
-  {
-    if(configs[i].pulsarbin)
+    //process the pulsar configuration files
+    for(int i=0;i<numconfigs;i++)
     {
+      if(configs[i].pulsarbin)
+      {
       if (consistencyok)
         consistencyok = processPulsarConfig(configs[i].pulsarconfigfilename, i);
       if (consistencyok)
         consistencyok = setPolycoFreqInfo(i);
-    }
+      }
 
-    if(configs[i].phasedarray)
-    {
-      if (consistencyok)
-        consistencyok = processPhasedArrayConfig(configs[i].phasedarrayconfigfilename, i);
+      if(configs[i].phasedarray)
+      {
+	if (consistencyok)
+	  consistencyok = processPhasedArrayConfig(configs[i].phasedarrayconfigfilename, i);
+      }
     }
-  }
-  if(consistencyok) {
-    model = new Model(this, calcfilename);
-    consistencyok = model->openSuccess();
-  }
-  for(int i=0;i<telescopetablelength;i++) {
+    if(consistencyok) {
+      model = new Model(this, calcfilename);
+      consistencyok = model->openSuccess();
+    }
+    for(int i=0;i<telescopetablelength;i++) {
+      if(consistencyok)
+	consistencyok = model->addClockTerms(telescopetable[i].name, telescopetable[i].clockrefmjd, telescopetable[i].clockorder, telescopetable[i].clockpoly, false);
+    }
     if(consistencyok)
-      consistencyok = model->addClockTerms(telescopetable[i].name, telescopetable[i].clockrefmjd, telescopetable[i].clockorder, telescopetable[i].clockpoly, false);
-  }
-  if(consistencyok)
-    estimatedbytes += model->getEstimatedBytes();
-  if(consistencyok)
-    consistencyok = populateScanConfigList();
-  if(consistencyok)
-    consistencyok = populateModelDatastreamMap();
-  if(consistencyok)
-    consistencyok = populateResultLengths();
-  if(consistencyok)
-    consistencyok = consistencyCheck();
-  commandthreadinitialised = false;
-  dumpsta = false;
-  dumplta = false;
-  dumpkurtosis = false;
-  stadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
-  ltadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
-
-  char *monitor_tcpwin = getenv("DIFX_MONITOR_TCPWINDOW");
-  if (monitor_tcpwin!=0) {
-    Configuration::MONITOR_TCP_WINDOWBYTES = atoi(monitor_tcpwin)*1024;
-    cinfo << startl << "DIFX_MONITOR_TCPWINDOW set to" << Configuration::MONITOR_TCP_WINDOWBYTES/1024 << "kB" << endl;
+      estimatedbytes += model->getEstimatedBytes();
+    if(consistencyok)
+      consistencyok = populateScanConfigList();
+    if(consistencyok)
+      consistencyok = populateModelDatastreamMap();
+    if(consistencyok)
+      consistencyok = populateResultLengths();
+    if(consistencyok)
+      consistencyok = consistencyCheck();
+    commandthreadinitialised = false;
+    dumpsta = false;
+    dumplta = false;
+    dumpkurtosis = false;
+    stadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
+    ltadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
+    
+    char *monitor_tcpwin = getenv("DIFX_MONITOR_TCPWINDOW");
+    if (monitor_tcpwin!=0) {
+      Configuration::MONITOR_TCP_WINDOWBYTES = atoi(monitor_tcpwin)*1024;
+      cinfo << startl << "DIFX_MONITOR_TCPWINDOW set to" << Configuration::MONITOR_TCP_WINDOWBYTES/1024 << "kB" << endl;
     } else {
       Configuration::MONITOR_TCP_WINDOWBYTES = 262144;
     }
+  }
 }
-
 
 Configuration::~Configuration()
 {
@@ -684,26 +687,26 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
     case LBASTD:
       if(stream.numbits != 2)
         cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth,  stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth,  stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, stream.linear2circular, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
       break;
     case LBAVSOP:
       if(stream.numbits != 2)
         cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
       break;
     case LBA8BIT:
       if(stream.numbits != 8) {
         cerror << startl << "8BIT LBA mode must have 8 bits! aborting" << endl;
         return NULL;
       }
-      return new LBA8BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 8/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
+      return new LBA8BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 8/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
       break;
     case LBA16BIT:
       if(stream.numbits != 16) {
         cerror << startl << "16BIT LBA mode must have 16 bits! aborting" << endl;
         return NULL;
       }
-      return new LBA16BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 16/*bits*/, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
+      return new LBA16BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 16/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
       break;
     case MKIV:
     case VLBA:
@@ -720,7 +723,7 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
         framesamples *= getDNumRecordedBands(configindex, datastreamindex);
         framebytes = (framebytes - VDIF_HEADER_BYTES)*getDNumRecordedBands(configindex, datastreamindex) + VDIF_HEADER_BYTES;
       }
-      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.sampling, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.sampling, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     default:
       cerror << startl << "Unknown mode being requested!!!" << endl;
@@ -1161,12 +1164,27 @@ bool Configuration::processDatastreamTable(ifstream * input)
         cfatal << startl << "Unknown data source " << line << " (case sensitive choices are FILE, MODULE, NETWORK and FAKE)" << endl;
       return false;
     }
-    getinputline(input, &line, "FILTERBANK USED");
-    datastreamtable[i].filterbank = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
-    if(datastreamtable[i].filterbank) {
-      if(mpiid == 0) //only write one copy of this error message
-        cwarn << startl << "Filterbank channelization requested but not yet supported!!!" << endl;
+
+    datastreamtable[i].filterbank=false;
+    datastreamtable[i].linear2circular=false;
+    getinputkeyval(input, &key, &line);
+    if (key=="FILTERBANK USED") {
+      if ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t")) 
+	datastreamtable[i].filterbank = true;
+    } else if (key=="PROCESSING METHOD") {
+      if (line == "FILTERBANK") 
+      	datastreamtable[i].filterbank=true;
+      else if (line=="L2C" || line=="LINEAR2CIRCULAR") 
+      	datastreamtable[i].linear2circular=true;
+      else if (line != "NONE") 
+	cerror << startl << "Unknown PROCESSING METHOD '" << line << "'. Ignoring." << endl;
+    } else {
+      cfatal << startl << "We thought we were reading something starting with 'FILTERBANK USED', when we actually got '" << key << "'" << endl;
+      return false;
     }
+    if (mpiid==0 && datastreamtable[i].filterbank)
+      cwarn << startl << "Filterbank channelization requested but not yet supported!!!" << endl;
+
     getinputkeyval(input, &key, &line);
     if(key.find("TCAL FREQUENCY") != string::npos) {
       datastreamtable[i].switchedpowerfrequency = atoi(line.c_str());
@@ -2857,7 +2875,7 @@ void Configuration::getinputkeyval(ifstream * input, std::string * key, std::str
   *key = key->substr(0, key->find_first_of(':'));
 }
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader) const
+void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, bool verbose) const
 {
   if(input->eof())
     cerror << startl << "Trying to read past the end of file!" << endl;
@@ -2871,15 +2889,26 @@ void Configuration::getinputline(ifstream * input, std::string * line, std::stri
   if(keylength < DEFAULT_KEY_LENGTH)
     keylength = DEFAULT_KEY_LENGTH;
   if(startofheader.compare((*line).substr(0, startofheader.length())) != 0) //not what we expected
-    cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << (*line).substr(0, keylength) << "'" << endl;
+    if (verbose) 
+      cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << (*line).substr(0, keylength) << "'" << endl;
+    else {
+      *line = "";
+      return;
+    }
   *line = line->substr(keylength);
 }
+
+void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader) const
+{
+  getinputline(input, line, startofheader, true);
+}
+
 
 void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, int intval) const
 {
   char buffer[MAX_KEY_LENGTH+1];
   sprintf(buffer, "%s%i", startofheader.c_str(), intval);
-  getinputline(input, line, string(buffer));
+  getinputline(input, line, string(buffer), true);
 }
 
 void Configuration::getMJD(int & d, int & s, int year, int month, int day, int hour, int minute, int second) const
