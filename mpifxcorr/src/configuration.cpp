@@ -34,7 +34,18 @@ int Configuration::MONITOR_TCP_WINDOWBYTES;
 Configuration::Configuration(const char * configfile, int id, double restartsec)
   : mpiid(id), consistencyok(true), restartseconds(restartsec)
 {
-  string configfilestring = configfile;
+  if (configfile[0]=='/') {
+    configfilestring = configfile;
+  } else {
+    char currentpath[2048], *status;
+    status = getcwd(currentpath, 2048);
+    if (status==NULL) {
+      cfatal << startl << "Current path too long. Increase buffer size. " << configfile << " - aborting!!!" << endl;
+      consistencyok = false;
+    } else {
+      configfilestring = (string)currentpath+"/"+configfile;
+    }
+  }
   size_t basestart = configfilestring.find_last_of('/');
   if(basestart == string::npos)
     basestart = 0;

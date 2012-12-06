@@ -897,6 +897,15 @@ void FxManager::sendMonitorData(int visID) {
   }
 }
 
+void FxManager::sendInputfile(string inputfile) 
+{
+  ssize_t nwrote;
+  int32_t nchar = inputfile.size()+1;
+  cout << startl << "Sending \"" << inputfile << "\" to monitor_server" << endl;
+  cinfo << startl << "Sending \"" << inputfile << "\" to monitor_server" << endl;
+  nwrote = send(mon_socket, &nchar, sizeof(int32_t), 0);
+  nwrote = send(mon_socket, inputfile.c_str(), nchar, 0);
+}
 
 bool FxManager::checkSocketStatus()
 {
@@ -951,7 +960,8 @@ bool FxManager::checkSocketStatus()
           // Connected!
           cinfo << startl << "Connection to monitor server succeeded" << endl;
           monsockStatus=OPENED;
-          return true;
+	  sendInputfile(config->getInputfile());
+	  return true;
         }
       }
     }
@@ -1042,6 +1052,7 @@ int FxManager::openMonitorSocket() {
   if(status==0) {
     monsockStatus = OPENED;
     cinfo << startl << "Immediate connection to monitor server" << endl;
+    sendInputfile(config->getInputfile());
     return 0;
   } else {
     if (errno!=EINPROGRESS) {

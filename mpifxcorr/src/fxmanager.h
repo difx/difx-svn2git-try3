@@ -137,6 +137,7 @@ private:
    */
 
   void sendMonitorData(int visID);
+  void sendInputfile(string inputfile);
   bool checkSocketStatus();
   int openMonitorSocket();
 

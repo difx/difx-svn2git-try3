@@ -136,69 +136,6 @@ void * launchCommandMonitorThread(void * c) {
   return 0;
 }
 
-//setup monitoring socket
-int setup_net(const char *monhostname, int port, int window_size, int *sock) {
-  int status;
-  unsigned long ip_addr;
-  struct hostent     *hostptr;
-  struct linger      linger = {1, 1};
-  struct sockaddr_in server;    /* Socket address */
-
-  hostptr = gethostbyname(monhostname);
-  if (hostptr==NULL) {
-
-    cerror << startl << "Failed to look up monhostname " << monhostname << endl;
-    return 1;
-  }
-  
-  memcpy(&ip_addr, (char *)hostptr->h_addr, sizeof(ip_addr));
-  memset((char *) &server, 0, sizeof(server));
-  server.sin_family = AF_INET;
-  server.sin_port = htons((unsigned short)port); 
-  server.sin_addr.s_addr = ip_addr;
-  
-  cinfo << startl << "Connecting to " << inet_ntoa(server.sin_addr) << endl;
-    
-  *sock = socket(AF_INET, SOCK_STREAM, 0);
-  if (*sock==-1) {
-    perror("Failed to allocate socket");
-    return(1);
-  }
-
-  /* Set the linger option so that if we need to send a message and
-     close the socket, the message shouldn't get lost */
-  status = setsockopt(*sock, SOL_SOCKET, SO_LINGER, (char *)&linger,
-                      sizeof(struct linger)); 
-  if (status!=0) {
-    close(*sock);
-    perror("Setting socket options");
-    return(1);
-  }
-
-  /* Set the window size to TCP actually works */
-  status = setsockopt(*sock, SOL_SOCKET, SO_SNDBUF,
-                      (char *) &window_size, sizeof(window_size));
-  if (status!=0) {
-    close(*sock);
-    perror("Setting socket options");
-    return(1);
-  }
-  status = setsockopt(*sock, SOL_SOCKET, SO_RCVBUF,
-                      (char *) &window_size, sizeof(window_size));
-  if (status!=0) {
-    close(*sock);
-    perror("Setting socket options");
-    return(1);
-  }
-    
-  status = connect(*sock, (struct sockaddr *) &server, sizeof(server));
-  if (status!=0) {
-    perror("Failed to connect to server");
-    return(1);
-  }
-  return(0);
-} /* Setup Net */
-
 static void generateIdentifier(const char *inputfile, char *identifier)
 {
   int i, s=0;

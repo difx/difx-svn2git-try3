@@ -84,6 +84,7 @@ public:
   inline int getMPIId() const { return mpiid; }
   inline string getJobName() const { return jobname; }
   inline string getObsCode() const { return obscode; }
+  inline string getInputfile() const { return configfilestring; }
   inline void setObsCode(string ocode) { obscode = ocode; }
   inline long long getEstimatedBytes() const { return estimatedbytes; }
   inline int getVisBufferLength() const { return visbufferlength; }
@@ -817,6 +818,7 @@ private:
 
   int mpiid;
   char header[MAX_KEY_LENGTH];
+  string configfilestring;
   bool commonread, configread, datastreamread, freqread, ruleread, baselineread;
   bool consistencyok, commandthreadinitialised, dumpsta, dumplta, dumpkurtosis;
   int visbufferlength, databufferfactor, numdatasegments;
