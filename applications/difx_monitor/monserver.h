@@ -71,8 +71,8 @@ class DIFX_ProdConfig {
 
 int readnetwork(int sock, char* ptr, int bytestoread);
 int writenetwork(int sock, char* ptr, int bytestowrite);
-void sendint(int sock, int32_t val, int *status);
-void readint(int sock, int32_t *val, int *status);
+void sendint32(int sock, int32_t val, int *status);
+void readint32(int sock, int32_t *val, int *status);
 
 int monserver_connect(struct monclient *monserver, char *monhostname, int window_size);
 int monserver_sendstatus(int sock, int32_t status32);

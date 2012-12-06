@@ -17,6 +17,7 @@
 int readnetwork(int sock, char* ptr, int bytestoread) {
   int nr;
 
+  if (sock==0) return(-1);
   while (bytestoread>0)
   {
     nr = recv(sock,ptr,bytestoread,0);
@@ -59,38 +60,63 @@ int writenetwork(int sock, char* ptr, int bytestowrite) {
   return(0);
 }
 
-void sendint(int sock, int32_t val, int *status) {
+void sendint32(int sock, int32_t val, int *status) {
   if (*status) return;
   *status = writenetwork(sock, (char*)&val, sizeof(int32_t)); 
   return;
 }
 
-void readint(int sock, int32_t *val, int *status) {
+void readint32(int sock, int32_t *val, int *status) {
   if (*status) return;
   *status = readnetwork(sock, (char*)val, sizeof(int32_t)); 
   return;
 }
 
+#define USEGETHOSTBYNAME 1
+
 int monserver_connect(struct monclient *monclient, char *monhostname, int window_size) {
   int sock, status;
   int32_t status32;
   unsigned long ip_addr;
+#if USEGETHOSTBYNAME
   struct hostent     *hostptr;
+#else
+  struct addrinfo hints, *res;
+#endif
   struct sockaddr_in server;
 
   memset(monclient, 0, sizeof(struct monclient));
 
   // Setup network structures etc
+#if USEGETHOSTBYNAME
   hostptr = gethostbyname(monhostname);
   if (hostptr==NULL) {
     fprintf(stderr,"Failed to look up hostname %s\n", monhostname);
     return(1);
   }
+#else
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_INET; // IPv4
+  hints.ai_socktype = SOCK_STREAM;
+ 
+  if ((status = getaddrinfo(monhostname, NULL, &hints, &res)) != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+    return(1);
+  }
+  // Just use the first entry
+ 
+#endif
 
   memset((char *) &server, 0, sizeof(server));
   server.sin_family = AF_INET;
   server.sin_port = htons(MONITOR_PORT); /* Which port number to use */
+#if USEGETHOSTBYNAME
   memcpy(&ip_addr, (char *)hostptr->h_addr, sizeof(ip_addr));
+#else
+  struct sockaddr_in *ipv4 = (struct sockaddr_in*)res->ai_addr;
+  memcpy(&ip_addr, (char *)ipv4->sin_addr.s_addr, sizeof(ip_addr));
+  freeaddrinfo(res); // free the linked list
+#endif
   server.sin_addr.s_addr = ip_addr;
   
   printf("Connecting to %s\n",inet_ntoa(server.sin_addr));
@@ -175,13 +201,13 @@ int monserver_requestproducts_byoffset(struct monclient client, struct product_o
 
   status32 = 0;
 
-  sendint(client.fd, nprod, &status);
+  sendint32(client.fd, nprod, &status);
   for (i=0; i<nprod; i++) {
-    sendint(client.fd, offset[i].offset, &status);
-    sendint(client.fd, offset[i].npoints, &status);
-    sendint(client.fd, offset[i].product, &status);
+    sendint32(client.fd, offset[i].offset, &status);
+    sendint32(client.fd, offset[i].npoints, &status);
+    sendint32(client.fd, offset[i].product, &status);
   }
-  readint(client.fd, &status32, &status);
+  readint32(client.fd, &status32, &status);
   if (status) return(status);
 
   if (status32!=DIFXMON_NOERROR) {

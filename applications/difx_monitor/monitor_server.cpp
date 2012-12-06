@@ -56,8 +56,8 @@ int monclient_sendvisdata(struct monclient client, int32_t thisbuffersize,
 			  struct datadescrstruct *datadescr);
 
 int main(int argc, const char * argv[]) {
-  int status, i, j;
-  char *tcpwindow;
+  int status, i, j, inputfilesize;
+  char *tcpwindow, *inputfile;
   int32_t thisbuffersize;
   //cf32 *resultbuffer;
   int port;                  // TCP port to listen on
@@ -72,6 +72,9 @@ int main(int argc, const char * argv[]) {
   struct pollfd pollfds[MAXCLIENTS+3];  // Sockets to monitor for messages
   nfds_t nfds;               // Number of sockets being monitored by poll
   stack <int> removestack;
+
+  inputfile = 0;
+  inputfilesize = 0;
 
   if(argc != 2)  {
     cerr << "Error - invoke with difx_monitor <port>" << endl;
@@ -145,8 +148,32 @@ int main(int argc, const char * argv[]) {
 	    close(asocket);
 	    cout << "Ignoring multiple connection attempts" << endl;
 	  } else {
+	    int32_t nbytes;
 	    difxsocket = asocket;
 	    pollfd_add(pollfds, &nfds, difxsocket, POLLIN);
+
+	    // Read inputfile name
+	    readint32(difxsocket, &nbytes, &status);
+	    if (!status) {
+55	      if (inputfilesize<nbytes) {
+		inputfile = (char*)realloc(inputfile, nbytes);
+		if (inputfile==NULL) {
+		  cerr << "Error allocating memory for input file" << endl;
+		  close(difxsocket);
+		  difxsocket = 0;
+		  inputfilesize = 0;
+		  inputfile = NULL;
+		}
+	      }
+	      status = readnetwork(difxsocket, inputfile, nbytes);
+	    }
+	    if (status) {
+	      cerr << "Error reading inputfile from mpifxcorr" << endl;
+	      close(difxsocket);
+	      difxsocket = 0;
+	    } else {
+	      cout << "Input file is " << inputfile << endl;
+	    }
 	  }
 	} else {
 	  cerr << "Warning: serversocket received poll error message: " << revents << endl;
@@ -210,15 +237,15 @@ int main(int argc, const char * argv[]) {
 	  status = DIFXMON_NOERROR;
 
 	  // Receive the timestamp
-	  readint(difxsocket, &datadescr.timestampsec, &status);
-
-	  cout << "Got " << datadescr.timestampsec << endl;
+	  readint32(difxsocket, &datadescr.timestampsec, &status);
 
 	  if (status) { // Error reading socket
 	    close(difxsocket);
 	    removestack.push(difxsocket);
 	    //pollfd_remove(pollfds, &nfds, difxsocket);
 	    difxsocket = 0;
+	  } else {
+	    cout << "Got " << datadescr.timestampsec << endl;
 	  }
 
 	  //if not skipping this vis
@@ -226,7 +253,7 @@ int main(int argc, const char * argv[]) {
 	    cout << "Got visibility # " << datadescr.timestampsec << endl;
       
 	    // Get buffersize to follow
-	    readint(difxsocket, &thisbuffersize, &status);
+	    readint32(difxsocket, &thisbuffersize, &status);
 	    if (status) break; // Error reading socket
 
 	    if (thisbuffersize>buffersize) {
@@ -284,7 +311,7 @@ int main(int argc, const char * argv[]) {
 	    //break;
 	  }
 
-	  readint(fd, &nproduct, &status);
+	  readint32(fd, &nproduct, &status);
 	  if (status) { // Error reading socket
 	    cerr << "Problem reading fd " << fd << " closing" << endl;
 	    removestack.push(fd);
@@ -306,9 +333,9 @@ int main(int argc, const char * argv[]) {
 	      struct product_offset *buf = new struct product_offset [nproduct];
 	      status = DIFXMON_NOERROR;
 	      for (j=0; j<nproduct; j++) {
-		readint(fd, &buf[j].offset, &status);
-		readint(fd, &buf[j].npoints, &status);
-		readint(fd, &buf[j].product, &status);
+		readint32(fd, &buf[j].offset, &status);
+		readint32(fd, &buf[j].npoints, &status);
+		readint32(fd, &buf[j].product, &status);
 	      }
 	      if (status) {
 		removestack.push(fd);		
@@ -578,19 +605,19 @@ int monclient_sendvisdata(struct monclient client, int32_t thisbuffersize, struc
   //     cf32[numchannels]   
 
   status = 0;
-  sendint(client.fd, datadescr->timestampsec, &status);
-  sendint(client.fd, client.nvis, &status);
+  sendint32(client.fd, datadescr->timestampsec, &status);
+  sendint32(client.fd, client.nvis, &status);
 
   buffersize = 0;
   for (i=0; i<client.nvis; i++) 
     buffersize += client.vis[i].npoints*sizeof(cf32) + sizeof(int32_t)*2;
   
-  sendint(client.fd, buffersize, &status);
+  sendint32(client.fd, buffersize, &status);
 
   for (i=0; i<client.nvis; i++) {
     //      if (client.vis[i] < maxvis) {
-    sendint(client.fd, client.vis[i].npoints, &status);
-    sendint(client.fd, client.vis[i].product, &status);
+    sendint32(client.fd, client.vis[i].npoints, &status);
+    sendint32(client.fd, client.vis[i].product, &status);
     if (status) return(status);
     status = writenetwork(client.fd, 
 			  (char*)(datadescr->buffer+client.vis[i].offset), 

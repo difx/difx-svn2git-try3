@@ -80,7 +80,7 @@ int main(int argc, const char * argv[]) {
 
   currentconfig = 0;
   prodconfig = change_config(config, currentconfig, refant, monserver);
-  if (prodconfig.size()==0) exit(1);
+  if (prodconfig.empty()) exit(1);
 
   atseconds = 0;
 
