@@ -670,6 +670,7 @@ private:
     int ** recordedfreqpcaltonefreqs; 
     int * recordedfreqpcaloffsetshz;
     double * recordedfreqclockoffsets;
+    double * recordedfreqclockoffsetsdelta;
     double * recordedfreqlooffsets;
     int * zoomfreqpols;
     int * zoomfreqtableindices;
