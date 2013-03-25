@@ -121,7 +121,7 @@ void Mk5DataStream::initialise()
   }
 
   if(config->isDMuxed(0, streamnum)) {
-    if(config->getDataFormat(0, streamnum) == Configuration::INTERLACEDVDIF) {
+    if(config->getDataFormat(0, streamnum) == Configuration::INTERLACEDVDIF || config->getDataFormat(0, streamnum) == Configuration::VDIFB) {
       nframes = config->getDNumMuxThreads(0, streamnum) * readbytes / ((framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(0, streamnum) + VDIF_HEADER_BYTES);
       datamuxer = new VDIFMuxer(config, streamnum, mpiid, config->getDNumMuxThreads(0, streamnum), framebytes, nframes, config->getFramesPerSecond(0, streamnum)/config->getDNumMuxThreads(0, streamnum), config->getDNumBits(0, streamnum), config->getDMuxThreadMap(0, streamnum));
     }

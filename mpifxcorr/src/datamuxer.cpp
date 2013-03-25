@@ -21,7 +21,7 @@
 //============================================================================
 #include <cstdio>
 #include <cstring>
-#include <omp.h>
+//#include <omp.h>
 #include "datamuxer.h"
 #include "vdifio.h"
 #include "alert.h"
@@ -129,7 +129,7 @@ bool VDIFMuxer::initialise()
 {
   //check the size of an int
   if (sizeof(int) != 4) {
-    cfatal << startl << "Int size is " << sizeof(int) << " bytes - VDIFMuxer assumes 4 byte ints - I must abort!" << endl;
+    cfatal << startl << "Int size is " << sizeof(int) << " bytes; VDIFMuxer assumes 4 byte ints - I must abort!" << endl;
     return false;
   }
 
@@ -145,7 +145,7 @@ bool VDIFMuxer::initialise()
   samplesperinputword = samplesperframe/wordsperinputframe;
   samplesperoutputword = samplesperinputword/numthreads;
   if(samplesperoutputword == 0) {
-    cfatal << startl << "Too many threads/too high bit resolution - can't fit one complete timestep in a 32 bit word! Aborting." << endl;
+    cfatal << startl << "Too many threads/too high bit resolution; can't fit one complete timestep in a 32 bit word! Aborting." << endl;
     return false;
   }
 #ifdef WORDS_BIGENDIAN
@@ -153,29 +153,58 @@ bool VDIFMuxer::initialise()
   // It is not even clear this generic one works for big endian...
   cornerturn = &VDIFMuxer::cornerturn_generic;
 #else
-  if (numthreads == 1) {
-    cinfo << startl << "Using optimized VDIF corner turner: cornerturn_1thread" << endl;
-    cornerturn = &VDIFMuxer::cornerturn_1thread;
-  }
-  else if (numthreads == 2 && bitspersample == 2) {
-    cinfo << startl << "Using optimized VDIF corner turner: cornerturn_2thread_2bit" << endl;
-    cornerturn = &VDIFMuxer::cornerturn_2thread_2bit;
-  }
-  else if (numthreads == 4 && bitspersample == 2) {
-    cinfo << startl << "Using optimized VDIF corner turner: cornerturn_4thread_2bit" << endl;
-    cornerturn = &VDIFMuxer::cornerturn_4thread_2bit;
-  }
-  else if (numthreads == 8 && bitspersample == 2) {
-    cinfo << startl << "Using optimized VDIF corner turner: cornerturn_8thread_2bit" << endl;
-    cornerturn = &VDIFMuxer::cornerturn_8thread_2bit;
-  }
-  else if (numthreads == 16 && bitspersample == 2) {
-    cinfo << startl << "Using optimized VDIF corner turner: cornerturn_16thread_2bit" << endl;
-    cornerturn = &VDIFMuxer::cornerturn_16thread_2bit;
-  }
+  if(config->getDataFormat(0, datastreamindex) == Configuration::VDIFB) {
+    cwarn << startl << "Warning: Using experimental VDIFB internal dataformat" << endl;
+    if (numthreads == 1) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_1thread" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_1thread;
+    }
+    else if (numthreads == 2 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_2thread_merge" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_2thread_merge;
+    }
+    else if (numthreads == 4 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_4thread_merge" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_4thread_merge;
+    }
+    else if (numthreads == 8 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_8thread_merge" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_8thread_merge;
+    }
+    else if (numthreads == 16 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_16thread_merge" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_16thread_merge;
+    }
+    else {
+      cfatal << startl << "No VDIFB modes available for " << numthreads << " threads and " << bitspersample << " bits per sample." << endl;
+      return false;
+    }
+  } 
   else {
-    cwarn << startl << "Using generic VDIF corner turner; performance may suffer" << endl;
-    cornerturn = &VDIFMuxer::cornerturn_generic;
+    if (numthreads == 1) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_1thread" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_1thread;
+    }
+    else if (numthreads == 2 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_2thread_2bit" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_2thread_2bit;
+    }
+    else if (numthreads == 4 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_4thread_2bit" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_4thread_2bit;
+    }
+    else if (numthreads == 8 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_8thread_2bit" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_8thread_2bit;
+    }
+    else if (numthreads == 16 && bitspersample == 2) {
+      cinfo << startl << "Using optimized VDIF corner turner: cornerturn_16thread_2bit" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_16thread_2bit;
+    }
+    else {
+      cwarn << startl << "Using generic VDIF corner turner; performance may suffer" << endl;
+      cornerturn = &VDIFMuxer::cornerturn_generic;
+    }
   }
 #endif
 
@@ -297,9 +326,13 @@ void VDIFMuxer::cornerturn_2thread_2bit(u8 * outputbuffer, int processindex, int
   int i, n;
   n = wordsperoutputframe;
 
+#ifdef _OPENMP
 #pragma omp parallel private(i,x) shared(chunk,outputwordptr,t0,t1,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       // assemble
@@ -355,9 +388,13 @@ void VDIFMuxer::cornerturn_4thread_2bit(u8 * outputbuffer, int processindex, int
   int i, n;
   n = wordsperoutputframe;
 
+#ifdef _OPENMP
 #pragma omp parallel private(i,x) shared(chunk,outputwordptr,t0,t1,t2,t3,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       // assemble
@@ -410,9 +447,13 @@ void VDIFMuxer::cornerturn_8thread_2bit(u8 * outputbuffer, int processindex, int
   union { unsigned int y1; u8 b1[4]; };
   union { unsigned int y2; u8 b2[4]; };
 
+#ifdef _OPENMP
 #pragma omp parallel private(i,x1,x2,y1,y2,b1,b2) shared(chunk,outputwordptr,t0,t1,t2,t3,t4,t5,t6,t7,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       // assemble 32-bit chunks
@@ -481,9 +522,13 @@ void VDIFMuxer::cornerturn_16thread_2bit(u8 * outputbuffer, int processindex, in
   union { unsigned int y3; u8 b3[4]; };
   union { unsigned int y4; u8 b4[4]; };
 
+#ifdef _OPENMP
 #pragma omp parallel private(i,x1,x2,x3,x4,y1,y2,y3,y4,b1,b2,b3,b4) shared(chunk,outputwordptr,t0,t1,t2,t3,t4,t5,t6,t7,t8,t9,t10,t11,t12,t13,t14,t15,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       // assemble 32-bit chunks
@@ -521,9 +566,13 @@ void VDIFMuxer::cornerturn_2thread_merge(u8 * outputbuffer, int processindex, in
   int i, n;
   n = wordsperoutputframe*2;
 
+#ifdef _OPENMP
 #pragma omp parallel private(i) shared(chunk,outputbyteptr,t0,t1,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       outputbyteptr[2*i]   = t0[i];
@@ -544,9 +593,13 @@ void VDIFMuxer::cornerturn_4thread_merge(u8 * outputbuffer, int processindex, in
   int i, n;
   n = wordsperoutputframe;
 
+#ifdef _OPENMP
 #pragma omp parallel private(i) shared(chunk,outputbyteptr,t0,t1,t2,t3,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       outputbyteptr[4*i]   = t0[i];
@@ -573,9 +626,13 @@ void VDIFMuxer::cornerturn_8thread_merge(u8 * outputbuffer, int processindex, in
   int i, n;
   n = wordsperoutputframe/2;
 
+#ifdef _OPENMP
 #pragma omp parallel private(i) shared(chunk,outputbyteptr,t0,t1,t2,t3,t4,t5,t6,t7,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       outputbyteptr[8*i]   = t0[i];
@@ -614,9 +671,13 @@ void VDIFMuxer::cornerturn_16thread_merge(u8 * outputbuffer, int processindex, i
   int i, n;
   n = wordsperoutputframe/4;
 
+#ifdef _OPENMP
 #pragma omp parallel private(i) shared(chunk,outputbyteptr,t0,t1,t2,t3,t4,t5,t6,t7,n)
+#endif
   {
+#ifdef _OPENMP
 #pragma omp for schedule(dynamic,chunk) nowait
+#endif
     for(i = 0; i < n; ++i)
     {
       outputbyteptr[16*i]   = t0[i];
