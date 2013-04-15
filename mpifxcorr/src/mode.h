@@ -56,7 +56,8 @@ public:
   * @param nrecordedfreqs The number of recorded frequencies for this Mode
   * @param recordedbw The bandwidth of each of these IFs
   * @param recordedfreqclkoffs The time offsets in microseconds to be applied post-F for each of the frequencies
-  * @param recordedfreqclkoffsdelta The offsets in microseconds between Rcp and Lcp
+  * @param recordedfreqclkoffsdelta The delay offsets in microseconds between Rcp and Lcp
+  * @param recordedfreqphaseoffs The phase offsets in degrees between Rcp and Lcp
   * @param recordedfreqlooffs The LO offsets in Hz for each recorded frequency
   * @param nrecordedbands The total number of subbands recorded
   * @param nzoombands The number of subbands to be taken from within the recorded bands - can be zero
@@ -70,7 +71,7 @@ public:
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param bclock The recorder clock-out frequency in MHz ("block clock")
   */
-  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, int unpacksamp, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, double bclock);
+  Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqphaseoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, int unpacksamp, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, double bclock);
 
  /**
   * Stores the FFT valid flags for this block of data
@@ -241,8 +242,9 @@ protected:
   bool filterbank, calccrosspolautocorrs, fractionalLoFreq, initok, isfft, linear2circular;
   double * recordedfreqclockoffsets;
   double * recordedfreqclockoffsetsdelta;
+  double * recordedfreqphaseoffset;
   double * recordedfreqlooffsets;
-  bool deltapoloffsets;
+  bool deltapoloffsets, phasepoloffset;
   u8  *   data;
   s16 *   lookup;
   s16 *   linearunpacked;
@@ -323,7 +325,7 @@ protected:
 
   // Linear to circular conversion
 
-  cf32 deg90; // 90 degrees
+  cf32 *phasecorr, *phasecorrconj; // 90 degrees + phase correction
   cf32 * tmpvec; 
 
 private:
@@ -353,6 +355,7 @@ public:
   * @param bw The bandwidth of each of these IFs
   * @param recordedfreqclkoffs The time offsets in microseconds to be applied post-F for each of the frequencies
   * @param recordedfreqclkoffsdelta The offsets in microseconds between Rcp and Lcp
+  * @param recordedfreqphaseoffs The phase offsets in degrees between Rcp and Lcp
   * @param recordedfreqlooffs The LO offsets in Hz for each recorded frequency
   * @param ninputbands The total number of subbands recorded
   * @param noutputbands The total number of subbands after prefiltering - not currently used (must be = numinputbands)
@@ -364,7 +367,7 @@ public:
   * @param cacorrs Whether cross-polarisation autocorrelations are to be calculated
   * @param unpackvalues 4 element array containing floating point unpack values for the four possible two bit values
   */
-  LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int chanstoavg, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, const s16* unpackvalues);
+  LBAMode(Configuration * conf, int confindex, int dsindex, int nchan, int chanstoavg, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta,double * recordedfreqphaseoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, const s16* unpackvalues);
 
     ///unpack mapping for "standard" recording modes
     static const s16 stdunpackvalues[];
@@ -382,7 +385,7 @@ public:
  */
 class LBA8BitMode : public Mode{
 public:
-  LBA8BitMode(Configuration * conf, int confindex, int dsindex, int nchan, int chanstoavg, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs);
+  LBA8BitMode(Configuration * conf, int confindex, int dsindex, int nchan, int chanstoavg, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqphaseoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs);
 
   virtual float unpack(int sampleoffset);
 };
@@ -397,7 +400,7 @@ public:
  */
 class LBA16BitMode : public Mode{
 public:
-  LBA16BitMode(Configuration * conf, int confindex, int dsindex, int nchan, int chanstoavg, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs);
+  LBA16BitMode(Configuration * conf, int confindex, int dsindex, int nchan, int chanstoavg, int bpersend, int gblocks, int nfreqs, double bw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqphaseoffs, double * recordedfreqlooffs, int ninputbands, int noutputbands, int nbits, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs);
 
   virtual float unpack(int sampleoffset);
 };

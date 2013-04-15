@@ -266,6 +266,7 @@ Configuration::~Configuration()
       delete [] datastreamtable[i].recordedfreqpols;
       delete [] datastreamtable[i].recordedfreqclockoffsets;
       delete [] datastreamtable[i].recordedfreqclockoffsetsdelta;
+      delete [] datastreamtable[i].recordedfreqphaseoffset;
       delete [] datastreamtable[i].recordedfreqlooffsets;
       delete [] datastreamtable[i].zoomfreqtableindices;
       delete [] datastreamtable[i].zoomfreqpols;
@@ -688,26 +689,26 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
     case LBASTD:
       if(stream.numbits != 2)
         cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth,  stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, stream.linear2circular, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth,  stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqphaseoffset, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, stream.linear2circular, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::stdunpackvalues);
       break;
     case LBAVSOP:
       if(stream.numbits != 2)
         cerror << startl << "All LBASTD Modes must have 2 bit sampling - overriding input specification!!!" << endl;
-      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
+      return new LBAMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqphaseoffset, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 2/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, LBAMode::vsopunpackvalues);
       break;
     case LBA8BIT:
       if(stream.numbits != 8) {
         cerror << startl << "8BIT LBA mode must have 8 bits! aborting" << endl;
         return NULL;
       }
-      return new LBA8BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 8/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
+      return new LBA8BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqphaseoffset, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 8/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
       break;
     case LBA16BIT:
       if(stream.numbits != 16) {
         cerror << startl << "16BIT LBA mode must have 16 bits! aborting" << endl;
         return NULL;
       }
-      return new LBA16BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 16/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
+      return new LBA16BitMode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqphaseoffset, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, 16/*bits*/, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs);
       break;
     case MKIV:
     case VLBA:
@@ -724,7 +725,7 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
         framesamples *= getDNumRecordedBands(configindex, datastreamindex);
         framebytes = (framebytes - VDIF_HEADER_BYTES)*getDNumRecordedBands(configindex, datastreamindex) + VDIF_HEADER_BYTES;
       }
-      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.sampling, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
+      return new Mk5Mode(this, configindex, datastreamindex, streamrecbandchan, streamchanstoaverage, conf.blockspersend, guardsamples, stream.numrecordedfreqs, streamrecbandwidth, stream.recordedfreqclockoffsets, stream.recordedfreqclockoffsetsdelta, stream.recordedfreqphaseoffset, stream.recordedfreqlooffsets, stream.numrecordedbands, stream.numzoombands, stream.numbits, stream.sampling, stream.filterbank, stream.filterbank, conf.fringerotationorder, conf.arraystridelen, conf.writeautocorrs, framebytes, framesamples, stream.format);
       break;
     default:
       cerror << startl << "Unknown mode being requested!!!" << endl;
@@ -1175,9 +1176,10 @@ bool Configuration::processDatastreamTable(ifstream * input)
     } else if (key=="PROCESSING METHOD") {
       if (line == "FILTERBANK") 
       	datastreamtable[i].filterbank=true;
-      else if (line=="L2C" || line=="LINEAR2CIRCULAR") 
+      else if (line=="L2C" || line=="LINEAR2CIRCULAR") {
+	cinfo << startl << "Linear to Circular enabled" << endl;
       	datastreamtable[i].linear2circular=true;
-      else if (line != "NONE") 
+      } else if (line != "NONE") 
 	cerror << startl << "Unknown PROCESSING METHOD '" << line << "'. Ignoring." << endl;
     } else {
       cfatal << startl << "We thought we were reading something starting with 'FILTERBANK USED', when we actually got '" << key << "'" << endl;
@@ -1207,6 +1209,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     datastreamtable[i].recordedfreqtableindices = new int[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqclockoffsets = new double[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqclockoffsetsdelta = new double[datastreamtable[i].numrecordedfreqs];
+    datastreamtable[i].recordedfreqphaseoffset = new double[datastreamtable[i].numrecordedfreqs];
     datastreamtable[i].recordedfreqlooffsets = new double[datastreamtable[i].numrecordedfreqs];
     estimatedbytes += 8*datastreamtable[i].numrecordedfreqs*3;
     datastreamtable[i].numrecordedbands = 0;
@@ -1218,12 +1221,25 @@ bool Configuration::processDatastreamTable(ifstream * input)
       size_t found;
       found = line.find_first_of(':');
       if (found==std::string::npos) {
+	// Just Delay offset
 	datastreamtable[i].recordedfreqclockoffsets[j] = atof(line.c_str());
 	datastreamtable[i].recordedfreqclockoffsetsdelta[j] = 0;
+	datastreamtable[i].recordedfreqphaseoffset[j] = 0;
       } else {
-	// seperated values. Maybe also include phase offset here also
+	// Offset:LcpOffset[+Phaseoffset] (usec:usec:degrees)
 	datastreamtable[i].recordedfreqclockoffsets[j] = atof(line.substr(0,found).c_str());
-	datastreamtable[i].recordedfreqclockoffsetsdelta[j] = atof(line.substr(found+1).c_str());
+
+	size_t found2;
+	found2 = line.substr(found+1).find_first_of('+');
+	if (found2==std::string::npos) {
+	  // Offset:LcpOffset
+	  datastreamtable[i].recordedfreqclockoffsetsdelta[j] = atof(line.substr(found+1).c_str());
+	} else {
+	  // Offset:LcpOffset+PhaseOffset
+	  datastreamtable[i].recordedfreqclockoffsetsdelta[j] = atof(line.substr(found+1).substr(0,found2).c_str());
+	  datastreamtable[i].recordedfreqphaseoffset[j] = atof(line.substr(found+1).substr(found2+1).c_str());
+
+	}
       }
 
       if(j == 0 && datastreamtable[i].recordedfreqclockoffsets[j] != 0.0 && mpiid == 0)
