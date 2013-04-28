@@ -293,6 +293,30 @@ public:
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
     return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == VDIF || f == INTERLACEDVDIF) && (s == UNIXFILE || s == NETWORKSTREAM || s == FAKESTREAM)); 
   }
+  inline bool isVDIFFile(int datastreamindex) const
+  {
+    dataformat f;
+    datasource s;
+    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (f == INTERLACEDVDIF && (s == UNIXFILE || s == FAKESTREAM)); 
+  }
+  inline bool isVDIFMark5(int datastreamindex) const
+  {
+    dataformat f;
+    datasource s;
+    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (f == INTERLACEDVDIF && s == MK5MODULE);
+  }
+  inline bool isVDIFNetwork(int datastreamindex) const
+  {
+    dataformat f;
+    datasource s;
+    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (f == INTERLACEDVDIF && s == NETWORKSTREAM);
+  }
   inline bool isNativeMkV(int datastreamindex) const
   { 
     dataformat f;

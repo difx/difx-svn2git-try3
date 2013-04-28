@@ -525,7 +525,7 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
   return offset;
 }
 
-double tim(void) {
+static double tim(void) {
   struct timeval tv;
   double t;
 

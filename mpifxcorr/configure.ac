@@ -19,7 +19,7 @@ dnl **** Set path for Intel Performance Primitive library ****
 dnl **********************************************************
 
 ipp_enabled=1
-PKG_CHECK_MODULES(IPP, ipp, [AC_DEFINE([HAVE_IPP], 1, [1=has IPP])], ipp_enabled=0)
+PKG_CHECK_MODULES([IPP], [ipp], [AC_DEFINE([HAVE_IPP], 1, [1=has IPP])], [ipp_enabled=0])
 AC_SUBST(ipp_enabled)
 dnl **********************************************************
 

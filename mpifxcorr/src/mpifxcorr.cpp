@@ -35,6 +35,7 @@
 #include "datastream.h"
 #include "mk5.h"
 #include "nativemk5.h"
+#include "vdiffile.h"
 #include <sys/utsname.h>
 //includes for socket stuff - for monitoring
 #include "string.h"
@@ -373,12 +374,21 @@ int main(int argc, char *argv[])
     else if (myID >= fxcorr::FIRSTTELESCOPEID && myID < fxcorr::FIRSTTELESCOPEID + numdatastreams) //im a datastream
     {
       int datastreamnum = myID - fxcorr::FIRSTTELESCOPEID;
-      if(config->isMkV(datastreamnum)) {
+      if(config->isVDIFFile(datastreamnum)) {
+        stream = new VDIFDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+      } else if(config->isVDIFMark5(datastreamnum)) {
+        cerror << startl << "VDIF Mark5 not yet implemented" << endl;
+        return EXIT_FAILURE;
+      } else if(config->isVDIFNetwork(datastreamnum)) {
+        cerror << startl << "VDIF Network not yet implemented" << endl;
+        return EXIT_FAILURE;
+      } else if(config->isMkV(datastreamnum)) {
         stream = new Mk5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
-      } else if(config->isNativeMkV(datastreamnum))
+      } else if(config->isNativeMkV(datastreamnum)) {
         stream = new NativeMk5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
-      else
+      } else {
         stream = new DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+      }
       stream->initialise();
       MPI_Barrier(world);
       cinfo << startl << "Estimated memory usage by Datastream: " << stream->getEstimatedBytes()/1048576.0 << " MB" << endl;
