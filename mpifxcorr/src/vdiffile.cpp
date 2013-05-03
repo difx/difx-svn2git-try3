@@ -501,7 +501,7 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 	//do the buffer housekeeping
 	waitForBuffer(buffersegment);
 
-	fileRead(buf, readbytes, buffersegment); // tells you how many bytes were read
+	fileRead(buf, readbytes, buffersegment);
 	obytes = bufferinfo[buffersegment].validbytes; // this is the number of bytes relevant for downstream processing
 
 	// Update estimated read timing variables

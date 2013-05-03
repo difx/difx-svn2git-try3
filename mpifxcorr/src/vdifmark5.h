@@ -25,7 +25,6 @@
 
 #include <pthread.h>
 #include <time.h>
-#include <mark5access.h>
 #include "mode.h"
 #include "datastream.h"
 #include "config.h"
@@ -53,7 +52,7 @@ public:
 	int reportDriveStats();
 
 protected:
-	void moduleToMemory(int buffersegment);
+	virtual void fileToMemory(int buffersegment);
 #ifdef HAVE_XLRAPI_H
 	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
 #endif
@@ -61,7 +60,7 @@ protected:
 private:
 #ifdef HAVE_XLRAPI_H
 	Mark5Module module;
-        int scanNum;
+	int scanNum;
 	const Mark5Scan *scanPointer;
 	long long readpointer;
 	SSHANDLE xlrDevice;
@@ -69,7 +68,6 @@ private:
 
 	DifxMessageMk5Status mk5status;
 
-	int executeseconds;
 	int invalidtime;
 	int filltime;
 	long long invalidstart;
@@ -78,16 +76,15 @@ private:
 	double lastrate;
 	int nrate;
 	int nError;
-        int nDMAError;
+	int nDMAError;
 	bool noMoreData;
-        bool noDataOnModule;
-        int readDelayMicroseconds;
+	bool noDataOnModule;
+	int readDelayMicroseconds;
 	int nReads;
 
-        void openStreamstor();
-        void closeStreamstor();
-        void resetStreamstor();
+	void openStreamstor();
+	void closeStreamstor();
+	void resetStreamstor();
 };
 
 #endif
-// vim: shiftwidth=2:softtabstop=2:expandtab

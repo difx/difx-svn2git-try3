@@ -271,7 +271,6 @@ NativeMk5DataStream::NativeMk5DataStream(const Configuration * conf, int snum,
 	 * because thats the way config determines max bytes
 	 */
 
-	executeseconds = conf->getExecuteSeconds();
 	scanNum = -1;
 	readpointer = -1;
 	scanPointer = 0;

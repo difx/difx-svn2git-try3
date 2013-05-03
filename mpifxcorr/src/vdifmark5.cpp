@@ -176,8 +176,7 @@ void VDIFMark5DataStream::resetStreamstor()
 	WATCHDOG( XLRReset(xlrDevice) );
 }
 
-VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, 
-	int id, int ncores, int * cids, int bufferfactor, int numsegments) :
+VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
 		VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	int perr;
@@ -186,12 +185,10 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum,
 	 * because thats the way config determines max bytes
 	 */
 
-	executeseconds = conf->getExecuteSeconds();
 	scanNum = -1;
 	readpointer = -1;
 	scanPointer = 0;
 	lastval = 0xFFFFFFFF;
-	mark5stream = 0;
 	filltime = 0;
 	invalidtime = 0;
 	invalidstart = 0;
@@ -232,19 +229,6 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum,
 
 VDIFMark5DataStream::~VDIFMark5DataStream()
 {
-	if(mark5stream)
-	{
-		if(mark5stream->nvalidatefail > mark5stream->nvalidatepass/49)
-		{
-			cerror << startl << "There were " << mark5stream->nvalidatefail << "/" << (mark5stream->nvalidatefail + mark5stream->nvalidatepass) << " data validation failures.  This number is high and might indicate a problem with the formatter at the station.  This is unlikely to be a playback problem." << endl;
-		}
-		else if(mark5stream->nvalidatefail > 0)
-		{
-			cwarn << startl << "There were " << mark5stream->nvalidatefail << "/" << (mark5stream->nvalidatefail + mark5stream->nvalidatepass) << " data validation failures." << endl;
-		}
-
-		delete_mark5_stream(mark5stream);
-	}
 
 /* FIXME: Replace with vdifmux analysis */
 #if 0
@@ -269,11 +253,11 @@ VDIFMark5DataStream::~VDIFMark5DataStream()
 	{
 		cinfo << startl << "Data recovery statistics: ninvalid=" << ninvalid << " nfill=" << nfill << " ngood=" << ngood << "." << endl;
 	}
+#endif
 	if(readDelayMicroseconds > 0)
 	{
 		cinfo << startl << "To reduce read rate in RT mode, read delay was set to " << readDelayMicroseconds << " microseconds" << endl;
 	}
-#endif
 
 	reportDriveStats();
 
@@ -331,33 +315,38 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	char *mk5dirpath;
 	int nbits, nrecordedbands, fbytes;
 	Configuration::dataformat format;
+	Configuration::datasampling sampling;
 	double bw;
 	XLR_RETURN_CODE xlrRC;
 
 	format = config->getDataFormat(configindex, streamnum);
+
 	nbits = config->getDNumBits(configindex, streamnum);
+	sampling = config->getDSampling(configindex, streamnum);
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
 	inputframebytes = config->getFrameBytes(configindex, streamnum);
 	framespersecond = config->getFramesPerSecond(configindex, streamnum);
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
+
+	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
+	startOutputFrameNumber = -1;
 
         outputframebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
 
 	nthreads = config->getDNumMuxThreads(configindex, streamnum);
 	threads = config->getDMuxThreadMap(configindex, streamnum);
 
-
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, config->getDSampling(configindex, streamnum), outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
-        if(fanout < 0)
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+        if(fanout != 1)
         {
-		cfatal << startl << "Fanout is " << fanout << ", which is impossible - no choice but to abort!" << endl;
+		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
 #if HAVE_MARK5IPC
                 unlockMark5();
 #endif
                 MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-	cinfo << startl << "initialiseFile format=" << formatname << endl;
+	cinfo << startl << "VDIFMark5DataStream::initialiseFile format=" << formatname << endl;
 
 	mk5dirpath = getenv("MARK5_DIR_PATH");
 	if(mk5dirpath == 0)
@@ -621,7 +610,10 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	S_READDESC      xlrRD;
 	XLR_ERROR_CODE  xlrEC;
 	char errStr[XLR_ERROR_LENGTH];
+	bool endofscan = false;
 
+	
+	// Bytes to read
 	bytes = readbuffersize - readbufferleftover;
 
 	// if we're starting after the end of the scan, then just set flags and return
@@ -630,15 +622,15 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 		// If there is some data left over, just demux that and send it out
 		if(readbufferleftover > minLeftoverData)
 		{
-			vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, -1, &vstats);
+			vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 			readbufferleftover = 0;
 			bufferinfo[buffersegment].validbytes = vstats.destUsed;
 		}
 		else
 		{
 			bufferinfo[buffersegment].validbytes = 0;
-			dataremaining = false;
 		}
+		dataremaining = false;
 
 		return 0;
 	}
@@ -647,6 +639,7 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	if(start + bytes > scanPointer->start + scanPointer->length)
 	{
 		bytes = scanPointer->start + scanPointer->length - start;
+		endofscan = true;
 
 		cverbose << startl << "At end of scan: shortening read to only " << bytes << " bytes " << "(was " << nbytes << ")" << endl;
 	}
@@ -708,7 +701,8 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	}
 	++nReads;
 
-	vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover + bytes, nputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, -1, &vstats);
+	// multiplex and corner turn the data
+	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover + bytes, nputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 
 	consumedbytes += bytes;
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
@@ -725,11 +719,11 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 		readseconds = bufferinfo[buffersegment].scanseconds;
 	}
 
-	readbufferleftover += (bytes - vstats.destUsed);
+	readbufferleftover += (bytes - vstats.srcUsed);
 
 	if(readbufferleftover > 0)
 	{
-		memmove(readbuffer, readbuffer+vstats.destUsed, readbufferleftover);
+		memmove(readbuffer, readbuffer+vstats.srcUsed, readbufferleftover);
 	}
 	else if(readbufferleftover < 0)
 	{
@@ -737,11 +731,18 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 
 		readbufferleftover = 0;
 	}
+	if(readbufferleftover <= minleftoverdata && endofscan)
+	{
+		readbufferleftover = 0;
+
+		// here we've in one call both read all the remaining data from a file and multiplexed it all without leftovers
+		dataremaining = false;
+	}
 
 	return bytes;
 }
 
-void VDIFMark5DataStream::moduleToMemory(int buffersegment)
+void VDIFMark5DataStream:diskToMemory(int buffersegment)
 {
 	unsigned long *buf;
 	char *readto;
@@ -759,10 +760,60 @@ void VDIFMark5DataStream::moduleToMemory(int buffersegment)
 
 	waitForBuffer(buffersegment);
 
-	rbytes = moduleRead(buf, readbytes, readpointer, buffersegment); // tells you how many bytes were read, used for changing the readpointer
+	rbytes = moduleRead(buf, readbytes, readpointer, buffersegment);
 	obytes = bufferinfo[buffersegment].validbytes; // this is the number of bytes relevant for downstream processing
 
-	if(rbytes > 0 && obytes <= 0)
+	// Update estimated read timing variables
+	readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
+	readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
+	readseconds += readnanoseconds/1000000000;
+	readnanoseconds %= 1000000000;
+
+	readpointer += rbytes;
+
+	// did we just cross into next scan?
+	if(readseconds >= model->getScanDuration(readscan))
+	{
+		if(readscan < (model->getNumScans()-1))
+		{
+			++readscan;
+			readseconds += model->getScanStartSec(readscan-1, corrstartday, corrstartseconds);
+			readseconds -= model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		}
+		else
+		{
+			// here we just crossed over the end of the job
+			keepreading = false;
+		}
+	}
+
+	if(switchedpower && obytes > 0)
+	{
+		static int nt = 0;
+
+		++nt;
+
+                // feed switched power detector
+		if(nt % switchedpowerincremens == 0)
+		{
+			struct mark5_stream *m5stream = new_mark5_stream_absorb(
+				new_mark5_stream_memory(buf, obytes),
+				new_mark5_format_generic_from_string(formatname) );
+			if(m5stream)
+			{
+				mark5_stream_fix_mjd(m5stream, config->getStartMJD());
+				switchedpower->feed(m5stream);
+				delete_mark5_stream(m5stream);
+			}
+                }
+	}
+
+	/* above here, this is basically the same as VDIFDataStream::diskToMemory() */
+
+
+	/* below here, handle some Mark5 servoing and reporting */
+
+	if(obytes <= 0)
 	{
 		++invalidtime;
 	}
@@ -845,135 +896,8 @@ void VDIFMark5DataStream::moduleToMemory(int buffersegment)
 		lastpos = readpointer + rbytes;
 		now_us = tv_us;
 	}
-
-	// Update various counters
-	readpointer += rbytes;
-
-	readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
-	readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
-	readseconds += readnanoseconds/1000000000;
-	readnanoseconds %= 1000000000;
-
-	if(switchedpower && obytes > 0)
-	{
-		static int nt = 0;
-
-		++nt;
-
-                // feed switched power detector
-		if(nt % switchedpowerincremens == 0)
-		{
-			struct mark5_stream *m5stream = new_mark5_stream_absorb(
-				new_mark5_stream_memory(buf, obytes),
-				new_mark5_format_generic_from_string(formatname) );
-			if(m5stream)
-			{
-				mark5_stream_fix_mjd(m5stream, config->getStartMJD());
-				switchedpower->feed(m5stream);
-				delete_mark5_stream(m5stream);
-			}
-                }
-	}
-
 }
 
-void VDIFMark5DataStream::loopfileread()
-{
-  int perr, rbytes;
-  int numread = 0;
-
-  //lock the outstanding send lock
-  perr = pthread_mutex_lock(&outstandingsendlock);
-  if(perr != 0)
-    csevere << startl << "Error in initial telescope readthread lock of outstandingsendlock!!!" << endl;
-
-  //lock the first section to start reading
-  openfile(bufferinfo[0].configindex, 0);
-  moduleToMemory(numread++);
-  moduleToMemory(numread++);
-  perr = pthread_mutex_lock(&(bufferlock[numread]));
-  if(perr != 0)
-    csevere << startl << "Error in initial telescope readthread lock of first buffer section!!!" << endl;
-  readthreadstarted = true;
-  perr = pthread_cond_signal(&initcond);
-  if(perr != 0)
-    csevere << startl << "VDIFMark5DataStream readthread " << mpiid << " error trying to signal main thread to wake up!!!" << endl;
-  moduleToMemory(numread++);
-
-  lastvalidsegment = (numread-1)%numdatasegments;
-  if(noDataOnModule)
-  {
-  	dataremaining = false;
-	keepreading = false;
-  }
-  while((bufferinfo[lastvalidsegment].configindex < 0 || filesread[bufferinfo[lastvalidsegment].configindex] <= confignumfiles[bufferinfo[lastvalidsegment].configindex]) && keepreading)
-  {
-    while(dataremaining && keepreading)
-    {
-      lastvalidsegment = (lastvalidsegment + 1)%numdatasegments;
-      
-      //lock the next section
-      perr = pthread_mutex_lock(&(bufferlock[lastvalidsegment]));
-      if(perr != 0)
-        csevere << startl << "Error in telescope readthread lock of buffer section!!!" << lastvalidsegment << endl;
-
-      //unlock the previous section
-      perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));
-      if(perr != 0)
-        csevere << startl << "Error in telescope readthread unlock of buffer section!!!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
-
-      //do the read
-      moduleToMemory(lastvalidsegment);
-      numread++;
-    }
-    if(keepreading)
-    {
-      //if we need to, change the config
-      int nextconfigindex = config->getScanConfigIndex(readscan);
-      cinfo << startl << "old config[" << mpiid << "] = " << nextconfigindex << endl;
-      while(nextconfigindex < 0 && readscan < model->getNumScans()) {
-        readseconds = 0; 
-        nextconfigindex = config->getScanConfigIndex(++readscan);
-      }
-      if(readscan == model->getNumScans())
-      {
-        bufferinfo[(lastvalidsegment+1)%numdatasegments].scan = model->getNumScans()-1;
-        bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
-        bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
-        keepreading = false;
-      }
-      else
-      {
-        if(config->getScanConfigIndex(readscan) != bufferinfo[(lastvalidsegment + 1)%numdatasegments].configindex)
-          updateConfig((lastvalidsegment + 1)%numdatasegments);
-	//if the datastreams for two or more configs are common, they'll all have the same 
-        //files.  Therefore work with the lowest one
-        int lowestconfigindex = bufferinfo[(lastvalidsegment+1)%numdatasegments].configindex;
-        for(int i=config->getNumConfigs()-1;i>=0;i--)
-        {
-          if(config->getDDataFileNames(i, streamnum) == config->getDDataFileNames(lowestconfigindex, streamnum))
-            lowestconfigindex = i;
-        }
-        openfile(lowestconfigindex, filesread[lowestconfigindex]);
-      }
-      if(keepreading == false)
-      {
-        bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = config->getExecuteSeconds();
-        bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
-      }
-    }
-  }
-  perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
-  if(perr != 0)
-    csevere << startl << "Error in telescope readthread unlock of buffer section!!!" << lastvalidsegment << endl;
-
-  //unlock the outstanding send lock
-  perr = pthread_mutex_unlock(&outstandingsendlock);
-  if(perr != 0)
-    csevere << startl << "Error in telescope readthread unlock of outstandingsendlock!!!" << endl;
-
-  cinfo << startl << "Readthread is exiting! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
-}
 
 static bool legalVSN(const char *vsn)
 {
