@@ -87,6 +87,8 @@ protected:
 
   virtual int testForSync(int configindex, int buffersegment);
 
+  virtual void loopfileread();
+
   int lastconfig;
 
   char formatname[64];
@@ -97,6 +99,7 @@ protected:
   int minleftoverdata;
   int nSort, nGap;  // muxer tuning parameters
   struct vdif_mux_statistics vstats;
+  long long startOutputFrameNumber;
 
   int nbits, framespersecond, nthreads, outputframebytes, inputframebytes;
   const int *threads;
