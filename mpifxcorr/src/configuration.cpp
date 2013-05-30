@@ -1230,12 +1230,12 @@ bool Configuration::processDatastreamTable(ifstream * input)
 	datastreamtable[i].recordedfreqclockoffsets[j] = atof(line.substr(0,found).c_str());
 
 	size_t found2;
-	found2 = line.substr(found+1).find_first_of('+');
+	found2 = line.substr(found+1).find_first_of(':');
 	if (found2==std::string::npos) {
 	  // Offset:LcpOffset
 	  datastreamtable[i].recordedfreqclockoffsetsdelta[j] = atof(line.substr(found+1).c_str());
 	} else {
-	  // Offset:LcpOffset+PhaseOffset
+	  // Offset:LcpOffset:PhaseOffset
 	  datastreamtable[i].recordedfreqclockoffsetsdelta[j] = atof(line.substr(found+1).substr(0,found2).c_str());
 	  datastreamtable[i].recordedfreqphaseoffset[j] = atof(line.substr(found+1).substr(found2+1).c_str());
 
