@@ -1,0 +1,126 @@
+Version 2.2
+~~~~~~~~~~~
+* Correct scaling of autocorrelations for LBA-format data
+* Optimized corner turners implemented for interlaced VDIF
+* Fixed a scaling bug for zoom band data
+* Allow building without IPP (needs fftw) [Thanks Richard Dodson!]
+* .pc files now include full compile-in info for ipp or fftw as appropriate
+* Check for a common .dir file anomoly caused by hand editing
+* Stop 0.5 ns delay wobble in 2 Gbps Mark5B format
+* c++11 compliance
+* Finally, kill off the MODE errors and Stale data errors for cases where
+  subintegration time is between 1 and 2 seconds long.  This enables 1 Hz
+  resolution.
+* Use openmp to parallelize common corner turners for VDIF
+* Fix weights (and maybe more) for setups differing only by pcal setup (Adam)
+* Defeat data "echoes" that that would occur on each scan start after files
+  ran out of data
+* Properly scale multicast weights when selecting bands or performing zooms
+* Avoid a rounding error which can lead to wrong scan choice when playing back
+  nativemk5 VDIF data
+* Tagged as DiFX 2.2, May 31, 2013
+
+Version 2.1
+~~~~~~~~~~~
+* Version number change from 2.0.2 prior to tagging
+* Tagging Version 2.1, May 4, 2012
+
+Version 2.0.2
+~~~~~~~~~~~~~
+* Correctly scale cross-correlation amplitudes for pulsar binning when using Tsys>0 (accounts for varying # samples per bin c.f. nominal)
+* Correctly scale LBA format visibilities, reducing the size of ACCOR corrections
+* Fix bug when pulsar binning/gating and xmaclength > nfftchan
+* Add collection of drive statistics to native Mark5
+* guardns was incorrectly (overzealously) calculated in mpifxcorr
+* "Mk5DataStream::calculateControlParams: bufferindex>=bufferbytes" bug fixed
+* Low weight reads could result in uninitialized memory
+* Streamstor XLRRead() bug work-around installed several places (read at position 0 before reading at position > 0)
+* mpifxcorr terminates correctly for all short jobs - previously it hung for jobs with a number of subints between nCores and 4 x nCores
+* multithread VDIF support enabled for nativemk5datastream (reading from a module) inclduing stripping of non-VDIF packets
+* Add "FAKE" as new datastream type.  Results will be useless but benchmarking and bugfixing may benefit
+
+Version 2.0.1, 2011 June 12
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Added new checkmpifxcorr utility
+* Updates to phase cal extraction
+* Added switched power detection (enable with TCAL FREQUENCY, optional line just above PHASE CAL INT (MHZ) ), currently only for mark5access based unpackers, and only works on 2-bit data.
+* Fix parsing of mark5 directory files: stepping through extra parameters had a bug.
+* Native Mark5: Swap order of fill pattern setting and bank mode setting to better work around certain module problems
+* Fix zoom-bands for all but special cases that just worked despite the logic in the code. (WFB paraphrasing for ATD)
+* Allow number of scans on a Mark5 module to exceed 1024
+* Fix calculation of bytes from guardns
+
+Version 2.0.0, 2010 July 14
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Many bugfixes to both band matching and multiple phase centres
+* Visibilities now written out in binary format
+* New polyco parser and checker is more forgiving of TEMPO2 generated polycos
+* Can now produce kurtosis dumps every STA under the command of difxfilterbank
+* Many nativemk5 inmprovements migrated from 1.5
+* Decorrelation correction is applied if uv shifting is done
+* Catch rare datastream error where file ends exactly at end of databuffer 
+  for a Mk5 files
+* Allow for new VEX FILE line in calc file to be optional
+* Bugfix for polycos with more than one entry
+* Many more minor bugfixes
+
+Version 2.0, 2009 September 24
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Many, many changes both visibly and under the hood
+* Allows support of multiple phase centres
+* Writes each pulsar bin/source to a different DiFX file
+* More efficient implementation of station-based processing, using
+  complex multiplications to replace many sin/cos calculations (~20% speedup)
+* More cache-efficient implementation of baseline-based processing
+  for correlations with many channels where whole output array can't
+  fit in cache simultaneously (factor of ~2 speedup for >=2k channels)
+* Allows support of zoom bands
+* Replaces blockspersend with subintNS, guardBlocks with guardNS
+* Shifts numchannels/oversample/decimation etc from Configuration to Freq
+* Allows use of Rule table in input file
+* Adds support for LO offsets
+* mostly complete Mark5B support
+* Mark5B eVLBI support
+* Visibilities with zero weight are not written to disk
+* See http://cira.ivec.org/dokuwiki/doku.php/difx/documentation for more info
+  on changes, particulaly for the file formats
+
+Version 1.5 Perth, 2008 March 7
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This version was born from the merge of the main trunk code and Walter's
+native-mark5 branch.  In addition some new features were added:
+
+1. Input file
+
+  * HEADER O/RIDE is removed (never used) and replaced with
+VIS BUFFER LENGTH, which was a compile-time constant.  Typical values for
+this number are upwards of 8.
+
+  * In the configuration table, two additional parameters have been added
+after NUM CHANNELS:
+
+  CHANNELS TO AVERAGE
+  OVERSAMPLE FACTOR
+
+Currently both of these only accept value 1.
+
+  * In the datastream table, the format and data source parameters have
+changed.  The four following parameters are now used:
+
+  DATA FORMAT
+  QUANTIZATION BITS
+  DATA FRAME SIZE
+  DATA SOURCE
+
+2. Difx format output
+
+  * WEIGHTS WRITTEN replaced with DATA WEIGHT.  The value is a float ranging
+from 0.0 to possibly a bit more than 1.0, but no more than 2.0; the average
+weight over many seconds of data should not exceed 1.0.
+
+  * Exactly NUM CHANNELS of data are written out.  For upper sideband data
+the first written channel is the DC channel and for lower sideband data
+the last written channel is the DC channel.  The Nyquist channel is always
+dropped.
+
