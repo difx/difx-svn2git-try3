@@ -1,0 +1,50 @@
+Summary: DiFX library for reading, writing and manipulating difx input files
+Name: difxio
+Version: @version@
+Release: 1
+License: GPL3
+Group: VLBI
+BuildRoot: /var/tmp/difxio-@version@-buildroot
+Requires: gcc >= 4.1.0
+Prefix: /usr
+Source: difxio-@version@.tar.gz
+
+%description
+C libraries and utilities useful for manipulation of difx files
+
+%prep
+%setup -q -n difxio-@version@
+
+%build
+%configure
+make
+
+%install
+%makeinstall
+
+%files
+%defattr(-,root,root)
+%{_libdir}/libdifxio.la
+%{_libdir}/libdifxio.so.0.0.0
+%{_libdir}/libdifxio.so.0
+%{_libdir}/libdifxio.so
+%{_libdir}/libdifxio.a
+%{_libdir}/pkgconfig/difxio.pc
+%{_includedir}/difxio.h
+%{_includedir}/difxio/difx_input.h
+%{_includedir}/difxio/parsedifx.h
+%{_includedir}/difxio/parsevis.h
+%{_includedir}/difxio/difx_write.h
+%{_includedir}/difxio/difx_calculator.h
+%{_includedir}/difxio/difx_tcal.h
+%{_bindir}/difxcalculator
+%{_bindir}/testtcal
+%{_bindir}/testdifxinput
+%{_bindir}/testparsedifx
+%{_bindir}/testparsevis
+%{_bindir}/teststringarray
+%{_bindir}/testephem
+
+%changelog
+* Fri Mar 11 2011 Walter Brisken <wbrisken@nrao.edu>
+- First rpm version
