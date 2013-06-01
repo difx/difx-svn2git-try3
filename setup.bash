@@ -1,11 +1,11 @@
 ####### DIFX VERSION ########################
-export DIFX_VERSION=DiFX-2.1.1
+export DIFX_VERSION=DiFX-2.1.2
 
 ####### ROOT PATHS ##########################
-export DIFXROOT=/usr/local/difx
+export DIFXROOT=/nfs/apps/corr/DiFX-2.1
 export DIFX_PREFIX=$DIFXROOT
-export PGPLOTDIR=/usr/local/pgplot
-export IPPROOT=/opt/intel/ipp/5.2/ia32
+export PGPLOTDIR=/usr/lib/pgplot5
+export IPPROOT=/nfs/apps/intel/ipp/5.3.3.075/em64t
 
 ####### COMPILER ############################
 export MPICXX=/usr/bin/mpicxx
@@ -31,10 +31,10 @@ perlsver="5.8.8"
 
 ####### PORTS FOR DIFXMESSAGE ###############
 # Uncomment these to enable DIFX_MESSAGES
-export DIFX_MESSAGE_GROUP=224.2.2.1
-export DIFX_MESSAGE_PORT=50201
-export DIFX_BINARY_GROUP=224.2.2.1
-export DIFX_BINARY_PORT=50202
+#export DIFX_MESSAGE_GROUP=224.2.2.1
+#export DIFX_MESSAGE_PORT=50201
+#export DIFX_BINARY_GROUP=224.2.2.1
+#export DIFX_BINARY_PORT=50202
 
 ####### No User configurable values below here
 

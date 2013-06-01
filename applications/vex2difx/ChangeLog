@@ -1,3 +1,8 @@
+Version 2.1.2
+~~~~~~~~~~~~~
+* Bug fix in reading channel order from Vex file for LBA format data
+* Version for DiFX-2.1.2, June 1, 2013
+
 Version 2.1.0
 ~~~~~~~~~~~~~
 * Version number change prior to DiFX-2.1

@@ -143,7 +143,7 @@ static int getRecordChannel(const string &antName, const string &chanName, const
 	}
 	else if( setup.formatName == "LBAVSOP" || setup.formatName == "LBASTD" ) 
 	{
-		/* int delta, track;
+		int delta, track;
 		map<string,Tracks>::const_iterator it = ch2tracks.find(chanName);
 
 		if(it == ch2tracks.end())
@@ -154,8 +154,8 @@ static int getRecordChannel(const string &antName, const string &chanName, const
 		const Tracks &T = it->second;
 		delta = T.sign.size() + T.mag.size();
 		track = T.sign[0];
-                */
-		return n;
+
+		return track/delta;
 	}
 	else if(setup.formatName == "S2" )
 	{
