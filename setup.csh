@@ -1,4 +1,4 @@
-alias PREPEND 'setenv \!^ {$\!^}:{\!:2}'
+alias PREPEND 'setenv \!^ {\!:2}:{$\!^}'
 
 ####### DIFX VERSION ########################
 setenv DIFX_VERSION DiFX-2.2.0
