@@ -6,7 +6,8 @@ mark5_files = \
 	watchdog.cpp
 else
 mark5_files = \
-	nativemk5_stubs.cpp
+	nativemk5_stubs.cpp \
+	vdifmark5_stubs.cpp
 endif
 
 bin_PROGRAMS = mpifxcorr neuteredmpifxcorr

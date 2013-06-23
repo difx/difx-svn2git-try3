@@ -302,25 +302,25 @@ int VDIFMark5DataStream::calculateControlParams(int scan, int offsetsec, int off
 /* Here "File" is VSN */
 void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 {
+	int nrecordedbands, fanout;
+	Configuration::datasampling sampling;
+	Configuration::dataformat format;
+	double bw;
+	int rv;
+
 	char defaultDirPath[] = ".";
 	double startmjd;
-	int v, fanout;
 	long long n;
 	int doUpdate = 0;
 	char *mk5dirpath;
-	int nrecordedbands;
-	Configuration::dataformat format;
-	Configuration::datasampling sampling;
-	double bw;
 	XLR_RETURN_CODE xlrRC;
 
 	format = config->getDataFormat(configindex, streamnum);
-
-	nbits = config->getDNumBits(configindex, streamnum);
 	sampling = config->getDSampling(configindex, streamnum);
+	nbits = config->getDNumBits(configindex, streamnum);
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
 	inputframebytes = config->getFrameBytes(configindex, streamnum);
-	framespersecond = config->getFramesPerSecond(configindex, streamnum);
+	framespersecond = config->getFramesPerSecond(configindex, streamnum)/config->getDNumMuxThreads(configindex, streamnum);
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
@@ -357,19 +357,19 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	{
 		doUpdate = 1;
 		cinfo << startl << "Getting module " << datafilenames[configindex][fileindex] << " directory info." << endl;
-		v = module.getCachedDirectory(xlrDevice, corrstartday, 
+		rv = module.getCachedDirectory(xlrDevice, corrstartday, 
 			datafilenames[configindex][fileindex].c_str(), 
 			mk5dirpath, &dirCallback, &mk5status, 0, 0, 0, 1, -1, -1);
 
-		if(v < 0)
+		if(rv < 0)
 		{
                 	if(module.error.str().size() > 0)
 			{
-				cerror << startl << module.error.str() << " (error code=" << v << ")" << endl;
+				cerror << startl << module.error.str() << " (error code=" << rv << ")" << endl;
 			}
 			else
 			{
-				cerror << startl << "Directory for module " << datafilenames[configindex][fileindex] << " is not up to date.  Error code is " << v << " .  You should have received a more detailed error message than this!" << endl;
+				cerror << startl << "Directory for module " << datafilenames[configindex][fileindex] << " is not up to date.  Error code is " << rv << " .  You should have received a more detailed error message than this!" << endl;
 			}
 			dataremaining = false;
 			sendMark5Status(MARK5_STATE_ERROR, 0, 0.0, 0.0);
@@ -381,8 +381,8 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 			MPI_Abort(MPI_COMM_WORLD, 1);
 		}
 
-		v = module.sanityCheck();
-		if(v < 0)
+		rv = module.sanityCheck();
+		if(rv < 0)
 		{
 			cerror << startl << "Module " << datafilenames[configindex][fileindex] << " contains undecoded scans" << endl;
 			dataremaining = false;

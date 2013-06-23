@@ -235,13 +235,15 @@ void VDIFDataStream::updateConfig(int segmentindex)
 
 void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 {
-	int nrecordedbands, fanout, jumpseconds, currentdsseconds;
+	int nrecordedbands, fanout;
 	Configuration::datasampling sampling;
 	Configuration::dataformat format;
 	double bw;
+	int rv;
+
 	long long dataoffset = 0;
 	struct vdif_file_summary fileSummary;
-	int rv;
+	int jumpseconds, currentdsseconds;
 
 	format = config->getDataFormat(configindex, streamnum);
 	sampling = config->getDSampling(configindex, streamnum);
