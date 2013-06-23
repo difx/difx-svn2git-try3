@@ -36,6 +36,7 @@
 #include "mk5.h"
 #include "nativemk5.h"
 #include "vdiffile.h"
+#include "vdifmark5.h"
 #include <sys/utsname.h>
 //includes for socket stuff - for monitoring
 #include "string.h"
@@ -377,8 +378,7 @@ int main(int argc, char *argv[])
       if(config->isVDIFFile(datastreamnum)) {
         stream = new VDIFDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
       } else if(config->isVDIFMark5(datastreamnum)) {
-        cerror << startl << "VDIF Mark5 not yet implemented" << endl;
-        return EXIT_FAILURE;
+        stream = new VDIFMark5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
       } else if(config->isVDIFNetwork(datastreamnum)) {
         cerror << startl << "VDIF Network not yet implemented" << endl;
         return EXIT_FAILURE;

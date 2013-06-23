@@ -36,7 +36,7 @@
 #include <mark5ipc.h>
 #endif
 
-
+#if 0
 time_t watchdogTime;
 int watchdogVerbose;
 char watchdogStatement[256];
@@ -120,6 +120,8 @@ void stopWatchdog()
 	pthread_mutex_unlock(&watchdogLock);
 	pthread_join(watchdogThread, NULL);
 }
+
+#endif
 
 static int dirCallback(int scan, int nscan, int status, void *data)
 {
@@ -639,7 +641,7 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 */
 			scanNum = module.nScans()-1;
 			scanPointer = &module.scans[scanNum];
-			readpointer = scanPointer->start + scanPointer->length - 1<<21;
+			readpointer = scanPointer->start + scanPointer->length - (1<<21);
 			if(readpointer < 0)
 			{
 				readpointer = 0;

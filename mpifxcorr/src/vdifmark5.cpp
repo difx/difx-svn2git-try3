@@ -29,7 +29,7 @@
 #include <unistd.h>
 #include <vdifio.h>
 #include "config.h"
-#include "nativemk5.h"
+#include "vdifmark5.h"
 #include "watchdog.h"
 #include "alert.h"
 
@@ -137,7 +137,6 @@ void VDIFMark5DataStream::openStreamstor()
 
 	sendMark5Status(MARK5_STATE_OPENING, 0, 0.0, 0.0);
 
-	cinfo << startl << "Opening Streamstor" << endl;
 	WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
   
   	if(xlrRC == XLR_FAIL)
@@ -148,10 +147,6 @@ void VDIFMark5DataStream::openStreamstor()
 		WATCHDOG( XLRClose(xlrDevice) );
 		cfatal << startl << "Cannot open Streamstor device.  Either this Mark5 unit has crashed, you do not have read/write permission to /dev/windrvr6, or some other process has full control of the Streamstor device." << endl;
 		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
-	else
-	{
-		cinfo << startl << "Success opening Streamstor device" << endl;
 	}
 
 	// FIXME: for non-bank-mode operation, need to look at the modules to determine what to do here.
@@ -280,7 +275,7 @@ int VDIFMark5DataStream::calculateControlParams(int scan, int offsetsec, int off
 	int r;
 	
 	// call parent class equivalent function and store return value
-	r = Mk5DataStream::calculateControlParams(scan, offsetsec, offsetns);
+	r = VDIFDataStream::calculateControlParams(scan, offsetsec, offsetns);
 
 	// check to see if we should send a status update
 	if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
@@ -313,7 +308,7 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	long long n;
 	int doUpdate = 0;
 	char *mk5dirpath;
-	int nbits, nrecordedbands, fbytes;
+	int nrecordedbands, fbytes;
 	Configuration::dataformat format;
 	Configuration::datasampling sampling;
 	double bw;
@@ -331,7 +326,7 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
 	startOutputFrameNumber = -1;
 
-        outputframebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
+        outputframebytes = (inputframebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
 
 	nthreads = config->getDNumMuxThreads(configindex, streamnum);
 	threads = config->getDMuxThreadMap(configindex, streamnum);
@@ -527,7 +522,7 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 
 			scanNum = module.nScans()-1;
 			scanPointer = &module.scans[scanNum];
-			readpointer = scanPointer->start + scanPointer->length - 1<<21;
+			readpointer = scanPointer->start + scanPointer->length - (1<<21);
 			if(readpointer < 0)
 			{
 				readpointer = 0;
@@ -612,7 +607,8 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	char errStr[XLR_ERROR_LENGTH];
 	bool endofscan = false;
 
-	
+// FIXME: if read size is enough less than readbufferleftover, don't read more now
+
 	// Bytes to read
 	bytes = readbuffersize - readbufferleftover;
 
@@ -620,7 +616,7 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	if(start >= scanPointer->start + scanPointer->length)
 	{
 		// If there is some data left over, just demux that and send it out
-		if(readbufferleftover > minLeftoverData)
+		if(readbufferleftover > minleftoverdata)
 		{
 			vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 			readbufferleftover = 0;
@@ -663,6 +659,7 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 
 	//execute the XLR read
 	WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
+
 	if(xlrRC != XLR_SUCCESS)
 	{
 		xlrEC = XLRGetLastError();
@@ -702,7 +699,7 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	++nReads;
 
 	// multiplex and corner turn the data
-	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover + bytes, nputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover + bytes, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 
 	consumedbytes += bytes;
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
@@ -742,7 +739,7 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	return bytes;
 }
 
-void VDIFMark5DataStream:diskToMemory(int buffersegment)
+void VDIFMark5DataStream::diskToMemory(int buffersegment)
 {
 	unsigned long *buf;
 	char *readto;
@@ -794,7 +791,7 @@ void VDIFMark5DataStream:diskToMemory(int buffersegment)
 		++nt;
 
                 // feed switched power detector
-		if(nt % switchedpowerincremens == 0)
+		if(nt % switchedpowerincrement == 0)
 		{
 			struct mark5_stream *m5stream = new_mark5_stream_absorb(
 				new_mark5_stream_memory(buf, obytes),

@@ -39,20 +39,18 @@
 class VDIFMark5DataStream : public VDIFDataStream
 {
 public:
-	VDIFMark5(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
-	virtual ~VDIFMark5();
+	VDIFMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
+	virtual ~VDIFMark5DataStream();
 	virtual void initialiseFile(int configindex, int fileindex);
 	virtual void openfile(int configindex, int fileindex);
-	virtual void loopfileread();
 	virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
-	virtual int readonedemux(bool resetreference, int buffersegment);
+	virtual void diskToMemory(int buffersegment);
 	int moduleRead(unsigned long * destination, int nbytes, long long start, int buffersegment);
 	int sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate);
 	int resetDriveStats();
 	int reportDriveStats();
 
 protected:
-	virtual void fileToMemory(int buffersegment);
 #ifdef HAVE_XLRAPI_H
 	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
 #endif

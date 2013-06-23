@@ -1,3 +1,12 @@
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <unistd.h>
+#include <mpi.h>
+#include "alert.h"
+#include "watchdog.h"
+
+using namespace std;
 
 time_t watchdogTime;
 int watchdogVerbose;
@@ -9,7 +18,7 @@ pthread_t watchdogThread;
 
 void *watchdogFunction(void *data)
 {
-	VDIFMark5DataStream *nativeMk5 = reinterpret_cast<VDIFMark5DataStream *>(data);
+//	VDIFMark5DataStream *nativeMk5 = reinterpret_cast<VDIFMark5DataStream *>(data);
 	int deltat;
 	int lastdeltat = 0;
 
@@ -30,10 +39,10 @@ void *watchdogFunction(void *data)
 			if(deltat > 60)  // Nothing should take 60 seconds to complete!
 			{
 				cfatal << startl << "Watchdog caught a hang-up executing: " << watchdogStatement << " Aborting!!!" << endl;
-				if(nativeMk5)
-				{
-					nativeMk5->sendMark5Status(MARK5_STATE_ERROR, 0, 0.0, 0.0);
-				}
+//				if(nativeMk5)
+//				{
+//					nativeMk5->sendMark5Status(MARK5_STATE_ERROR, 0, 0.0, 0.0);
+//				}
 #if HAVE_MARK5IPC
 				unlockMark5();
 #endif
