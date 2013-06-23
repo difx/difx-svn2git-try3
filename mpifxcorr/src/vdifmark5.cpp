@@ -308,7 +308,7 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	long long n;
 	int doUpdate = 0;
 	char *mk5dirpath;
-	int nrecordedbands, fbytes;
+	int nrecordedbands;
 	Configuration::dataformat format;
 	Configuration::datasampling sampling;
 	double bw;
@@ -492,6 +492,8 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 			}
 			else if(startmjd < scanend) /* obs starts within data */
 			{
+				int fbytes;
+
 				cinfo << startl << "NM5 : scan found(2) : " << (scanNum+1) << endl;
 				readpointer = scanPointer->start + scanPointer->frameoffset;
 				n = static_cast<long long>((
@@ -608,6 +610,7 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	bool endofscan = false;
 
 // FIXME: if read size is enough less than readbufferleftover, don't read more now
+// FIXME: maybe even better: don't do unnecessary memmove; this would require another offset pointer
 
 	// Bytes to read
 	bytes = readbuffersize - readbufferleftover;
@@ -748,7 +751,7 @@ void VDIFMark5DataStream::diskToMemory(int buffersegment)
 	static double now_us;
 	static long long lastpos = 0;
 	struct timeval tv;
-	int mjd, sec, sec2, fbytes;
+	int mjd, sec, sec2;
 	int ns;
 	int n = 0;
 	const vdif_header *header;

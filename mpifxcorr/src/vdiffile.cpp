@@ -274,7 +274,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	rv = summarizevdiffile(&fileSummary, datafilenames[configindex][fileindex].c_str(), inputframebytes);
 	if(rv < 0)
 	{
-		cwarn << startl << "VDIFDataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << endl;
+		cwarn << startl << "VDIFDataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid VDIF data." << endl;
 		dataremaining = false;
 
 		return;
