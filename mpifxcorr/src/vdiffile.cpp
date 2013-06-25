@@ -34,8 +34,6 @@
 
 #include <unistd.h>
 
-#define MAXPACKETSIZE 100000
-
 #ifdef WORDS_BIGENDIAN
 #define FILL_PATTERN 0x44332211UL
 #else
@@ -75,8 +73,8 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 
 	readbuffersize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*11/10;
 	readbuffersize -= (readbuffersize % 8); // make it a multiple of 8 bytes
-	readbuffer = new unsigned char[readbuffersize];
 	readbufferleftover = 0;
+	readbuffer = 0;	// to be allocated via initialize();
 
 	// Don't bother to do another read iteration just to salvage this many bytes at the end of a file/scan
 	minleftoverdata = 20000;
@@ -93,11 +91,15 @@ VDIFDataStream::~VDIFDataStream()
 	{
 		delete switchedpower;
 	}
-	delete [] readbuffer;
+	if(readbuffer)
+	{
+		delete [] readbuffer;
+	}
 }
 
 void VDIFDataStream::initialise()
 {
+	readbuffer = new unsigned char[readbuffersize];
 	DataStream::initialise();
 }
 

@@ -197,6 +197,13 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, i
 	noDataOnModule = false;
 	nReads = 0;
 
+	readbufferslots = 1;	// FIXME! change this to 6 or so when threading
+	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*11/10;
+	readbufferslotsize -= (readbuffersize % 8); // make it a multiple of 8 bytes
+	readbuffersize = readbufferslots * readbufferslotsize;
+	// Note: the read buffer is allocated in vdiffile.cpp by VDIFDataStream::initialse()
+	// the above values override defaults for file-based VDIF
+
 #if HAVE_MARK5IPC
         int v = lockMark5(5);
         {
@@ -574,6 +581,9 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 		cinfo << startl << "NOT updating all configs [" << mpiid << "]" << endl;
 	}
 
+	// pointer to first byte after end of current scan
+	readend = scanPointer->start + scanPointer->length;
+
 	cinfo << startl << "Scan " << scanNum <<" initialised[" << mpiid << "]" << endl;
 }
 
@@ -618,7 +628,7 @@ int VDIFMark5DataStream::moduleRead(int buffersegment)
 	bytes = readbuffersize - readbufferleftover;
 
 	// if we're starting after the end of the scan, then just set flags and return
-	if(readpointer >= scanPointer->start + scanPointer->length)
+	if(readpointer >= readend)
 	{
 		// If there is some data left over, just demux that and send it out
 		if(readbufferleftover > minleftoverdata)
@@ -637,10 +647,10 @@ int VDIFMark5DataStream::moduleRead(int buffersegment)
 	}
 
 	// if this will be the last read of the scan, shorten if necessary
-	if(readpointer + bytes > scanPointer->start + scanPointer->length)
+	if(readpointer + bytes > readend)
 	{
 		int origbytes = bytes;
-		bytes = scanPointer->start + scanPointer->length - readpointer;
+		bytes = readend - readpointer;
 		endofscan = true;
 
 		cverbose << startl << "At end of scan: shortening read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
@@ -759,7 +769,7 @@ void VDIFMark5DataStream::diskToMemory(int buffersegment)
 
 	waitForBuffer(buffersegment);
 
-	// This function call abstracts away all the details.  The result is demultiplexed data populating the 
+	// This function call abstracts away all the details.  The result is multiplexed data populating the 
 	// desired buffer segment.
 	moduleRead(buffersegment);
 

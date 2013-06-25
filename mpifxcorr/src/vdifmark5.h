@@ -60,7 +60,7 @@ private:
 	Mark5Module module;
 	int scanNum;
 	const Mark5Scan *scanPointer;
-	long long readpointer;
+	long long readpointer, readend;
 	SSHANDLE xlrDevice;
 #endif
 
@@ -79,6 +79,7 @@ private:
 	bool noDataOnModule;
 	int readDelayMicroseconds;
 	int nReads;
+	int readbufferslots, readbufferslotsize;
 
 	void openStreamstor();
 	void closeStreamstor();
