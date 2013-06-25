@@ -39,11 +39,6 @@ void VDIFMark5DataStream::diskToMemory(int buffersegment)
 {
 }
 
-int VDIFMark5DataStream::moduleRead(unsigned long * destination, int nbytes, long long start, int buffersegment)
-{
-	return -1;
-}
-
 int VDIFMark5DataStream::sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate)
 {
 	return -1;

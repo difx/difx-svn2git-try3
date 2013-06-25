@@ -599,7 +599,7 @@ void VDIFMark5DataStream::openfile(int configindex, int fileindex)
 }
 
 
-int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long long start, int buffersegment)
+int VDIFMark5DataStream::moduleRead(int buffersegment)
 {
 	unsigned long a, b;
 	int bytes;
@@ -609,6 +609,8 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	char errStr[XLR_ERROR_LENGTH];
 	bool endofscan = false;
 
+	unsigned long *destination = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+
 // FIXME: if read size is enough less than readbufferleftover, don't read more now
 // FIXME: maybe even better: don't do unnecessary memmove; this would require another offset pointer
 
@@ -616,12 +618,12 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	bytes = readbuffersize - readbufferleftover;
 
 	// if we're starting after the end of the scan, then just set flags and return
-	if(start >= scanPointer->start + scanPointer->length)
+	if(readpointer >= scanPointer->start + scanPointer->length)
 	{
 		// If there is some data left over, just demux that and send it out
 		if(readbufferleftover > minleftoverdata)
 		{
-			vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+			vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 			readbufferleftover = 0;
 			bufferinfo[buffersegment].validbytes = vstats.destUsed;
 		}
@@ -635,17 +637,18 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 	}
 
 	// if this will be the last read of the scan, shorten if necessary
-	if(start + bytes > scanPointer->start + scanPointer->length)
+	if(readpointer + bytes > scanPointer->start + scanPointer->length)
 	{
-		bytes = scanPointer->start + scanPointer->length - start;
+		int origbytes = bytes;
+		bytes = scanPointer->start + scanPointer->length - readpointer;
 		endofscan = true;
 
-		cverbose << startl << "At end of scan: shortening read to only " << bytes << " bytes " << "(was " << nbytes << ")" << endl;
+		cverbose << startl << "At end of scan: shortening read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
 	}
 
 	// remember that all reads of a module must be 64 bit aligned
-	a = start >> 32;
-	b = start & 0xFFFFFFF8; 	// enforce 8 byte boundary
+	a = readpointer >> 32;
+	b = readpointer & 0xFFFFFFF8; 	// enforce 8 byte boundary
 	bytes -= (bytes % 8);		// enforce 8 byte multiple length
 
 	// set up the XLR info
@@ -695,14 +698,15 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 			double errorTime = corrstartday + (readseconds + corrstartseconds + readnanoseconds*1.0e-9)/86400.0;
 			sendMark5Status(MARK5_STATE_ERROR, readpointer, errorTime, 0.0);
 			++nError;
-
-			return 0;
 		}
+
+		return 0;
 	}
+	readpointer += bytes;
 	++nReads;
 
 	// multiplex and corner turn the data
-	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover + bytes, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 
 	consumedbytes += bytes;
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
@@ -745,22 +749,20 @@ int VDIFMark5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 void VDIFMark5DataStream::diskToMemory(int buffersegment)
 {
 	unsigned long *buf;
-	char *readto;
-	int rbytes, obytes;
+	int obytes;
 	double tv_us;
 	static double now_us;
 	static long long lastpos = 0;
 	struct timeval tv;
-	int mjd, sec, sec2;
-	int ns;
-	int n = 0;
-	const vdif_header *header;
 
 	buf = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	waitForBuffer(buffersegment);
 
-	rbytes = moduleRead(buf, readbytes, readpointer, buffersegment);
+	// This function call abstracts away all the details.  The result is demultiplexed data populating the 
+	// desired buffer segment.
+	moduleRead(buffersegment);
+
 	obytes = bufferinfo[buffersegment].validbytes; // this is the number of bytes relevant for downstream processing
 
 	// Update estimated read timing variables
@@ -768,8 +770,6 @@ void VDIFMark5DataStream::diskToMemory(int buffersegment)
 	readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
-
-	readpointer += rbytes;
 
 	// did we just cross into next scan?
 	if(readseconds >= model->getScanDuration(readscan))
@@ -855,7 +855,7 @@ void VDIFMark5DataStream::diskToMemory(int buffersegment)
 				const int LowRealTimeRate = 1300;
 
 				state = MARK5_STATE_PLAY;
-				rate = (static_cast<double>(readpointer) + static_cast<double>(rbytes) - static_cast<double>(lastpos))*8.0/(tv_us - now_us);
+				rate = (static_cast<double>(readpointer) - static_cast<double>(lastpos))*8.0/(tv_us - now_us);
 //				if(nrate > 1)
 //				{
 //					rate = (nrate*lastrate + 4*rate)/(nrate+4);
@@ -893,7 +893,7 @@ void VDIFMark5DataStream::diskToMemory(int buffersegment)
 
 			sendMark5Status(state, readpointer, fmjd, rate);
 		}
-		lastpos = readpointer + rbytes;
+		lastpos = readpointer;
 		now_us = tv_us;
 	}
 }
