@@ -53,6 +53,8 @@ protected:
 #ifdef HAVE_XLRAPI_H
 	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
 	int moduleRead(int buffersegment);
+	static void *launchmark5threadfunction(void *self);
+	void mark5threadfunction();
 #endif
 
 private:
@@ -62,6 +64,15 @@ private:
 	const Mark5Scan *scanPointer;
 	long long readpointer, readend;
 	SSHANDLE xlrDevice;
+	unsigned int readbufferslots, readbufferslotsize;
+	pthread_t mark5thread;
+	pthread_mutex_t *mark5threadmutex;
+	pthread_barrier_t mark5threadbarrier;
+	bool mark5xlrfail;
+	bool mark5threadstop;
+	int lockstart, lockend, lastslot, endindex, muxindex;
+	int readbufferwriteslot;
+	char *mutexstate;
 #endif
 
 	DifxMessageMk5Status mk5status;
@@ -79,7 +90,6 @@ private:
 	bool noDataOnModule;
 	int readDelayMicroseconds;
 	int nReads;
-	int readbufferslots, readbufferslotsize;
 
 	void openStreamstor();
 	void closeStreamstor();

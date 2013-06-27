@@ -86,6 +86,28 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 
 VDIFDataStream::~VDIFDataStream()
 {
+	cinfo << startl << "VDIF multiplexing statistics: nValidFrame=" << vstats.nValidFrame << " nInvalidFrame=" << vstats.nInvalidFrame << " nDiscardedFrame=" << vstats.nDiscardedFrame << " nWrongThread=" << vstats.nWrongThread << " nSkippedByte=" << vstats.nSkippedByte << " nFillByte=" << vstats.nFillByte << " nDuplicateFrame=" << vstats.nDuplicateFrame << " bytesProcessed=" << vstats.bytesProcessed << " nGoodFrame=" << vstats.nGoodFrame << " nCall=" << vstats.nCall << endl;
+	if(vstats.nWrongThread > 0)
+	{
+		cerror << startl << "One or more wrong-threads were identified.  This may indicate a correlator configuration error." << endl;
+	}
+	if(vstats.nDuplicateFrame > 0)
+	{
+		cerror << startl << "One or more duplicate data frames (same time and thread) were found.  This may indicate serious problems with the digital back end configuration." << endl;
+	}
+	if(vstats.nFillByte > 3*vstats.bytesProcessed/4)
+	{
+		cerror << startl << "More than three quarters of the data from this station was unrecoverable (fill pattern)." << endl;
+	}
+	if(vstats.nFillByte > vstats.bytesProcessed/2)
+	{
+		cwarn << startl << "More than half of the data from this station was unrecoverable (fill pattern)." << endl;
+	}
+	if(vstats.nSkippedByte > vstats.bytesProcessed/20)
+	{
+		cwarn << startl << "More than 5 percent of data from this antenna were unwanted packets.  This could indicate a problem in the routing of data from the digital back end to the recorder." << endl;
+	}
+
 	printvdifmuxstatistics(&vstats);
 	if(switchedpower)
 	{
@@ -556,7 +578,7 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 
 void VDIFDataStream::loopfileread()
 {
-	int perr, rbytes;
+	int perr;
 	int numread = 0;
 
 cverbose << startl << "Starting loopfileread()" << endl;
