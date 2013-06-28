@@ -35,10 +35,6 @@ int VDIFMark5DataStream::calculateControlParams(int scan, int offsetsec, int off
 	return -1;
 }
 
-void VDIFMark5DataStream::diskToMemory(int buffersegment)
-{
-}
-
 int VDIFMark5DataStream::sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate)
 {
 	return -1;

@@ -81,7 +81,7 @@ protected:
 
   virtual void initialiseFake(int configindex);
 
-  int fileRead(unsigned long *destination, int nbytes, int buffersegment);
+  virtual int dataRead(int buffersegment);
 
   virtual void diskToMemory(int buffersegment);
 
@@ -100,6 +100,7 @@ protected:
   int nSort, nGap;  // muxer tuning parameters
   struct vdif_mux_statistics vstats;
   long long startOutputFrameNumber;
+  int invalidtime;
 
   int nbits, framespersecond, nthreads, outputframebytes, inputframebytes;
   const int *threads;

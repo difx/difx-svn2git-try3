@@ -196,7 +196,8 @@ void Core::execute()
   int perr, status, lastconfigindex, adjust, countdown, tounlock;
   bool terminate;
   processthreadinfo * threadinfos = new processthreadinfo[numprocessthreads];
-  
+  pthread_attr_t attr;
+
   terminate = false;
   numreceived = 0;
   cverbose << startl << "Core " << mpiid << " has started executing!!! Numprocessthreads is " << numprocessthreads << endl;
@@ -256,14 +257,17 @@ void Core::execute()
   }
 
   //now we have the lock on the last two slots in the ring.  Launch processthreads
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
   for(int i=0;i<numprocessthreads;i++)
   {
     threadinfos[i].thiscore = this;
     threadinfos[i].processthreadid = i;
-    perr = pthread_create(&processthreads[i], NULL, Core::launchNewProcessThread, (void *)(&threadinfos[i]));
+    perr = pthread_create(&processthreads[i], &attr, Core::launchNewProcessThread, (void *)(&threadinfos[i]));
     if(perr != 0)
       csevere << startl << "Error in launching Core " << mpiid << " processthread " << i << "!!!" << endl;
   }
+  pthread_attr_destroy(&attr);
 
   //wait til they are all initialised (and hence have a lock of their own)
   for(int i=0;i<numprocessthreads;i++)

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2012 by Walter Brisken and Adam Deller             *
+ *   Copyright (C) 2007-2013 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -31,48 +31,13 @@
 #include "nativemk5.h"
 #include "watchdog.h"
 #include "alert.h"
+#include "mark5utils.h"
 
 #if HAVE_MARK5IPC
 #include <mark5ipc.h>
 #endif
 
 
-static int dirCallback(int scan, int nscan, int status, void *data)
-{
-	const int MessageLength=200;
-	char message[MessageLength];
-	int v;
-	DifxMessageMk5Status *mk5status;
-
-	mk5status = reinterpret_cast<DifxMessageMk5Status *>(data);
-	mk5status->scanNumber = scan + 1;
-	mk5status->position = nscan;
-	v = snprintf(mk5status->scanName, MODULE_SCAN_NAME_LENGTH, "%s", Mark5DirDescription[status]);
-	if(v >= MessageLength)
-	{
-		fprintf(stderr, "Warning: dirCallback: scanName: v=%d >= %d\n", v, MODULE_SCAN_NAME_LENGTH);
-	}
-
-	difxMessageSendMark5Status(mk5status);
-
-	if(status == MARK5_DIR_READ_ERROR)
-	{
-		v = snprintf(message, MessageLength, "XLR read error in decoding of scan %d\n", scan+1);
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-	}
-	else if(status == MARK5_DIR_DECODE_ERROR)
-	{
-		v = snprintf(message, MessageLength, "cannot decode scan %d\n", scan+1);
-		difxMessageSendDifxAlert(message, DIFX_ALERT_LEVEL_ERROR);
-	}
-
-	if(v >= MessageLength)
-	{
-		fprintf(stderr, "Warning: dirCallback: message: v=%d, >= %d\n", v, MessageLength);
-	}
-
-	return 0;
-}
 
 int NativeMk5DataStream::resetDriveStats()
 {
@@ -279,10 +244,10 @@ NativeMk5DataStream::~NativeMk5DataStream()
 	{
 		cwarn << startl << nError << " errors were encountered reading this module" << endl;
 	}
+	closeStreamstor();
 #if HAVE_MARK5IPC
 	unlockMark5();
 #endif
-	closeStreamstor();
 
         // stop watchdog thread
         stopWatchdog();
@@ -1243,48 +1208,6 @@ void NativeMk5DataStream::loopfileread()
     csevere << startl << "Error in telescope readthread unlock of outstandingsendlock!!!" << endl;
 
   cinfo << startl << "Readthread is exiting! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
-}
-
-static bool legalVSN(const char *vsn)
-{
-	int nSep = 0;
-
-	for(int i = 0; i < 8; ++i)
-	{
-		if(vsn[i] == '+' || vsn[i] == '-')
-		{
-			if(nSep > 0 || i == 0 || i == 7)
-			{
-				return false;
-			}
-			++nSep;
-		}
-		else if(isalpha(vsn[i]))
-		{
-			if(nSep != 0)
-			{
-				return false;
-			}
-		}
-		else if(isdigit(vsn[i]))
-		{
-			if(nSep != 1)
-			{
-				return false;
-			}
-		}
-		else
-		{
-			return false;
-		}
-	}
-
-	if(nSep != 1)
-	{
-		return false;
-	}
-
-	return true;
 }
 
 int NativeMk5DataStream::sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate)

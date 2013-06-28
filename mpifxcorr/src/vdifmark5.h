@@ -44,7 +44,6 @@ public:
 	virtual void initialiseFile(int configindex, int fileindex);
 	virtual void openfile(int configindex, int fileindex);
 	virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
-	virtual void diskToMemory(int buffersegment);
 	int sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate);
 	int resetDriveStats();
 	int reportDriveStats();
@@ -52,9 +51,10 @@ public:
 protected:
 #ifdef HAVE_XLRAPI_H
 	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
-	int moduleRead(int buffersegment);
+	virtual int dataRead(int buffersegment);
 	static void *launchmark5threadfunction(void *self);
 	void mark5threadfunction();
+	void servoMark5();
 #endif
 
 private:
@@ -70,14 +70,14 @@ private:
 	pthread_barrier_t mark5threadbarrier;
 	bool mark5xlrfail;
 	bool mark5threadstop;
-	int lockstart, lockend, lastslot, endindex, muxindex;
-	int readbufferwriteslot;
+	int lockstart, lockend, lastslot;
+	unsigned int endindex, muxindex;
+	unsigned int readbufferwriteslot;
 	char *mutexstate;
 #endif
 
 	DifxMessageMk5Status mk5status;
 
-	int invalidtime;
 	int filltime;
 	long long invalidstart;
 	unsigned long lastval;

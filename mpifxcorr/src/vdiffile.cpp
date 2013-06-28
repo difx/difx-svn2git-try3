@@ -82,6 +82,7 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	resetvdifmuxstatistics(&vstats);
 	nthreads = 0; // no threads identified yet
 	threads = 0;  // null pointer indicating not yet initialized
+	invalidtime = 0;
 }
 
 VDIFDataStream::~VDIFDataStream()
@@ -396,12 +397,14 @@ int VDIFDataStream::testForSync(int configindex, int buffersegment)
 
 
 // This function does the actual file IO, readbuffer management, and VDIF multiplexing.  The result after each
-// call is, hopefully, nbytes of multiplexed data being put into buffer segment with potentially some 
+// call is, hopefully, readbytes of multiplexed data being put into buffer segment with potentially some 
 // read data left over in the read buffer ready for next time
-int VDIFDataStream::fileRead(unsigned long *destination, int nbytes, int buffersegment)
+int VDIFDataStream::dataRead(int buffersegment)
 {
+	unsigned long *destination;
 	int bytes;
 
+	destination = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	// Bytes to read
 	bytes = readbuffersize - readbufferleftover;
@@ -412,7 +415,7 @@ int VDIFDataStream::fileRead(unsigned long *destination, int nbytes, int buffers
 		// If there is some data left over, just demux that and send it out
 		if(readbufferleftover > minleftoverdata)
 		{
-			vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+			vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 			readbufferleftover = 0;
 			bufferinfo[buffersegment].validbytes = vstats.destUsed;
 
@@ -435,7 +438,7 @@ int VDIFDataStream::fileRead(unsigned long *destination, int nbytes, int buffers
 	bytes = input.gcount();
 
 	// multiplex and corner turn the data
-	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), nbytes, readbuffer, readbufferleftover + bytes, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 
 	if(vstats.destUsed == vstats.destSize)
 	{
@@ -451,33 +454,6 @@ int VDIFDataStream::fileRead(unsigned long *destination, int nbytes, int buffers
 	{
 		cwarn << startl << "vdifmux returned " << X << endl;
 	}
-
-#if 0
-	{
-		int ofb = (inputframebytes-VDIF_HEADER_BYTES)*nthreads+VDIF_HEADER_BYTES;
-		int ng=0, nb=0;
-
-		cverbose << startl << "Bad ones are:";
-
-		for(int i = 0; i < vstats.destUsed; i += ofb)
-		{
-			vdif_header *vh;
-			vh = reinterpret_cast<vdif_header *>(reinterpret_cast<unsigned char *>(destination) + i);
-			if(getVDIFFrameInvalid(vh))
-			{
-				++nb;
-				cverbose << " " << i;
-			}
-			else
-			{
-				++ng;
-			}
-		}
-		cverbose << endl;
-
-		cverbose << startl << "After muxing: " << ng << " valid frames and " << nb << " invalid frames" << endl;
-	}
-#endif
 
 	consumedbytes += bytes;
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
@@ -520,15 +496,15 @@ int VDIFDataStream::fileRead(unsigned long *destination, int nbytes, int buffers
 void VDIFDataStream::diskToMemory(int buffersegment)
 {
 	unsigned long *buf;
-	int obytes;
 
 	buf = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	//do the buffer housekeeping
 	waitForBuffer(buffersegment);
 
-	fileRead(buf, readbytes, buffersegment);
-	obytes = bufferinfo[buffersegment].validbytes; // this is the number of bytes relevant for downstream processing
+	// This function call abstracts away all the details.  The result is multiplexed data populating the 
+	// desired buffer segment.
+	dataRead(buffersegment);
 
 	// Update estimated read timing variables
 	readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
@@ -536,7 +512,14 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
 
-//cverbose << startl << "readscan=" << readscan << "  readseconds=" << readseconds << "  readnanoseconds=" << readnanoseconds << endl;
+	if(vstats.destUsed == 0)
+	{
+		++invalidtime;
+	}
+	else
+	{
+		invalidtime = 0;
+	}
 
 	// did we just cross into next scan?
 	if(readseconds >= model->getScanDuration(readscan))
@@ -554,17 +537,17 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 		}
 	}
 
-	if(switchedpower && obytes > 0)
+	if(switchedpower && bufferinfo[buffersegment].validbytes > 0)
 	{
 		static int nt = 0;
 
 		++nt;
 
-		// feed switched power detector
+                // feed switched power detector
 		if(nt % switchedpowerincrement == 0)
 		{
 			struct mark5_stream *m5stream = new_mark5_stream_absorb(
-				new_mark5_stream_memory(buf, obytes),
+				new_mark5_stream_memory(buf, bufferinfo[buffersegment].validbytes),
 				new_mark5_format_generic_from_string(formatname) );
 			if(m5stream)
 			{
@@ -572,7 +555,7 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 				switchedpower->feed(m5stream);
 				delete_mark5_stream(m5stream);
 			}
-		}
+                }
 	}
 }
 
