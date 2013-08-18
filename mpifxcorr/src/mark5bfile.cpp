@@ -29,7 +29,7 @@
 #include <sys/socket.h>
 #include "config.h"
 #include "alert.h"
-#include "vdiffile.h"
+#include "mark5bfile.h"
 #include "mode.h"
 
 #include <unistd.h>
@@ -41,9 +41,9 @@
 #endif
 
 
-/// VDIFDataStream -------------------------------------------------------
+/// Mark5BDataStream -------------------------------------------------------
 
-VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
+Mark5BDataStream::Mark5BDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
  : DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	//each data buffer segment contains an integer number of frames, because thats the way config determines max bytes
@@ -61,9 +61,7 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 		switchedpower = 0;
 	}
 
-	// Set some VDIF muxer parameters
-	nSort = 64;	// allow data to be this many frames out of order without any loss at read boundaries
-	nGap = 1000;	// a gap of this many frames will trigger an interruption of muxing
+	// Set some Mark5B fixer parameters
 	startOutputFrameNumber = -1;
 
 	// Make read buffer a bit bigger than a data segment size so extra bytes can be filtered out 
@@ -79,37 +77,28 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	// Don't bother to do another read iteration just to salvage this many bytes at the end of a file/scan
 	minleftoverdata = 20000;
 
-	resetvdifmuxstatistics(&vstats);
-	nthreads = 0; // no threads identified yet
-	threads = 0;  // null pointer indicating not yet initialized
+	resetmark5bfixstatistics(&m5bstats);
 	invalidtime = 0;
 }
 
-VDIFDataStream::~VDIFDataStream()
+Mark5BDataStream::~Mark5BDataStream()
 {
-	cinfo << startl << "VDIF multiplexing statistics: nValidFrame=" << vstats.nValidFrame << " nInvalidFrame=" << vstats.nInvalidFrame << " nDiscardedFrame=" << vstats.nDiscardedFrame << " nWrongThread=" << vstats.nWrongThread << " nSkippedByte=" << vstats.nSkippedByte << " nFillByte=" << vstats.nFillByte << " nDuplicateFrame=" << vstats.nDuplicateFrame << " bytesProcessed=" << vstats.bytesProcessed << " nGoodFrame=" << vstats.nGoodFrame << " nCall=" << vstats.nCall << endl;
-	if(vstats.nWrongThread > 0)
-	{
-		cerror << startl << "One or more wrong-threads were identified.  This may indicate a correlator configuration error." << endl;
-	}
-	if(vstats.nDuplicateFrame > 0)
-	{
-		cerror << startl << "One or more duplicate data frames (same time and thread) were found.  This may indicate serious problems with the digital back end configuration." << endl;
-	}
-	if(vstats.nFillByte > 3*vstats.bytesProcessed/4)
+	long long bytesProcessed = (m5bstats.nValidFrame + m5bstats.nLostPacket)*10016 + m5bstats.nFillByte + m5bstats.nSkippedByte;
+	cinfo << startl << "Mark5B fixing statistics: nValidFrame=" << m5bstats.nValidFrame << " nInvalidFrame=" << m5bstats.nInvalidFrame << " nSkippedByte=" << m5bstats.nSkippedByte << " nFillByte=" << m5bstats.nFillByte << " nLostPacket=" << m5bstats.nLostPacket << " nCall=" << m5bstats.nCall << endl;
+
+	if(m5bstats.nFillByte > 3*bytesProcessed/4)
 	{
 		cerror << startl << "More than three quarters of the data from this station was unrecoverable (fill pattern)." << endl;
 	}
-	if(vstats.nFillByte > vstats.bytesProcessed/2)
+	if(m5bstats.nFillByte > bytesProcessed/2)
 	{
 		cwarn << startl << "More than half of the data from this station was unrecoverable (fill pattern)." << endl;
 	}
-	if(vstats.nSkippedByte > vstats.bytesProcessed/20)
+	if(m5bstats.nSkippedByte > bytesProcessed/20)
 	{
-		cwarn << startl << "More than 5 percent of data from this antenna were unwanted packets.  This could indicate a problem in the routing of data from the digital back end to the recorder." << endl;
+		cwarn << startl << "More than 5 percent of data from this antenna were unwanted bytes.  This could indicate a problem in the routing of data from the digital back end to the recorder." << endl;
 	}
 
-	printvdifmuxstatistics(&vstats);
 	if(switchedpower)
 	{
 		delete switchedpower;
@@ -120,13 +109,13 @@ VDIFDataStream::~VDIFDataStream()
 	}
 }
 
-void VDIFDataStream::initialise()
+void Mark5BDataStream::initialise()
 {
 	readbuffer = new unsigned char[readbuffersize];
 	DataStream::initialise();
 }
 
-int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
+int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
   int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
   float datarate;
@@ -173,9 +162,6 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
   payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
   framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
   framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
-  payloadbytes *= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
-  framebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum) + VDIF_HEADER_BYTES;
-  framespersecond /= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
 
   //set the fraction of data to use to determine system temperature based on data rate
   //the values set here work well for the today's computers and clusters...
@@ -194,7 +180,7 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 
   if(vlbaoffset < 0)
   {
-    cfatal << startl << "VDIFDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
+    cfatal << startl << "Mark5BDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     // WFB20120123 MPI_Abort(MPI_COMM_WORLD, 1);
     return 0;
@@ -230,7 +216,7 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 
   if(bufferindex > bufferbytes) /* WFB: this was >= */
   {
-    cfatal << startl << "VDIFDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
+    cfatal << startl << "Mark5BDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
     bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
     MPI_Abort(MPI_COMM_WORLD, 1);
     return 0;
@@ -238,7 +224,7 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
   return bufferindex;
 }
 
-void VDIFDataStream::updateConfig(int segmentindex)
+void Mark5BDataStream::updateConfig(int segmentindex)
 {
 	//run the default update config, then add additional information specific to Mk5
 	DataStream::updateConfig(segmentindex);
@@ -247,18 +233,18 @@ void VDIFDataStream::updateConfig(int segmentindex)
 		return;
 	}
 
-	int oframebytes = (config->getFrameBytes(bufferinfo[segmentindex].configindex, streamnum) - VDIF_HEADER_BYTES)*config->getDNumMuxThreads(bufferinfo[segmentindex].configindex, streamnum) + VDIF_HEADER_BYTES;
-	int oframespersecond = config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum) / config->getDNumMuxThreads(bufferinfo[segmentindex].configindex, streamnum);
+	int fb = config->getFrameBytes(bufferinfo[segmentindex].configindex, streamnum);
+	int fps = config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum);
 
 	//correct the nsinc - should be number of output frames*frame time
-	bufferinfo[segmentindex].nsinc = int(((bufferbytes/numdatasegments)/oframebytes)*(1000000000.0/double(oframespersecond)) + 0.5);
+	bufferinfo[segmentindex].nsinc = int(((bufferbytes/numdatasegments)/fb)*(1000000000.0/double(fps)) + 0.5);
 
 	//take care of the case where an integral number of frames is not an integral number of blockspersend - ensure sendbytes is long enough
 	//note below, the math should produce a pure integer, but add 0.5 to make sure that the fuzziness of floats doesn't cause an off-by-one error
 	bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getSubintNS(bufferinfo[segmentindex].configindex)))/(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex)) + 0.5));
 }
 
-void VDIFDataStream::initialiseFile(int configindex, int fileindex)
+void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
 {
 	int nrecordedbands, fanout;
 	Configuration::datasampling sampling;
@@ -267,54 +253,49 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	int rv;
 
 	long long dataoffset = 0;
-	struct vdif_file_summary fileSummary;
+	struct mark5b_file_summary fileSummary;
 	int jumpseconds, currentdsseconds;
 
 	format = config->getDataFormat(configindex, streamnum);
 	sampling = config->getDSampling(configindex, streamnum);
 	nbits = config->getDNumBits(configindex, streamnum);
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
-	inputframebytes = config->getFrameBytes(configindex, streamnum);
-	framespersecond = config->getFramesPerSecond(configindex, streamnum)/config->getDNumMuxThreads(configindex, streamnum);
+	framebytes = config->getFrameBytes(configindex, streamnum);
+	framespersecond = config->getFramesPerSecond(configindex, streamnum);
+
 	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
-	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
 	startOutputFrameNumber = -1;
 
-	outputframebytes = (inputframebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
-
-	nthreads = config->getDNumMuxThreads(configindex, streamnum);
-	threads = config->getDMuxThreadMap(configindex, streamnum);
-
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
 	if(fanout != 1)
 	{
 		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	cinfo << startl << "VDIFDataStream::initialiseFile format=" << formatname << endl;
+	cinfo << startl << "Mark5BDataStream::initialiseFile format=" << formatname << endl;
 
 	// Here we need to open the file, read the start time, jump if necessary, and if past end of file, dataremaining = false.  Then set readseconds...
 
-	// First we get a description of the contents of the purported VDIF file and exit if it looks like not VDIF at all
-	rv = summarizevdiffile(&fileSummary, datafilenames[configindex][fileindex].c_str(), inputframebytes);
+	// First we get a description of the contents of the purported Mark5B file and exit if it looks like not Mark5B at all
+	rv = summarizemark5bfile(&fileSummary, datafilenames[configindex][fileindex].c_str());
 	if(rv < 0)
 	{
-		cwarn << startl << "VDIFDataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid VDIF data." << endl;
+		cwarn << startl << "Mark5BDataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid Mark5B data." << endl;
 		dataremaining = false;
 
 		return;
 	}
-	vdiffilesummarysetsamplerate(&fileSummary, static_cast<int>(bw*2*1000000));
+	mark5bfilesummarysettotalbandwidth(&fileSummary, static_cast<int>(bw*nrecordedbands*1000000));
 
 	// If verbose...
-	printvdiffilesummary(&fileSummary);
+	printmark5bfilesummary(&fileSummary);
 
 
 	// Here set readseconds to time since beginning of job
-	readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
-	readnanoseconds = vdiffilesummarygetstartns(&fileSummary);
+	readseconds = 86400*(mark5bfilesummarygetstartmjd(&fileSummary)-corrstartday) + mark5bfilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
+	readnanoseconds = mark5bfilesummarygetstartns(&fileSummary);
 	currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
 
 	if(currentdsseconds > readseconds+1)
@@ -326,7 +307,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 		}
 
 		// set byte offset to the requested time
-		dataoffset = static_cast<long long>(jumpseconds * vdiffilesummarygetbytespersecond(&fileSummary) + 0.5);
+		dataoffset = static_cast<long long>(jumpseconds * mark5bfilesummarygetbitrate(&fileSummary)*125000LL + 0.5);
 		readseconds += jumpseconds;
 	}
 
@@ -343,7 +324,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	// Now set readseconds to time since beginning of scan
 	readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 	
-	//cverbose << startl << "The frame start is day=" << vdiffilesummarygetstartmjd(&fileSummary) << ", seconds=" << vdiffilesummarygetstartsecond(&fileSummary) << ", ns=" << vdiffilesummarygetstartns(&fileSummary) << ", readscan=" << readscan << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
+	//cverbose << startl << "The frame start is day=" << mark5bfilesummarygetstartmjd(&fileSummary) << ", seconds=" << mark5bfilesummarygetstartsecond(&fileSummary) << ", ns=" << mark5bfilesummarygetstartns(&fileSummary) << ", readscan=" << readscan << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
 
 	// Advance into file if requested
 	if(fileSummary.firstFrameOffset + dataoffset > 0)
@@ -361,7 +342,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 }
 
 // FIXME: Warning: this needs some work???
-void VDIFDataStream::initialiseFake(int configindex)
+void Mark5BDataStream::initialiseFake(int configindex)
 {
 	int nrecordedbands, fanout;
 	Configuration::dataformat format;
@@ -375,31 +356,28 @@ void VDIFDataStream::initialiseFake(int configindex)
 	sampling = config->getDSampling(configindex, streamnum);
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
 	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
-	inputframebytes = config->getFrameBytes(configindex, streamnum);
-	outputframebytes = (inputframebytes - VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	framebytes = config->getFrameBytes(configindex, streamnum);
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
 	if(fanout < 0)
 	{
 		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
-	nthreads = config->getDNumMuxThreads(configindex, streamnum);
-	threads = config->getDMuxThreadMap(configindex, streamnum);
 
 	cwarn << startl << "Correlating fake data with format " << formatname << endl;
 }
 
-int VDIFDataStream::testForSync(int configindex, int buffersegment)
+int Mark5BDataStream::testForSync(int configindex, int buffersegment)
 {
-	// not needed.  vdifmux always leaves perfectly synchonized data behind
+	// not needed.  mark5bfix always leaves perfectly synchonized data behind
 	return 0;
 }
 
 
-// This function does the actual file IO, readbuffer management, and VDIF multiplexing.  The result after each
+// This function does the actual file IO, readbuffer management, and Mark5B fixing.  The result after each
 // call is, hopefully, readbytes of multiplexed data being put into buffer segment with potentially some 
 // read data left over in the read buffer ready for next time
-int VDIFDataStream::dataRead(int buffersegment)
+int Mark5BDataStream::dataRead(int buffersegment)
 {
 	unsigned long *destination;
 	int bytes;
@@ -415,9 +393,9 @@ int VDIFDataStream::dataRead(int buffersegment)
 		// If there is some data left over, just demux that and send it out
 		if(readbufferleftover > minleftoverdata)
 		{
-			vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+			mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover, startOutputFrameNumber, framespersecond, &m5bstats);
 			readbufferleftover = 0;
-			bufferinfo[buffersegment].validbytes = vstats.destUsed;
+			bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 
 			startOutputFrameNumber = -1;
 		}
@@ -438,12 +416,12 @@ int VDIFDataStream::dataRead(int buffersegment)
 	bytes = input.gcount();
 
 	// multiplex and corner turn the data
-	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	int X = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, framespersecond,  startOutputFrameNumber, &m5bstats);
 
-	if(vstats.destUsed == vstats.destSize)
+	if(m5bstats.destUsed == m5bstats.destSize)
 	{
 		// FIXME: the line below should help things, but it causes first output frame to be invalid.  Hmmm....
-		//startOutputFrameNumber = vstats.startFrameNumber + vstats.nOutputFrame;
+		//startOutputFrameNumber = m5bstats.startFrameNumber + m5bstats.nOutputFrame;
 	}
 	else
 	{
@@ -452,29 +430,27 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 	if(X <= 0)
 	{
-		cwarn << startl << "vdifmux returned " << X << endl;
+		cwarn << startl << "mark5bfix returned " << X << endl;
 	}
 
 	consumedbytes += bytes;
-	bufferinfo[buffersegment].validbytes = vstats.destUsed;
+	bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
-		// In the case of VDIF, we can get the time from the data, so use that just in case there was a jump
-		bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
-		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
-		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = (8640000 + (vstats.startFrameNumber / framespersecond) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
+		// In the case of Mark5B, we can get the time from the data, so use that just in case there was a jump
+		bufferinfo[buffersegment].scanns = m5bstats.startFrameNanoseconds;
+		bufferinfo[buffersegment].scanseconds = (8640000 + m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
 	
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
 	}
 
-	readbufferleftover += (bytes - vstats.srcUsed);
+	readbufferleftover += (bytes - m5bstats.srcUsed);
 
 	if(readbufferleftover > 0)
 	{
-		memmove(readbuffer, readbuffer+vstats.srcUsed, readbufferleftover);
+		memmove(readbuffer, readbuffer+m5bstats.srcUsed, readbufferleftover);
 	}
 	else if(readbufferleftover < 0)
 	{
@@ -493,7 +469,9 @@ int VDIFDataStream::dataRead(int buffersegment)
 	return bytes;
 }
 
-void VDIFDataStream::diskToMemory(int buffersegment)
+// Below here, these are thought to be identical for VDIF and Mark5B
+
+void Mark5BDataStream::diskToMemory(int buffersegment)
 {
 	unsigned long *buf;
 
@@ -512,7 +490,7 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
 
-	if(vstats.destUsed == 0)
+	if(m5bstats.destUsed == 0)
 	{
 		++invalidtime;
 	}
@@ -559,7 +537,7 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 	}
 }
 
-void VDIFDataStream::loopfileread()
+void Mark5BDataStream::loopfileread()
 {
 	int perr;
 	int numread = 0;
@@ -593,20 +571,17 @@ cverbose << startl << "Opened first usable file" << endl;
 		diskToMemory(numread++);
 		diskToMemory(numread++);
 		lastvalidsegment = numread;
-		//cdebug << startl << "READTHREAD: VDIFDataStream::loopfileread: Try lock buffer " << numread << endl;
 		perr = pthread_mutex_lock(&(bufferlock[numread]));
 		if(perr != 0)
 		{
 			csevere << startl << "Error in initial telescope readthread lock of first buffer section!!!" << endl;
 		}
-		//cdebug << startl << "READTHREAD:               Got it" << endl;
 	}
 	else
 	{
 		csevere << startl << "Couldn't find any valid data - will be shutting down gracefully!!!" << endl;
 	}
 	readthreadstarted = true;
-	//cdebug << startl << "READTHREAD: VDIFDataStream::loopfileread: cond_signal initcond" << endl;
 	perr = pthread_cond_signal(&initcond);
 	if(perr != 0)
 	{
@@ -626,18 +601,15 @@ cverbose << startl << "Opened first usable file" << endl;
 			lastvalidsegment = (lastvalidsegment + 1)%numdatasegments;
 
 			//lock the next section
-			//cdebug << startl << "READTHREAD: VDIFDataStream::loopfileread: Try lock buffer " << lastvalidsegment << endl;
 			perr = pthread_mutex_lock(&(bufferlock[lastvalidsegment]));
 			if(perr != 0)
 			{
 				csevere << startl << "Error in telescope readthread lock of buffer section!!!" << lastvalidsegment << endl;
 			}
-			//cdebug << startl << "READTHREAD:               Got it" << endl;
 
 			if(!isnewfile) //can unlock previous section immediately
 			{
 				//unlock the previous section
-				//cdebug << startl << "READTHREAD: VDIFDataStream::loopfileread: Unlock buffer " << (lastvalidsegment-1+numdatasegments)% numdatasegments << endl;
 				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));    
 				if(perr != 0)
 				{
@@ -652,7 +624,6 @@ cverbose << startl << "Opened first usable file" << endl;
 			if(isnewfile) //had to wait before unlocking file
 			{
 				//unlock the previous section
-				//cdebug << startl << "READTHREAD: VDIFDataStream::loopfileread: Unlock buffer " << (lastvalidsegment-1+numdatasegments)% numdatasegments << endl;
 				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));
 				if(perr != 0)
 				{

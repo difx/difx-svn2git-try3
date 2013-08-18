@@ -27,9 +27,8 @@
 #include <sys/time.h>
 #include <mpi.h>
 #include <unistd.h>
-#include <vdifio.h>
 #include "config.h"
-#include "vdifmark5.h"
+#include "mark5bmark5.h"
 #include "watchdog.h"
 #include "alert.h"
 #include "mark5utils.h"
@@ -38,8 +37,8 @@
 #include <mark5ipc.h>
 #endif
 
-VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
-		VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
+		Mark5BDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	int perr;
 
@@ -67,17 +66,9 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, i
 	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*21/10;
 	readbufferslotsize -= (readbufferslotsize % 8); // make it a multiple of 8 bytes
 	readbuffersize = readbufferslots * readbufferslotsize;
-	// Note: the read buffer is allocated in vdiffile.cpp by VDIFDataStream::initialse()
-	// the above values override defaults for file-based VDIF
+	// Note: the read buffer is allocated in mark5bfile.cpp by Mark5BDataStream::initialse()
+	// the above values override defaults for file-based Mark5B
 
-
-mutexstate = new char[readbufferslots+1];
-
-for(int i = 0; i < readbufferslots; ++i)
-{
-mutexstate[i] = '.';
-}
-mutexstate[readbufferslots] = 0;
 
 #if HAVE_MARK5IPC
 	perr = lockMark5(5);
@@ -125,7 +116,7 @@ mutexstate[readbufferslots] = 0;
 		pthread_attr_t attr;
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-		perr = pthread_create(&mark5thread, &attr, VDIFMark5DataStream::launchmark5threadfunction, this);
+		perr = pthread_create(&mark5thread, &attr, Mark5BMark5DataStream::launchmark5threadfunction, this);
 		pthread_attr_destroy(&attr);
 	}
 
@@ -136,7 +127,7 @@ mutexstate[readbufferslots] = 0;
 	}
 }
 
-VDIFMark5DataStream::~VDIFMark5DataStream()
+Mark5BMark5DataStream::~Mark5BMark5DataStream()
 {
 	mark5threadstop = true;
 
@@ -173,7 +164,7 @@ VDIFMark5DataStream::~VDIFMark5DataStream()
 
 // this function implements the Mark5 module reader.  It is continuously either filling data into a ring buffer or waiting for a mutex to clear.
 // any serious problems are reported by setting mark5xlrfail.  This will call the master thread to shut down.
-void VDIFMark5DataStream::mark5threadfunction()
+void Mark5BMark5DataStream::mark5threadfunction()
 {
 	cout << "Thread started " << mpiid << endl;
 
@@ -183,8 +174,6 @@ void VDIFMark5DataStream::mark5threadfunction()
 
 		readbufferwriteslot = 1;	// always 
 		pthread_mutex_lock(mark5threadmutex + readbufferwriteslot);
-		mutexstate[readbufferwriteslot] = 'w';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
 		if(mark5threadstop)
 		{
 			cinfo << startl << "mark5threadfunction: mark5threadstop -> this thread will end." << endl;
@@ -215,7 +204,6 @@ void VDIFMark5DataStream::mark5threadfunction()
 				lastslot = readbufferwriteslot;
 				endindex = lastslot*readbufferslotsize;
 				cwarn << startl << "Developer error: mark5threadfunction: readpointer >= readend" << endl;
-cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 
 				break;
 			}
@@ -232,7 +220,6 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 				endindex = lastslot*readbufferslotsize + bytes;	// No data in this slow from here to end
 
 				cinfo << startl << "At end of scan: shortening Mark5 read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
-cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 			}
 
 			// remember that all reads of a module must be 64 bit aligned
@@ -245,8 +232,6 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 			xlrRD.AddrLo = b;
 			xlrRD.XferLength = bytes;
 			xlrRD.BufferAddr = reinterpret_cast<streamstordatatype *>(readbuffer + readbufferwriteslot*readbufferslotsize);
-
-			cinfo << startl << "XLRRead " << mpiid << " bytes=" << bytes << "/" << readbufferslotsize << " readbufferslotsize=" << readbufferslotsize << " buf offset=" << (readbufferwriteslot*readbufferslotsize) << endl;
 
 			// delay the read if needed
 			if(readDelayMicroseconds > 0)
@@ -303,11 +288,7 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 					readbufferwriteslot = 1;
 				}
 				pthread_mutex_lock(mark5threadmutex + readbufferwriteslot);
-		mutexstate[readbufferwriteslot] = 'w';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
 				pthread_mutex_unlock(mark5threadmutex + curslot);
-		mutexstate[curslot] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
 
 				cinfo << startl << "mark5threadfunction: exhanged locks from " << curslot << " to " << readbufferwriteslot << endl;
 
@@ -319,8 +300,6 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 			}
 		}
 		pthread_mutex_unlock(mark5threadmutex + readbufferwriteslot);
-		mutexstate[readbufferwriteslot] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
 		cinfo << startl << "mark5threadfunction: end of scan reached.  Unlocked " << readbufferwriteslot << endl;
 		if(mark5threadstop)
 		{
@@ -331,9 +310,9 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 	} 
 }
 
-void *VDIFMark5DataStream::launchmark5threadfunction(void *self)
+void *Mark5BMark5DataStream::launchmark5threadfunction(void *self)
 {
-	VDIFMark5DataStream *me = (VDIFMark5DataStream *)self;
+	Mark5BMark5DataStream *me = (Mark5BMark5DataStream *)self;
 
 	cout << "Launching " << me->mpiid << endl;
 
@@ -342,13 +321,13 @@ void *VDIFMark5DataStream::launchmark5threadfunction(void *self)
 	return 0;
 }
 
-int VDIFMark5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
+int Mark5BMark5DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
 	static int last_offsetsec = -1;
 	int r;
 	
 	// call parent class equivalent function and store return value
-	r = VDIFDataStream::calculateControlParams(scan, offsetsec, offsetns);
+	r = Mark5BDataStream::calculateControlParams(scan, offsetsec, offsetns);
 
 	// check to see if we should send a status update
 	if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
@@ -373,7 +352,7 @@ int VDIFMark5DataStream::calculateControlParams(int scan, int offsetsec, int off
 }
 
 /* Here "File" is VSN */
-void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
+void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 {
 	int nrecordedbands, fanout;
 	Configuration::datasampling sampling;
@@ -392,19 +371,13 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	sampling = config->getDSampling(configindex, streamnum);
 	nbits = config->getDNumBits(configindex, streamnum);
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
-	inputframebytes = config->getFrameBytes(configindex, streamnum);
-	framespersecond = config->getFramesPerSecond(configindex, streamnum)/config->getDNumMuxThreads(configindex, streamnum);
+	framebytes = config->getFrameBytes(configindex, streamnum);
+	framespersecond = config->getFramesPerSecond(configindex, streamnum);
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
-	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
 	startOutputFrameNumber = -1;
 
-        outputframebytes = (inputframebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
-
-	nthreads = config->getDNumMuxThreads(configindex, streamnum);
-	threads = config->getDMuxThreadMap(configindex, streamnum);
-
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
         if(fanout != 1)
         {
 		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
@@ -414,7 +387,7 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
                 MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-	cinfo << startl << "VDIFMark5DataStream::initialiseFile format=" << formatname << endl;
+	cinfo << startl << "Mark5BMark5DataStream::initialiseFile format=" << formatname << endl;
 
 	mk5dirpath = getenv("MARK5_DIR_PATH");
 	if(mk5dirpath == 0)
@@ -590,7 +563,7 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 				break;
 			}
 		}
-		cinfo << startl << "VDIFMark5DataStream " << mpiid << " positioned at byte " << readpointer << " scan = " << readscan << " seconds = " << readseconds << " ns = " << readnanoseconds << " n = " << n << endl;
+		cinfo << startl << "Mark5BMark5DataStream " << mpiid << " positioned at byte " << readpointer << " scan = " << readscan << " seconds = " << readseconds << " ns = " << readnanoseconds << " n = " << n << endl;
 
 		if(scanNum >= module.nScans() || scanPointer == 0)
 		{
@@ -659,9 +632,9 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	cinfo << startl << "Scan " << scanNum <<" initialised[" << mpiid << "]" << endl;
 }
 
-void VDIFMark5DataStream::openfile(int configindex, int fileindex)
+void Mark5BMark5DataStream::openfile(int configindex, int fileindex)
 {
-	cinfo << startl << "VDIFMark5DataStream " << mpiid << " is about to look at a scan" << endl;
+	cinfo << startl << "Mark5BMark5DataStream " << mpiid << " is about to look at a scan" << endl;
 
 	/* fileindex should never increase for native mark5, but
 	 * check just in case. 
@@ -670,7 +643,7 @@ void VDIFMark5DataStream::openfile(int configindex, int fileindex)
 	{
 		dataremaining = false;
 		keepreading = false;
-		cinfo << startl << "VDIFMark5DataStream " << mpiid << " is exiting because fileindex is " << fileindex << ", while confignumconfigfiles is " << confignumfiles[configindex] << endl;
+		cinfo << startl << "Mark5BMark5DataStream " << mpiid << " is exiting because fileindex is " << fileindex << ", while confignumconfigfiles is " << confignumfiles[configindex] << endl;
 
 		return;
 	}
@@ -681,14 +654,14 @@ void VDIFMark5DataStream::openfile(int configindex, int fileindex)
 }
 
 
-int VDIFMark5DataStream::dataRead(int buffersegment)
+int Mark5BMark5DataStream::dataRead(int buffersegment)
 {
 	// Note: here readbytes is actually the length of the buffer segment, i.e., the amount of data wanted to be "read" by calling processes. 
 	// In this threaded approach the actual size of reads off Mark5 modules (as implemented in the ring buffer writing thread) is generally larger.
 
 	unsigned long *destination = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 	int n1, n2;
-	unsigned int muxend, bytesvisible;
+	unsigned int fixend, bytesvisible;
 
 	if(lockstart < -1)
 	{
@@ -698,35 +671,29 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	if(lockstart == -1)
 	{
 		// first decoding of scan
-		muxindex = readbufferslotsize;	// start at beginning of slot 1 (second slot)
+		fixindex = readbufferslotsize;	// start at beginning of slot 1 (second slot)
 		lockstart = lockend = 1;
 		pthread_mutex_lock(mark5threadmutex + lockstart);
-		mutexstate[lockstart] = 'r';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
 		if(mark5xlrfail)
 		{
 			cwarn << startl << "dataRead " << mpiid << " detected mark5xlrfail.  [1]  Stopping." << endl;
 			dataremaining = false;
 			keepreading = false;
 			pthread_mutex_unlock(mark5threadmutex + lockstart);
-		mutexstate[lockstart] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-			cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockstart << endl;
 			lockstart = lockend = -2;
 
 			return 0;
 		}
-		cinfo << startl << "dataRead " << mpiid << " has locked slot " << lockstart << endl;
 	}
 
-	n1 = muxindex / readbufferslotsize;
-	if(lastslot >= 0 && muxindex + readbytes > endindex)
+	n1 = fixindex / readbufferslotsize;
+	if(lastslot >= 0 && fixindex + readbytes > endindex)
 	{
 		n2 = (endindex - 1) / readbufferslotsize;
 	}
 	else
 	{
-		n2 = (muxindex + readbytes - 1) / readbufferslotsize;
+		n2 = (fixindex + readbytes - 1) / readbufferslotsize;
 	}
 
 	// note: it should be impossible for n2 >= readbufferslots because a previous memmove and slot shuffling should have prevented this.
@@ -739,75 +706,56 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	{
 		lockend = n2;
 		pthread_mutex_lock(mark5threadmutex + lockend);
-		mutexstate[lockend] = 'r';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
 		if(mark5xlrfail)
 		{
-			cwarn << startl << "dataRead " << mpiid << " detected mark5xlrfail.  [2]  Stopping." << endl;
 			dataremaining = false;
 			keepreading = false;
 			pthread_mutex_unlock(mark5threadmutex + lockstart);
-		mutexstate[lockstart] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-			cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockstart << endl;
 			pthread_mutex_unlock(mark5threadmutex + lockend);
-		mutexstate[lockend] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-			cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockend << endl;
 			lockstart = lockend = -2;
 
 			return 0;
 		}
-		cinfo << startl << "dataRead " << mpiid << " has locked slot " << lockend << endl;
-
 	}
 	
 	if(lastslot == n2)
 	{
-		muxend = endindex;
+		fixend = endindex;
 	}
 	else
 	{
-		muxend = (n2+1)*readbufferslotsize;
+		fixend = (n2+1)*readbufferslotsize;
 	}
 
-	bytesvisible = muxend - muxindex;
+	bytesvisible = fixend - fixindex;
 
 	// multiplex and corner turn the data
-	vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+muxindex, bytesvisible, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
 
-	cinfo << startl << "vdifmux " << mpiid << " muxindex=" << muxindex << " bytesvisible=" << bytesvisible << " srcUsed=" << vstats.srcUsed << " destUsed=" << vstats.destUsed << " readbytes=" << readbytes << endl;
-
-	bufferinfo[buffersegment].validbytes = vstats.destUsed;
+	bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
-		// In the case of VDIF, we can get the time from the data, so use that just in case there was a jump
-		bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
-		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
+		// In the case of Mark5B, we can get the time from the data, so use that just in case there was a jump
+		bufferinfo[buffersegment].scanns = m5bstats.startFrameNanoseconds;
+		// FIXME: warning! here we are assuming no leap seconds since the epoch of the Mark5B stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = (((vstats.startFrameNumber / framespersecond)) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
-	
+		bufferinfo[buffersegment].scanseconds = (m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
+
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
 	}
 
-	muxindex += vstats.srcUsed;
+	fixindex += m5bstats.srcUsed;
 
-	if(lastslot == n2 && (muxindex+minleftoverdata > endindex || bytesvisible < readbytes / 4) )
+	if(lastslot == n2 && (fixindex+minleftoverdata > endindex || bytesvisible < readbytes / 4) )
 	{
 		// end of useful data for this scan
 		dataremaining = false;
 		pthread_mutex_unlock(mark5threadmutex + lockstart);
-		mutexstate[lockstart] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-		cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockstart << endl;
 		if(lockstart != lockend)
 		{
 			pthread_mutex_unlock(mark5threadmutex + lockend);
-		mutexstate[lockend] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-			cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockend << endl;
 		}
 		lockstart = lockend = -2;
 	}
@@ -817,13 +765,10 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 		// note:  in all cases n2 = n1 or n1+1, n3 = n1 or n1+1 and n3 = n2 or n2+1
 		// i.e., n3 >= n2 >= n1 and n3-n1 <= 1
 
-		n3 = muxindex / readbufferslotsize;
+		n3 = fixindex / readbufferslotsize;
 		if(n3 > lockstart)
 		{
 			pthread_mutex_unlock(mark5threadmutex + lockstart);
-		mutexstate[lockstart] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-			cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockstart << endl;
 			lockstart = n3;
 		}
 
@@ -840,8 +785,6 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 			}
 			lockstart = 0;
 			pthread_mutex_lock(mark5threadmutex + lockstart);
-		mutexstate[lockstart] = 'r';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
 			if(mark5xlrfail)
 			{
 				cwarn << startl << "dataRead " << mpiid << " detected mark5xlrfail.  [3]  Stopping." << endl;
@@ -849,30 +792,19 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 				dataremaining = false;
 				keepreading = false;
 				pthread_mutex_unlock(mark5threadmutex + lockstart);
-		mutexstate[lockstart] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-				cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockstart << endl;
 				if(lockend != lockstart)
 				{
 					pthread_mutex_unlock(mark5threadmutex + lockend);
-		mutexstate[lockend] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-					cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockend << endl;
 				}
 				lockstart = lockend = -2;
 
 				return 0;
 			}
-			int newstart = muxindex % readbufferslotsize;
-			memmove(readbuffer + newstart, readbuffer + muxindex, readbuffersize-muxindex);
-		cinfo << startl << "Memmove: " << (readbuffersize-muxindex) << " bytes from " << muxindex << 
-"/" << readbuffersize << " to " << newstart << endl;
-			muxindex = newstart;
+			int newstart = fixindex % readbufferslotsize;
+			memmove(readbuffer + newstart, readbuffer + fixindex, readbuffersize-fixindex);
+			fixindex = newstart;
 
 			pthread_mutex_unlock(mark5threadmutex + lockend);
-		mutexstate[lockend] = '_';
-		cinfo << startl << "Mutex state: " << mutexstate << endl;
-			cinfo << startl << "dataRead " << mpiid << " has unlocked slot " << lockend << endl;
 			lockend = 0;
 		}
 	}
@@ -881,7 +813,7 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 }
 
 
-void VDIFMark5DataStream::servoMark5()
+void Mark5BMark5DataStream::servoMark5()
 {
 	double tv_us;
 	static double now_us = 0.0;
@@ -962,7 +894,7 @@ void VDIFMark5DataStream::servoMark5()
 
 
 
-int VDIFMark5DataStream::resetDriveStats()
+int Mark5BMark5DataStream::resetDriveStats()
 {
 	S_DRIVESTATS driveStats[XLR_MAXBINS];
 	const int defaultStatsRange[] = { 75000, 150000, 300000, 600000, 1200000, 2400000, 4800000, -1 };
@@ -978,7 +910,7 @@ int VDIFMark5DataStream::resetDriveStats()
 	return 0;
 }
 
-int VDIFMark5DataStream::reportDriveStats()
+int Mark5BMark5DataStream::reportDriveStats()
 {
 	XLR_RETURN_CODE xlrRC;
 	S_DRIVESTATS driveStats[XLR_MAXBINS];
@@ -1019,7 +951,7 @@ int VDIFMark5DataStream::reportDriveStats()
 	return 0;
 }
 
-void VDIFMark5DataStream::openStreamstor()
+void Mark5BMark5DataStream::openStreamstor()
 {
 	XLR_RETURN_CODE xlrRC;
 
@@ -1047,19 +979,19 @@ void VDIFMark5DataStream::openStreamstor()
 	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 }
 
-void VDIFMark5DataStream::closeStreamstor()
+void Mark5BMark5DataStream::closeStreamstor()
 {
 	sendMark5Status(MARK5_STATE_CLOSE, 0, 0.0, 0.0);
 	WATCHDOG( XLRClose(xlrDevice) );
 }
 
-void VDIFMark5DataStream::resetStreamstor()
+void Mark5BMark5DataStream::resetStreamstor()
 {
 	sendMark5Status(MARK5_STATE_RESETTING, 0, 0.0, 0.0);
 	WATCHDOG( XLRReset(xlrDevice) );
 }
 
-int VDIFMark5DataStream::sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate)
+int Mark5BMark5DataStream::sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate)
 {
 	int v = 0;
 	S_BANKSTATUS A, B;

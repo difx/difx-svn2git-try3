@@ -317,6 +317,30 @@ public:
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
     return (f == INTERLACEDVDIF && s == NETWORKSTREAM);
   }
+  inline bool isMark5BFile(int datastreamindex) const
+  {
+    dataformat f;
+    datasource s;
+    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (f == MARK5B && (s == UNIXFILE || s == FAKESTREAM)); 
+  }
+  inline bool isMark5BMark5(int datastreamindex) const
+  {
+    dataformat f;
+    datasource s;
+    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (f == MARK5B && s == MK5MODULE);
+  }
+  inline bool isMark5BNetwork(int datastreamindex) const
+  {
+    dataformat f;
+    datasource s;
+    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (f == MARK5B && s == NETWORKSTREAM);
+  }
   inline bool isNativeMkV(int datastreamindex) const
   { 
     dataformat f;

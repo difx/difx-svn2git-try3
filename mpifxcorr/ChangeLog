@@ -17,6 +17,7 @@ Version 2.2
   ran out of data
 * Properly scale multicast weights when selecting bands or performing zooms
 * Adding new experimental VDIF-specific datastreams
+* Adding new fault tolerent Mark5B-specific datastreams
 
 Version 2.1
 ~~~~~~~~~~~
