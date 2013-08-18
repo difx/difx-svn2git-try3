@@ -635,7 +635,10 @@ cverbose << startl << "Opened first usable file" << endl;
 		if(keepreading)
 		{
 cverbose << startl << "keepreading is true" << endl;
-			input.close();
+			if(input.is_open())
+			{
+				input.close();
+			}
 			//if we need to, change the config
 			int nextconfigindex = config->getScanConfigIndex(readscan);
 			while(nextconfigindex < 0 && readscan < model->getNumScans())

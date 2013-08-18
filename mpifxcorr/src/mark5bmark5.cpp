@@ -166,8 +166,6 @@ Mark5BMark5DataStream::~Mark5BMark5DataStream()
 // any serious problems are reported by setting mark5xlrfail.  This will call the master thread to shut down.
 void Mark5BMark5DataStream::mark5threadfunction()
 {
-	cout << "Thread started " << mpiid << endl;
-
 	for(;;)
 	{
 		// No locks shall be set at this point
@@ -290,8 +288,6 @@ void Mark5BMark5DataStream::mark5threadfunction()
 				pthread_mutex_lock(mark5threadmutex + readbufferwriteslot);
 				pthread_mutex_unlock(mark5threadmutex + curslot);
 
-				cinfo << startl << "mark5threadfunction: exhanged locks from " << curslot << " to " << readbufferwriteslot << endl;
-
 				servoMark5();
 			}
 			if(endofscan)
@@ -313,8 +309,6 @@ void Mark5BMark5DataStream::mark5threadfunction()
 void *Mark5BMark5DataStream::launchmark5threadfunction(void *self)
 {
 	Mark5BMark5DataStream *me = (Mark5BMark5DataStream *)self;
-
-	cout << "Launching " << me->mpiid << endl;
 
 	me->mark5threadfunction();
 
@@ -708,6 +702,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		pthread_mutex_lock(mark5threadmutex + lockend);
 		if(mark5xlrfail)
 		{
+			cwarn << startl << "dataRead " << mpiid << " detected mark5xlrfail.  [2]  Stopping." << endl;
 			dataremaining = false;
 			keepreading = false;
 			pthread_mutex_unlock(mark5threadmutex + lockstart);
@@ -731,7 +726,6 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 
 	// multiplex and corner turn the data
 	mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
-
 	bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
 	if(bufferinfo[buffersegment].validbytes > 0)
@@ -812,6 +806,134 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 	return 0;
 }
 
+void Mark5BMark5DataStream::loopfileread()
+{
+	int perr;
+	int numread = 0;
+
+cverbose << startl << "Starting loopfileread()" << endl;
+
+	//lock the outstanding send lock
+	perr = pthread_mutex_lock(&outstandingsendlock);
+	if(perr != 0)
+	{
+		csevere << startl << "Error in initial telescope readthread lock of outstandingsendlock!!!" << endl;
+	}
+
+	openfile(bufferinfo[0].configindex, 0);
+
+cverbose << startl << "Found first usable scan" << endl;
+
+	if(keepreading)
+	{
+		diskToMemory(numread++);
+		diskToMemory(numread++);
+		perr = pthread_mutex_lock(&(bufferlock[numread]));
+		if(perr != 0)
+		{
+			csevere << startl << "Error in initial telescope readthread lock of first buffer section!!!" << endl;
+		}
+		diskToMemory(numread++);
+		lastvalidsegment = (numread-1) % numdatasegments;
+	}
+	else
+	{
+		csevere << startl << "Couldn't find any valid data - will be shutting down gracefully!!!" << endl;
+	}
+	readthreadstarted = true;
+	perr = pthread_cond_signal(&initcond);
+	if(perr != 0)
+	{
+		csevere << startl << "Datastream readthread " << mpiid << " error trying to signal main thread to wake up!!!" << endl;
+	}
+
+cverbose << startl << "Opened first usable file" << endl;
+
+	if(noDataOnModule)
+	{
+		dataremaining = false;
+		keepreading = false;
+	}
+
+	while(keepreading && (bufferinfo[lastvalidsegment].configindex < 0 || filesread[bufferinfo[lastvalidsegment].configindex] <= confignumfiles[bufferinfo[lastvalidsegment].configindex]))
+	{
+		while(dataremaining && keepreading)
+		{
+			lastvalidsegment = (lastvalidsegment + 1)%numdatasegments;
+
+			//lock the next section
+			perr = pthread_mutex_lock(&(bufferlock[lastvalidsegment]));
+			if(perr != 0)
+			{
+				csevere << startl << "Error in telescope readthread lock of buffer section!!!" << lastvalidsegment << endl;
+			}
+
+			//unlock the previous section
+			perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));    
+			if(perr != 0)
+			{
+				csevere << startl << "Error (" << perr << ") in telescope readthread unlock of buffer section!!!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
+			}
+
+			//do the read
+			diskToMemory(lastvalidsegment);
+			numread++;
+		}
+		if(keepreading)
+		{
+cverbose << startl << "keepreading is true" << endl;
+			//if we need to, change the config
+			int nextconfigindex = config->getScanConfigIndex(readscan);
+			while(nextconfigindex < 0 && readscan < model->getNumScans())
+			{
+				readseconds = 0; 
+				nextconfigindex = config->getScanConfigIndex(++readscan);
+			}
+			if(readscan == model->getNumScans())
+			{
+				bufferinfo[(lastvalidsegment+1)%numdatasegments].scan = model->getNumScans()-1;
+				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
+				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
+				keepreading = false;
+			}
+			else
+			{
+				if(config->getScanConfigIndex(readscan) != bufferinfo[(lastvalidsegment + 1)%numdatasegments].configindex)
+				{
+					updateConfig((lastvalidsegment + 1)%numdatasegments);
+				}
+				//if the datastreams for two or more configs are common, they'll all have the same 
+				//files.  Therefore work with the lowest one
+				int lowestconfigindex = bufferinfo[(lastvalidsegment+1)%numdatasegments].configindex;
+				for(int i=config->getNumConfigs()-1;i>=0;i--)
+				{
+					if(config->getDDataFileNames(i, streamnum) == config->getDDataFileNames(lowestconfigindex, streamnum))
+					lowestconfigindex = i;
+				}
+				openfile(lowestconfigindex, filesread[lowestconfigindex]++);
+			}
+			if(keepreading == false)
+			{
+				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = config->getExecuteSeconds();
+				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
+			}
+		}
+	}
+	perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
+	if(perr != 0)
+	{
+		csevere << startl << "Error (" << perr << ") in telescope readthread unlock of buffer section!!!" << lastvalidsegment << endl;
+	}
+
+	//unlock the outstanding send lock
+	perr = pthread_mutex_unlock(&outstandingsendlock);
+	if(perr != 0)
+	{
+		csevere << startl << "Error (" << perr << ") in telescope readthread unlock of outstandingsendlock!!!" << endl;
+	}
+
+	cinfo << startl << "Readthread is exiting! dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
+}
 
 void Mark5BMark5DataStream::servoMark5()
 {

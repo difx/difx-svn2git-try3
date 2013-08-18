@@ -297,8 +297,8 @@ void Core::execute()
     numreceived += receivedata(numreceived % RECEIVE_RING_LENGTH, &terminate);
 
     //send off a message if we are back at the start of the buffer
-    if(numreceived % RECEIVE_RING_LENGTH == 0)
-      cverbose << startl << "CORE: " << numreceived-(numcomplete+1) << " unprocessed segments, 1 being processed, and " << RECEIVE_RING_LENGTH-(numreceived-numcomplete) << " to be sent" << endl;
+//    if(numreceived % RECEIVE_RING_LENGTH == 0)
+//      cverbose << startl << "CORE: " << numreceived-(numcomplete+1) << " unprocessed segments, 1 being processed, and " << RECEIVE_RING_LENGTH-(numreceived-numcomplete) << " to be sent" << endl;
 
     if(terminate)
       break;

@@ -309,7 +309,7 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 		mutexstate[curslot] = '_';
 		cinfo << startl << "Mutex state: " << mutexstate << endl;
 
-				cinfo << startl << "mark5threadfunction: exhanged locks from " << curslot << " to " << readbufferwriteslot << endl;
+				cinfo << startl << "mark5threadfunction: exchanged locks from " << curslot << " to " << readbufferwriteslot << endl;
 
 				servoMark5();
 			}
@@ -783,10 +783,10 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
 		// In the case of VDIF, we can get the time from the data, so use that just in case there was a jump
-		bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
+		bufferinfo[buffersegment].scanns = ((vstats.startFrameNumber % framespersecond) * 1000000000LL) / framespersecond;
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = (((vstats.startFrameNumber / framespersecond)) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
+		bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
 	
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
