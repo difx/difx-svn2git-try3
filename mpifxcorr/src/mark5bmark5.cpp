@@ -472,7 +472,7 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 			}
 			// NOTE: removed WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 			cwarn << startl << "Enabled realtime playback mode" << endl;
-			readDelayMicroseconds = 10000;	// prime the read delay to speed up convergence to best value
+			readDelayMicroseconds = 70000;	// prime the read delay to speed up convergence to best value
 		}
 	}
 
