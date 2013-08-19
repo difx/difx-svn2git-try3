@@ -205,6 +205,7 @@ int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offset
       ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
         bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
     {
+      cwarn << startl << "bufferindex == bufferbytes --> Mode::INVALID_SUBINT" << endl;
       bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
       return 0; //note exit here!!!!
     }
@@ -502,6 +503,7 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 	// did we just cross into next scan?
 	if(readseconds >= model->getScanDuration(readscan))
 	{
+		cinfo << startl << "diskToMemory: end of scan detected" << endl;
 		if(readscan < (model->getNumScans()-1))
 		{
 			++readscan;

@@ -55,6 +55,7 @@ protected:
 	static void *launchmark5threadfunction(void *self);
 	void mark5threadfunction();
 	void servoMark5();
+	virtual void loopfileread();
 #endif
 
 private:
