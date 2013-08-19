@@ -126,6 +126,11 @@ void NativeMk5DataStream::openStreamstor()
 		cerror << startl << "Cannot put Mark5 unit in bank mode" << endl;
 	}
 
+	WATCHDOG( XLRSetMode(xlrDevice, SS_MODE_SINGLE_CHANNEL) );
+	WATCHDOG( XLRClearChannels(xlrDevice) );
+	WATCHDOG( XLRSelectChannel(xlrDevice, 0) );
+	WATCHDOG( XLRBindOutputChannel(xlrDevice, 0) );
+
 	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 }
 

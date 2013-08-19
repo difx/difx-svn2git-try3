@@ -37,9 +37,6 @@
 #include <mark5ipc.h>
 #endif
 
-FILE *xout;
-int nbad = 0;
-
 Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
 		Mark5BDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
@@ -64,8 +61,6 @@ Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snu
 	readDelayMicroseconds = 0;
 	noDataOnModule = false;
 	nReads = 0;
-
-xout = fopen("/tmp/fixes", "w");
 
 	readbufferslots = 8;
 	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*21/10;
@@ -136,10 +131,9 @@ Mark5BMark5DataStream::~Mark5BMark5DataStream()
 {
 	mark5threadstop = true;
 
-	cinfo << startl << "~Mark5BMark5DataStream[" << mpiid << "] waiting for barrier" << endl;
+	/* barriers come in pairs to allow the read thread to always get first lock */
 	pthread_barrier_wait(&mark5threadbarrier);
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "~Mark5BMark5DataStream[" << mpiid << "] passed barrier" << endl;
 
 	pthread_join(mark5thread, 0);
 
@@ -180,23 +174,16 @@ void Mark5BMark5DataStream::mark5threadfunction()
 	{
 		// No locks shall be set at this point
 
-		cinfo << startl << "mark5threadfunction[" << mpiid << "] waiting for barrier 1" << endl;
+		// Note two-barrier situation here to allow this thread to have first dibs on locking slot 1
 		pthread_barrier_wait(&mark5threadbarrier);
-		cinfo << startl << "mark5threadfunction[" << mpiid << "] passed barrier 1" << endl;
 
 		readbufferwriteslot = 1;	// always 
 		pthread_mutex_lock(mark5threadmutex + (readbufferwriteslot % lockmod));
 		if(mark5threadstop)
 		{
-			cinfo << startl << "mark5threadfunction: mark5threadstop -> this thread will end." << endl;
+			cverbose << startl << "mark5threadfunction: mark5threadstop -> this thread will end." << endl;
 		}
-		else
-		{
-			cinfo << startl << "mark5threadfunction: start of scan reached.  Locked " << readbufferwriteslot << endl;
-		}
-		cinfo << startl << "mark5threadfunction[" << mpiid << "] waiting for barrier 2" << endl;
 		pthread_barrier_wait(&mark5threadbarrier);
-		cinfo << startl << "mark5threadfunction[" << mpiid << "] passed barrier 2" << endl;
 
 		while(!mark5threadstop)
 		{
@@ -233,7 +220,7 @@ void Mark5BMark5DataStream::mark5threadfunction()
 				lastslot = readbufferwriteslot;
 				endindex = lastslot*readbufferslotsize + bytes;	// No data in this slot from here to end
 
-				cinfo << startl << "At end of scan: shortening Mark5 read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
+				cverbose << startl << "At end of scan: shortening Mark5 read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
 			}
 
 			// remember that all reads of a module must be 64 bit aligned
@@ -337,7 +324,7 @@ void Mark5BMark5DataStream::mark5threadfunction()
 			}
 		}
 		pthread_mutex_unlock(mark5threadmutex + (readbufferwriteslot % lockmod));
-		cinfo << startl << "mark5threadfunction: end of scan reached.  Unlocked " << readbufferwriteslot << endl;
+		cverbose << startl << "mark5threadfunction: end of scan reached.  Unlocked " << (readbufferwriteslot % lockmod) << endl;
 		if(mark5threadstop)
 		{
 			break;
@@ -422,7 +409,7 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
                 MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-	cinfo << startl << "Mark5BMark5DataStream::initialiseFile format=" << formatname << endl;
+	cinfo << startl << "Module initialized: format=" << formatname << endl;
 
 	mk5dirpath = getenv("MARK5_DIR_PATH");
 	if(mk5dirpath == 0)
@@ -516,7 +503,7 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 
 			return;
 		}
-		cinfo << startl << "Before scan change: readscan = " << readscan << "  readsec = " << readseconds << "  readns = " << readnanoseconds << endl;
+		cverbose << startl << "Before scan change: readscan = " << readscan << "  readsec = " << readseconds << "  readns = " << readnanoseconds << endl;
 		readpointer = scanPointer->start + scanPointer->frameoffset;
 		readseconds = (scanPointer->mjd-corrstartday)*86400 + scanPointer->sec - corrstartseconds + intclockseconds;
 		readnanoseconds = scanPointer->nsStart();
@@ -530,11 +517,11 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 		}
 		readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 
-		cinfo << startl << "After scan change:  readscan = " << readscan << "  readsec = " << readseconds << "  readns = " << readnanoseconds << endl;
+		cverbose << startl << "After scan change:  readscan = " << readscan << "  readsec = " << readseconds << "  readns = " << readnanoseconds << endl;
 
 		if(readscan == model->getNumScans() - 1 && readseconds >= model->getScanDuration(readscan))
 		{
-			cwarn << startl << "No more data for project on module [" << mpiid << "]" << endl;
+			cinfo << startl << "No more data for project on module [" << mpiid << "]" << endl;
 			scanPointer = 0;
 			scanNum = -1;
 			dataremaining = false;
@@ -661,18 +648,15 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 	lockstart = lockend = lastslot = -1;
 
 	// cause Mark5 reading thread to go ahead and start filling buffers
-	cinfo << startl << "initialiseFile[" << mpiid << "] waiting for barrier" << endl;
+	// these barriers come in pairs...
 	pthread_barrier_wait(&mark5threadbarrier);
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "initialiseFile[" << mpiid << "] passed barrier" << endl;
 
 	cinfo << startl << "Scan " << scanNum <<" initialised[" << mpiid << "]" << endl;
 }
 
 void Mark5BMark5DataStream::openfile(int configindex, int fileindex)
 {
-	cinfo << startl << "Mark5BMark5DataStream " << mpiid << " is about to look at a scan" << endl;
-
 	/* fileindex should never increase for native mark5, but
 	 * check just in case. 
 	 */
@@ -788,16 +772,13 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		}
 		else
 		{
-			cwarn << startl << "Data gap found: srcUsed=" << m5bstats.srcUsed << " destUsed=" << m5bstats.destUsed << endl;
-
-			++nbad;
-			if(nbad == 1)
+			if(m5bstats.srcUsed < m5bstats.destUsed)
 			{
-				FILE *yout;
-
-				yout = fopen("/tmp/bad.m5b", "w");
-				fwrite(readbuffer+fixindex, 1, bytesvisible, yout);
-				fclose(yout);
+				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found" << endl;
+			}
+			else
+			{
+				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found" << endl;
 			}
 			startOutputFrameNumber = -1;
 		}
@@ -807,14 +788,12 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		startOutputFrameNumber = -1;
 	}
 
-	fprintf(xout, "%d %d %d %d %d %d %d %d %d %d %d\n", m5bstats.startFrameSeconds, m5bstats.startFrameNanoseconds, m5bstats.srcUsed, m5bstats.destUsed, bytesvisible, nbad, n1, n2, fixend, fixindex, readbufferslotsize);
-
 	fixindex += m5bstats.srcUsed;
 
 	if(lastslot == n2 && (fixindex+minleftoverdata > endindex || bytesvisible < readbytes / 4) )
 	{
 		// end of useful data for this scan
-		cinfo << startl << "End of data for scan" << endl;
+		cverbose << startl << "End of data for scan" << endl;
 		dataremaining = false;
 		pthread_mutex_unlock(mark5threadmutex + (lockstart % lockmod));
 		if(lockstart != lockend)
@@ -833,7 +812,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		n3 = fixindex / readbufferslotsize;
 		if(n3 > lockstart+1)
 		{
-			cinfo << startl << "WOW: n3 = " << n3 << "  and lockstart= " << lockstart << endl;
+			cerror << startl << "Developer error: Mark5BMark5DataStream::dataRead: n3=" << n3 << " and lockstart=" << lockstart << " This should never be!" << endl;
 		}
 
 		while(lockstart < n3)
@@ -849,32 +828,18 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 			// Before:   |          |dddddddddd|          |          |          |      dddd|  slot 5 locked
 			// After:    |      dddd|dddddddddd|          |          |          |          |  slot 0 locked
 
+			// Note! No need change locks here as slot 0 and slot readbufferslots - 1 share a lock
+
 			if(lockend != lockstart)
 			{
-				csevere << startl << "dataRead " << mpiid << " memmove needed but lockend("<<lockend<<") != lockstart("<<lockstart<<")  lastslot="<<lastslot << endl;
+				csevere << startl << "Developer error: Mark5BMark5DataStream::dataRead " << mpiid << " memmove needed but lockend(" << lockend << ") != lockstart(" << lockstart << ")  lastslot=" << lastslot << endl;
 			}
 			lockstart = 0;
-	//WB		pthread_mutex_lock(mark5threadmutex + lockstart);
-			if(mark5xlrfail)
-			{
-				cwarn << startl << "dataRead " << mpiid << " detected mark5xlrfail.  [3]  Stopping." << endl;
 
-				dataremaining = false;
-				keepreading = false;
-				pthread_mutex_unlock(mark5threadmutex + (lockstart % lockmod));
-				if(lockend != lockstart)
-				{
-					pthread_mutex_unlock(mark5threadmutex + (lockend % lockmod));
-				}
-				lockstart = lockend = -2;
-
-				return 0;
-			}
 			int newstart = fixindex % readbufferslotsize;
 			memmove(readbuffer + newstart, readbuffer + fixindex, readbuffersize-fixindex);
 			fixindex = newstart;
 
-	//WB		pthread_mutex_unlock(mark5threadmutex + lockend);
 			lockend = 0;
 		}
 	}
@@ -956,7 +921,7 @@ cverbose << startl << "Opened first usable file" << endl;
 			diskToMemory(lastvalidsegment);
 			numread++;
 		}
-cinfo << startl << "Out of inner read loop: keepreading = " << keepreading << " dataremaining = " << dataremaining << endl;
+cverbose << startl << "Out of inner read loop: keepreading = " << keepreading << " dataremaining = " << dataremaining << endl;
 		if(keepreading)
 		{
 			//if we need to, change the config
@@ -972,7 +937,7 @@ cinfo << startl << "Out of inner read loop: keepreading = " << keepreading << " 
 				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
 				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
 				keepreading = false;
-				cinfo << startl << "readscan == getNumScans -> keepreading = false" << endl;
+				cverbose << startl << "readscan == getNumScans -> keepreading = false" << endl;
 			}
 			else
 			{
@@ -994,7 +959,7 @@ cinfo << startl << "Out of inner read loop: keepreading = " << keepreading << " 
 			{
 				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = config->getExecuteSeconds();
 				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
-				cinfo << startl << "New scan -> keepreading = false" << endl;
+				cverbose << startl << "New scan -> keepreading = false" << endl;
 			}
 		}
 	}
@@ -1011,7 +976,7 @@ cinfo << startl << "Out of inner read loop: keepreading = " << keepreading << " 
 		csevere << startl << "Error (" << perr << ") in telescope readthread unlock of outstandingsendlock!!!" << endl;
 	}
 
-	cinfo << startl << "Readthread is exiting! dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
+	cverbose << startl << "Readthread is exiting! dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
 }
 
 void Mark5BMark5DataStream::servoMark5()
