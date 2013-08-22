@@ -289,6 +289,7 @@ void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
 		return;
 	}
 	mark5bfilesummarysettotalbandwidth(&fileSummary, static_cast<int>(bw*nrecordedbands*1000000));
+	mark5bfilesummaryfixmjd(&fileSummary, config->getStartMJD());
 
 	// If verbose...
 	printmark5bfilesummary(&fileSummary);
@@ -500,21 +501,40 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 		invalidtime = 0;
 	}
 
+	// see if next read will start after end of scan
+	double nextMJD = model->getScanStartMJD(readscan) + (readseconds + 0.5)/86400.0;
+
 	// did we just cross into next scan?
-	if(readseconds >= model->getScanDuration(readscan))
+	if(nextMJD >= model->getScanEndMJD(readscan))
 	{
-		cinfo << startl << "diskToMemory: end of scan detected" << endl;
-		if(readscan < (model->getNumScans()-1))
+		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " detected" << endl;
+		
+		// find next valid schedule scan
+		while((nextMJD >= model->getScanEndMJD(readscan) || config->getScanConfigIndex(readscan) < 0) && readscan < model->getNumScans())
 		{
 			++readscan;
-			readseconds += model->getScanStartSec(readscan-1, corrstartday, corrstartseconds);
-			readseconds -= model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		}
+
+		if(readscan < model->getNumScans())
+		{
+			//if we need to, change the config
+			if(config->getScanConfigIndex(readscan) != bufferinfo[(lastvalidsegment + 1)%numdatasegments].configindex)
+			{
+				updateConfig((lastvalidsegment + 1)%numdatasegments);
+			}
 		}
 		else
 		{
 			// here we just crossed over the end of the job
 			keepreading = false;
+
+			bufferinfo[(lastvalidsegment+1)%numdatasegments].scan = model->getNumScans()-1;
+			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
+			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
+			keepreading = false;
+			cverbose << startl << "readscan == getNumScans -> keepreading = false" << endl;
 		}
+		cinfo << startl << "diskToMemory: starting schedule scan " << readscan << endl;
 	}
 
 	if(switchedpower && bufferinfo[buffersegment].validbytes > 0)
