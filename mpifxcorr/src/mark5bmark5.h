@@ -80,7 +80,6 @@ private:
 
 	int filltime;
 	long long invalidstart;
-	unsigned long lastval;
 	int newscan;
 	double lastrate;
 	int nrate;

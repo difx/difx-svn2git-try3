@@ -74,14 +74,12 @@ private:
 	int lockstart, lockend, lastslot;
 	unsigned int endindex, muxindex;
 	unsigned int readbufferwriteslot;
-	char *mutexstate;
 #endif
 
 	DifxMessageMk5Status mk5status;
 
 	int filltime;
 	long long invalidstart;
-	unsigned long lastval;
 	int newscan;
 	double lastrate;
 	int nrate;

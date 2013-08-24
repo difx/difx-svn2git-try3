@@ -175,7 +175,7 @@ int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offset
     switchedpowerincrement = static_cast<int>(datarate/512 + 0.1);
   }
 
-  //do the necessary correction to start from a frame boundary - work out the offset from the start of this segment
+  //do the necessary correction to start from a frame boundary; work out the offset from the start of this segment
   vlbaoffset = bufferindex - atsegment*readbytes;
 
   if(vlbaoffset < 0)
@@ -207,7 +207,7 @@ int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offset
     {
       cwarn << startl << "bufferindex == bufferbytes --> Mode::INVALID_SUBINT" << endl;
       bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return 0; //note exit here!!!!
+      return 0; //note exit here!!
     }
     else
     {
@@ -526,13 +526,13 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 		else
 		{
 			// here we just crossed over the end of the job
+			cverbose << startl << "readscan==getNumScans -> keepreading=false" << endl;
+
 			keepreading = false;
 
 			bufferinfo[(lastvalidsegment+1)%numdatasegments].scan = model->getNumScans()-1;
 			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
 			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
-			keepreading = false;
-			cverbose << startl << "readscan == getNumScans -> keepreading = false" << endl;
 		}
 		cinfo << startl << "diskToMemory: starting schedule scan " << readscan << endl;
 	}
@@ -570,7 +570,7 @@ cverbose << startl << "Starting loopfileread()" << endl;
 	perr = pthread_mutex_lock(&outstandingsendlock);
 	if(perr != 0)
 	{
-		csevere << startl << "Error in initial telescope readthread lock of outstandingsendlock!!!" << endl;
+		csevere << startl << "Error in initial readthread lock of outstandingsendlock!" << endl;
 	}
 
 	//lock the first section to start reading
@@ -596,18 +596,18 @@ cverbose << startl << "Opened first usable file" << endl;
 		perr = pthread_mutex_lock(&(bufferlock[numread]));
 		if(perr != 0)
 		{
-			csevere << startl << "Error in initial telescope readthread lock of first buffer section!!!" << endl;
+			csevere << startl << "Error in initial readthread lock of first buffer section!" << endl;
 		}
 	}
 	else
 	{
-		csevere << startl << "Couldn't find any valid data - will be shutting down gracefully!!!" << endl;
+		csevere << startl << "Couldn't find any valid data; will be shutting down gracefully!" << endl;
 	}
 	readthreadstarted = true;
 	perr = pthread_cond_signal(&initcond);
 	if(perr != 0)
 	{
-		csevere << startl << "Datastream readthread " << mpiid << " error trying to signal main thread to wake up!!!" << endl;
+		csevere << startl << "Datastream readthread error trying to signal main thread to wake up!" << endl;
 	}
 	if(keepreading)
 	{
@@ -626,7 +626,7 @@ cverbose << startl << "Opened first usable file" << endl;
 			perr = pthread_mutex_lock(&(bufferlock[lastvalidsegment]));
 			if(perr != 0)
 			{
-				csevere << startl << "Error in telescope readthread lock of buffer section!!!" << lastvalidsegment << endl;
+				csevere << startl << "Error in readthread lock of buffer section!" << lastvalidsegment << endl;
 			}
 
 			if(!isnewfile) //can unlock previous section immediately
@@ -635,7 +635,7 @@ cverbose << startl << "Opened first usable file" << endl;
 				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));    
 				if(perr != 0)
 				{
-					csevere << startl << "Error (" << perr << ") in telescope readthread unlock of buffer section!!!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
+					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
 				}
 			}
 
@@ -649,7 +649,7 @@ cverbose << startl << "Opened first usable file" << endl;
 				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));
 				if(perr != 0)
 				{
-					csevere << startl << "Error (" << perr << ") in telescope readthread unlock of buffer section!!!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
+					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
 				}
 			}
 			isnewfile = false;
@@ -657,10 +657,8 @@ cverbose << startl << "Opened first usable file" << endl;
 		if(keepreading)
 		{
 cverbose << startl << "keepreading is true" << endl;
-			if(input.is_open())
-			{
-				input.close();
-			}
+			input.close();
+
 			//if we need to, change the config
 			int nextconfigindex = config->getScanConfigIndex(readscan);
 			while(nextconfigindex < 0 && readscan < model->getNumScans())
@@ -716,7 +714,7 @@ cverbose << startl << "keepreading is true" << endl;
 		perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
 		if(perr != 0)
 		{
-			csevere << startl << "Error (" << perr << ") in telescope readthread unlock of buffer section!!!" << lastvalidsegment << endl;
+			csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << lastvalidsegment << endl;
 		}
 	}
 
@@ -724,15 +722,15 @@ cverbose << startl << "keepreading is true" << endl;
 	perr = pthread_mutex_unlock(&outstandingsendlock);
 	if(perr != 0)
 	{
-		csevere << startl << "Error (" << perr << ") in telescope readthread unlock of outstandingsendlock!!!" << endl;
+		csevere << startl << "Error (" << perr << ") in readthread unlock of outstandingsendlock!" << endl;
 	}
 
 	if(lastvalidsegment >= 0)
 	{
-		cverbose << startl << "Datastream " << mpiid << "'s readthread is exiting!!! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
+		cverbose << startl << "Datastream readthread is exiting! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
 	}
 	else
 	{
-		cverbose << startl << "Datastream " << mpiid << "'s readthread is exiting, after not finding any data at all!" << endl;
+		cverbose << startl << "Datastream readthread is exiting, after not finding any data at all!" << endl;
 	}
 }
