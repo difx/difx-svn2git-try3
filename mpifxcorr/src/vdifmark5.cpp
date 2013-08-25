@@ -309,7 +309,7 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 				}
 				servoMark5();
 			}
-			if(endofscan)
+			if(endofscan || !keepreading)
 			{
 				break;
 			}
@@ -722,9 +722,15 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	bytesvisible = muxend - muxindex;
 
 	// multiplex and corner turn the data
-	vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+muxindex, bytesvisible, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+muxindex, bytesvisible, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	if(X <= 0)
+	{
+		cwarn << startl << "mark5bfix returned " << X << endl;
+	}
+
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
+	consumedbytes += vstats.srcUsed;
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
 		// In the case of VDIF, we can get the time from the data, so use that just in case there was a jump
@@ -745,11 +751,9 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 		cverbose << startl << "End of data for record scan " << (scanNum+1) << endl;
 		dataremaining = false;
 		pthread_mutex_unlock(mark5threadmutex + (lockstart % lockmod));
-		cinfo << startl << "dataRead has unlocked slot " << (lockstart % lockmod) << endl;
 		if(lockstart != lockend)
 		{
 			pthread_mutex_unlock(mark5threadmutex + (lockend % lockmod));
-			cinfo << startl << "dataRead has unlocked slot " << (lockend % lockmod) << endl;
 		}
 		lockstart = lockend = -2;
 	}
@@ -763,7 +767,6 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 		while(lockstart < n3)
 		{
 			pthread_mutex_unlock(mark5threadmutex + (lockstart % lockmod));
-			cinfo << startl << "dataRead has unlocked slot " << (lockstart % lockmod) << endl;
 			++lockstart;
 		}
 
@@ -776,10 +779,6 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 
 			// Note! No need change locks here as slot 0 and slot readbufferslots - 1 share a lock
 
-			if(lockend != lockstart)
-			{
-				csevere << startl << "Developer error: VDIFMark5DataStream::dataRead memmove needed but lockend=" << lockend << " != lockstart=" << lockstart << "  lastslot=" << lastslot << endl;
-			}
 			lockstart = 0;
 
 			int newstart = muxindex % readbufferslotsize;
@@ -851,10 +850,10 @@ void VDIFMark5DataStream::loopfileread()
 			}
 
 			//unlock the previous section
-			perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));    
+			perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments) % numdatasegments]));    
 			if(perr != 0)
 			{
-				csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
+				csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments) % numdatasegments << endl;
 			}
 
 			//do the read
@@ -873,10 +872,17 @@ cverbose << startl << "Out of inner read loop: keepreading=" << keepreading << "
 			cverbose << startl << "readscan == getNumScans -> keepreading = false" << endl;
 		}
 	}
-	perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
-	if(perr != 0)
+	if(lockstart >= 0)
 	{
-		csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << lastvalidsegment << endl;
+		pthread_mutex_unlock(mark5threadmutex + (lockstart % (readbufferslots - 1)));
+	}
+	if(numread > 0)
+	{
+		perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
+		if(perr != 0)
+		{
+			csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << lastvalidsegment << endl;
+		}
 	}
 
 	//unlock the outstanding send lock

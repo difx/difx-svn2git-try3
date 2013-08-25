@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2012 by Walter Brisken and Adam Deller             *
+ *   Copyright (C) 2007-2013 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *

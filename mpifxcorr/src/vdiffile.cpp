@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006 by Adam Deller                                     *
+ *   Copyright (C) 2006-2013 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -39,6 +39,12 @@
 #else
 #define FILL_PATTERN 0x11223344UL
 #endif
+
+
+/* TODO: 
+   - make use of activesec and activescan
+   - make FAKE mode work
+ */
 
 
 /// VDIFDataStream -------------------------------------------------------
@@ -128,114 +134,122 @@ void VDIFDataStream::initialise()
 
 int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
-  int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
-  float datarate;
+	int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
+	float datarate;
 
-  bufferindex = DataStream::calculateControlParams(scan, offsetsec, offsetns);
+	bufferindex = DataStream::calculateControlParams(scan, offsetsec, offsetns);
 
-  if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
-    return 0;
+	if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
+	{
+		return 0;
+	}
 
-  looksegment = atsegment;
-  if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
-  {
-    //look at the following segment - normally has sensible info
-    looksegment = (atsegment+1)%numdatasegments;
-    if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
-    {
-      cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return bufferindex;
-    }
-  }
-  if(bufferinfo[looksegment].configindex < 0)
-  {
-    //Sometimes the next segment is still showing invalid due to the geometric delay.
-    //try the following segment - if thats no good, get out
-    //this is not entirely safe since the read thread may not have set the configindex yet, but at worst
-    //one subint will be affected
-    looksegment = (looksegment+1)%numdatasegments;
-    if(bufferinfo[looksegment].configindex < 0)
-    {
-      cwarn << startl << "Cannot find a valid configindex to set Mk5-related info.  Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return bufferindex;
-    }
-    if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
-    {
-      cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return bufferindex;
-    }
-  }
+	looksegment = atsegment;
+	if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
+	{
+		//look at the following segment - normally has sensible info
+		looksegment = (atsegment+1)%numdatasegments;
+		if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+		{
+			cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+	
+			return bufferindex;
+		}
+	}
+	if(bufferinfo[looksegment].configindex < 0)
+	{
+		//Sometimes the next segment is still showing invalid due to the geometric delay.
+		//try the following segment - if thats no good, get out
+		//this is not entirely safe since the read thread may not have set the configindex yet, but at worst
+		//one subint will be affected
+		looksegment = (looksegment+1)%numdatasegments;
+		if(bufferinfo[looksegment].configindex < 0)
+		{
+			cwarn << startl << "Cannot find a valid configindex to set Mk5-related info.  Flagging this subint" << endl;
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
 
-  //if we got here, we found a configindex we are happy with.  Find out the mk5 details
-  payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
-  framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
-  framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
-  payloadbytes *= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
-  framebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum) + VDIF_HEADER_BYTES;
-  framespersecond /= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
+			return bufferindex;
+		}
+		if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+		{
+			cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
 
-  //set the fraction of data to use to determine system temperature based on data rate
-  //the values set here work well for the today's computers and clusters...
-  datarate = static_cast<float>(framebytes)*static_cast<float>(framespersecond)*8.0/1.0e6;  // in Mbps
-  if(datarate < 512)
-  {
-    switchedpowerincrement = 1;
-  }
-  else
-  {
-    switchedpowerincrement = static_cast<int>(datarate/512 + 0.1);
-  }
+			return bufferindex;
+		}
+	}
 
-  //do the necessary correction to start from a frame boundary; work out the offset from the start of this segment
-  vlbaoffset = bufferindex - atsegment*readbytes;
+	//if we got here, we found a configindex we are happy with.  Find out the mk5 details
+	payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
+	framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
+	framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
+	payloadbytes *= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
+	framebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum) + VDIF_HEADER_BYTES;
+	framespersecond /= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
 
-  if(vlbaoffset < 0)
-  {
-    cfatal << startl << "VDIFDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-    // WFB20120123 MPI_Abort(MPI_COMM_WORLD, 1);
-    return 0;
-  }
+	//set the fraction of data to use to determine system temperature based on data rate
+	//the values set here work well for the today's computers and clusters...
+	datarate = static_cast<float>(framebytes)*static_cast<float>(framespersecond)*8.0/1.0e6;  // in Mbps
+	if(datarate < 512)
+	{
+		switchedpowerincrement = 1;
+	}
+	else
+	{
+		switchedpowerincrement = static_cast<int>(datarate/512 + 0.1);
+	}
 
-  // bufferindex was previously computed assuming no framing overhead
-  framesin = vlbaoffset/payloadbytes;
+	//do the necessary correction to start from a frame boundary; work out the offset from the start of this segment
+	vlbaoffset = bufferindex - atsegment*readbytes;
 
+	if(vlbaoffset < 0)
+	{
+		cfatal << startl << "VDIFDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
+		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+		// WFB20120123 MPI_Abort(MPI_COMM_WORLD, 1);
+		
+		return 0;
+	}
 
-  // Note here a time is needed, so we only count payloadbytes
-  long long segoffns = bufferinfo[atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + ((int)(segoffns/1000000000));
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = ((int)(segoffns%1000000000));
+	// bufferindex was previously computed assuming no framing overhead
+	framesin = vlbaoffset/payloadbytes;
 
-  //go back to nearest frame -- here the total number of bytes matters
-  bufferindex = atsegment*readbytes + framesin*framebytes;
+	// Note here a time is needed, so we only count payloadbytes
+	long long segoffns = bufferinfo[atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
+	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + ((int)(segoffns/1000000000));
+	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = ((int)(segoffns%1000000000));
 
-  //if we are right at the end of the last segment, and there is a jump after this segment, bail out
-  if(bufferindex == bufferbytes)
-  {
-    if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
-      ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
-        bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
-    {
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return 0; //note exit here!!
-    }
-    else
-    {
-      cwarn << startl << "Developer error mk5: bufferindex == bufferbytes in a 'normal' situation" << endl;
-    }
-  }
+	//go back to nearest frame -- here the total number of bytes matters
+	bufferindex = atsegment*readbytes + framesin*framebytes;
 
-  if(bufferindex > bufferbytes) /* WFB: this was >= */
-  {
-    cfatal << startl << "VDIFDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-    MPI_Abort(MPI_COMM_WORLD, 1);
-    return 0;
-  }
-  return bufferindex;
+	//if we are right at the end of the last segment, and there is a jump after this segment, bail out
+	if(bufferindex == bufferbytes)
+	{
+		if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
+		   ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
+		   bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
+		{
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+			
+			return 0; //note exit here!!
+		}
+		else
+		{
+			cwarn << startl << "Developer error mk5: bufferindex == bufferbytes in a 'normal' situation" << endl;
+		}
+	}
+
+	if(bufferindex > bufferbytes) /* WFB: this was >= */
+	{
+		cfatal << startl << "VDIFDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
+		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+		MPI_Abort(MPI_COMM_WORLD, 1);
+
+		return 0;
+	}
+
+	return bufferindex;
 }
 
 void VDIFDataStream::updateConfig(int segmentindex)
@@ -464,7 +478,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 		bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = (8640000 + (vstats.startFrameNumber / framespersecond) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
+		bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
 	
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;

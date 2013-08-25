@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006 by Adam Deller                                     *
+ *   Copyright (C) 2006-2013 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -39,6 +39,11 @@
 #else
 #define FILL_PATTERN 0x11223344UL
 #endif
+
+/* TODO: 
+   - make use of activesec and activescan
+   - make FAKE mode work
+ */
 
 
 /// Mark5BDataStream -------------------------------------------------------
@@ -117,112 +122,121 @@ void Mark5BDataStream::initialise()
 
 int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
-  int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
-  float datarate;
+	int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
+	float datarate;
 
-  bufferindex = DataStream::calculateControlParams(scan, offsetsec, offsetns);
+	bufferindex = DataStream::calculateControlParams(scan, offsetsec, offsetns);
 
-  if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
-    return 0;
+	if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
+	{
+		return 0;
+	}
 
-  looksegment = atsegment;
-  if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
-  {
-    //look at the following segment - normally has sensible info
-    looksegment = (atsegment+1)%numdatasegments;
-    if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
-    {
-      cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return bufferindex;
-    }
-  }
-  if(bufferinfo[looksegment].configindex < 0)
-  {
-    //Sometimes the next segment is still showing invalid due to the geometric delay.
-    //try the following segment - if thats no good, get out
-    //this is not entirely safe since the read thread may not have set the configindex yet, but at worst
-    //one subint will be affected
-    looksegment = (looksegment+1)%numdatasegments;
-    if(bufferinfo[looksegment].configindex < 0)
-    {
-      cwarn << startl << "Cannot find a valid configindex to set Mk5-related info.  Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return bufferindex;
-    }
-    if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
-    {
-      cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return bufferindex;
-    }
-  }
+	looksegment = atsegment;
+	if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
+	{
+		//look at the following segment - normally has sensible info
+		looksegment = (atsegment+1)%numdatasegments;
+		if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+		{
+			cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+			
+			return bufferindex;
+		}
+	}
+	if(bufferinfo[looksegment].configindex < 0)
+	{
+		//Sometimes the next segment is still showing invalid due to the geometric delay.
+		//try the following segment - if thats no good, get out
+		//this is not entirely safe since the read thread may not have set the configindex yet, but at worst
+		//one subint will be affected
+		looksegment = (looksegment+1)%numdatasegments;
+		if(bufferinfo[looksegment].configindex < 0)
+		{
+			cwarn << startl << "Cannot find a valid configindex to set Mk5-related info.  Flagging this subint" << endl;
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
 
-  //if we got here, we found a configindex we are happy with.  Find out the mk5 details
-  payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
-  framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
-  framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
+			return bufferindex;
+		}
+		if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+		{
+			cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
 
-  //set the fraction of data to use to determine system temperature based on data rate
-  //the values set here work well for the today's computers and clusters...
-  datarate = static_cast<float>(framebytes)*static_cast<float>(framespersecond)*8.0/1.0e6;  // in Mbps
-  if(datarate < 512)
-  {
-    switchedpowerincrement = 1;
-  }
-  else
-  {
-    switchedpowerincrement = static_cast<int>(datarate/512 + 0.1);
-  }
+			return bufferindex;
+		}
+	}
 
-  //do the necessary correction to start from a frame boundary; work out the offset from the start of this segment
-  vlbaoffset = bufferindex - atsegment*readbytes;
+	//if we got here, we found a configindex we are happy with.  Find out the mk5 details
+	payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
+	framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
+	framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
 
-  if(vlbaoffset < 0)
-  {
-    cfatal << startl << "Mark5BDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-    // WFB20120123 MPI_Abort(MPI_COMM_WORLD, 1);
-    return 0;
-  }
+	//set the fraction of data to use to determine system temperature based on data rate
+	//the values set here work well for the today's computers and clusters...
+	datarate = static_cast<float>(framebytes)*static_cast<float>(framespersecond)*8.0/1.0e6;  // in Mbps
+	if(datarate < 512)
+	{
+		switchedpowerincrement = 1;
+	}
+	else
+	{
+		switchedpowerincrement = static_cast<int>(datarate/512 + 0.1);
+	}
 
-  // bufferindex was previously computed assuming no framing overhead
-  framesin = vlbaoffset/payloadbytes;
+	//do the necessary correction to start from a frame boundary; work out the offset from the start of this segment
+	vlbaoffset = bufferindex - atsegment*readbytes;
+
+	if(vlbaoffset < 0)
+	{
+		cfatal << startl << "Mark5BDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
+		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+		// WFB20120123 MPI_Abort(MPI_COMM_WORLD, 1);
+	
+		return 0;
+	}
+
+	// bufferindex was previously computed assuming no framing overhead
+	framesin = vlbaoffset/payloadbytes;
 
 
-  // Note here a time is needed, so we only count payloadbytes
-  long long segoffns = bufferinfo[atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + ((int)(segoffns/1000000000));
-  bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = ((int)(segoffns%1000000000));
+	// Note here a time is needed, so we only count payloadbytes
+	long long segoffns = bufferinfo[atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
+	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + ((int)(segoffns/1000000000));
+	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = ((int)(segoffns%1000000000));
 
-  //go back to nearest frame -- here the total number of bytes matters
-  bufferindex = atsegment*readbytes + framesin*framebytes;
+	//go back to nearest frame -- here the total number of bytes matters
+	bufferindex = atsegment*readbytes + framesin*framebytes;
 
-  //if we are right at the end of the last segment, and there is a jump after this segment, bail out
-  if(bufferindex == bufferbytes)
-  {
-    if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
-      ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
-        bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
-    {
-      cwarn << startl << "bufferindex == bufferbytes --> Mode::INVALID_SUBINT" << endl;
-      bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-      return 0; //note exit here!!
-    }
-    else
-    {
-      cwarn << startl << "Developer error mk5: bufferindex == bufferbytes in a 'normal' situation" << endl;
-    }
-  }
+	//if we are right at the end of the last segment, and there is a jump after this segment, bail out
+	if(bufferindex == bufferbytes)
+	{
+		if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
+		   ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
+		   bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
+		{
+			cwarn << startl << "bufferindex == bufferbytes --> Mode::INVALID_SUBINT" << endl;
+			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+			
+			return 0; //note exit here!!
+		}
+		else
+		{
+			cwarn << startl << "Developer error mk5: bufferindex == bufferbytes in a 'normal' situation" << endl;
+		}
+	}
 
-  if(bufferindex > bufferbytes) /* WFB: this was >= */
-  {
-    cfatal << startl << "Mark5BDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
-    bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
-    MPI_Abort(MPI_COMM_WORLD, 1);
-    return 0;
-  }
-  return bufferindex;
+	if(bufferindex > bufferbytes) /* WFB: this was >= */
+	{
+		cfatal << startl << "Mark5BDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
+		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	
+		return 0;
+	}
+	
+	return bufferindex;
 }
 
 void Mark5BDataStream::updateConfig(int segmentindex)
@@ -313,21 +327,9 @@ void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
 		readseconds += jumpseconds;
 	}
 
-	// Determine the actual identity of this data file in terms of scan number
-	while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
-	{
-		++readscan;
-	}
-	while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
-	{
-		--readscan;
-	}
-
 	// Now set readseconds to time since beginning of scan
 	readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 	
-	//cverbose << startl << "The frame start is day=" << mark5bfilesummarygetstartmjd(&fileSummary) << ", seconds=" << mark5bfilesummarygetstartsecond(&fileSummary) << ", ns=" << mark5bfilesummarygetstartns(&fileSummary) << ", readscan=" << readscan << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
-
 	// Advance into file if requested
 	if(fileSummary.firstFrameOffset + dataoffset > 0)
 	{
@@ -417,35 +419,49 @@ int Mark5BDataStream::dataRead(int buffersegment)
 	input.read(reinterpret_cast<char *>(readbuffer + readbufferleftover), bytes);
 	bytes = input.gcount();
 
-	// multiplex and corner turn the data
+	// "fix" Mark5B data: remove stray packets/byts and put good frames on a uniform grid
 	int X = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, framespersecond,  startOutputFrameNumber, &m5bstats);
-
-	if(m5bstats.destUsed == m5bstats.destSize)
-	{
-		// FIXME: the line below should help things, but it causes first output frame to be invalid.  Hmmm....
-		//startOutputFrameNumber = m5bstats.startFrameNumber + m5bstats.nOutputFrame;
-	}
-	else
-	{
-		startOutputFrameNumber = -1;
-	}
-
 	if(X <= 0)
 	{
 		cwarn << startl << "mark5bfix returned " << X << endl;
 	}
 
-	consumedbytes += bytes;
 	bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
+	consumedbytes += m5bstats.srcUsed;
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
 		// In the case of Mark5B, we can get the time from the data, so use that just in case there was a jump
 		bufferinfo[buffersegment].scanns = m5bstats.startFrameNanoseconds;
-		bufferinfo[buffersegment].scanseconds = (8640000 + m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
+		bufferinfo[buffersegment].scanseconds = (m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
 	
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
+
+		if(m5bstats.destUsed == m5bstats.destSize)
+		{
+			// FIXME: the line below should help things, but it causes first output frame to be invalid.  Hmmm....
+			startOutputFrameNumber = m5bstats.startFrameNumber + m5bstats.destUsed/10016;
+		}
+		else
+		{
+			if(m5bstats.srcUsed < m5bstats.destUsed - 10*10016)
+			{
+				// Warn if more than 10 frames of data are missing
+				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found" << endl;
+			}
+			else
+			{
+				// Warn if more than 50kB of unexpected data found
+				// Note that 5008 bytes of extra data at scan ends is not uncommon, so specifically don't warn for that.
+				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found" << endl;
+			}
+			startOutputFrameNumber = -1;
+		}
+	}
+	else
+	{
+		startOutputFrameNumber = -1;
 	}
 
 	readbufferleftover += (bytes - m5bstats.srcUsed);
@@ -456,7 +472,7 @@ int Mark5BDataStream::dataRead(int buffersegment)
 	}
 	else if(readbufferleftover < 0)
 	{
-		cwarn << startl << "readbufferleftover = " << readbufferleftover << "; it should never be negative." << endl;
+		cwarn << startl << "readbufferleftover=" << readbufferleftover << "; it should never be negative." << endl;
 
 		readbufferleftover = 0;
 	}
@@ -504,10 +520,12 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 	// see if next read will start after end of scan
 	double nextMJD = model->getScanStartMJD(readscan) + (readseconds + 0.5)/86400.0;
 
+	cinfo.precision(12);
+
 	// did we just cross into next scan?
 	if(nextMJD >= model->getScanEndMJD(readscan))
 	{
-		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " detected" << endl;
+		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " of " << model->getNumScans() << " detected" << endl;
 		
 		// find next valid schedule scan
 		while((nextMJD >= model->getScanEndMJD(readscan) || config->getScanConfigIndex(readscan) < 0) && readscan < model->getNumScans())
@@ -564,8 +582,6 @@ void Mark5BDataStream::loopfileread()
 	int perr;
 	int numread = 0;
 
-cverbose << startl << "Starting loopfileread()" << endl;
-
 	//lock the outstanding send lock
 	perr = pthread_mutex_lock(&outstandingsendlock);
 	if(perr != 0)
@@ -585,8 +601,6 @@ cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] <<
 			input.close();
 		}
 	}
-
-cverbose << startl << "Opened first usable file" << endl;
 
 	if(keepreading)
 	{
@@ -614,8 +628,6 @@ cverbose << startl << "Opened first usable file" << endl;
 		diskToMemory(numread++);
 	}
 
-cverbose << startl << "Opened first usable file" << endl;
-
 	while(keepreading && (bufferinfo[lastvalidsegment].configindex < 0 || filesread[bufferinfo[lastvalidsegment].configindex] <= confignumfiles[bufferinfo[lastvalidsegment].configindex]))
 	{
 		while(dataremaining && keepreading)
@@ -629,79 +641,37 @@ cverbose << startl << "Opened first usable file" << endl;
 				csevere << startl << "Error in readthread lock of buffer section!" << lastvalidsegment << endl;
 			}
 
-			if(!isnewfile) //can unlock previous section immediately
+			//unlock the previous section
+			perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments) % numdatasegments]));    
+			if(perr != 0)
 			{
-				//unlock the previous section
-				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));    
-				if(perr != 0)
-				{
-					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
-				}
+				csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
 			}
 
 			//do the read
 			diskToMemory(lastvalidsegment);
 			numread++;
-
-			if(isnewfile) //had to wait before unlocking file
-			{
-				//unlock the previous section
-				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));
-				if(perr != 0)
-				{
-					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
-				}
-			}
-			isnewfile = false;
 		}
 		if(keepreading)
 		{
 cverbose << startl << "keepreading is true" << endl;
 			input.close();
 
-			//if we need to, change the config
-			int nextconfigindex = config->getScanConfigIndex(readscan);
-			while(nextconfigindex < 0 && readscan < model->getNumScans())
+			//if the datastreams for two or more configs are common, they'll all have the same 
+			//files.  Therefore work with the lowest one
+			int lowestconfigindex = bufferinfo[(lastvalidsegment+1)%numdatasegments].configindex;
+			for(int i=config->getNumConfigs()-1;i>=0;i--)
 			{
-				readseconds = 0; 
-				nextconfigindex = config->getScanConfigIndex(++readscan);
+				if(config->getDDataFileNames(i, streamnum) == config->getDDataFileNames(lowestconfigindex, streamnum))
+				lowestconfigindex = i;
 			}
-			if(readscan == model->getNumScans())
-			{
-				bufferinfo[(lastvalidsegment+1)%numdatasegments].scan = model->getNumScans()-1;
-				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
-				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
-				keepreading = false;
-			}
-			else
-			{
-				if(config->getScanConfigIndex(readscan) != bufferinfo[(lastvalidsegment + 1)%numdatasegments].configindex)
-				{
-					updateConfig((lastvalidsegment + 1)%numdatasegments);
-				}
-				//if the datastreams for two or more configs are common, they'll all have the same 
-				//files.  Therefore work with the lowest one
-				int lowestconfigindex = bufferinfo[(lastvalidsegment+1)%numdatasegments].configindex;
-				for(int i=config->getNumConfigs()-1;i>=0;i--)
-				{
-					if(config->getDDataFileNames(i, streamnum) == config->getDDataFileNames(lowestconfigindex, streamnum))
-					lowestconfigindex = i;
-				}
-				openfile(lowestconfigindex, filesread[lowestconfigindex]++);
-				bool skipsomefiles = (config->getScanConfigIndex(readscan) < 0)?true:false;
-				while(skipsomefiles)
-				{
-					int nextscan = peekfile(lowestconfigindex, filesread[lowestconfigindex]);
-					if(nextscan == readscan || (nextscan == readscan+1 && config->getScanConfigIndex(nextscan) < 0))
-					{
-						openfile(lowestconfigindex, filesread[lowestconfigindex]++);
-					}
-					else
-					{
-						skipsomefiles = false;
-					}
-				}
-			}
+			openfile(lowestconfigindex, filesread[lowestconfigindex]++);
+		}
+		if(!keepreading)
+		{
+			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = config->getExecuteSeconds();
+			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
+			cverbose << startl << "New record scan -> keepreading=false" << endl;
 		}
 	}
 	if(input.is_open())
@@ -727,7 +697,7 @@ cverbose << startl << "keepreading is true" << endl;
 
 	if(lastvalidsegment >= 0)
 	{
-		cverbose << startl << "Datastream readthread is exiting! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
+		cverbose << startl << "Datastream readthread is exiting; filecount=" << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles=" << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining=" << dataremaining << ", keepreading=" << keepreading << endl;
 	}
 	else
 	{
