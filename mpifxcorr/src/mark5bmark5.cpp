@@ -38,12 +38,9 @@
 #endif
 
 /* TODO
-   * Remove one barrier section and the lock checking once those are understood
-   * Reduce verbosity considerably
    * Jump over large blocks of data based on requested times
    * Terminate gracefully
-     - at end of job	(datastreams exit properly when data remains past end of job)
-     - on signal
+     - on signal (need to test)
  */
 
 Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
@@ -139,13 +136,8 @@ Mark5BMark5DataStream::~Mark5BMark5DataStream()
 	mark5threadstop = true;
 
 	/* barriers come in pairs to allow the read thread to always get first lock */
-	cinfo << startl << "~Mark5BMark5DataStream: barrier 0" << endl;
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "~Mark5BMark5DataStream: barrier 1" << endl;
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "~Mark5BMark5DataStream: barrier 2" << endl;
-	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "~Mark5BMark5DataStream: barrier 3" << endl;
 
 	pthread_join(mark5thread, 0);
 
@@ -186,44 +178,10 @@ void Mark5BMark5DataStream::mark5threadfunction()
 	for(;;)
 	{
 		// Note two-barrier situation here to allow this thread to have first dibs on locking slot 1
-		cinfo << startl << "read thread: barrier 0" << endl;
 		pthread_barrier_wait(&mark5threadbarrier);
-		cinfo << startl << "read thread: barrier 1" << endl;
-		pthread_barrier_wait(&mark5threadbarrier);
-		cinfo << startl << "read thread: barrier 2" << endl;
-
-		// No locks shall be set at this point.  Test that just to be sure
-		for(int m = 0; m < readbufferslots; ++m)
-		{
-			int v;
-			
-			v = pthread_mutex_trylock(mark5threadmutex + m);
-			if(v == 0)
-			{
-				// This is the expected case and we just got lock.  Now unlock.
-				pthread_mutex_unlock(mark5threadmutex + m);
-			}
-			else
-			{
-				// Oops, there was a lock already on this!
-				cerror << startl << "Developer error: mark5threadfunction: mutex " << m << " is locked by " << mark5threadmutex[m].__data.__owner << " and this thread is " << pthread_self() << endl;
-
-				if(mark5threadmutex[m].__data.__owner == pthread_self())
-				{
-					pthread_mutex_unlock(mark5threadmutex + m);
-					cinfo << startl << "Since this lock is owned by me, I just unlocked it." << endl;
-				}
-			}
-		}
-
 		readbufferwriteslot = 1;	// always start a new reading at slot 1
 		pthread_mutex_lock(mark5threadmutex + (readbufferwriteslot % lockmod));
-		if(mark5threadstop)
-		{
-			cverbose << startl << "mark5threadfunction: mark5threadstop -> this thread will end." << endl;
-		}
 		pthread_barrier_wait(&mark5threadbarrier);
-		cinfo << startl << "read thread: barrier 3" << endl;
 
 		lastlockedslot = readbufferwriteslot;
 
@@ -370,7 +328,7 @@ void Mark5BMark5DataStream::mark5threadfunction()
 
 				servoMark5();
 			}
-			if(endofscan)
+			if(endofscan || !keepreading)
 			{
 				break;
 			}
@@ -677,38 +635,8 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 	// cause Mark5 reading thread to go ahead and start filling buffers
 	// these barriers come in pairs...
 
-	cinfo << startl << "initialiseFile: barrier 0" << endl;
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "initialiseFile: barrier 1" << endl;
-
-	// No locks shall be set at this point.  Test that just to be sure
-	for(int m = 0; m < readbufferslots; ++m)
-	{
-		int v;
-		
-		v = pthread_mutex_trylock(mark5threadmutex + m);
-		if(v == 0)
-		{
-			// This is the expected case and we just got lock.  Now unlock.
-			pthread_mutex_unlock(mark5threadmutex + m);
-		}
-		else
-		{
-			// Oops, there was a lock already on this!
-			cerror << startl << "Developer error: initialiseFile: mutex " << m << " is locked by " << mark5threadmutex[m].__data.__owner << " and this thread is " << pthread_self() << endl;
-
-			if(mark5threadmutex[m].__data.__owner == pthread_self())
-			{
-				pthread_mutex_unlock(mark5threadmutex + m);
-				cinfo << startl << "Since this lock is owned by me, I just unlocked it." << endl;
-			}
-		}
-	}
-
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "initialiseFile: barrier 2" << endl;
-	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "initialiseFile: barrier 3" << endl;
 	
 	cinfo << startl << "Scan " << (scanNum+1) <<" initialised" << endl;
 }
@@ -808,10 +736,15 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 
 	bytesvisible = fixend - fixindex;
 
-	// multiplex and corner turn the data
-	mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
+	// "fix" Mark5B data: remove stray packets/byts and put good frames on a uniform grid
+	int X = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
+	if(X <= 0)
+	{
+		cwarn << startl << "mark5bfix returned " << X << endl;
+	}
 	bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
+	consumedbytes += m5bstats.srcUsed;
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
 		// In the case of Mark5B, we can get the time from the data, so use that just in case there was a jump
@@ -822,6 +755,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
+
 		if(m5bstats.destUsed == m5bstats.srcUsed)
 		{
 			startOutputFrameNumber = m5bstats.startFrameNumber + m5bstats.destUsed/10016;
@@ -835,7 +769,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 			}
 			else if(m5bstats.srcUsed > m5bstats.destUsed + 50000)
 			{
-				// Warn if more than 20kB of unexpected data found
+				// Warn if more than 50kB of unexpected data found
 				// Note that 5008 bytes of extra data at scan ends is not uncommon, so specifically don't warn for that.
 				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found" << endl;
 			}
@@ -869,10 +803,6 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		// i.e., n3 >= n2 >= n1 and n3-n1 <= 1
 
 		n3 = fixindex / readbufferslotsize;
-		if(n3 > lockstart+1)
-		{
-			cerror << startl << "Developer error: Mark5BMark5DataStream::dataRead: n3=" << n3 << " and lockstart=" << lockstart << " This should never be!" << endl;
-		}
 
 		while(lockstart < n3)
 		{
@@ -889,10 +819,6 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 
 			// Note! No need change locks here as slot 0 and slot readbufferslots - 1 share a lock
 
-			if(lockend != lockstart)
-			{
-				csevere << startl << "Developer error: Mark5BMark5DataStream::dataRead memmove needed but lockend=" << lockend << " != lockstart=" << lockstart << "  lastslot=" << lastslot << endl;
-			}
 			lockstart = 0;
 
 			int newstart = fixindex % readbufferslotsize;
@@ -964,7 +890,7 @@ void Mark5BMark5DataStream::loopfileread()
 			}
 
 			//unlock the previous section
-			perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));    
+			perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments) % numdatasegments]));    
 			if(perr != 0)
 			{
 				csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
@@ -986,10 +912,17 @@ cverbose << startl << "Out of inner read loop: keepreading=" << keepreading << "
 			cverbose << startl << "New record scan -> keepreading=false" << endl;
 		}
 	}
-	perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
-	if(perr != 0)
+	if(lockstart >= 0)
 	{
-		csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << lastvalidsegment << endl;
+		pthread_mutex_unlock(mark5threadmutex + (lockstart % (readbufferslots - 1)));
+	}
+	if(numread < 0)
+	{
+		perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
+		if(perr != 0)
+		{
+			csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << lastvalidsegment << endl;
+		}
 	}
 
 	//unlock the outstanding send lock
