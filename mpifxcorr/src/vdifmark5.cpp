@@ -61,6 +61,7 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, i
 	readDelayMicroseconds = 0;
 	noDataOnModule = false;
 	nReads = 0;
+	jobEndMJD = conf->getStartMJD() + (conf->getStartSeconds() + conf->getExecuteSeconds() + 1)/86400.0;
 
 	readbufferslots = 8;
 	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*21/10;
@@ -484,7 +485,7 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 		cinfo << startl << "Advancing to next record scan from " << (scanNum+1) << endl;
 		++scanNum;
 		scanPointer = &module.scans[scanNum];
-		if(scanNum >= module.nScans())
+		if(scanNum >= module.nScans() || scanPointer->mjd > jobEndMJD)
 		{
 			cwarn << startl << "No more data for this job on this module" << endl;
 			scanPointer = 0;
@@ -723,7 +724,7 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 
 	// multiplex and corner turn the data
 	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+muxindex, bytesvisible, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
-	if(X <= 0)
+	if(X < 0)
 	{
 		cwarn << startl << "mark5bfix returned " << X << endl;
 	}
@@ -737,7 +738,15 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 		bufferinfo[buffersegment].scanns = ((vstats.startFrameNumber % framespersecond) * 1000000000LL) / framespersecond;
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
+		bufferinfo[buffersegment].scanseconds = (vstats.startFrameNumber / framespersecond)%86400 + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		if(bufferinfo[buffersegment].scanseconds > 86400/2)
+		{
+			bufferinfo[buffersegment].scanseconds -= 86400;
+		}
+		else if(bufferinfo[buffersegment].scanseconds < -86400/2)
+		{
+			bufferinfo[buffersegment].scanseconds += 86400;
+		}
 	
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;

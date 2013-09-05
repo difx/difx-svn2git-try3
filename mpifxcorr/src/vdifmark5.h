@@ -74,6 +74,7 @@ private:
 	int lockstart, lockend, lastslot;
 	unsigned int endindex, muxindex;
 	unsigned int readbufferwriteslot;
+	double jobEndMJD;
 #endif
 
 	DifxMessageMk5Status mk5status;

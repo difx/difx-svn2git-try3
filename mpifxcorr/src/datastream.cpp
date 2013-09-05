@@ -283,7 +283,7 @@ void DataStream::execute()
     if(bufferinfo[i].numsent > 0)
     {
       MPI_Waitall(bufferinfo[i].numsent, bufferinfo[i].datarequests, datastatuses);
-      MPI_Waitall(bufferinfo[i].numsent, bufferinfo[i].controlrequests,  controlstatuses);
+      MPI_Waitall(bufferinfo[i].numsent, bufferinfo[i].controlrequests, controlstatuses);
       bufferinfo[i].numsent = 0;
     }
   }
@@ -557,7 +557,7 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   }
 
   if(bufferindex < atsegment*readbytes) {
-    cerror << startl << "Developer error: bufferindex is " << bufferindex << ", shouldn't be before " <<       atsegment*readbytes << endl;
+    cerror << startl << "Developer error: bufferindex is " << bufferindex << ", shouldn't be before " << atsegment*readbytes << endl;
   }
 
   return bufferindex;

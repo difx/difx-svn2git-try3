@@ -340,25 +340,19 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 		}
 
 		// set byte offset to the requested time
-		dataoffset = static_cast<long long>(jumpseconds * vdiffilesummarygetbytespersecond(&fileSummary) + 0.5);
-		readseconds += jumpseconds;
-	}
 
-	// Determine the actual identity of this data file in terms of scan number
-	while(readscan < (model->getNumScans()-1) && model->getScanEndSec(readscan, corrstartday, corrstartseconds) < readseconds)
-	{
-		++readscan;
-	}
-	while(readscan > 0 && model->getScanStartSec(readscan, corrstartday, corrstartseconds) > readseconds)
-	{
-		--readscan;
+		int n, d;	// numerator and demoninator of frame/payload size ratio
+		n = fileSummary.frameSize;
+		d = fileSummary.frameSize - 32;
+
+		dataoffset = static_cast<long long>(jumpseconds*vdiffilesummarygetbytespersecond(&fileSummary)/d*n + 0.5);
+
+		readseconds += jumpseconds;
 	}
 
 	// Now set readseconds to time since beginning of scan
 	readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 	
-	//cverbose << startl << "The frame start is day=" << vdiffilesummarygetstartmjd(&fileSummary) << ", seconds=" << vdiffilesummarygetstartsecond(&fileSummary) << ", ns=" << vdiffilesummarygetstartns(&fileSummary) << ", readscan=" << readscan << ", readseconds=" << readseconds << ", readns=" << readnanoseconds << endl;
-
 	// Advance into file if requested
 	if(fileSummary.firstFrameOffset + dataoffset > 0)
 	{
@@ -453,6 +447,10 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 	// multiplex and corner turn the data
 	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	if(X < 0)
+	{
+		cwarn << startl << "vdifmux returned " << X << endl;
+	}
 
 	if(vstats.destUsed == vstats.destSize)
 	{
@@ -464,10 +462,6 @@ int VDIFDataStream::dataRead(int buffersegment)
 		startOutputFrameNumber = -1;
 	}
 
-	if(X <= 0)
-	{
-		cwarn << startl << "vdifmux returned " << X << endl;
-	}
 
 	consumedbytes += bytes;
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
@@ -478,8 +472,16 @@ int VDIFDataStream::dataRead(int buffersegment)
 		bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
-	
+		bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) % 86400) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		if(bufferinfo[buffersegment].scanseconds > 86400/2)
+		{
+			bufferinfo[buffersegment].scanseconds -= 86400;
+		}
+		else if(bufferinfo[buffersegment].scanseconds < -86400/2)
+		{
+			bufferinfo[buffersegment].scanseconds += 86400;
+		}
+
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
 	}
@@ -541,7 +543,8 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 	// did we just cross into next scan?
 	if(nextMJD >= model->getScanEndMJD(readscan))
 	{
-		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " detected" << endl;
+		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " of " << model->getNumScans() << " detected" << endl;
+		cinfo << startl << "nextMJD=" << nextMJD << " readseconds=" << readseconds << endl;
 
 		// find next valid schedule scan
 		while((nextMJD >= model->getScanEndMJD(readscan) || config->getScanConfigIndex(readscan) < 0) && readscan < model->getNumScans())

@@ -168,8 +168,8 @@ void Visibility::increment()
   }
   sec = experseconds + model->getScanStartSec(currentscan, expermjd, experseconds) + currentstartseconds;
 
-  cinfo << startl << "Vis. " << visID << " is incrementing, since currentsubints = " << currentsubints << endl;
-  cinfo << startl << "The approximate mjd/seconds is " << expermjd + sec/86400 << "/" << (sec)%86400 << endl;
+  cverbose << startl << "Vis. " << visID << " is incrementing, since currentsubints = " << currentsubints << endl;
+  cverbose << startl << "The approximate mjd/seconds is " << expermjd + sec/86400 << "/" << (sec)%86400 << endl;
 
   currentsubints = 0;
   for(int i=0;i<numvisibilities;i++) //adjust the start time and offset
@@ -1115,7 +1115,7 @@ void Visibility::changeConfig(int configindex)
   offsetnsperintegration = (int)(((long long)(1000000000.0*config->getIntTime(configindex)))%((long long)config->getSubintNS(configindex)));
   meansubintsperintegration =config->getIntTime(configindex)/(((double)config->getSubintNS(configindex))/1000000000.0);
   fftsperintegration = meansubintsperintegration*config->getBlocksPerSend(configindex);
-  cverbose << startl << "For Visibility " << visID << ", offsetnsperintegration is " << offsetnsperintegration << ", subintns is " << config->getSubintNS(configindex) << ", and configindex is now " << configindex << endl;
+//  cverbose << startl << "For Visibility " << visID << ", offsetnsperintegration is " << offsetnsperintegration << ", subintns is " << config->getSubintNS(configindex) << ", and configindex is now " << configindex << endl;
   resultlength = config->getCoreResultLength(configindex);
   for(int i=0;i<numdatastreams;i++) {
     autocorrcalibs[i] = new cf32[config->getDNumTotalBands(configindex, i)];

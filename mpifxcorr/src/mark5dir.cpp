@@ -1398,7 +1398,7 @@ int Mark5Module::getCachedDirectory(SSHANDLE xlrDevice,
 	{
 		error.str("");
 
-		v = save(filename);
+//		v = save(filename);
 		if(v < 0)
 		{
 			error << "Saving directory file " << filename << " failed.  Error code=" << v << "\n";
@@ -1739,7 +1739,7 @@ int resetModuleDirectory(SSHANDLE xlrDevice, const char *vsn, int newStatus, int
 	printf("> Dir Size = %d  Dir Version = %d  Status = %d\n", 
 		dirLength, dirVersion, newStatus);
 
-	WATCHDOGTEST( XLRSetUserDir(xlrDevice, dirData, dirLength) );
+//	WATCHDOGTEST( XLRSetUserDir(xlrDevice, dirData, dirLength) );
 	if(dirData)
 	{
 		free(dirData);
@@ -1886,6 +1886,7 @@ int setDiscModuleStateLegacy(SSHANDLE xlrDevice, int newState)
 
 	label[rs] = 0;
 
+#if 0
 	if(strcmp(label+rs+1, moduleStatusName(newState)) != 0)
 	{
 		cout << "Directory version 0: setting module DMS to " << moduleStatusName(newState) << endl;
@@ -1901,6 +1902,7 @@ int setDiscModuleStateLegacy(SSHANDLE xlrDevice, int newState)
 			WATCHDOGTEST( XLRSetWriteProtect(xlrDevice) );
 		}
 	}
+#endif
 
 	return 0;
 }
@@ -1927,6 +1929,7 @@ int setDiscModuleStateNew(SSHANDLE xlrDevice, int newState)
 	
 	dirHead = (struct Mark5DirectoryHeaderVer1 *)dirData;
 
+#if 0
 	if(dirHead->status != newState)
 	{
 		cout << "Directory version " << dirHead->version << ": setting module DMS to " << moduleStatusName(newState) << endl;
@@ -1942,6 +1945,7 @@ int setDiscModuleStateNew(SSHANDLE xlrDevice, int newState)
 			WATCHDOGTEST( XLRSetWriteProtect(xlrDevice) );
 		}
 	}
+#endif
 
 	free(dirData);
 
@@ -1970,7 +1974,7 @@ int setDiscModuleVSNNew(SSHANDLE xlrDevice, int newStatus, const char *newVSN, i
 		snprintf(dirHeader->vsn, MODULE_EXTENDED_VSN_LENGTH, "%s/%d/%d", newVSN, capacity, rate);
 	}
 
-	WATCHDOGTEST( XLRSetUserDir(xlrDevice, data, dirLength) );
+//	WATCHDOGTEST( XLRSetUserDir(xlrDevice, data, dirLength) );
 
 	free(data);
 

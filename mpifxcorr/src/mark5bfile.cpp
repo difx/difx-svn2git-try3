@@ -101,7 +101,7 @@ Mark5BDataStream::~Mark5BDataStream()
 	}
 	if(m5bstats.nSkippedByte > bytesProcessed/20)
 	{
-		cwarn << startl << "More than 5 percent of data from this antenna were unwanted bytes.  This could indicate a problem in the routing of data from the digital back end to the recorder." << endl;
+		cwarn << startl << "More than 5 percent of data from this antenna were unwanted bytes or fill pattern.  This could indicate a problem in the routing of data from the digital back end to the recorder.  More likely it is a result of an unplugged drive in the module." << endl;
 	}
 
 	if(switchedpower)
@@ -322,8 +322,11 @@ void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
 			jumpseconds--;
 		}
 
+		const int n=10016, d=10000;	// numerator and denominator of framesize/payload ratio
+
 		// set byte offset to the requested time
-		dataoffset = static_cast<long long>(jumpseconds * mark5bfilesummarygetbitrate(&fileSummary)*125000LL + 0.5);
+		dataoffset = static_cast<long long>(jumpseconds*mark5bfilesummarygetbitrate(&fileSummary)/d*n/8 + 0.5);
+
 		readseconds += jumpseconds;
 	}
 
@@ -421,9 +424,18 @@ int Mark5BDataStream::dataRead(int buffersegment)
 
 	// "fix" Mark5B data: remove stray packets/byts and put good frames on a uniform grid
 	int X = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, framespersecond,  startOutputFrameNumber, &m5bstats);
-	if(X <= 0)
+	if(X < 0)
 	{
-		cwarn << startl << "mark5bfix returned " << X << endl;
+		cerror << startl << "mark5bfix returned " << X << endl;
+
+		keepreading = false;
+		dataremaining = false;
+	}
+	if(X == 0)
+	{
+		cwarn << startl << "mark5bfix returned zero.  Going to next record scan..." << endl;
+
+		dataremaining = false;
 	}
 
 	bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
@@ -433,7 +445,15 @@ int Mark5BDataStream::dataRead(int buffersegment)
 	{
 		// In the case of Mark5B, we can get the time from the data, so use that just in case there was a jump
 		bufferinfo[buffersegment].scanns = m5bstats.startFrameNanoseconds;
-		bufferinfo[buffersegment].scanseconds = (m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds)) % 86400;
+		bufferinfo[buffersegment].scanseconds = m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		if(bufferinfo[buffersegment].scanseconds > 86400/2)
+		{
+			bufferinfo[buffersegment].scanseconds -= 86400;
+		}
+		else if(bufferinfo[buffersegment].scanseconds < -86400/2)
+		{
+			bufferinfo[buffersegment].scanseconds += 86400;
+		}
 	
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
@@ -450,9 +470,9 @@ int Mark5BDataStream::dataRead(int buffersegment)
 				// Warn if more than 10 frames of data are missing
 				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found" << endl;
 			}
-			else
+			else if(m5bstats.srcUsed > m5bstats.destUsed + 10*10016)
 			{
-				// Warn if more than 50kB of unexpected data found
+				// Warn if more than 10 frames of unexpected data found
 				// Note that 5008 bytes of extra data at scan ends is not uncommon, so specifically don't warn for that.
 				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found" << endl;
 			}
@@ -526,6 +546,7 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 	if(nextMJD >= model->getScanEndMJD(readscan))
 	{
 		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " of " << model->getNumScans() << " detected" << endl;
+		cinfo << startl << "nextMJD=" << nextMJD << " readseconds=" << readseconds << endl;
 		
 		// find next valid schedule scan
 		while((nextMJD >= model->getScanEndMJD(readscan) || config->getScanConfigIndex(readscan) < 0) && readscan < model->getNumScans())
@@ -540,11 +561,13 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 			{
 				updateConfig((lastvalidsegment + 1)%numdatasegments);
 			}
+
+			cinfo << startl << "diskToMemory: starting schedule scan " << readscan << endl;
 		}
 		else
 		{
 			// here we just crossed over the end of the job
-			cverbose << startl << "readscan==getNumScans -> keepreading=false" << endl;
+			cinfo << startl << "readscan==getNumScans -> keepreading=false" << endl;
 
 			keepreading = false;
 
@@ -552,7 +575,6 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
 			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
 		}
-		cinfo << startl << "diskToMemory: starting schedule scan " << readscan << endl;
 	}
 
 	if(switchedpower && bufferinfo[buffersegment].validbytes > 0)

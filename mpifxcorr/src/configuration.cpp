@@ -2232,7 +2232,7 @@ bool Configuration::consistencyCheck()
       do {
         nsaccumulate += dsdata->bytespersampledenom*samplens;
       } while (!(fabs(nsaccumulate - int(nsaccumulate)) < Mode::TINY));
-      cdebug << startl << "NS accumulate is " << nsaccumulate << " and max geom slip is " << model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001 << ", maxnsslip is " << dsdata->maxnsslip << endl;
+//      cdebug << startl << "NS accumulate is " << nsaccumulate << " and max geom slip is " << model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001 << ", maxnsslip is " << dsdata->maxnsslip << endl;
       nsaccumulate += model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001;
       if(nsaccumulate > dsdata->maxnsslip)
         dsdata->maxnsslip = int(nsaccumulate + 0.99);
