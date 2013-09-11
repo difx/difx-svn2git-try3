@@ -689,7 +689,7 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	// note: it should be impossible for n2 >= readbufferslots because a previous memmove and slot shuffling should have prevented this.
 	if(n2 >= readbufferslots)
 	{
-		csevere << startl << "dataRead n2=" << n2 << " >= readbufferslots=" << readbufferslots << endl;
+		csevere << startl << "dataRead n2=" << n2 << " >= readbufferslots=" << readbufferslots << " muxindex=" << muxindex << " readbufferslotsize=" << readbufferslotsize << " n1=" << n1 << " n2=" << n2 << " endindex=" << endindex << " lastslot=" << lastslot << endl;
 	}
 
 	if(n2 > n1 && lockend != n2)
@@ -750,6 +750,27 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
+
+		if(vstats.destUsed == vstats.srcUsed)
+		{
+			// We should be able to preset startOutputFrameNumber, but not sure if that works well enough yet
+		}
+		else
+		{
+			if(vstats.srcUsed < vstats.destUsed - 20*5032)
+			{
+				cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
+			}
+			else if(vstats.srcUsed > vstats.destUsed + 20*5032)
+			{
+				cwarn << startl << "Data excess of " << (vstats.srcUsed-vstats.destUsed) << " bytes out of " << vstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
+			}
+			startOutputFrameNumber = -1;
+		}
+	}
+	else
+	{
+		startOutputFrameNumber = -1;
 	}
 
 	muxindex += vstats.srcUsed;
@@ -765,6 +786,26 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 			pthread_mutex_unlock(mark5threadmutex + (lockend % lockmod));
 		}
 		lockstart = lockend = -2;
+	}
+	else if(muxindex == readbufferslotsize*readbufferslots) // special case where the buffer was used up exactly
+	{
+		cinfo << startl << "In special case where full buffer was used up exactly" << endl;
+
+		// start again at the beginning of slot 1
+		muxindex = readbufferslotsize;
+
+		// need to acquire lock for first slot
+		pthread_mutex_lock(mark5threadmutex + 1);
+
+		// unlock existing locks
+		while(lockstart < readbufferslots)
+		{
+			pthread_mutex_unlock(mark5threadmutex + (lockstart % lockmod));
+			++lockstart;
+		}
+
+		lockstart = 1;
+		lockend = 1;
 	}
 	else
 	{
@@ -818,13 +859,19 @@ void VDIFMark5DataStream::loopfileread()
 	if(keepreading)
 	{
 		diskToMemory(numread++);
-		diskToMemory(numread++);
-		perr = pthread_mutex_lock(&(bufferlock[numread]));
-		if(perr != 0)
+		if(keepreading)
 		{
-			csevere << startl << "Error in initial readthread lock of first buffer section!" << endl;
+			diskToMemory(numread++);
+			perr = pthread_mutex_lock(&(bufferlock[numread]));
+			if(perr != 0)
+			{
+				csevere << startl << "Error in initial readthread lock of first buffer section!" << endl;
+			}
 		}
-		diskToMemory(numread++);
+		if(keepreading)
+		{
+			diskToMemory(numread++);
+		}
 		lastvalidsegment = (numread-1) % numdatasegments;
 	}
 	else

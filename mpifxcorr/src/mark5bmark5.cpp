@@ -735,7 +735,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 	// note: it should be impossible for n2 >= readbufferslots because a previous memmove and slot shuffling should have prevented this.
 	if(n2 >= readbufferslots)
 	{
-		csevere << startl << "dataRead n2=" << n2 << " >= readbufferslots=" << readbufferslots << endl;
+		csevere << startl << "dataRead n2=" << n2 << " >= readbufferslots=" << readbufferslots << " fixindex=" << fixindex << " readbufferslotsize=" << readbufferslotsize << " n1=" << n1 << " n2=" << n2 << " endindex=" << endindex << " lastslot=" << lastslot << endl;
 	}
 
 	if(n2 > n1 && lockend != n2)
@@ -813,13 +813,13 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 			if(m5bstats.srcUsed < m5bstats.destUsed - 10*10016)
 			{
 				// Warn if more than 10 frames of data are missing
-				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << endl;
+				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
 			}
 			else if(m5bstats.srcUsed > m5bstats.destUsed + 10*10016)
 			{
 				// Warn if more than 10 frames of unexpected data found
 				// Note that 5008 bytes of extra data at scan ends is not uncommon, so specifically don't warn for that.
-				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << endl;
+				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
 			}
 			startOutputFrameNumber = -1;
 		}
@@ -843,6 +843,27 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		}
 		lockstart = lockend = -2;
 		startOutputFrameNumber = -1;
+	}
+	else if(fixindex == readbufferslotsize*readbufferslots)	// special case where the buffer was used up exactly
+	{
+		cinfo << startl << "In special case where full buffer was used up exactly" << endl;
+
+		// start again at the beginning of slot 1
+		fixindex = readbufferslotsize;			
+
+		// need to acquire lock for first slot
+		pthread_mutex_lock(mark5threadmutex + 1);
+
+		// unlock existing locks
+		while(lockstart < readbufferslots)
+		{
+			pthread_mutex_unlock(mark5threadmutex + (lockstart % lockmod));
+			++lockstart;
+		}
+
+		// At this point we hold just this one lock.
+		lockstart = 1;
+		lockend = 1;
 	}
 	else
 	{
@@ -897,11 +918,14 @@ void Mark5BMark5DataStream::loopfileread()
 	if(keepreading)
 	{
 		diskToMemory(numread++);
-		diskToMemory(numread++);
-		perr = pthread_mutex_lock(&(bufferlock[numread]));
-		if(perr != 0)
+		if(keepreading)
 		{
-			csevere << startl << "Error in initial readthread lock of first buffer section!" << endl;
+			diskToMemory(numread++);
+			perr = pthread_mutex_lock(&(bufferlock[numread]));
+			if(perr != 0)
+			{
+				csevere << startl << "Error in initial readthread lock of first buffer section!" << endl;
+			}
 		}
 		if(keepreading)
 		{
@@ -919,6 +943,7 @@ void Mark5BMark5DataStream::loopfileread()
 	{
 		csevere << startl << "Datastream readthread error trying to signal main thread to wake up!" << endl;
 	}
+
 
 	if(noDataOnModule)
 	{
