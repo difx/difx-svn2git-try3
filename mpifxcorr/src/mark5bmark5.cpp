@@ -260,36 +260,55 @@ void Mark5BMark5DataStream::mark5threadfunction()
 				cverbose << startl << "At end of scan: shortening Mark5 read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
 			}
 
-			// remember that all reads of a module must be 64 bit aligned
-			a = readpointer >> 32;
-			b = readpointer & 0xFFFFFFF8; 	// enforce 8 byte boundary
 			bytes -= (bytes % 8);		// enforce 8 byte multiple length
 
-			// set up the XLR info
-			xlrRD.AddrHi = a;
-			xlrRD.AddrLo = b;
-			xlrRD.XferLength = bytes;
-			xlrRD.BufferAddr = reinterpret_cast<streamstordatatype *>(readbuffer + readbufferwriteslot*readbufferslotsize);
-
-			// delay the read if needed
-			if(readDelayMicroseconds > 0)
+			const int maxReadBytes = 20000000;
 			{
-				usleep(readDelayMicroseconds);
+				/* divide the read into multiple sections */
+				int nRead = bytes/maxReadBytes + 1;
+				int readSize = (bytes / nRead + 7) & 0xFFFFFFF8;
+
+				for(int offset = 0; offset < bytes; offset += readSize)
+				{
+					if(offset + readSize > bytes)
+					{
+						readSize = bytes - offset;
+					}
+					a = (readpointer + offset) >> 32;
+					b = (readpointer + offset) & 0xFFFFFFF8; 	// enforce 8 byte boundary
+
+					// set up the XLR info
+					xlrRD.AddrHi = a;
+					xlrRD.AddrLo = b;
+					xlrRD.XferLength = readSize;
+					xlrRD.BufferAddr = reinterpret_cast<streamstordatatype *>(readbuffer + offset + readbufferwriteslot*readbufferslotsize);
+
+					// delay the read if needed
+					if(readDelayMicroseconds > 0)
+					{
+						usleep(readDelayMicroseconds);
+					}
+
+					WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
+					
+					int nzero = 0;
+					for(int ii = 100; ii < 500; ++ii)
+					{
+						if(readbuffer[readbufferwriteslot*readbufferslotsize+offset+ii] == 0)
+						{
+							++nzero;
+						}
+					}
+
+					if(xlrRC == XLR_SUCCESS && nzero > 30)
+					{
+						cwarn << startl << "High zero rate=" << nzero << "/" << 400 <<" in this data.  rereading!  readpointer=" << readpointer << " bytes=" << bytes << endl;
+
+						usleep(readDelayMicroseconds);
+						WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
+					}
+				}
 			}
-
-			//execute the XLR read
-			WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
-			int nzero = 0;
-
-			for(int ii = 100; ii < 500; ++ii) if(readbuffer[readbufferwriteslot*readbufferslotsize+ii] == 0) ++nzero;
-
-			if(xlrRC == XLR_SUCCESS && nzero > 30)
-			{
-				cwarn << startl << "High zero rate=" << nzero << "/" << 400 <<" in this data.  rereading!  readpointer=" << readpointer << " bytes=" << bytes << endl;
-
-				WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
-			}
-			
 
 			if(xlrRC != XLR_SUCCESS)
 			{
@@ -518,7 +537,7 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 			}
 			// NOTE: removed WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
 			cwarn << startl << "Enabled realtime playback mode" << endl;
-			readDelayMicroseconds = 70000;	// prime the read delay to speed up convergence to best value
+			readDelayMicroseconds = 80000;	// prime the read delay to speed up convergence to best value
 		}
 	}
 
