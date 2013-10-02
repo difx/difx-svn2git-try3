@@ -346,7 +346,6 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 			}
 		}
 		pthread_mutex_unlock(mark5threadmutex + (readbufferwriteslot % lockmod));
-		cverbose << startl << "mark5threadfunction: end of scan reached.  Unlocked " << (readbufferwriteslot % lockmod) << endl;
 		if(mark5threadstop)
 		{
 			break;

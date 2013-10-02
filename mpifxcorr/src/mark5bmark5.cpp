@@ -137,11 +137,8 @@ Mark5BMark5DataStream::~Mark5BMark5DataStream()
 	mark5threadstop = true;
 
 	/* barriers come in pairs to allow the read thread to always get first lock */
-	cinfo << startl << "~Mark5BMark5DataStream: barrier 0" << endl;
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "~Mark5BMark5DataStream: barrier 1" << endl;
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "~Mark5BMark5DataStream: barrier 2" << endl;
 
 	pthread_join(mark5thread, 0);
 
@@ -182,7 +179,6 @@ void Mark5BMark5DataStream::mark5threadfunction()
 	for(;;)
 	{
 		// Note two-barrier situation here to allow this thread to have first dibs on locking slot 1
-		cinfo << startl << "mark5threadfunction: barrier 0" << endl;
 		pthread_barrier_wait(&mark5threadbarrier);
 
 		for(int m = 0; m < lockmod; ++m)
@@ -206,10 +202,8 @@ void Mark5BMark5DataStream::mark5threadfunction()
 		}
 
 		readbufferwriteslot = 1;	// always start a new reading at slot 1
-		cinfo << startl << "mark5threadfunction: barrier 1" << endl;
 		pthread_mutex_lock(mark5threadmutex + (readbufferwriteslot % lockmod));
 		pthread_barrier_wait(&mark5threadbarrier);
-		cinfo << startl << "mark5threadfunction: barrier 2" << endl;
 
 		lastlockedslot = readbufferwriteslot;
 
@@ -387,7 +381,6 @@ void Mark5BMark5DataStream::mark5threadfunction()
 			cwarn << startl << "Developer error: lastlockedslot=" << lastlockedslot << " != readbufferwriteslot=" << readbufferwriteslot << endl;
 		}
 		pthread_mutex_unlock(mark5threadmutex + (readbufferwriteslot % lockmod));
-		cinfo << startl << "mark5threadfunction: end of scan reached.  Unlocked " << (readbufferwriteslot % lockmod) << endl;
 		if(mark5threadstop)
 		{
 			break;
@@ -681,11 +674,8 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 	// cause Mark5 reading thread to go ahead and start filling buffers
 	// these barriers come in pairs...
 
-	cinfo << startl << "initialiseFile: barrier 0" << endl;
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "initialiseFile: barrier 1" << endl;
 	pthread_barrier_wait(&mark5threadbarrier);
-	cinfo << startl << "initialiseFile: barrier 2" << endl;
 	
 	cinfo << startl << "Scan " << (scanNum+1) <<" initialised" << endl;
 }
