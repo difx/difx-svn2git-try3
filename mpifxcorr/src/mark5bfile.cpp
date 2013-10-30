@@ -537,22 +537,18 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 		invalidtime = 0;
 	}
 
-	// see if next read will start after end of scan
-	double nextMJD = model->getScanStartMJD(readscan) + (readseconds + 0.5)/86400.0;
-
-	cinfo.precision(12);
-
 	// did we just cross into next scan?
-	if(nextMJD >= model->getScanEndMJD(readscan))
+	if(readseconds >= model->getScanDuration(readscan))
 	{
 		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " of " << model->getNumScans() << " detected" << endl;
-		cinfo << startl << "nextMJD=" << nextMJD << " readseconds=" << readseconds << endl;
 		
 		// find next valid schedule scan
-		while((nextMJD >= model->getScanEndMJD(readscan) || config->getScanConfigIndex(readscan) < 0) && readscan < model->getNumScans())
+		do
 		{
 			++readscan;
-		}
+		} while(readscan < model->getNumScans() && config->getScanConfigIndex(readscan));
+
+		cinfo << startl << "readscan incremented to " << readscan << endl;
 
 		if(readscan < model->getNumScans())
 		{

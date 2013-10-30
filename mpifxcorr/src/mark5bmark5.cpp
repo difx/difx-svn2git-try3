@@ -211,7 +211,7 @@ void Mark5BMark5DataStream::mark5threadfunction()
 		{
 			unsigned long a, b;
 			int bytes;
-			XLR_RETURN_CODE xlrRC;
+			XLR_RETURN_CODE xlrRC= XLR_SUCCESS;
 			S_READDESC      xlrRD;
 			XLR_ERROR_CODE  xlrEC;
 			char errStr[XLR_ERROR_LENGTH];
@@ -251,7 +251,8 @@ void Mark5BMark5DataStream::mark5threadfunction()
 				lastslot = readbufferwriteslot;
 				endindex = lastslot*readbufferslotsize + bytes;	// No data in this slot from here to end
 
-				cverbose << startl << "At end of scan: shortening Mark5 read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
+				cinfo << startl << "At end of scan: shortening Mark5 read to only " << bytes << " bytes " << "(was " << origbytes << ")" << endl;
+				cinfo << startl << "endindex=" << endindex << " lastslot=" << lastslot << " readbufferwriteslot=" << readbufferwriteslot << endl;
 			}
 
 			bytes -= (bytes % 8);		// enforce 8 byte multiple length
@@ -549,15 +550,19 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 			scanPointer = 0;
 			dataremaining = false;
 			keepreading = false;
-		mark5threadstop = true;
+			mark5threadstop = true;
 			noMoreData = true;
 			sendMark5Status(MARK5_STATE_NOMOREDATA, 0, 0.0, 0.0);
 
 			return;
 		}
 		cinfo << startl << "Landed on record scan " << (scanNum+1) << endl;
+		cinfo << startl << "readscan remains at " << readscan << endl;
 		readpointer = scanPointer->start + scanPointer->frameoffset;
 		readseconds = (scanPointer->mjd-corrstartday)*86400 + scanPointer->sec - corrstartseconds + intclockseconds;
+
+		readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+
 		readnanoseconds = scanPointer->nsStart();
 	}
 	else	/* first time this project */
@@ -732,8 +737,9 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 	}
 
 	n1 = fixindex / readbufferslotsize;
-	if(lastslot >= 0 && fixindex + readbytes > endindex)
+	if(lastslot >= 0 && fixindex + readbytes > endindex && fixindex < endindex)
 	{
+		// here we have less than readbytes remaining so make sure n2 gets set properly
 		n2 = (endindex - 1) / readbufferslotsize;
 	}
 	else
@@ -773,6 +779,18 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		fixend = (n2+1)*readbufferslotsize;
 	}
 
+	if(fixend <= fixindex)
+	{
+		csevere << startl << "Weird: fixend=" << fixend << " <= fixindex=" << fixindex << ": this should never be!  n2=" << n2 << " readbufferslots=" << readbufferslots << " readbufferslotsize=" << readbufferslotsize << " n1=" << n1 << " n2=" << n2 << " endindex=" << endindex << " lastslot=" << lastslot << endl;
+
+		bufferinfo[buffersegment].validbytes = 0;
+		bufferinfo[buffersegment].readto = true;
+
+		// Note that this exit strategy likely will hang mpifxcorr
+
+		return 0;
+	}
+
 	bytesvisible = fixend - fixindex;
 
 	// "fix" Mark5B data: remove stray packets/byts and put good frames on a uniform grid
@@ -801,6 +819,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the Mark5B stream. FIXME
 		// FIXME: below assumes each scan is < 86400/2 seconds long
 		bufferinfo[buffersegment].scanseconds = m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		bufferinfo[buffersegment].scan = readscan;
 		if(bufferinfo[buffersegment].scanseconds > 86400/2)
 		{
 			bufferinfo[buffersegment].scanseconds -= 86400;
@@ -843,7 +862,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 	if(lastslot == n2 && (fixindex+minleftoverdata > endindex || bytesvisible < readbytes / 4) )
 	{
 		// end of useful data for this scan
-		cverbose << startl << "End of data for record scan " << (scanNum+1) << endl;
+		cinfo << startl << "End of data for record scan " << (scanNum+1) << endl;
 		dataremaining = false;
 		pthread_mutex_unlock(mark5threadmutex + (lockstart % lockmod));
 		if(lockstart != lockend)

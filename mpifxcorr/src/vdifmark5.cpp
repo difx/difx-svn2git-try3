@@ -191,7 +191,7 @@ void VDIFMark5DataStream::mark5threadfunction()
 		{
 			unsigned long a, b;
 			int bytes;
-			XLR_RETURN_CODE xlrRC;
+			XLR_RETURN_CODE xlrRC = XLR_SUCCESS;
 			S_READDESC      xlrRD;
 			XLR_ERROR_CODE  xlrEC;
 			char errStr[XLR_ERROR_LENGTH];
@@ -526,8 +526,12 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 			return;
 		}
 		cinfo << startl << "Landed on record scan " << (scanNum+1) << endl;
+		cinfo << startl << "readscan remains at " << readscan << endl;
 		readpointer = scanPointer->start + scanPointer->frameoffset;
 		readseconds = (scanPointer->mjd-corrstartday)*86400 + scanPointer->sec - corrstartseconds + intclockseconds;
+
+		readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+	
 		readnanoseconds = scanPointer->nsStart();
 	}
 	else	/* first time this project */
@@ -706,8 +710,9 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	}
 
 	n1 = muxindex / readbufferslotsize;
-	if(lastslot >= 0 && muxindex + readbytes > endindex)
+	if(lastslot >= 0 && muxindex + readbytes > endindex && muxindex < endindex)
 	{
+		// here fewer than readbytes remain so make sure n2 gets set properly
 		n2 = (endindex - 1) / readbufferslotsize;
 	}
 	else
@@ -749,13 +754,27 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 		muxend = (n2+1)*readbufferslotsize;
 	}
 
+	if(muxend <= muxindex)
+	{
+		csevere << startl << "Weird: muxend=" << muxend << " <= muxindex=" << muxindex << ": this should never be!  n2=" << n2 << " readbufferslots=" << readbufferslots << " readbufferslotsize=" << readbufferslotsize << " n1=" << n1 << " n2=" << n2 << " endindex=" << endindex << " lastslot=" << lastslot << endl;
+
+		bufferinfo[buffersegment].validbytes = 0;
+		bufferinfo[buffersegment].readto = true;
+
+		// Note that this exit strategy likely will hang mpifxcorr
+
+		dataremaining = false;
+
+		return 0;
+	}
+
 	bytesvisible = muxend - muxindex;
 
 	// multiplex and corner turn the data
 	int X = vdifmux(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+muxindex, bytesvisible, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
 	if(X < 0)
 	{
-		cwarn << startl << "mark5bfix returned " << X << endl;
+		cwarn << startl << "vdifmux returned " << X << endl;
 	}
 
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
@@ -767,6 +786,7 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 		bufferinfo[buffersegment].scanns = ((vstats.startFrameNumber % framespersecond) * 1000000000LL) / framespersecond;
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
+		bufferinfo[buffersegment].scan = readscan;
 		bufferinfo[buffersegment].scanseconds = (vstats.startFrameNumber / framespersecond)%86400 + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 		if(bufferinfo[buffersegment].scanseconds > 86400/2)
 		{
@@ -788,7 +808,7 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 		{
 			if(vstats.srcUsed < vstats.destUsed - 20*5032)
 			{
-				cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
+	//			cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
 			}
 			else if(vstats.srcUsed > vstats.destUsed + 20*5032)
 			{
