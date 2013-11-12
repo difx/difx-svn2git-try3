@@ -792,12 +792,12 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
         for(int k=0;k<config->getDNumTotalBands(currentconfigindex, i); k++)
         {
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
-          if(config->anyUsbXLsb(currentconfigindex) && config->getFreqTableLowerSideband(freqindex))
+          if(config->anyUsbXLsb(currentconfigindex) && config->getFreqTableLowerSideband(freqindex) && config->getFreqTableCorrelatedAgainstUpper(freqindex))
           {
             freqindex = config->getOppositeSidebandFreqIndex(freqindex);
             if(freqindex < 0)
             {
-              csevere << startl << "Cannot find matching USB frequency to LSB freq table entry #" << config->getDTotalFreqIndex(currentconfigindex, i, k) << endl;
+              csevere << startl << "Cannot find matching USB frequency to LSB freq table entry #" << config->getDTotalFreqIndex(currentconfigindex, i, k) << " - this should be impossible!" << endl;
               freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
             }
           }
@@ -1068,7 +1068,7 @@ void Visibility::changeConfig(int configindex)
     pulsarwidth = 1;
     if(pulsarbinon && !config->scrunchOutputOn(currentconfigindex))
       pulsarwidth = config->getNumPulsarBins(currentconfigindex);
-    cverbose << startl << "Starting to delete some old arrays" << endl;
+//    cverbose << startl << "Starting to delete some old arrays" << endl;
     //need to delete the old arrays before allocating the new ones
     for(int i=0;i<numdatastreams;i++) {
       delete [] autocorrcalibs[i];
@@ -1115,7 +1115,7 @@ void Visibility::changeConfig(int configindex)
   offsetnsperintegration = (int)(((long long)(1000000000.0*config->getIntTime(configindex)))%((long long)config->getSubintNS(configindex)));
   meansubintsperintegration =config->getIntTime(configindex)/(((double)config->getSubintNS(configindex))/1000000000.0);
   fftsperintegration = meansubintsperintegration*config->getBlocksPerSend(configindex);
-//  cverbose << startl << "For Visibility " << visID << ", offsetnsperintegration is " << offsetnsperintegration << ", subintns is " << config->getSubintNS(configindex) << ", and configindex is now " << configindex << endl;
+  cverbose << startl << "For Visibility " << visID << ", offsetnsperintegration is " << offsetnsperintegration << ", subintns is " << config->getSubintNS(configindex) << ", and configindex is now " << configindex << endl;
   resultlength = config->getCoreResultLength(configindex);
   for(int i=0;i<numdatastreams;i++) {
     autocorrcalibs[i] = new cf32[config->getDNumTotalBands(configindex, i)];

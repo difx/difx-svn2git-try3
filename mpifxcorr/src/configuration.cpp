@@ -160,7 +160,7 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
   delete input;
   //work out which frequencies are used in each config, and the minimum #channels
   freqdata freq;
-  int oppositefreqindex;
+  // int oppositefreqindex;
   for(int i=0;i<numconfigs;i++)
   {
     freq = freqtable[getBFreqIndex(i,0,0)];

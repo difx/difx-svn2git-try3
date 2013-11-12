@@ -659,34 +659,6 @@ int Mark5Module::load(const char *filename)
 	return 0;
 }
 
-int Mark5Module::save(const char *filename)
-{
-	FILE *out;
-	
-	out = fopen(filename, "w");
-	if(!out)
-	{
-		error << "Cannot write to file: " << filename << "\n";
-
-		return -1;
-	}
-
-	fprintf(out, "%8s %d %c %u %d %s%s%s\n",
-		label.c_str(), nScans(), bank+'A', signature, dirVersion,
-		Mark5ReadModeName[mode], 
-		fast ? " Fast" : "",
-		synthetic ? " Synth" : "");
-
-	for(vector<Mark5Scan>::const_iterator s = scans.begin(); s != scans.end(); ++s)
-	{
-		s->writeDirEntry(out);
-	}
-
-	fclose(out);
-
-	return 0;
-}
-
 void Mark5Module::sort()
 {
 	std::sort(scans.begin(), scans.end());
@@ -941,12 +913,12 @@ int Mark5Module::readDirectory(SSHANDLE xlrDevice, int mjdref,
 	int bufferlen;
 	unsigned int x, newSignature;
 	int die = 0;
-	long long wGood=0, wBad=0;
-	long long wGoodSum=0, wBadSum=0;
+	long long wGood = 0, wBad = 0;
+	long long wGoodSum = 0, wBadSum = 0;
 	int nZero;
 	int newDirVersion;   /* == 0 for old style (pre-mark5-memo 81) */
 	                     /* == version number for mark5-memo 81 */
-	int oldLen1, oldLen2, oldLen3;
+	int oldLen1, oldLen2, oldLen3, oldLen4;
 	int start, stop;
 	int oldFast;
 	double overhead = 0.0;
@@ -985,7 +957,8 @@ int Mark5Module::readDirectory(SSHANDLE xlrDevice, int mjdref,
 	oldLen1 = (int)sizeof(struct Mark5LegacyDirectory);
 	oldLen2 = oldLen1 + 64 + 8*88;	/* 88 = sizeof(S_DRIVEINFO) */
 	oldLen3 = oldLen1 + 64 + 16*88;
-	if(len == oldLen1 || len == oldLen2 || len == oldLen3)
+	oldLen4 = 83552;		/* SDK9 with legacy */
+	if(len == oldLen1 || len == oldLen2 || len == oldLen3 || len == oldLen4)
 	{
 		newDirVersion = 0;
 	}
@@ -1398,7 +1371,6 @@ int Mark5Module::getCachedDirectory(SSHANDLE xlrDevice,
 	{
 		error.str("");
 
-//		v = save(filename);
 		if(v < 0)
 		{
 			error << "Saving directory file " << filename << " failed.  Error code=" << v << "\n";

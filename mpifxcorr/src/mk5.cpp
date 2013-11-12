@@ -268,7 +268,7 @@ void Mk5DataStream::updateConfig(int segmentindex)
 
   //take care of the case where an integral number of frames is not an integral number of blockspersend - ensure sendbytes is long enough
   //note below, the math should produce a pure integer, but add 0.5 to make sure that the fuzziness of floats doesn't cause an off-by-one error
-  bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getSubintNS(bufferinfo[segmentindex].configindex)))/(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex)) + 0.5));
+  bufferinfo[segmentindex].sendbytes = config->getDataBytes(bufferinfo[segmentindex].configindex,streamnum);
 }
 
 void Mk5DataStream::deriveFormatName(int configindex)
@@ -286,11 +286,10 @@ void Mk5DataStream::deriveFormatName(int configindex)
     framebytes = config->getFrameBytes(configindex, streamnum);
     if(config->isDMuxed(configindex, streamnum)) {
       framebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
-      nrecordedbands = 1;
     }
     fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
     if (fanout < 0) {
-      cfatal << startl << "Fanount is " << fanout << ", which is impossible - no choice but to abort!" << endl;
+      cfatal << startl << "Fanout is " << fanout << ", which is impossible - no choice but to abort!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
 }
@@ -317,7 +316,7 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   }
   fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
   if (fanout < 0) {
-    cfatal << startl << "Fanount is " << fanout << ", which is impossible - no choice but to abort!" << endl;
+    cfatal << startl << "Fanout is " << fanout << ", which is impossible - no choice but to abort!" << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
@@ -525,6 +524,74 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
   return offset;
 }
 
+int Mk5DataStream::checkData(int buffersegment) 
+{ 
+  int mjd, sec, corrday, status;
+  double ns, nsperbyte; // Nanosec since 00:00 UTC 1 Jan 2000 - check enough precision
+  uint64_t ns2000, endns2000;
+  BUFOFFSET_T goodbytes;
+
+  corrday = config->getStartMJD();
+  //corrsec = config->getStartSeconds();
+  if(syncteststream != 0)
+    delete_mark5_stream(syncteststream);
+
+  syncteststream = new_mark5_stream(new_mark5_stream_memory(&(databuffer[buffersegment*(bufferbytes/numdatasegments)]),     bufferinfo[buffersegment].validbytes), new_mark5_format_generic_from_string(formatname) );
+  if(syncteststream == 0)
+  {
+    cerror << startl << "Could not create a mark5stream to test for sync!" << endl;
+    return -1; //note exit here
+  }
+
+  // resolve any day ambiguities
+  mark5_stream_fix_mjd(syncteststream, corrday);
+
+  // Get time of first frame
+  mark5_stream_get_frame_time(syncteststream, &mjd, &sec, &ns);
+
+  nsperbyte = syncteststream->framens/(double)syncteststream->framebytes;
+  endns2000 = static_cast<uint64_t>((((mjd-51544)*24*60*60+sec)*1e9 + ns)+nsperbyte*bufferinfo[buffersegment].validbytes);
+
+  // Loops over frames looking times past the end of the expected segment end
+  while (mark5_stream_next_frame(syncteststream)==0) {
+    
+    mark5_stream_get_frame_time(syncteststream, &mjd, &sec, &ns);
+    ns2000 = static_cast<uint64_t>(((mjd-51544)*24*60*60+sec)*1e9 + ns);
+
+    if (ns2000 > endns2000) {
+      // Copy the rest of the bytes to a temporary buffer for next read and
+      // Mark buffer as smaller than expected
+      goodbytes = syncteststream->frame - &databuffer[buffersegment*(bufferbytes/numdatasegments)];
+      if (tempbuf==0) {
+	tempbuf = vectorAlloc_u8(bufferbytes/numdatasegments);
+	if (tempbuf==NULL) {
+	  cerror << startl << "Datastream " << mpiid << " could not allocate temporary buffer. Skipping bytes after data jump" << endl;
+	} else {
+	  tempbytes = bufferinfo[buffersegment].validbytes - goodbytes;
+	  status = vectorCopy_u8(&databuffer[buffersegment*(bufferbytes/numdatasegments)+goodbytes], tempbuf, tempbytes);
+	  if(status != vecNoErr) {
+	    cerror << startl << "Error copying in the DataStream data buffer!!!" << endl;
+	    tempbytes = 0;
+	  }
+	}
+	bufferinfo[buffersegment].validbytes = goodbytes;
+      }
+    }
+
+    // CJP Musing
+    // Could also detect missed frames here easily but then need to deal with
+    // by inserting missing frames which will be messy. Probably best approach
+    // would be if missing frame is detected, copy rest of buffer to temp
+    // storage then fill in blanks and copy good data as needed. Left over bytes
+    // Could then be dealt with the same as the current situation
+  }
+
+  delete_mark5_stream(syncteststream);
+  syncteststream = 0;
+
+  return 0;
+}
+
 static double tim(void) {
   struct timeval tv;
   double t;
@@ -572,7 +639,7 @@ void Mk5DataStream::fakeToMemory(int buffersegment)
 
 void Mk5DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
-  if (!tcp && udp_offset>readbytes) { // What does this do to networkToMempory - does packet head need updating
+  if (!tcp && udp_offset>readbytes) { // What does this do to networkToMemory - does packet head need updating
     int skip = udp_offset-(udp_offset%readbytes);
     cinfo << startl << "DataStream " << mpiid << ": Skipping over " << skip/1024/1024 << " Mbytes" << endl;
     if (skip > readbytes) 

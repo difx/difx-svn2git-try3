@@ -120,7 +120,6 @@ public:
 	int nScans() const { return scans.size(); }
 	void print() const;
 	int load(const char *filename);
-	int save(const char *filename);
 	void sort();
 	int sanityCheck();
 	int uniquifyScanNames();

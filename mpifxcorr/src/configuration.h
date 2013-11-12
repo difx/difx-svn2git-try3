@@ -56,13 +56,14 @@ public:
 
   /// Supported types of recorded data format
 
-  enum dataformat {LBASTD, LBAVSOP, LBA8BIT, LBA16BIT, K5VSSP, K5VSSP32, MKIV, VLBA, MARK5B, VDIF, INTERLACEDVDIF, VLBN};
+  enum dataformat {LBASTD, LBAVSOP, LBA8BIT, LBA16BIT, K5VSSP, K5VSSP32, MKIV, VLBA, MARK5B, VDIF, INTERLACEDVDIF, VLBN, KVN5B};
 
   /// Supported sources of data
   enum datasource {UNIXFILE, MK5MODULE, NETWORKSTREAM, FAKESTREAM};
 
   /// Supported types of recorded data sampling types
   enum datasampling {REAL, COMPLEX};
+  enum complextype {SINGLE, DOUBLE};
 
   /// Constant for the TCP window size for monitoring
   static int MONITOR_TCP_WINDOWBYTES;
@@ -161,6 +162,8 @@ public:
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].muxthreadmap; }
   inline datasampling getDSampling(int configindex, int configdatastreamindex)const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].sampling; }
+  inline int getDRecordedFreqFreqTableIndex(int configindex, int configdatastreamindex, int datastreamrecordedfreqindex) const
+    { const datastreamdata &ds = datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]]; return ds.recordedfreqtableindices[datastreamrecordedfreqindex]; }
   inline int getDRecordedFreqIndex(int configindex, int configdatastreamindex, int datastreamrecordedbandindex) const
     { const datastreamdata &ds = datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]]; return ds.recordedfreqtableindices[ds.recordedbandlocalfreqindices[datastreamrecordedbandindex]]; }
   inline int getDZoomFreqIndex(int configindex, int configdatastreamindex, int datastreamzoombandindex) const
@@ -271,6 +274,7 @@ public:
   inline string getFreqTableRxName(int index) const { return freqtable[index].rxName; }
   inline double getFreqTableBandwidth(int index) const { return freqtable[index].bandwidth; }
   inline bool getFreqTableLowerSideband(int index) const { return freqtable[index].lowersideband; }
+  inline bool getFreqTableCorrelatedAgainstUpper(int index) const {return freqtable[index].correlatedagainstupper; }
   inline int getFNumChannels(int index) const { return freqtable[index].numchannels; }
   inline int getFChannelsToAverage(int index) const { return freqtable[index].channelstoaverage; }
   inline int getFMatchingWiderBandIndex(int index) const { return freqtable[index].matchingwiderbandindex; }
@@ -291,7 +295,7 @@ public:
     datasource s;
     f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
-    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == VDIF || f == INTERLACEDVDIF) && (s == UNIXFILE || s == NETWORKSTREAM || s == FAKESTREAM)); 
+    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == KVN5B || f == VDIF || f == INTERLACEDVDIF) && (s == UNIXFILE || s == NETWORKSTREAM || s == FAKESTREAM)); 
   }
   inline bool isVDIFFile(int datastreamindex) const
   {
@@ -347,7 +351,7 @@ public:
     datasource s;
     f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
-    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == VDIF || f == INTERLACEDVDIF) && s == MK5MODULE); 
+    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == KVN5B || f == VDIF || f == INTERLACEDVDIF) && s == MK5MODULE); 
   }
   inline int getFrameBytes(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].framebytes; }
@@ -547,6 +551,9 @@ public:
   */
   void getinputline(ifstream * input, std::string * line, std::string startofheader, int intval) const;
 
+  /** Actual function **/
+  void getinputline(ifstream * input, std::string * line, std::string startofheader, bool verbose) const;
+
  /**
   * Utility method which reads a line from a file, splitting it into a key and a value and storing both
   * @param input Open input stream to read from
@@ -698,6 +705,7 @@ private:
     dataformat format;
     datasource source;
     datasampling sampling;
+    complextype tcomplex;
     bool ismuxed;
     int phasecalintervalmhz;
     int switchedpowerfrequency; // e.g., 80 Hz for VLBA
@@ -710,6 +718,7 @@ private:
     int nummuxthreads;
     int * muxthreadmap;
     bool filterbank;
+    bool linear2circular;
     int numrecordedfreqs;
     int numzoomfreqs;
     int maxrecordedpcaltones;
@@ -719,6 +728,8 @@ private:
     int ** recordedfreqpcaltonefreqs; 
     int * recordedfreqpcaloffsetshz;
     double * recordedfreqclockoffsets;
+    double * recordedfreqclockoffsetsdelta;
+    double * recordedfreqphaseoffset;
     double * recordedfreqlooffsets;
     int * zoomfreqpols;
     int * zoomfreqtableindices;
