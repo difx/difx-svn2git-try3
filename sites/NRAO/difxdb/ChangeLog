@@ -1,0 +1,34 @@
+Version 1.17
+~~~~~~~~~~~~
+* Support new calibration data path (see upcoming memo)
+* db2wx: get weather data for GB and Y
+* Version for DiFX-2.3, Dec 20, 2013
+
+Version 1.16
+~~~~~~~~~~~~
+* Moving into NRAO sites directory
+* difxarch: David Gordon added Mark4 support
+* db2vex: leap second correctness
+* Version for DiFX-2.2.  Tagged June 1, 2013
+
+Version 1.15
+~~~~~~~~~~~~
+* Post DiFX-2.0.1
+* Version for DiFX-2.1.  Tagged May 4, 2012
+
+Version 1.14
+~~~~~~~~~~~~
+* Version for DiFX-2.0.1.  Tagged June 12, 2011
+
+Version 1.13
+~~~~~~~~~~~~
+* Lots of fixes
+* Version for DiFX-1.5.3
+
+Version 1.12
+~~~~~~~~~~~~
+* DiFX-1.5 version
+* Sign flip on $CLOCK value to match vex convention
+* getvex: retrieve uncompressed cal.vlba files
+* don't truncate clocks at antenna on-source times
+* Tagged for DiFX-1.5.2 version
