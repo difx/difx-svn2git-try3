@@ -1,0 +1,149 @@
+Version 2.3.0
+~~~~~~~~~~~~~
+* Suport for VDIFL added
+* Move some NRAO-specific utilities outside this package
+* vexpeek: new --format and --diskusage options
+* Version for DiFX-2.3, Dec 20, 2013
+
+Version 2.2.0
+~~~~~~~~~~~~~
+* vexpeek: --bands mode
+* Support writing of .machines file
+* Improved support for FAKE
+* Verify input files do not have DOS end of line characters
+* Populate difxLabel in difxio->.calc and in .joblist
+* Generate systematic threadId
+* Verify all or none of the ephemeris parameters are provided
+* c++11 compliance
+* Don't allow subintNS greater than about 1 second (to ward off MODE errors)
+* Remove "using namespace std" from .h files; goal is to remove them from .cpp files in time
+* Track oversample value in channel structure; move checking downstream to
+  more relevant code.
+* Add a few features (ephemDeltaT, ephemStellarAber, ephemClockError) useful in
+  exploring spacecraft ephemeris but probably not useful for operations
+* change zoom band definition to always be USB (specify lower edge freq)
+* Reorder Mark5B tracks to accomodate bitstream masks
+* Consider two sources within 1 mas of each other to be the same
+* Added separate mjdStart and mjdStop parameters for each antenna
+* Version for DiFX-2.2, May 31, 2013
+
+Version 2.1.0
+~~~~~~~~~~~~~
+* Allowed zoom bands to be used with profile mode also
+* Version for DiFX-2.1, May 14, 2012
+
+Version 2.0.2
+~~~~~~~~~~~~~
+* Bug fix: when sorting events, round to nearest 0.1 second
+* Bug fix: order of operations in computing zoom channels: don't overflow integers
+* Change parameters to be better optimized for larger bandwidths (at marginal, if any, impact to small bandwidths)
+* Reimplement tweak integration time
+* Fix zoom bands when statting with different bandwidths.  WFB gets a beer for this one!
+* Start implementation of "global zoom bands" which can either be referenced from an ANTENNA or a SETUP
+* Distinction between recorded and non-recorded channels is now more clear.  Only recorded channels will be correlated.
+* No more VexFormat class.  Its contents were moved into VexSetup.
+* vex2script: better job allocating RDBE personality and choosing whether or not to record
+* set xmacLength and strideLength automatically for powers of 2 and powers of 5 FFT sizes
+* Can set up "fake" correlations
+
+Version 2.0.1
+~~~~~~~~~~~~~
+* add -v option to vexpeek
+* move most strcpy to snprintf and make use of parameterized string lengths in difxio
+* add recordEnable map to VexScan.
+* fix back-to-back scan handling when singleScan = False
+* fix media changes that occur immediately before a scan change
+* don't error-out if an ANTENNA block does not correspond to an entry in antennas list
+* Follow refs to CLOCK entries; fall back on unreffed clocks only if no other clocks found first
+* Follow refs to TAPELOG_OBS entries; fall back on unreffed VSNs only if no other VSNs found first
+* Support proper vex epoch for SITE; allow mjd to continue to work
+* Generalize vexDate just a bit to allow for the posibility of vexdate without all date fields
+* Add sampling parameter to ANTENNA confuration
+* When cross-pol enabled, allow correlation of R-L even if one antenna doesn't have both polarizations
+* Try different subintNS until the readsize becomes reasonable (probably some tuning to be done still)
+* Propagate .vex file phase cal extraction into .input file* Pass tcalFreq from .v2d to .input
+* Support several different modes of pulse cal tone selection
+* Allow different numbers of bits on different antennas within same Mode (Thanks Jasper Horrell for the bug report)
+* Catch a few vex problems before segfaulting (thanks Chris Phillips for the bug report)
+* Fix bug estimating the output size of the correlation
+* Change the nChan input parameter to mean the number of post-averaged channels
+  - Clarified in several places in the code whether nChan is nInputChan or nOutputChan
+* FIXMEs are now #warnings
+* Default pulse cal tone extraction mode is smart: that is take the two most extreme tones per band that are not within the outer 1/8 of the band if possible.
+* Allow source names with underscores
+* Fix bug calculating spectral averaging for zoom bands
+* Ephemeris driven objects: use linear interpolation with a default interval of 15 seconds.  Results are much smoother.
+* Version for DiFX 2.0.1.  Tagged June 12, 2011 / updated June 16
+
+Version 2.0
+~~~~~~~~~~~
+* Jumped because in the mean-time difx-1.5 branch had gone to 1.1
+* Includes the following corrections merged in from the 1.5 branch
+  - Zero length scans are ignored
+  - Warn if no clock values are applied on a job/antenna basis
+  - oms2v2d: correct use of POLARIZATION
+  - oms2v2d: respect TWEAK_INT_TIME parameter
+  - oms2v2d: trap missing FFT_SIZE and SPECTRAL_AVERAGE parameters
+* Also bugfixes related to variable initialisation
+* Adds support for multiple phase centres
+* Requires difxio 3.0
+* Add support for VLBN "format" -- that is VLBA with no data modulation
+* Use strict parsing by default
+* Add deltaClock and deltaClockRate
+* More user warnings
+* Further fix to generated flags when an antenna is not in a job
+* oms2v2d: trap missing FFT_SIZE and SPECTRAL_AVERAGE parameters
+* Actually respect clock breaks!
+* Fix some logic to avert some unneeded warnings
+* Don't require DIFX_VERSION to be set
+* Check that all supplied antenna, source, scan and mode names are in vex file
+* Huge speed-up by not constantly sorting events
+* Fix convergence problem when there is no time gap between modules
+* Force v2d file to start with a letter
+* oms2v2d: warn if both .skd and .vex are found; default to .vex
+* Source names were confused: no distinction was made between the vex "def" name and the source name.  Fixed.
+* Check for sources with illegal names
+* Improved function/variable naming to indicate explicitly where some def names are used
+* Vex loading error messages are slightly more useful
+* Adapt to difxio changes where data source info was moved from antenna into datastream
+* Support default ANTENNA setup in .v2d file
+* Support new namings in difxio.  recChan -> recBand
+* Fix year definition ( was correct in difx 1.5 for quite some time )
+* Better default some difx2.0 specific parameters
+* Don't write out rules which are not used in a given job
+* improve checking of subintNS and averaging intervals
+* prevent a crash when source RA and decs are changed
+* add vexfile to .calc
+* Version for DiFX-2.0.0
+
+Version 0.3
+~~~~~~~~~~~
+* Post DiFX-1.5
+* Mark5B support
+* format override support
+* Pulsar profile mode
+
+Version 0.2
+~~~~~~~~~~~
+* Make several classes subclasses of VexInterval to simplify things
+* Compute "Computational load" -- an estimate of the number of numerical operations required.
+* Initial (untested) support for ephemeris-driven targets
+* Estimate output data size / allow job splitting based on job size
+* Version for DiFX-1.5
+
+Version 0.1
+~~~~~~~~~~~
+* simplified difx input file output
+* add SOURCE blocks to .v2d files
+* allow colon separated RAs and Decs in the config file
+* implement ANTENNA blocks
+* write SCAN_GAP scans instead of no scans 
+* start time and stop time are no longer expanded to full length of all included scans
+* write flag file that is compliant with difx2fits
+* add oms2v2f to this package
+* implement maxLength (seconds)
+* don't allow white-space separated lists
+
+Version 0.0
+~~~~~~~~~~~
+* Initial version
