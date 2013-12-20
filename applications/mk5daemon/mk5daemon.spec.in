@@ -1,0 +1,55 @@
+Summary: Mark5 utilities for the DiFX suite
+Name: mk5daemon
+Version: @version@
+Release: 7
+License: GPL3
+Group: VLBI
+BuildRoot: /var/tmp/mk5daemon-@version@-buildroot
+Requires: streamstor >= 8.2
+Requires: difxmessage >= 2.2.0
+Requires: mark5access >= 1.4.4
+Requires: expat
+Prefix: /usr
+Source: mk5daemon-@version@.tar.gz
+
+%description
+Several useful utilites for working with Mark5 units
+
+%prep
+%setup -q -n mk5daemon-@version@
+
+%build
+%configure
+make
+
+%install
+%makeinstall
+chmod a+x /sbin/poweroff
+chmod a+x /sbin/reboot
+chmod a+x /sbin/halt
+
+%files
+%defattr(-,root,root)
+%{_bindir}/checkdir
+%{_bindir}/fileto5c
+%{_bindir}/mk5daemon
+%{_bindir}/mk5cat
+%{_bindir}/mk5control
+%{_bindir}/mk5cp
+%{_bindir}/mk5dir
+%{_bindir}/mk5erase
+%{_bindir}/mk5lock
+%{_bindir}/mk5map
+%{_bindir}/mk5putdir
+%{_bindir}/record5c
+%{_bindir}/recover
+%{_bindir}/sukill
+%{_bindir}/testmod
+%{_bindir}/vsn
+
+%changelog
+* Fri Jun 15 2011 Walter Brisken <wbrisken@nrao.edu>
+- Non-root-building capability
+
+* Fri Mar 11 2011 Walter Brisken <wbrisken@nrao.edu>
+- First rpm version
