@@ -1,0 +1,161 @@
+Version 3.3.0
+* Improved clarity in generation of Flag, Tsys, Pcal, Gain and Weather tables: prioritized sources of data
+* Fix off-by-one timestamp error in the sniffer output files
+* All times are UTC (always have been).  Change variables and comments to reflect this and avoid some confusion.
+* Add utility to show which sources of calibration data (GN, PH, FG, WX, TS) will be used by difx2fits (called showcal)
+* Version for DiFX-2.3, Dec 20, 2013
+
+Version 3.2.0
+* Fix for correlation of mismatched sidebands.  Requires contemporaneous
+upgrade of difxio.
+* Add DIFX_LABEL env var to FITS files
+* Make sniffer plots more consistent with AIPS.  They will always show USB now and should have the same phase sense.
+* Use the SX gain table rows when SX observing is used.  Thanks to James Miller-Jones for reporting the problem.
+* pcal, weather, tsys, and flag files could be compromized by observations spanning the new year.
+  - Now handle day of year jumps
+  - Also handle possible use of mjds rather than days of year in future
+* increase number of phase cal tones allowed
+* Version for DiFX-2.2, 31 May 2013
+
+Version 3.1.0
+* Version renumber from 3.0.2 prior to DiFX-2.1 release
+* Version for DiFX-2.1, 4 May 2012
+
+Version 3.0.2
+* Post DiFX-2.0.1
+* Improved reporting when weights go crazy (negative)
+* --zero (or -0) option: don't write visibilities (well, write one per input file)
+  - not useful for AIPS as AIPS requires a UV table
+* makefits: pass along non-dashed options to difx2fits
+* Do better job verifying baseband data files have compliant names.
+* Improved checking on fopen return values
+* Maximum number of file descriptors checked.  For large merges this can be a problem.
+* Multiple DIFX files per job: don't write records from later files that overlap in time with those written by earlier ones.
+  - perhaps later the order of things should change and the _newer_ records get kept.
+  - multiple SWITCHEDPOWER and PCAL files are handled in the same way
+* Make use of new difx_tcal infrastructure
+* Support DiFX job restarts
+* Better support for mixed 1 and 2 bit data: include antenna-based numbers in FITS and scale accordingly
+* Populate the new RAOBS and DECOBS (pointing center) columns of the source table
+
+Version 3.0.1
+* Post 2.0.0
+* Make use of clock shifting function in difxio
+* Add in Difx-based pulse cal data
+* Add in Difx-based tsys
+* Fix TSys values in the zoom band cases
+* Fix Pulse cal values in the zoom band cases
+* DiFX extracted pulse cals: ensure proper antennaIds for merged job cases
+* valgrind used to track down some memory leaks
+* print fits keywords for each fits file when -v is supplied
+* don't invoke sniffer in cases where it would use too much memory
+* don't overwrite FITS when parse-all input difx are from different vex setups (thanks Jan Wagner)
+* Version for DiFX-2.0.1, 10 June 2011
+
+Version 3.0
+* Includes the following merged changes from DiFX-1.5:
+  - Copy jobmatrix file
+  - rename "makefilts.tmp" to "makefits.tmp"
+  - Apply flags properly, even in cases with crazy subarraying
+  - Write file that summarizes jobs that went into FITS
+  - Pass full command line option structure to UV writing
+  - Normalize calling to all table writing functions
+  - Properly populate GATEMODL table
+  - Write .jobmatrix file
+  - Write new WEIGHTYP keyword
+  - Sniffer: keep one more amplitude digit
+  - Sniffer: apd and apc files: keep 2 more time digits
+* Adds support for multiple phase centres, zoom bands
+* Also bugfixes for freeing memory
+* Requires difxio 3.0
+* Fixes by Olaf Wuchnitz: print format for writing strings to FITS and argument order in memcpy
+* Some cppcheck results from Martin Ettl
+* Don't fail to set proper .jobmatrix filename when not running sniffer
+* Properly index config table in fitsGM.c
+* makefits: pass --override-version on to difx2fits
+* makefits: list all phase centres and pulsar bins, and use this info
+* by default produce sniffer output only for bin=0 phasecentre=0
+* conform to new variable names in difxio, and more importantly, don't go out of the way to get frequency labelling wrong!
+* migrate to using EQUINOX in output FITS files
+* Version for DiFX-2.0.0
+
+Version 2.5
+* Require difxio 2.10
+* Post DiFX-1.5
+* Sniffer: look for spectral lines
+
+Version 2.4
+* Post NRAO-DiFX 1.1 development
+* Require difxio 2.5
+* Fix numbering of FITS Source IDs
+* Better handle transitional scans
+* don't use bcopy -- use memcpy instead.
+* fix sense of phase for LSB sniffer output data
+* add makefits wrapper program
+* Fix model tables when crossing midnight
+* Version for DiFX-1.5
+
+Version 2.3
+* Support for writing FITS files larger than 2 GiB
+* Option to force each input file into its own output file
+* Pay attention to difx versions
+* Don't write out vis records that occur over a scan change
+* int -> double mjd for gain curve selection
+* Respect DIFX_GROUP_ID and set umask
+* Write sniffer file output
+* Version for NRAO-DiFX 1.1
+
+Version 2.2
+* Use .im file to generate ML, MC table if file exists
+* Minor improvements to FR, ML, MC, AG, CT, SU, GN, TS, FL tables
+* Fix MC table -- index to model is dsId, not antId
+
+Version 2.1
+* Sorts by antenna name by default.  override with -k
+
+Version 2.0
+* New visibility writing code -- will merge multiple input files
+  into single FITS file in time order.
+* use fitsSourceId to keep the source table as small as possible, without
+  repeats
+* fix delay values in ML (IM) table
+* fix uninitialized freq offset vals in SU table
+* use difxio >= 2.0
+* start of pulsar table support
+
+Version 1.9
+* Use difxio >= 1.7
+
+Version 1.8
+* Use vlog output to generate FG, TS, PH, WX tables (WX is suspect)
+* Use gain curve files to generate GC (from env var GAIN_CURVE_PATH)
+* Use autoconf endianness detection -- remove byteorder.[ch]
+* Write spacecraft orbit table
+
+Version 1.7
+* support scaling parameter
+
+Version 1.6
+* Respect .flag file
+* Print more information
+
+Version 1.5
+* Fix up configure.ac a bit more
+
+Version 1.4
+* Summarize tables at end
+* Allow --no-model option
+
+Version 1.3
+* Amplitude scaling
+
+Version 1.2
+* Fix sign of gdelay, grate in MC table, and subtract off the atmosphere.
+* FFT_SIZE fix in MC table
+* Update automake a bit
+
+Version 1.1
+* Don't require .calc, .rates files
+
+Version 1.0
+* Initial version.  
