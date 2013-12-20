@@ -1,0 +1,71 @@
+Summary: DiFX library for sending and receiving multicast messages
+Name: difxmessage
+Version: @version@
+Release: 1
+License: GPL3
+Group: VLBI
+BuildRoot: /var/tmp/difxmessage-@version@-buildroot
+Requires: gcc >= 4.1.0, expat
+Requires: expat
+Prefix: /usr
+Source: difxmessage-@version@.tar.gz
+
+%description
+C libraries and utilities useful for interprocess communication
+
+%prep
+%setup -q -n difxmessage-@version@
+
+%build
+%configure
+make
+
+%install
+%makeinstall
+
+%files
+%defattr(-,root,root)
+%{_libdir}/libdifxmessage.la
+%{_libdir}/libdifxmessage.so.0.0.0
+%{_libdir}/libdifxmessage.so.0
+%{_libdir}/libdifxmessage.so
+%{_libdir}/libdifxmessage.a
+%{_libdir}/libmark5ipc.la
+%{_libdir}/libmark5ipc.so.0.0.0
+%{_libdir}/libmark5ipc.so.0
+%{_libdir}/libmark5ipc.so
+%{_libdir}/libmark5ipc.a
+%{_libdir}/pkgconfig/difxmessage.pc
+%{_libdir}/pkgconfig/mark5ipc.pc
+%{_includedir}/difxmessage.h
+%{_includedir}/mark5ipc.h
+%{_includedir}/difxmessage/difxmessageinternal.h
+%{_bindir}/testdifxmessagesend
+%{_bindir}/testdifxmessagereceive
+%{_bindir}/testdifxmessagereceivecond
+%{_bindir}/testm5lock
+%{_bindir}/testseqnumbers
+%{_bindir}/sendtransient
+%{_bindir}/updatedifxclock
+%{_bindir}/difxlog
+%{_bindir}/mk5mon
+%{_bindir}/cpumon
+%{_bindir}/difxwatch
+%{_bindir}/errormon
+%{_bindir}/errormon2
+%{_bindir}/statemon
+%{_bindir}/mk5display
+%{_bindir}/getsmart
+%{_bindir}/sendsmart
+%{_bindir}/smartmon
+%{_bindir}/difxdiagnosticmon
+%{_bindir}/probemachine
+%{_bindir}/restartdifx
+%{_bindir}/testdifxmessagedrivestats
+
+%changelog
+* Mon Apr 30 2012 Walter Brisken <wbrisken@nrao.edu>
+- Some updates prior to DiFX 2.1
+
+* Fri Mar 11 2011 Walter Brisken <wbrisken@nrao.edu>
+- First rpm version
