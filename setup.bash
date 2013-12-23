@@ -95,11 +95,9 @@ if [ $OS = "darwin" -o $OS = "darwin9.0" ]
 then
   PrependPath DYLD_LIBRARY_PATH  ${DIFXROOT}/lib
   PrependPath DYLD_LIBRARY_PATH  ${PGPLOTDIR}
-  PrependPath DYLD_LIBRARY_PATH  ${IPPROOT}/Libraries
 else
   PrependPath LD_LIBRARY_PATH  ${DIFXROOT}/lib
   PrependPath LD_LIBRARY_PATH  ${PGPLOTDIR}
-  PrependPath LD_LIBRARY_PATH  ${IPPROOT}/sharedlib
 fi
 PrependPath PKG_CONFIG_PATH  ${DIFXROOT}/lib/pkgconfig
 if test "$PS1" != ""; then
