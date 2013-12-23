@@ -1,0 +1,42 @@
+#### INSTALLATION ##############
+To install DiFX-2.3, first go to the area you wish the source code to reside
+and checkout the code with
+
+  svn co https://svn.atnf.csiro.au/difx/master_tags/DiFX-2.3.
+  cd DiFX-2.3
+
+You probably already did that, if you're reading this README, so in
+the DiFX-2.3 directory, do this:
+
+1) Ensure you have a working installation of IPP and MPI
+2) Open setup.bash or setup.csh in your favourite text editor and change the
+DIFXROOT, IPPROOT, MPICXX and PGPLOT paths and the perl versions to suit your system
+3) source setup.bash (or .csh). You will probably want to add this to your 
+.bashrc or .cshrc file
+4) Run "./install-difx"
+
+Thats it. DiFX should compile - if not, check out the troubleshooting
+area on http://cira.ivec.org/dokuwiki/doku.php/difx/start
+
+There are optional applications that can be installed using install-difx:
+difxfilterbank (--withfb) and HOPS (--withhops).  Both of these require
+PGPLOT, which can be finicky, which is why they are not included
+by default.  You may need to tweak your PGPLOT setup to get them to work.
+
+There is one other application, difx_monitor, which also has an
+install-difx switch (--with-monitor) but which does not compile since
+it has not yet been set up with an autotools Make system.  It also 
+uses PGPLOT (but does not use the environment variables already set up).
+To compile this package, cd to applications/difx_monitor/, edit Makefile
+and then run make, make install.
+
+#### TESTING ####################
+
+See http://cira.ivec.org/dokuwiki/doku.php/difx/datasets
+
+#### FURTHER DOCUMENTATION ######
+
+The DiFX users guide is your friend.  You can find this at the top level
+of the DiFX source tree, under doc/userguide/.  Go there and type make, 
+and you will get a pdf full of interesting and useful information, mostly
+written and maintained by Walter Brisken.
