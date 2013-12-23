@@ -20,8 +20,6 @@ author = 'Walter Brisken'
 version = '0.16'
 verdate = '20121210'
 
-tsysFile = 'tsys'
-
 # Name of the Oracle VLBA legacy database
 databaseName = getenv("VLBA_DB")
 
@@ -854,7 +852,7 @@ def processVexFile(vexFile, force, verbose, preobs, vsnProjectCode, isMark5C, fs
 
 	if not preobs:
 		cmd = 'db2wx %s' % vexFile
-		if verbose > 1:
+		if verbose > 0:
 			print 'Executing: %s' % cmd
 		system(cmd)
 
@@ -940,9 +938,9 @@ processVexFile(args[0], force, verbose, preobs, vsnProjectCode, isMark5C, fsVSNs
 
 if isMark5C > 0 and not preobs:
 	print '\nGetting Tsys values'
-	cmd = 'rdbetsys %s %s' % (args[0], tsysFile)
+	cmd = 'rdbetsys -p %s' % args[0]
+	if verbose > 0:
+		print 'Executing: %s' % cmd
 	system(cmd);
-	print '\nTsys data written to file: %s' % tsysFile
-	
 
 print ''
