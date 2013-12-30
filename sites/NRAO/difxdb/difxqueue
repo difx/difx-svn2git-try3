@@ -13,9 +13,9 @@ from time import localtime, asctime
 dbname = getenv("VLBA_DB")
 
 program = 'difxqueue'
-version = '1.0'
+version = '1.1'
 author  = 'Walter Brisken'
-verdate = '20131118'
+verdate = '20131230'
 
 clusterHorsepower = 1.0
 	
@@ -878,9 +878,14 @@ class Pass:
 
 		jobs = self.getJoblistJobsByNumbers(numbers)
 
+		if 'label' in self.jobList.kv:
+			corrVersion = self.jobList.kv['label']
+		else:
+			corrVersion = self.jobList.kv['DiFX']
+
 		for j in jobs:		
 			print 'Adding %s to the queue (database only)' % j.name
-			addDatabaseEntry(self.database, passData, j, queueDir, priority, self.corrType, self.jobList.kv['DiFX'], verbose)
+			addDatabaseEntry(self.database, passData, j, queueDir, priority, self.corrType, corrVersion, verbose)
 
 	def queueJobs(self, numbers, queueDir, priority, verbose=0):
 

@@ -28,7 +28,7 @@ newDatabaseName = getenv("VLBAMPTS_DB")
 if newDatabaseName == None:
 	newDB = False
 
-if environ.has_key('EVLAMPTS_DB'):
+if 'EVLAMPTS_DB' in environ:
 	vlaDatabaseName = getenv('EVLAMPTS_DB')
 else:
 	vlaDatabaseName = None
@@ -456,7 +456,7 @@ def genMark5CBlocks(stn, tapes, banks):
 
 def getVSN(vsns, stn, unitNumber, t):
 	vsn = 'none'
-	if not vsns.has_key(stn):
+	if not stn in vsns:
 		return vsn
 	for v in vsns[stn]:
 		if t + 0.5/86400.0 >= v[0] and unitNumber == v[2]:
@@ -610,7 +610,7 @@ def makeVSNDict(tapes):
 		stn = t[2]
 		mjd = calcMJD(t[3])
 		row = [mjd, t[4], t[5]-4]
-		if not td.has_key(stn):
+		if not stn in td:
 			td[stn] = []
 		td[stn].append(row)
 

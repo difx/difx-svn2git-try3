@@ -56,7 +56,7 @@ def getTapesFromDB(db, prop, seg):
 
 def getVSN(vsns, stn, u, t):
 	vsn = 'none'
-	if not vsns.has_key(stn):
+	if not stn in vsns:
 		return vsn
 	for v in vsns[stn]:
 		if t + 0.5/86400.0 >= v[0] and u == v[2]:
@@ -116,7 +116,7 @@ def makeVSNDict(tapes):
 		stn = t[2]
 		mjd = calcMJD(t[3])
 		row = [mjd, t[4], t[5]-4]
-		if not td.has_key(stn):
+		if not stn in td:
 			td[stn] = []
 		td[stn].append(row)
 	return td
