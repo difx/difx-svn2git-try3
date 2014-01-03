@@ -10,8 +10,8 @@ mjd0 = datetime.datetime(1858, 11, 17, 0, 0)
 
 program = 'difxusage'
 author = 'Walter Brisken'
-version = '0.2'
-verdate = '20100316'
+version = '0.3'
+verdate = '20140102'
 
 
 def usage(pgm):
@@ -26,6 +26,10 @@ def usage(pgm):
 	print '  -k or --killed    Get jobs in the KILLED state.'
 	print '  -u or --unknown   Get jobs in the UNKNOWN state.'
 	print '  -a or --all       Get jobs in any/all states.\n'
+	print '<mjdStart> and <mjdStop> are fractional MJDs bounding the'
+	print 'query period.  Note that for both of these numbers, an integer'
+	print 'value refers to 0 UT of that day, so giving the same number'
+	print 'twice will result in a zero-time request.\n'
 	exit(0)
 
 def calcMJD(t):
