@@ -8,9 +8,9 @@ from os.path import isfile, isdir
 from time import gmtime
 
 program = 'difxarch'
-version = '0.4'
+version = '0.5'
 author  = 'Walter Brisken and David Gordon'
-verdate = '20120718'
+verdate = '20140105'
 # Modified by David Gordon to archive Mark4 files from makemark4.
 
 def usage(prog):
@@ -71,6 +71,46 @@ def parsekv(str):
 			return {}
 		kv[p[0]] = p[1]
 	return kv
+		
+def testdifxversion(kv, override):
+	difxVersion = getenv('DIFX_VERSION')
+	difxLabel = getenv('DIFX_LABEL')
+	fitsstop = False
+	if difxVersion == None:
+		print 'Error: env var DIFX_VERSION is not set!'
+		exit(0)
+	elif difxVersion != kv['DiFX']:
+		if override:
+			print 'Overriding version mismatch: %s != %s' % (difxVersion, kv['DiFX'])
+			fitsstop = False
+			kv['DiFX'] = difxVersion
+		else:
+			print 'Error: FITS file DiFX version = %s' % kv['DiFX']
+			print 'and environment DiFX version = %s' % difxVersion
+			fitsstop = True
+
+	if difxLabel != None:
+		if not 'label' in kv:
+			if override:
+				print 'Override causing DiFX label to be set to %s' % difxLabel
+				kv['label'] = difxLabel
+				difxVersion = 'unknown'
+			else:
+				print 'Error: file DiFX label is not set but environment DiFX label is %s' % difxLabel
+				exit(0)
+		if difxLabel != kv['label']:
+			if override:
+				print 'Overriding DiFX label mismatch: %s != %s' % (difxLabel, kv['label'])
+				kv['label'] = difxLabel
+	elif 'label' in kv:
+		if override:
+			print 'Override causing DiFX label to be unset (it was %s)' % kv['label']
+			del kv['label']
+		else:
+			print 'Error: file DiFX label is set to %s but environment DiFX label not set' % kv['label']
+			exit(0)
+
+	return fitsstop
 
 class FitsList:
 	def __init__(self, filename):
@@ -108,29 +148,7 @@ class FitsList:
 		return fitsstop
 
 	def testversion(self, override):
-		difxVersion = getenv('DIFX_VERSION')
-		fitsstop = False
-		if difxVersion == None:
-			print 'Warning: env var DIFX_VERSION is not set!'
-			if override:
-				difxVersion = 'unknown'
-				fitsstop = False
-			else:
-				fitsstop = True
-				exit(0)
-		elif difxVersion != self.kv['DiFX']:
-			if override:
-				print 'Overriding version mismatch: %s != %s' % \
-					(difxVersion, self.kv['DiFX'])
-				difxVersion = 'unknwown'
-				fitsstop = False
-			else:
-				print 'Error: FITS file DiFX version = %s' % self.kv['DiFX']
-				print 'and current DiFX version = %s' % difxVersion
-				fitsstop = True
-
-		self.kv['DiFX'] = difxVersion
-                return fitsstop
+		return testdifxversion(self.kv, override)
 
 	def verify(self, queuedir):
  		dir = queuedir + '/' + self.kv['exper']
@@ -247,24 +265,7 @@ class Mark4List:
 			self.files.append(s[0])
 		
 	def testversion(self, override):
-		difxVersion = getenv('DIFX_VERSION')
-		if difxVersion == None:
-			print 'Warning: env var DIFX_VERSION is not set!'
-			if override:
-				difxVersion = 'unknown'
-			else:
-				exit(0)
-		elif difxVersion != self.kv['DiFX']:
-			if override:
-				print 'Overriding version mismatch: %s != %s' % \
-					(difxVersion, self.kv['DiFX'])
-				difxVersion = 'unknwown'
-			else:
-				print 'Error: mark4 file DiFX version = %s' % self.kv['DiFX']
-				print 'and current DiFX version = %s' % difxVersion
-				exit(0)
-
-		self.kv['DiFX'] = difxVersion
+		testdifxversion(self.kv, override)
 
 	def verify(self, queuedir):
  		dir = queuedir + '/' + self.kv['exper']
@@ -279,7 +280,6 @@ class Mark4List:
 				print 'Mark4 file %s not found' % fn
 				r = False
 		return r
-				
 
 	def show(self, indent=0):
 		id = ' '*indent
@@ -456,7 +456,7 @@ if doofits:
 
         if dofits:
 	        if not OK:
-		        print '\n fits list verification failed! Will not archive FITS files.'
+		        print '\n fitslist verification failed! Will not archive FITS files.'
 			dofits = False
 			if not domark4:
                            exit(0)
