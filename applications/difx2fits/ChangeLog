@@ -1,3 +1,7 @@
+Version ?.?.?
+* changes for space VLBI support
+
+
 Version 3.4.0
 * Add command line option --primary-band.  This causes a keyword to be added to the output FITS file.  Intended for VLITE.
 

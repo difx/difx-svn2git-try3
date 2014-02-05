@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -36,10 +36,13 @@ const DifxInput *DifxInput2FitsSO(const DifxInput *D, struct fits_keywords *p_fi
 {
 	struct fitsBinTableColumn columns[] =
 	{
-		{"SPACECR", "16A", "spacecraft name", 0},
-		{"TIME",    "1D",  "UT time", "DAYS"},
-		{"ORBXYZ",  "3D",  "geocentric coordinates", "METERS"},
-		{"VELXYZ",  "3D",  "velcity vector", "METERS/SEC"}
+		{"SPACECR",  "16A", "spacecraft name", 0},
+		{"TIME",     "1D",  "UT time", "DAYS"},
+		{"ORBXYZ",   "3D",  "geocentric coordinates", "METERS"},
+		{"VELXYZ",   "3D",  "velcity vector", "METERS/SEC"},
+		{"ORBOFFXYZ","3D",  "model position offset applied", "METERS"},
+		{"VELOFFXYZ","3D",  "model velocity offset applied", "METERS/SEC"},
+		{"ISANTENNA","1L",  "spacecraft is antenna", 0}
 	};
 
 	int nColumn;
@@ -79,7 +82,9 @@ const DifxInput *DifxInput2FitsSO(const DifxInput *D, struct fits_keywords *p_fi
 		{
 			double xyz[3], vel[3];
 			const sixVector *pos;
+                        nineVector offset;
 			double time;
+                        char isantenna;
 
 			pos = D->spacecraft[s].pos + p;
 
@@ -90,6 +95,11 @@ const DifxInput *DifxInput2FitsSO(const DifxInput *D, struct fits_keywords *p_fi
 			vel[0] = pos->dX;
 			vel[1] = pos->dY;
 			vel[2] = pos->dZ;
+                        isantenna = (D->spacecraft[s].is_antenna) ? 'T':'F';
+                        evaluateDifxSpacecraftAntennaOffset(D->spacecraft+s,
+                                                            pos->mjd,
+                                                            pos->fracDay,
+                                                           &offset);
 
 			p_fitsbuf = fitsbuf;
 
@@ -97,14 +107,17 @@ const DifxInput *DifxInput2FitsSO(const DifxInput *D, struct fits_keywords *p_fi
 			{
 				fitsWriteBinTable(out, nColumn, columns, nRowBytes, "SPACECRAFT_ORBIT");
 				arrayWriteKeys(p_fits_keys, out);
-				fitsWriteInteger(out, "TABREV", 1, "");
+				fitsWriteInteger(out, "TABREV", 2, "");
 				fitsWriteEnd(out);
 			}
 
-			FITS_WRITE_ITEM (name, p_fitsbuf);
+			FITS_WRITE_ARRAY (name, p_fitsbuf, 16);
 			FITS_WRITE_ITEM (time, p_fitsbuf);
-			FITS_WRITE_ITEM (xyz, p_fitsbuf);
-			FITS_WRITE_ITEM (vel, p_fitsbuf);
+			FITS_WRITE_ARRAY (xyz, p_fitsbuf, 3);
+			FITS_WRITE_ARRAY (vel, p_fitsbuf, 3);
+			FITS_WRITE_ARRAY (&(offset.X), p_fitsbuf, 3);
+			FITS_WRITE_ARRAY (&(offset.dX), p_fitsbuf, 3);
+			FITS_WRITE_ITEM (isantenna, p_fitsbuf);
 
 			testFitsBufBytes(p_fitsbuf - fitsbuf, nRowBytes, "SO");
 

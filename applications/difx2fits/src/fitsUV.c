@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2012, 2014 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -1420,6 +1420,14 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D, struct fits_keywords *p_fi
 #ifndef WORDS_BIGENDIAN
 			FitsBinRowByteSwap(columns, nColumn, dv->record);
 #endif
+                        if(opts->verbose >= 2)
+                        {
+                            if(nWritten >= next_message)
+                            {
+                                next_message = nWritten+1000;
+                                printf("Writing record %7d for MJD %.0f days + %6.0f seconds\n", nWritten, dv->mjd, dv->iat*86400.);
+                            }
+                        }
 
 			fitsWriteBinRow(out, (char *)dv->record);
 			++nWritten;

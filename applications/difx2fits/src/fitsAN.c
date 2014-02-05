@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,7 +32,11 @@
 #include "config.h"
 #include "difx2fits.h"
 
-const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
+
+
+
+const DifxInput *DifxInput2FitsAN(const DifxInput *D,
+	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
 {
 	/*  define the antenna characteristic FITS table columns */
 	char bandFormFloat[8];

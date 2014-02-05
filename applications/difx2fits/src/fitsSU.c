@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -213,6 +213,11 @@ const DifxInput *DifxInput2FitsSU(const DifxInput *D, struct fits_keywords *p_fi
 		strcpypad(calCode, source->calCode, 4);
 		RAEpoch = source->ra * 180.0 / M_PI;
 		decEpoch = source->dec * 180.0 / M_PI;
+#warning "Fix epoch for SU table when AIPS correctly deals with non J2000 epochs"
+                /*if(source->sc_epoch != 0.0)
+                {
+                    epoch = (source->sc_epoch - 51544.5) / 365.25 + 2000.0;
+                }*/
 		RAApp = RAEpoch;
 		decApp = decEpoch;
 		pointingCentreSrc = DifxInputGetPointingCentreSource(D, sourceId);
