@@ -1,5 +1,10 @@
 calcif2
 ~~~~~~~
+Version ?.?.?
+* updates for space VLBI support, transmitting spacecraft information to
+	the calcserver and retrieving extra information
+
+
 Version 2.3.0
 * vlog: split ANTAB file into antenna-specific files
 * Version for DiFX-2.3, Dec 20, 2013
