@@ -1576,8 +1576,9 @@ C
 C     Check for debug output.
       IF (KUT1D .ne. 1) GO TO 600
       WRITE(6,9)
-    9 FORMAT(1X,"Debug output for subroutine UT1SZT")
-      WRITE(6,9200) L,LP,F,D,OM,ARG,DUT,DLOD,DOMEGA
+    9 FORMAT(1X,'Debug output for subroutine UT1SZT')
+C      WRITE(6,9200) L,LP,F,D,OM,ARG,DUT,DLOD,DOMEGA
+      WRITE(6,9200) fa(1),fa(2),fa(3),fa(4),fa(5),ARG,DUT,DLOD,DOMEGA
  9200 FORMAT(1X,"L = ",D30.16,/,1X,"LP = ",D30.16,/,
      1       1X,"F = ",D30.16,/,1X,"D = ",D30.16,/,
      2       1X,"OM = ",D30.16,/,1X,"ARG = ",D30.16,/,

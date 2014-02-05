@@ -14,14 +14,16 @@ C
      5                 XLAT(Max_Stat), XLON(Max_Stat), 
      7                 SITHOA(11,2,Max_Stat), SITHOP(11,2,Max_Stat),
      8                 HEIGHT(Max_Stat), RTROT(3,3,Max_Stat),
-     9                 GLAT(Max_Stat)
+     9                 GLAT(Max_Stat), SITVEL(3,Max_Stat),
+     &                 SITACC(3,Max_Stat)
       Integer*2 KTYPE(Max_Stat), NLAST(2), NUMSIT, LNSITE(4,Max_Stat),
      *          i3dum
       Integer*4 Zero_site 
 C
       COMMON / SITCM / CFRAD, PLAT, PLON, SITAXO, SITOAM, SITOPH,
      .                 SITXYZ, SNRM, SITZEN, TCROT, XLAT, XLON, SITHOA,
-     .                 SITHOP, HEIGHT, RTROT, GLAT, Zero_site, 
+     .                 SITHOP, HEIGHT, RTROT, GLAT, SITVEL, SITACC,
+     .                 Zero_site, 
      .                 KTYPE, NLAST, LNSITE, NUMSIT, i3dum
 C
 C       1.  CFRAD(Max_Stat)      -  THE SITE SPHERICAL EARTH RADII.  (M)
@@ -38,6 +40,9 @@ C       6.  SITOPH(11,Max_Stat)  -  THE SITE VERTICAL OCEAN LOADING PHASES.
 C                                   (RAD)
 C       7.  SITXYZ(3,Max_Stat)   -  THE SITE CRUST FIXED X, Y, & Z
 C                                   COORDINATES. (M, M, M )
+C                                   If antenna is a spacecraft, the coordinates
+C                                   are in the J2000 frame with respect to the
+C                                   center of the Earth
 C       8.  SNRM(3,Max_Stat)     -  THE X, Y, AND Z COMPONENTS OF THE SITE
 C                                   NORMAL UNIT VECTORS. (UNITLESS)
 C       9.  SITZEN(Max_Stat)     -  THE ZENITH ELECTRICAL PATH LENGTH AT EACH
@@ -77,5 +82,16 @@ C                                   direction from the center of the Earth;
 C                                   'East' is East; and 'North' is perpendicular
 C                                   to the radial in the north direction.
 C      21.  GLAT(Max_Stat)       -  The geocentric latitude at each site. (rad)
-C      22.  Zero_site            -  The site number of the site at the
-C                                   geocenter, if there is one in this data set.C                                   For correlator usage. 
+C      22.  SITVEL(3,Max_Stat)   -  The site velocity components in X, Y, & Z
+C                                   coordinates. (m/s, m/s, m/s )
+C                                   If antenna is a spacecraft, the coordinates
+C                                   are in the J2000 frame with respect to the
+C                                   center of the Earth
+C      23.  SITACC(3,Max_Stat)   -  The site acceleration components in X, Y, & Z
+C                                   coordinates. (m/s/s, m/s/s, m/s/s )
+C                                   If antenna is a spacecraft, the coordinates
+C                                   are in the J2000 frame with respect to the
+C                                   center of the Earth
+C      24.  Zero_site            -  The site number of the site at the
+C                                   geocenter, if there is one in this data set.
+C                                   For correlator usage. 

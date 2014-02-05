@@ -184,7 +184,7 @@ C
 C
 C*****************************************************************************
       SUBROUTINE OCEG ( CFSITE, UT1, OCEAMP, OCEPHS, R2000,
-     1                  XJD, TCTOCF, TSKIP, XLOADP, XLOADV)
+     1                  XJD, TCTOCF, KAXIS, TSKIP, XLOADP, XLOADV)
       IMPLICIT None
 C
 C     OCEG is the ocean loading geometry section.
@@ -217,6 +217,7 @@ C                           QUESTION. (DAYS)
 C         7. TCTOCF(3,3,2)- THE ROTATION MATRIX WHICH ROTATES THE TOPOCENTRIC
 C                           REFERENCE SYSTEM TO THE CRUST FIXED REFERENCE SYSTEM
 C                           AT EACH OBSERVATION SITE. (UNITLESS)
+C         8. KAXIS(2)     - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
 C
 C       OUTPUT VARIABLES:
 C         1. XLOADP(3,2)  - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
@@ -295,6 +296,7 @@ C
      7       ZLOAV1_HOR(3,2),ZLOAV1_VER(3,2), ZLOAV2_HOR(3,2),
      8       ZLOAV2_VER(3,2), XHOLD(3,2,2), UT1, XJD
       Integer*4 TSKIP
+      Integer*2 KAXIS(2)
 C
       Save ANGLE
 C
@@ -380,6 +382,7 @@ C                                    station, zeroes out necessary quantities.
 C                    David Gordon    98.10.16 Added 'cuser.i' include file
 C                                    and code to add ocean loading to the 
 C                                    theoreticals for correlator users. 
+C                    James M Anderson 12.02.23 Update for spacecraft
 C
 C     OCEG PROGRAM STRUCTURE
 C
@@ -396,7 +399,8 @@ C
       DO  L = 1, 2
 C
 C Check for Geocenter site
-      IF (L .eq. Nzero) Then
+C Check for spacecraft antenna
+      IF ((L .eq. Nzero).OR.(KAXIS(L).EQ. 6)) Then
        Do K=1,3
          DELTAO(K,L) = 0.D0
          DELTAV(K,L) = 0.D0

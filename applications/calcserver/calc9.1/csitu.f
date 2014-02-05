@@ -32,16 +32,16 @@ C                               POSITION VECTORS DUE TO OCEAN LOADING EFFECTS.
 C                               (M) 
 C            6. XLOADV(3,2)  -  THE CORRECTIONS TO THE 2000.0 GEOCENTRIC SITE
 C                               VELOCITY VECTORS DUE TO OCEAN LOADING EFFECTS.
-C                              (M/SEC) 
+C                               (M/SEC) 
 C            7. POLTDP(3,2)  -  GEOCENTRIC 2000.0 SITE POSITION CORRECTION FOR
 C                               THE EFFECTS OF THE POLE TIDE. (METERS) 
 C            8. POLTDV(3,2)  -  GEOCENTRIC 2000.0 SITE VELOCITY CORRECTION FOR 
 C                               THE EFFECTS OF THE POLE TIDE. (M/SEC)
 C
 C           OUTPUT VARIABLES: 
-C            1. EPBASE(3,2)  -  THE 2000.0 GEOCENTRIC BASELINE POSITION AND
-C                               VELOCITY VECTORS CORRECTED FOR EARTH TIDAL
-C                               EFFECTS.(M, M/SEC)
+C            1. EPBASE(3,3)  -  THE 2000.0 GEOCENTRIC BASELINE POSITION,
+C                               VELOCITY, ACCEL VECTORS CORRECTED FOR EARTH TIDAL
+C                               EFFECTS.(M, M/SEC, M/SEC/SEC)
 C            2. SITEP(3,2)   -  THE 2000.0 GEOCENTRIC SITE POSITION VECTORS
 C                               CORRECTED FOR EARTH TIDAL EFFECTS. (M) 
 C            3. SITEV(3,2)   -  THE 2000.0 GEOCENTRIC SITE VELOCITY VECTORS
@@ -55,7 +55,7 @@ C              1. KSTEC  -  THE SITCR UTILITY ROUTINE FLOW CONTROL FLAG.
 C              2. KSTED  -  THE SITCR UTILITY ROUTINE DEBUG OUTPUT FLAG.
 C 
 C 1.2.3 PROGRAM SPECIFICATIONS -
-      Real*8 CSITEP(3,2), CSITEV(3,2), EPBASE(3,2), SITEP(3,2), 
+      Real*8 CSITEP(3,2), CSITEV(3,2), EPBASE(3,3), SITEP(3,2), 
      1       SITEV(3,2), TIDEP(3,2), TIDEV(3,2), USITEP(3,2), 
      2       USITEV(3,2), XLOADP(3,2), XLOADV(3,2), POLTDP(3,2),
      3       POLTDV(3,2), TX(3,2), TV(3,2)

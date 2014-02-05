@@ -1,3 +1,7 @@
+Version 1.7
+* changes for space VLBI, to transmit full position, velocity, and
+	acceleration of telescope, plus return back extra information
+
 Version 1.6
 * use bash, not sh
 * Version for DiFX-2.3, Dec 20, 2013

@@ -1,7 +1,8 @@
       SUBROUTINE CALCMODL2 (MJD,TIME,SRCID,STNAID,STNBID,DELAY,RATE,
      *                     U,V,W, ATMOS, DATMOS, ACCEL,
      *                     RISETIME, SETTIME, XELEV, RELEV,
-     *                     XAZ, RAZ, PARTIALS, IRETURN)
+     *                     XAZ, RAZ, XMSA, RMSA, BJ2000,
+     *                     PARTIALS, IRETURN)
 C-------------------------------------------------------------------
 C
 C     CALCMODL calls the CALC driver subroutine (DRIVR).
@@ -9,6 +10,7 @@ C
       IMPLICIT DOUBLE PRECISION (A-H, O-Z) 
       REAL*8   D_FTOC                                   
       REAL*8   TIME,UTCSEC,DELAY,RATE,U,V,W, TWOPI, XAZ(2), RAZ(2)
+      REAL*8   XMSA(2), RMSA(2), BJ2000(3,3)
       REAL*8   XDELAY,XRATE,SEQ, BSLN(3,2), SRC(3), EARTH(3,3)
       REAL*8   RISETIME,SETTIME,NEXTELEV,SRCELEV(2,2), CALC_DELAY
       REAL*8   ACCEL,UT1UTC, XPOLE, YPOLE, ATMOS(2,2), DATMOS(2,2)
@@ -27,6 +29,7 @@ C
       REAL*8   MAG_STN1_SC, MAG_STN2_SC, MAG_MP_STN1, MAG_MP_STN2
       REAL*8   MAG_MP_SC, MAG_MP_SC1, MAG_MP_SC2
       REAL*8   SUNGRAVDLY, MOONGRAVDLY, EARGRAVDLY, PLANGRAVDLY
+      REAL*8   A,DA
       INTEGER*4  MJD, SRCID, STNAID, STNBID, YEAR, MONTH, DAY
       INTEGER*4  UTCTAG(5), I, J, ISOL, ITER_SOL, IRETURN
 C
@@ -46,9 +49,10 @@ C     One light year in meters
 C
 C----------------------------------------------------------------------
 C     Normally CALC calls OBSNT to get the observing date and time,
-C     stations and source. We to it by hand here.
+C     stations and source. We do it by hand here.
 C----------------------------------------------------------------------
 C
+      MJDFRACDAY= TIME / TWOPI
       UTCTAG(4) = TIME * 24.0D0 / TWOPI
       UTCTAG(5) = ((TIME * 24.0D0 / TWOPI - DFLOAT(UTCTAG(4)))*60.0D0
      *          + 0.01)
@@ -90,6 +94,10 @@ C     Retrieve CALC delay and rate from COMMON variables
       XRATE  = PUTRAT
       DELAY  = XDELAY
       RATE   = XRATE
+      PRINT*, 'JMA in calcmodl2 ', PUTDLY
+      PRINT*, 'JMA in calcmodl2 ', XDELAY
+      PRINT*, 'JMA in calcmodl2 ', XRATE
+      PRINT*, 'JMA in calcmodl2 ', DELAY
 C
 C     Get the Calc atmos delay and rate from common in CALCIO.INC
 C     Pass the dry and wet delays and rates. First index is station a
@@ -113,10 +121,23 @@ C     aberration corrections are NOT applied to U,V,W.
 C----------------------------------------------------------------------
 C
       SEQ = DSQRT(1.0D0 - SRC(3)*SRC(3))
+      IF(SEQ.GT.0.0D0) THEN
       U = -BSLN(1,1)*SRC(2)/SEQ + BSLN(2,1)*SRC(1)/SEQ
       V = -BSLN(1,1)*SRC(1)*SRC(3)/SEQ - BSLN(2,1)*SRC(2)*SRC(3)/SEQ
      +    +BSLN(3,1)*SEQ
       W =  BSLN(1,1)*SRC(1) + BSLN(2,1)*SRC(2) + BSLN(3,1)*SRC(3)
+      ELSE
+C        North or South Pole
+         IF(SRC(3).GT.0.0D0) THEN
+            U = BSLN(2,1)
+            V = -BSLN(1,1)
+            W = BSLN(3,1)
+         ELSE
+            U = BSLN(2,1)
+            V = BSLN(1,1)
+            W = -BSLN(3,1)
+         ENDIF
+      ENDIF
 C
 C----------------------------------------------------------------------
 C     Calculate the projection of the earth's accelaration (orbital)
@@ -126,6 +147,17 @@ C
       ACCEL = SRC(1)*EARTH(1,3)
      *      + SRC(2)*EARTH(2,3)
      *      + SRC(3)*EARTH(3,3)
+C
+C----------------------------------------------------------------------
+C     Copy over the baseline position, velocity, and acceleration
+C     to the output array
+C----------------------------------------------------------------------
+C
+      DO I=1,3
+         DO J=1,3
+            BJ2000(J,I) = BSLN(J,I)
+         ENDDO
+      ENDDO
 C
 C
 C----------------------------------------------------------------------
@@ -240,6 +272,7 @@ C
 C    This is the actual delay from Calc in microsecs.
 C
       CALC_DELAY = DELAY
+      PRINT*, 'JMA in calcmodl2 ', CALC_DELAY
 C
 C     Calculate BETA (geocentric velocity in solar system barycenter)
 C     Calculate BETA2 = BETA + station #2 velocity
@@ -471,6 +504,7 @@ c      write (6,3001) "corrected total delay   = ", delay
  4003 format(1x,a,f16.12)
  4004 format(1x,a,f18.2)
  900  CONTINUE
+      PRINT*, 'JMA in calcmodl2 ', DELAY
       RETURN
       END                                                                     
       SUBROUTINE JPL314 (C_TERM, TERM4,

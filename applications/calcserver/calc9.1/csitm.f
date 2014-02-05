@@ -78,7 +78,7 @@ C    external file inputs
      *          3,Numsit,1)
        CALL ADDR(1,'SITEZENS','Site zenith path delays (nsec). ',
      *          Numsit,1,1)
-       CALL ADDI(1,'AXISTYPS','Axis type (1-eq,2-xy,3-azel,4,5)',
+       CALL ADDI(1,'AXISTYPS','Axis type (1-eq,2-xy,3-azel,4-6)',
      *          Numsit,1,1)
        CALL ADDR(1,'AXISOFFS','Axis offsets (m).               ',
      *          Numsit,1,1)
@@ -176,11 +176,13 @@ C
      *          Intrvl(5,2), KERX(2)
       Integer*4 N, I, J, K, L, ik, kj, imdoy(12), Intmov
       REAL*8 XLAT_DUMMY,XLON_DUMMY, RY(3,3), RZ(3,3), TCROT_DUMMY(3,3),
-     *       RGY(3,3), GLAT_DUMMY, RTROT_DUMMY(3,3), Sitxyzv(7,Max_stat)
+     *       RGY(3,3), GLAT_DUMMY, RTROT_DUMMY(3,3),Sitxyzv(7,Max_stat),
+     *       SITXYZA(3,3,Max_stat)
       Real*8 xlatlonht(3),pie,a,fl,xyz(3), Xdoy1, Xepoch, X_frac
       CHARACTER*40 C_LSITM(2)
       EQUIVALENCE (LSITM,C_LSITM)
       CHARACTER*1 ITEST, idum(3)
+      LOGICAL USEVEL, USEACC
 C     Logical*4 Input_sites, Input_ocean 
 C
       DATA C_LSITM /
@@ -207,6 +209,9 @@ C      8. SITHOP(11,2,Max_Stat) -  THE SITE HORIZONTAL OCEAN LOADING PHASES.
 C                                  (RAD)
 C      9. SITXYZ(3,Max_Stat)    -  THE SITE CRUST FIXED X, Y, & Z
 C                                  COORDINATES. (M, M, M )
+C                                  If antenna is a spacecraft, the coordinates
+C                                  are in the J2000 frame with respect to the
+C                                  center of the Earth
 C     10. SITZEN(Max_Stat)      -  THE ZENITH ELECTRICAL PATH LENGTH
 C                                  AT EACH OBSERVATION SITE. (SEC)
 C     11. Sitxyzv(7,Max_Stat)   -  Optional correlator input via access code
@@ -220,12 +225,34 @@ C                                  Second index runs over the sites. For
 C                                  geocenter station make sure X-velocity =
 C                                  Y-velocity = Z-velocity = 0.D0.
 C                                  (m, m, m, yrs, m/sec, m/sec, m/sec) 
+C     11. SITXYZA(3,3,Max_Stat) -  Optional correlator input via access code
+C                                  'SITERECA' in place of SITXYZ or SITERECV 
+C                                  First index runs over site direction
+C                                  coordinates (X, Y, Z).  The second index
+C                                  runs over
+C                                     1 position (units of m)
+C                                     2 velocity (units of m/s)
+C                                     3 acceleration (units of m/s/s)
+C                                  The values are valid for the current exact
+C                                  instant.  For ground-based antennas, the
+C                                  velocity and acceleration terms are set
+C                                  to 0.0, and the velocity and acceleration
+C                                  terms must be calculated from Earth spin.
+C                                  The coordinates for ground-based antennas
+C                                  are Earth-fixed.  For spacecraft, the
+C                                  coordinates are J2000 with respect to the 
+C                                  center of the Earth, and the velocity and
+C                                  acceleration are provided.
 C
 C    'PUT' VARIABLES:
 C      1. LSITM(40)  -  THE SITE MODULE TEXT MESSAGE.
 C      2. SITXYZ(3,Max_Stat) - Correlator output of site crust fixed 
 C                       coordinates, modified if access code 'SITERECV' 
 C                       supplied. 
+C      2. SITVEL(3,Max_Stat) - Correlator output of site velocity components, 
+C                       if access code 'SITERECV' supplied. 
+C      2. SITACC(3,Max_Stat) - Correlator output of site acceleration components,
+C                       if access code 'SITERECV' supplied. 
 C
 C    ACCESS CODES:
 C      1. 'SIT MESS'  -  THE DATA BASE ACCESS CODE FOR THE SITE MODULE TEXT
@@ -249,6 +276,10 @@ C     10. 'SITHOCAM'  -  THE DATA BASE ACCESS CODE FOR THE HORIZONTAL OCEAN
 C                        LOADING AMPLITUDES.
 C     11. 'SITHOCPH'  -  THE DATA BASE ACCESS CODE FOR THE HORIZONTAL OCEAN
 C                        LOADING PHASES.
+C     12. 'SITERECV'  -  THE DATA BASE ACCESS CODE FOR THE  ARRAY OF SITE
+C                        X,Y,Z POSITION AND VELOCITY COORDINATES.
+C     13. 'SITERECA'  -  THE DATA BASE ACCESS CODE FOR THE  ARRAY OF SITE
+C                        X,Y,Z POSITION, VELOCITY, AND ACCELERATION COORDINATES.
 C
 C 3.2.6 SUBROUTINE INTERFACE -
 C           CALLER SUBROUTINES: INITL
@@ -310,6 +341,9 @@ C                         not there will use 'INTERVAL' (2-digit year).
 C                         Correlator output site position Lcode changed to
 C                         'SITEXYZS', dimensions (3,Max_stat). 10 year limit
 C                         set on velocity interpolation. 
+C                    James M Anderson 12.02.16 add velocity components of sites
+C                         to global variable SITVEL for spacecraft processing
+C                         Add acceleration terms to SITACC
 C
 C
 C 3.3   SITI PROGRAM STRUCTURE
@@ -319,6 +353,14 @@ C   Initialize site positions for correlator usage
          do ik=1,Max_Stat
           do kj=1,3
            SITXYZ(kj,ik) = 0.D0
+           SITVEL(kj,ik) = 0.D0
+           SITACC(kj,ik) = 0.D0
+           DO I=1,3
+              SITXYZA(I,kj,ik) = 0.0D0
+           END DO
+          enddo
+          do kj=1,7
+           Sitxyzv(kj,ik) = 0.D0
           enddo
          enddo
        Endif
@@ -355,15 +397,29 @@ C
 C***********************************************
 C  Expanded for optional correlator usage of site velocities 
 C
-C-VLBA Force this IF statement to return false since we apply the 
-C-VLBA station velocities outside of CALC, but we need calc_user = C
-C-VLBA elsewhere.
-C       If (calc_user. eq. 'C') Then
-       If (calc_user. eq. 'Z') Then
+       USEACC = .FALSE.
+       If (calc_user. eq. 'C') Then
+          CALL GET4 ('SITERECA      ',SITXYZA, 3, 3, NUMSIT_LOCAL, NDO,
+     *            KERX(1) )
+C !  Apply site position, velocity, acceleration from new L-code 'SITERECA'
+          If (KERX(1) .eq. 0)  Then
+             USEACC = .TRUE.
+             DO IK = 1, NUMSIT_LOCAL
+                DO KJ = 1, 3
+                   SITXYZ(KJ,IK) = SITXYZA(KJ,1,IK)
+                   SITVEL(KJ,IK) = SITXYZA(KJ,2,IK)
+                   SITACC(KJ,IK) = SITXYZA(KJ,3,IK)
+                ENDDO
+             ENDDO
+          END IF
+       END IF
+       If ((.NOT. USEACC) .AND. (calc_user. eq. 'C')) Then
 C         'SITERECV' should contain X, Y, Z, epoch, X-dot, Y-dot, Z-dot
 C           for each station, all Real*8. Epoch must be a 4-digit year and 
 C           fraction  thereof (1998.0, 2001.5, etc.) If Epoch is zero for a
-C           site, then velocity corrections will be turned off for that site.
+C           site, then velocity corrections will be turned off for that site,
+C           unless the site is an orbiting spacecraft, in which case the
+C           positions and velocities are for exactly the current time.
 C           If X=Y=Z=0.D0 (geocenter), then velocity corrections will 
 C           automatically be turned off.
         CALL GET4 ('SITERECV      ',Sitxyzv, 7, NUMSIT_LOCAL, 1, NDO,
@@ -371,45 +427,62 @@ C           automatically be turned off.
 C
 C !  Apply site velocities from new L-code 'SITERECV'
         If (KERX(1) .eq. 0)  Then
-C           Look for 4-digit year interval
-          CALL GETI ('INTRVAL4      ',Intrvl, 5, 2, 1, NDO, KERX(2) )
-C           If no 4-digit year interval, get 2-digit year interval
-         If (KERX(2).ne.0) then
-          CALL GETI ('INTERVAL      ',Intrvl, 5, 2, 1, NDO, KERX(2) )
-C            Convert 2-digit year to 4-digit year
-          If (Intrvl(1,1) .ge. 70 .and. Intrvl(1,1) .le. 99) 
-     *        Intrvl(1,1) = Intrvl(1,1)+1900
-          If (Intrvl(1,1) .ge.  0 .and. Intrvl(1,1) .le. 69) 
-     *        Intrvl(1,1) = Intrvl(1,1)+2000
-         Endif
+           USEVEL = .FALSE.
+           DO IK = 1, NUMSIT_LOCAL
+              DO KJ = 1, 3
+                 SITXYZ(KJ,IK) = SITXYZV(KJ,IK)
+                 SITVEL(KJ,IK) = SITXYZV(KJ+4,IK)
+              ENDDO
+              IF((SITXYZV(4,IK) .NE. 0.D0).AND.(KTYPE(IK).NE. 6)) THEN
+                 USEVEL = .TRUE.
+              ENDIF
+           ENDDO
+           IF(USEVEL) THEN
+C             Look for 4-digit year interval
+              CALL GETI ('INTRVAL4      ',Intrvl, 5, 2, 1, NDO, KERX(2))
+C             If no 4-digit year interval, get 2-digit year interval
+              If (KERX(2).ne.0) then
+                 CALL GETI ('INTERVAL      ',Intrvl, 5, 2, 1, NDO, 
+     &                KERX(2) )
+C                Convert 2-digit year to 4-digit year
+                 If (Intrvl(1,1) .ge. 70 .and. Intrvl(1,1) .le. 99) 
+     *                Intrvl(1,1) = Intrvl(1,1)+1900
+                 If (Intrvl(1,1) .ge.  0 .and. Intrvl(1,1) .le. 69) 
+     *                Intrvl(1,1) = Intrvl(1,1)+2000
+              Endif
 C  Convert start time to year and fraction, not worrying about leap years:
-           xdoy1 = imdoy(Intrvl(2,1)) + Intrvl(3,1) + Intrvl(4,1)/24.d0 
+              xdoy1 = imdoy(Intrvl(2,1)) + Intrvl(3,1) 
+     &             + Intrvl(4,1)/24.d0 
      *             + Intrvl(5,1)/1440.d0 
-           Xepoch = Intrvl(1,1) + xdoy1/365.D0
-             Do ik = 1, Numsit_local
-              X_frac = Xepoch - Sitxyzv(4,ik)
+              Xepoch = Intrvl(1,1) + xdoy1/365.D0
+              Do ik = 1, Numsit_local
+                 IF((SITXYZV(4,IK) .NE. 0.D0).AND.(KTYPE(IK).NE. 6))THEN
+                    X_frac = Xepoch - Sitxyzv(4,ik)
 C              Turn off corrections if no position epoch or at the geocenter
-                If (Sitxyzv(4,ik) .eq. 0.D0) X_frac = 0.D0
-                If ( (DABS(Sitxyzv(1,ik)) .le. 1.D-6) .and.
-     *               (DABS(Sitxyzv(2,ik)) .le. 1.D-6) .and.
-     *               (DABS(Sitxyzv(3,ik)) .le. 1.D-6) )  X_frac = 0.D0
+                    If (Sitxyzv(4,ik) .eq. 0.D0) X_frac = 0.D0
+                    If ( (DABS(Sitxyzv(1,ik)) .le. 1.D-6) .and.
+     *                   (DABS(Sitxyzv(2,ik)) .le. 1.D-6) .and.
+     *                   (DABS(Sitxyzv(3,ik)) .le. 1.D-6) )  
+     &                   X_frac = 0.D0
 C               Make sure interpolation is over no more than 10 years!!
-                 If (DABS(X_frac) .gt. 10.D0) Then
-                  Write(6,147) ik, Xepoch, Sitxyzv(4,ik)    
- 147              Format(' Problem in SITI for Site #',I2,
+                    If (DABS(X_frac) .gt. 10.D0) Then
+                       Write(6,147) ik, Xepoch, Sitxyzv(4,ik)    
+ 147                   Format(' Problem in SITI for Site #',I2,
      *             ', Data epoch = ',F10.2, ', Site epoch = ',F10.2,/,
      *             ' Maximum difference allowed is 10 years!! Check',
      *             ' input codes SITERECV and INTRVAL4/INTERVAL. ') 
-                  CALL CKILL (6HSITI  , 0, 0 )
-                  STOP
-                 Endif
+                       CALL CKILL (6HSITI  , 0, 0 )
+                       STOP
+                    Endif
 C 
-               Do kj = 1, 3
-C                   Add motion rounded to nearest 0.1 mm
-                 Intmov = Sitxyzv(kj+4,ik)*X_frac*1.D4 + .49D0
-                SITXYZ(kj,ik) = Sitxyzv(kj,ik) + Intmov/1.D4
-               Enddo
-             Enddo 
+                    Do kj = 1, 3
+C                      Add motion rounded to nearest 0.1 mm
+                       Intmov = Sitxyzv(kj+4,ik)*X_frac*1.D4 + .49D0
+                       SITXYZ(kj,ik) = Sitxyzv(kj,ik) + Intmov/1.D4
+                    Enddo
+                 ENDIF
+              Enddo 
+           ENDIF
 C !  No site velocities, use old L-code
         Else
           CALL GET4 ('SITERECS      ',SITXYZ, 3, NUMSIT_LOCAL, 1, NDO,
@@ -690,6 +763,9 @@ C     WRITE ( 6, 11)
     9 FORMAT(/,A,11F9.4,/,(9X,11F9.4))
       WRITE(6,6)' SITXYZ  ',((SITXYZ(J,K),J=1,3),K=1,NUMSIT)
     6 FORMAT(/,A,3F20.4,/,(9X,3F20.4))
+      WRITE(6,12)' SITVEL  ',((SITVEL(J,K),J=1,3),K=1,NUMSIT)
+      WRITE(6,12)' SITACC  ',((SITACC(J,K),J=1,3),K=1,NUMSIT)
+   12 FORMAT(/,A,3D20.10,/,(9X,3D20.10))
       WRITE(6,8)' SITZEN  ',(SITZEN(K),K=1,NUMSIT)
       WRITE(6,4)' SNRM    ',((SNRM(I,J),I=1,3),J=1,NUMSIT)
       WRITE(6,4)' TCROT   ',(((TCROT(I,J,K),I=1,3),J=1,3),K=1,
@@ -708,9 +784,11 @@ C     Normal conclusion.
       END
 C
 C******************************************************************************
-      SUBROUTINE SITG ( AXOFF, CFBASE, CFLAT, CFLON, CFSITE, CFSITN,
-     1                  KAXIS, OCEAMP, OCEPHS,  SITLAT, SITLON, SITRAD,
-     2                  TCTOCF, RTTOCF, ZPATH, SITHEIGHT, GEOLAT)
+      SUBROUTINE SITG ( AXOFF, CFBASE, CFLAT, CFLON, CFSITE, CFSITV,
+     1                  CFSITA, CFSITN, KAXIS, OCEAMP, OCEPHS,  SITLAT, 
+     2                  SITLON, SITRAD, TCTOCF, RTTOCF, ZPATH, 
+     3                  SITHEIGHT, GEOLAT
+     4                )
       IMPLICIT None
 C
 C 4.    SITG
@@ -738,29 +816,34 @@ C           4. CFLON(3,2)    - THE PARTIAL DERIVATIVES OF THE SITE CRUST FIXED
 C                              VECTOR COMPONENTS WITH RESPECT TO THE EAST
 C                              LONGITUDES AT EACH OBSERVATION SITE.  (M/RAD)
 C           5. CFSITE(3,2)   - THE CRUST FIXED SITE VECTORS AT EACH SITE. (M)
-C           6. CFSITN(3,2)   - THE CRUST FIXED SITE NORMAL UNIT VECTORS AT
+C                                   If antenna is a spacecraft, the coordinates
+C                                   are in the J2000 frame with respect to the
+C                                   center of the Earth
+C           6. CFSITV(3,2)   - THE VELOCITY VECTORS AT EACH SITE. (m/s)
+C           7. CFSITA(3,2)   - THE ACCELERATION VECTORS AT EACH SITE. (m/s/s)
+C           8. CFSITN(3,2)   - THE CRUST FIXED SITE NORMAL UNIT VECTORS AT
 C                              EACH OBSERVATION SITE. (UNITLESS)
-C           7. KAXIS(2)      - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
-C           8. OCEAMP(11,3,2)- THE TOPOCENTRIC OCEAN LOADING AMPLITUDES FOR
+C           9. KAXIS(2)      - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
+C          10. OCEAMP(11,3,2)- THE TOPOCENTRIC OCEAN LOADING AMPLITUDES FOR
 C                    ( J,K,L)  THE 11 MAIN TIDES (J=1,11),
 C                                      K=1 : VERTICAL,
 C                                      K=2 : EAST-WEST, AND
 C                                      K=3 : NORTH-SOUTH DIRECTION
 C                               FOR EACH OBSERVATION SITE (L=1,2). (M)
-C           9. OCEPHS(11,3,2)- THE OCEAN LOADING PHASES AT EACH SITE. (RAD)
-C          10. SITLAT(2)     - THE GEODETIC LATITUDE AT EACH SITE. (RAD)
-C          11. SITLON(2)     - THE EAST LONGITUDE AT EACH SITE. (RAD)
-C          12. SITRAD(2)     - THE SPHERICAL EARTH RADIUS OF EACH SITE. (M)
-C          13. TCTOCF(3,3,2) - THE ROTATION MATRIX WHICH ROTATES THE
+C          11. OCEPHS(11,3,2)- THE OCEAN LOADING PHASES AT EACH SITE. (RAD)
+C          12. SITLAT(2)     - THE GEODETIC LATITUDE AT EACH SITE. (RAD)
+C          13. SITLON(2)     - THE EAST LONGITUDE AT EACH SITE. (RAD)
+C          14. SITRAD(2)     - THE SPHERICAL EARTH RADIUS OF EACH SITE. (M)
+C          15. TCTOCF(3,3,2) - THE ROTATION MATRIX WHICH ROTATES THE
 C                              TOPOCENTRIC REFERENCE SYSTEM TO THE CRUST FIXED
 C                              REFERENCE SYSTEM AT EACH SITE. (UNITLESS)
-C          14. RTTOCF(3,3,2) - The rotation matrix which rotates the 
+C          16. RTTOCF(3,3,2) - The rotation matrix which rotates the 
 C                              'radial-transverse' reference system to the 
 C                              crust fixed reference system at each site.
-C          15. ZPATH(2)      - THE ZENITH ELECTRICAL PATH LENGTH AT EACH 
+C          17. ZPATH(2)      - THE ZENITH ELECTRICAL PATH LENGTH AT EACH 
 C                              OBSERVATION SITE.  (SEC)
-C          16. SITHEIGHT(2)  - The height above the geoid at each site. (m)
-C          17. GEOLAT(2)     - The geocentric latitude at each site. (rad)
+C          18. SITHEIGHT(2)  - The height above the geoid at each site. (m)
+C          19. GEOLAT(2)     - The geocentric latitude at each site. (rad)
 C
       INCLUDE 'cmxst.i'
 C
@@ -778,9 +861,10 @@ C
 C 4.2.3 PROGRAM SPECIFICATIONS -
 C
       Real*8  AXOFF(2),CFBASE(3),CFLAT(3,2),CFLON(3,2),CFSITE(3,2),
-     1        CFSITN(3,2),OCEAMP(11,3,2),OCEPHS(11,3,2),SITLAT(2),
-     2        SITLON(2),SITRAD(2),TCTOCF(3,3,2),ZPATH(2),SITHEIGHT(2),
-     3        RTTOCF(3,3,2), GEOLAT(2)
+     1        CFSITV(3,2),CFSITA(3,2),CFSITN(3,2),OCEAMP(11,3,2),
+     2        OCEPHS(11,3,2),SITLAT(2),
+     3        SITLON(2),SITRAD(2),TCTOCF(3,3,2),ZPATH(2),SITHEIGHT(2),
+     4        RTTOCF(3,3,2), GEOLAT(2)
       Integer*2  KAXIS(2), LNBASE(4,2), NDO(3), KERR, IDBASE(2)
       Integer*4  I, J, K, L, N, NN
 C
@@ -826,6 +910,7 @@ C                             in the solid Earth tide module.
 C                    David Gordon 98.07.29 Added 'Include cobsn.i' with 
 C                             variable Nzero, and code to determine when a 
 C                             station is at the geocenter.
+C                    James M Anderson 12.02.16 Update for spacecraft
 C
 C     SITG program structure.
 C
@@ -868,14 +953,26 @@ C        GO TO 700
 C
 C       Check to see if the ID of the baseline has changed from that of the
 C       previous observation. If not, then retain the current site geometry.
+C       2012 Feb 07  James M Anderson  --change for spacecraft axis types,
+C       so that if the antenna is a spacecraft, force recalculation of
+C       everything.
 C
-  330   IF ( NLAST(L) .EQ. N )  GO TO 3130
+  330   IF (( NLAST(L) .EQ. N ).AND.(KTYPE(N).NE.6))  GO TO 3130
         NLAST(L) = N
 C
 C       Construct the array to hold the crust fixed site vectors.
+C       Note that spacecraft antennas are in J2000, not Earth-fixed coordinates
         CFSITE(1,L) = SITXYZ(1,N)
         CFSITE(2,L) = SITXYZ(2,N)
         CFSITE(3,L) = SITXYZ(3,N)
+C       Construct the array to hold the site velocities.
+        CFSITV(1,L) = SITVEL(1,N)
+        CFSITV(2,L) = SITVEL(2,N)
+        CFSITV(3,L) = SITVEL(3,N)
+C       Construct the array to hold the site accelerations.
+        CFSITA(1,L) = SITACC(1,N)
+        CFSITA(2,L) = SITACC(2,N)
+        CFSITA(3,L) = SITACC(3,N)
 C
 C       Construct the array to hold the site spherical radii.
         SITRAD(L) = CFRAD(N)
@@ -970,6 +1067,9 @@ C     Check KSITD for debug output.
     9 FORMAT(/,A,11F7.4,/,(9X,11F7.4))
       WRITE(6,6)' SITXYZ  ',((SITXYZ(J,K),J=1,3),K=1,NUMSIT)
     6 FORMAT(/,A,3F20.4,/,(9X,3F20.4))
+      WRITE(6,10)' SITVEL  ',((SITVEL(J,K),J=1,3),K=1,NUMSIT)
+      WRITE(6,10)' SITACC  ',((SITACC(J,K),J=1,3),K=1,NUMSIT)
+   10 FORMAT(/,A,3D20.10,/,(9X,3D20.10))
       WRITE(6,8)' SITZEN  ',(SITZEN(K),K=1,NUMSIT)
       WRITE(6,4)' SNRM    ',((SNRM(I,J),I=1,3),J=1,NUMSIT)
       WRITE(6,4)' TCROT   ',(((TCROT(I,J,K),I=1,3),J=1,3),K=1,
@@ -981,13 +1081,16 @@ C     Check KSITD for debug output.
       WRITE(6,8)' SITHEIGHT ',(SITHEIGHT(J),J=1,NUMSIT)
 C
       WRITE ( 6, 9200 )  AXOFF, CFBASE, CFLAT, CFLON, CFSITE,
-     1           CFSITN, KAXIS, OCEAMP, OCEPHS, SITLAT, SITLON,
-     2           SITRAD, TCTOCF, ZPATH,  LNBASE
+     1           CFSITV, CFSITA,
+     2           CFSITN, KAXIS, OCEAMP, OCEPHS, SITLAT, SITLON,
+     3           SITRAD, TCTOCF, ZPATH,  LNBASE
  9200 FORMAT (1X, 'AXOFF  = ', 2 ( D30.16, 10X ), /, 1X,
      .            'CFBASE = ', 3 ( D30.16, 10X ), /, 1X,
      .            'CFLAT  = ',/, 2 ( 3 ( D30.16, 10X ), /, 1X ),
      .            'CFLON  = ',/, 2 ( 3 ( D30.16, 10X ), /, 1X ),
      .            'CFSITE = ',/, 2 ( 3 ( D30.16, 10X ), /, 1X ),
+     .            'CFSITV = ',/, 2 ( 3 ( D30.16, 10X ), /, 1X ),
+     .            'CFSITA = ',/, 2 ( 3 ( D30.16, 10X ), /, 1X ),
      .            'CFSITN = ',/, 2 ( 3 ( D30.16, 10X ), /, 1X ),
      .            'KAXIS  = ',/, 2 ( I2, 10X ), /, 1X,
      .            'OCEAMP = ',/,2( 3( 11F10.4,/ ),/),/,1X,
@@ -1010,7 +1113,7 @@ C     Abnormal conclusion.       .
       END
 C
 C******************************************************************************
-      SUBROUTINE SITP ( R2000, STAR , EARTH, SITEV)
+      SUBROUTINE SITP ( R2000, STAR , EARTH, SITEV, SITEA, KAXIS)
       IMPLICIT None
 C
 C 5.    SITP
@@ -1038,6 +1141,9 @@ C           3.  EARTH(3,3)   - The position, velocity, and acceleration of the
 C                              Earth relative to the SSBC. (m, m/s, m/s**2)
 C           4. SITEV(3,2)    - THE J2000.0 GEOCENTRIC VELOCITY VECTORS OF EACH
 C                              OBSERVATION SITE. (M/SEC)
+C           5. SITEA(3,2)    - THE J2000.0 GEOCENTRIC ACCELERATION VECTORS OF 
+C                              EACH OBSERVATION SITE. (m/s/s)
+C           6. KAXIS(2)      - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
 C
 C         OUTPUT VARIABLES: NONE
 C
@@ -1055,10 +1161,12 @@ C            2.  KSITD  -  THE SITE MODULE DEBUG OUTPUT FLAG.
 C
 C 5.2.3 PROGRAM SPECIFICATIONS -
 C
-      Real*8 R2000(3,3,3), STAR(3), EARTH(3,3), SITEV(3,2), DBDX1(3,2),
+      Real*8 R2000(3,3,3), STAR(3), EARTH(3,3), SITEV(3,2), SITEA(3,2), 
+     *       DBDX1(3,2),
      *       DBDX2(3,2), DBDY1(3,2), DBDY2(3,2), DBDZ1(3,2), 
      *       DBDZ2(3,2), DSITP(3,2,2), VG(3), VE(3), c1, c2, tt, DOTP
       Integer*4 I, K
+      Integer*2 KAXIS(2)
 C
 C 5.2.4 DATA BASE ACCESS -
 C
@@ -1120,6 +1228,7 @@ C                                   Changed site delay and rate partials
 C                                   computations to use the Consensus formula. 
 C                                   Differences are very small and probably
 C                                   not noticeable.
+C                    James M Anderson 12.02.27 Update for spacecraft
 C
 C     SITP program structure
 C
@@ -1129,24 +1238,58 @@ C      [Index K runs over the delays and rates.]
 C
 C   Loop three times for the calculation of the partials with respect to the
 C    crust fixed vector components.
-        DO 140  I = 1,3
+         DO 140  I = 1,3
 C
 C    Compute the partial derivatives of the J2000.0 baseline position and
 C    velocity vectors with respect to the crust fixed vector coordinates 
 C    at site #2.
-          DBDX2(I,K) = R2000(I,1,K)
-          DBDY2(I,K) = R2000(I,2,K)
-          DBDZ2(I,K) = R2000(I,3,K)
+            IF(KAXIS(2).NE. 6) THEN
+C           Not a spacecraft
+               DBDX2(I,K) = R2000(I,1,K)
+               DBDY2(I,K) = R2000(I,2,K)
+               DBDZ2(I,K) = R2000(I,3,K)
+            ELSE
+               IF(I.EQ. 1) THEN
+                  DBDX2(I,K) = 1.0D0
+                  DBDY2(I,K) = 1.0D0
+                  DBDZ2(I,K) = 1.00
+               ELSEIF(I.EQ. 2) THEN
+                  DBDX2(I,K) = SITEV(1,K)
+                  DBDY2(I,K) = SITEV(2,K)
+                  DBDZ2(I,K) = SITEV(3,K)
+               ELSE
+                  DBDX2(I,K) = SITEA(1,K)
+                  DBDY2(I,K) = SITEA(2,K)
+                  DBDZ2(I,K) = SITEA(3,K)
+               ENDIF
+            ENDIF
 C
 C    Compute the partial derivatives of the J2000.0 baseline position and
 C    velocity vectors with respect to the crust fixed site coordinates 
 C    at site #1.
-          DBDX1(I,K) = - R2000(I,1,K)
-          DBDY1(I,K) = - R2000(I,2,K)
-          DBDZ1(I,K) = - R2000(I,3,K)
+            IF(KAXIS(1).NE. 6) THEN
+C           Not a spacecraft
+               DBDX1(I,K) = - R2000(I,1,K)
+               DBDY1(I,K) = - R2000(I,2,K)
+               DBDZ1(I,K) = - R2000(I,3,K)
+            ELSE
+               IF(I.EQ. 1) THEN
+                  DBDX2(I,K) = -1.0D0
+                  DBDY2(I,K) = -1.0D0
+                  DBDZ2(I,K) = -1.00
+               ELSEIF(I.EQ. 2) THEN
+                  DBDX2(I,K) = -SITEV(1,K)
+                  DBDY2(I,K) = -SITEV(2,K)
+                  DBDZ2(I,K) = -SITEV(3,K)
+               ELSE
+                  DBDX2(I,K) = -SITEA(1,K)
+                  DBDY2(I,K) = -SITEA(2,K)
+                  DBDZ2(I,K) = -SITEA(3,K)
+               ENDIF
+            ENDIF
 C
 C    Close the loop running over the vector components.
-  140   CONTINUE
+ 140     CONTINUE
 C
 C    Complete the calculation of the partial derivatives of the delay and the
 C    rate with respect to the crust fixed site vector components at each site.
