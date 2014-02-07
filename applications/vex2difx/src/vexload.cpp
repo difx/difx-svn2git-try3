@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012 by Walter Brisken                             *
+ *   Copyright (C) 2009-2012, 2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -34,6 +34,7 @@
 #include <cstring>
 #include <cctype>
 #include <cstdio>
+#include <iomanip>
 #include <algorithm>
 #include <unistd.h>
 #include "util.h"
@@ -144,6 +145,29 @@ static int getRecordChannel(const std::string &antName, const std::string &chanN
 		const Tracks &T = it->second;
 		delta = T.sign.size() + T.mag.size();
 		track = T.sign[0];
+                if(T.sign.size() == 1)
+                {
+                    if(T.mag.size() == 1)
+                    {
+                        int mtrack = T.mag[0];
+                        if(mtrack-track != 1)
+                        {
+                            cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the magnitude bit (bit " << mtrack-2 << ") is not 1 higher than the sign bit (" << track-2 << ").  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
+                        }
+                        else if(track&0x1 == 0x1)
+                        {
+                            cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the sign bit (" << track-2 << ") is not at an even bit number.  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
+                        }
+                    }
+                    else if(T.mag.size() > 1)
+                    {
+                        cerr << "Warning: Does MARK5B recording really support " << T.sign.size() << " sign bits and " << T.mag.size() << " magnitude bits recording?  Check antenna " << antName << " for channel " << chanName << endl;
+                    }
+                }
+                else
+                {
+                    cerr << "Warning: Does MARK5B recording really support " << T.sign.size() << " sign bits?  Check antenna " << antName << " for channel " << chanName << endl;
+                }
 
 		return (track-2)/delta;
 	}
@@ -281,6 +305,7 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 	struct dvalue *r;
 	llist *block;
 	int nWarn = 0;
+        char *cp;
 
 	block = find_block(B_CLOCK, v);
 
@@ -301,6 +326,21 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 		A->name = stn;
 		A->defName = stn;
 		Upper(A->name);
+
+                cp = (char *)get_station_lowl(stn, T_SITE_TYPE, B_SITE, v);
+                if(cp == 0)
+                {
+                    cerr << "Error: cannot find site type for antenna " << antName << " in the vex file." << endl;
+
+			exit(0);
+		}
+                A->sitetype = stringToSiteType(cp);
+                if(A->sitetype == AntennaSiteOther)
+                {
+                    cerr << "Error: unknown site type '" << cp << "' for antenna " << antName << " in the vex file." << endl;
+
+			exit(0);
+		}
 
 		p = (struct site_position *)get_station_lowl(stn, T_SITE_POSITION, B_SITE, v);
 		if(p == 0)
@@ -491,6 +531,21 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 				}
 			}
 		}
+                
+		if(antennaSetup)
+		{
+                    // If there is a ground station associated with a spacecraft,
+                    // mark any ground station clock breaks.
+                    if(antennaSetup->GS_exists) {
+                        for(std::vector<SpacecraftGroundClockBreak>::const_iterator it = antennaSetup->spacecraft_ground_clock_recording_breaks.begin();
+                            it != antennaSetup->spacecraft_ground_clock_recording_breaks.end();
+                            ++it)
+                        {
+                            mjd = it->mjd_start + it->day_fraction_start;
+                            V->addEvent(mjd, VexEvent::CLOCK_BREAK, antName);
+                        }
+                    }
+                }
 
 		if(!antennaSetup || antennaSetup->dataSource == DataSourceNone)
 		{

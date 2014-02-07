@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2012, 2014 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -261,7 +261,7 @@ public:
 class VexAntenna
 {
 public:
-	VexAntenna() : x(0.0), y(0.0), z(0.0), dx(0.0), dy(0.0), dz(0.0), posEpoch(0.0), axisOffset(0.0), dataSource(DataSourceNone) {}
+	VexAntenna() : x(0.0), y(0.0), z(0.0), dx(0.0), dy(0.0), dz(0.0), posEpoch(0.0), axisOffset(0.0), dataSource(DataSourceNone), sitetype(AntennaSiteOther) {}
 
 	double getVexClocks(double mjd, double * coeffs) const;
 
@@ -276,6 +276,7 @@ public:
 	std::vector<VexClock> clocks;
 	std::vector<VexBasebandFile> basebandFiles;
 	enum DataSource	dataSource;
+        enum AntennaSiteType sitetype;
 };
 
 class VexEOP

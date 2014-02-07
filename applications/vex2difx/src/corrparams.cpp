@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2013 by Walter Brisken                             *
+ *   Copyright (C) 2009-2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -38,13 +38,17 @@
 #include <cctype>
 #include <ctime>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <difxio.h>
+#include <cerrno>
 #include "util.h"
 #include "corrparams.h"
 
 const double MJD_UNIX0 = 40587.0;	// MJD at beginning of unix time
 const double SEC_DAY = 86400.0;
+const int    MJD_UNIX0_INT = 40587;
+const int    SEC_DAY_INT = 86400;
 const double MUSEC_DAY = 86400000000.0;
 
 const double PhaseCentre::DEFAULT_RA  = -999.9;
@@ -56,9 +60,9 @@ static double roundSeconds(double mjd)
 	int intmjd, intsec;
 
 	intmjd = static_cast<int>(mjd);
-	intsec = static_cast<int>((mjd - intmjd)*86400.0 + 0.5);
+	intsec = static_cast<int>((mjd - intmjd)*SEC_DAY + 0.5);
 
-	return intmjd + intsec/86400.0;
+	return intmjd + intsec/SEC_DAY;
 }
 
 bool isTrue(const std::string &str)
@@ -85,22 +89,23 @@ bool isPower2(int n)
 }
 
 // Turns a string into MJD 
-// The following formats are allowd:
+// The following formats are allowed:
 // 1. decimal mjd:  55345.113521
 // 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
 // 3. VLBA-like time:   2009MAR08-12:34:56.121
 // 4. vex time: 2009y245d08h12m24s"
 double parseTime(const std::string &timeStr)
 {
-	const int TimeLength=54;
 	double mjd;
-	char str[TimeLength];
-	char *p;
+	const char* const str = timeStr.c_str();
+	const char *p;
+	double t;
+        double f;
 	int n;
 	struct tm tm;
+        bool need_s = false;
 	char dummy;
-
-	snprintf(str, TimeLength, "%s", timeStr.c_str());
+        char* endptr;
 
 	// Test for ISO 8601
 	p = strptime(str, "%FT%T", &tm);
@@ -112,11 +117,33 @@ double parseTime(const std::string &timeStr)
 	if(!p)
 	{
 		//Test for Vex
-		p = strptime(str, "%Yy%jd%Hh%Mm%Ss", &tm);
+		p = strptime(str, "%Yy%jd%Hh%Mm%S", &tm);
+                need_s = true;
 	}
 	if(p)
 	{
-		return mktime(&tm)/86400.0 + MJD_UNIX0;
+            f = 0.0;
+            if(p[0] == '.') {
+                errno = 0;
+                f = strtod(p,&endptr);
+                if((endptr != p) && (errno==0)) {
+                    p = endptr;
+                }
+                else {
+                    f = 0.0;
+                }
+            }
+            if(need_s) {
+                if(p[0] == 's') {}
+                else {
+                    goto format_error;
+                }
+            }
+            t = mktime(&tm);
+                
+            mjd = (t+f)/SEC_DAY + MJD_UNIX0;
+
+            return mjd;
 	}
 
 	n = sscanf(str, "%lf%c", &mjd, &dummy);
@@ -125,9 +152,10 @@ double parseTime(const std::string &timeStr)
 		// Must be straight MJD value
 		return mjd;
 	}
-
+        
+format_error:
 	// No match
-	std::cerr << std::endl;
+        std::cerr << std::endl;
 	std::cerr << "Error: date not parsable: " << timeStr << std::endl;
 	std::cerr << std::endl;
 	std::cerr << "Allowable formats are:" << std::endl;
@@ -139,6 +167,308 @@ double parseTime(const std::string &timeStr)
 
 	exit(EXIT_FAILURE);
 }
+
+namespace {
+// Turns a string into an MJD with a integer and fractional day parts
+// The following formats are allowed:
+// 1. decimal mjd:                 54345.341944
+// 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
+// 3. VLBA-like time               2009MAR08-12:34:56.121
+// 4. vex time                     2009y061d12h34m56.121s
+void parseTimeFractional(const char* const str,
+                         int& mjd,
+                         double& dayfraction,
+                         char** endptr)
+{
+	char *p;
+        double f;
+	struct tm tm;
+        bool need_s = false;
+        *endptr = 0;
+
+	// Test for ISO 8601
+	p = strptime(str, "%FT%T", &tm);
+	if(!p)
+	{
+		//Test for VLBA-like
+		p = strptime(str, "%Y%b%d-%T", &tm);
+	}
+	if(!p)
+	{
+		//Test for Vex
+		p = strptime(str, "%Yy%jd%Hh%Mm%S", &tm);
+                need_s = true;
+	}
+	if(p)
+	{
+            f = 0.0;
+            if(p[0] == '.') {
+                errno = 0;
+                f = strtod(p,endptr);
+                if((*endptr != p) && (errno==0)) {
+                    p = *endptr;
+                }
+                else {
+                    f = 0.0;
+                }
+            }
+            if(need_s) {
+                if(p[0] == 's') {
+                    *endptr = const_cast<char*>(p+1);
+                }
+                else {
+                    goto format_error;
+                }
+            }
+            else {
+                *endptr = const_cast<char*>(p);
+            }
+            time_t tt = mktime(&tm);
+                
+            mjd = tt/SEC_DAY_INT + MJD_UNIX0_INT;
+            dayfraction = (tt%SEC_DAY_INT + f)/SEC_DAY;
+            return;
+	}
+
+        errno = 0;
+        mjd = int(strtol(p,endptr,10));
+        if((*endptr != p) && (errno==0)) {}
+        else {
+            goto format_error;
+        }
+        p=*endptr;
+        dayfraction = strtod(p,endptr);
+        if((*endptr != p) && (errno==0)) {}
+        else {
+            goto format_error;
+        }
+        return;
+        
+format_error:
+	// No match
+	std::cerr << std::endl;
+	std::cerr << "Error: date not parsable in parseTimeFractional: " << str << std::endl;
+	std::cerr << std::endl;
+	std::cerr << "Allowable formats are:" << std::endl;
+	std::cerr << "1. Straight MJD        54345.341944" << std::endl;
+	std::cerr << "2. Vex formatted date  2009y245d08h12m24s" << std::endl;
+	std::cerr << "3. VLBA-like format    2009SEP02-08:12:24" << std::endl;
+	std::cerr << "4. ISO 8601 format     2009-09-02T08:12:24" << std::endl;
+	std::cerr << std::endl;
+
+	exit(EXIT_FAILURE);
+}
+}
+
+
+
+
+
+// Turns a SpacecraftGroundClockBreak string into two MJDs and a clock offset fudge
+// /start@MJD/sync@MJD/clockfudge@sec
+// The following formats are allowed for the MJDs:
+// 1. decimal mjd:                 54345.341944
+// 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
+// 3. VLBA-like time               2009MAR08-12:34:56.121
+// 4. vex time                     2009y061d12h34m56.121s
+SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr, int* nWarn)
+{
+    bool have_start = false;
+    bool have_sync = false;
+    bool have_fudge = false;
+    bool no_identifiers = false;
+    int pos_count = 0;
+    string::size_type at, last, splitat;
+    string nestedkeyval;
+    string key;
+    string value;
+    const char* str;
+    const char* p;
+    char* endptr = 0;
+    SpacecraftGroundClockBreak result;
+   
+    last = 0;
+    at = 0;
+    while(at != string::npos)
+    {
+        at = timeStr.find_first_of('/', last);
+        nestedkeyval = timeStr.substr(last, at-last);
+        splitat = nestedkeyval.find_first_of('@');
+        if(splitat == string::npos)
+        {
+            if(pos_count == 0)
+            {
+                cerr << "Warning: old style SC_GS_clock_break entry without key@value pairs found.  Assuming the values come in the correct order" << endl;
+                *nWarn++;
+                no_identifiers = true;
+            }
+            else if(!no_identifiers) {
+                cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.  SC_GS_clock_break entry is '" << timeStr << "'" << endl;
+                goto format_error;
+            }
+            str = nestedkeyval.c_str();
+            if(pos_count == 0) {
+                parseTimeFractional(str, result.mjd_start, result.day_fraction_start, &endptr);
+                if((endptr == 0) || (*endptr != 0)) {
+                    goto format_error;
+                }
+                have_start = true;
+            }
+            else if(pos_count == 1) {
+                parseTimeFractional(str, result.mjd_sync, result.day_fraction_sync, &endptr);
+                if((endptr == 0) || (*endptr != 0)) {
+                    goto format_error;
+                }
+                have_sync = true;
+            }
+            else if(pos_count == 2) {
+                errno = 0;
+                result.clock_break_fudge_seconds = strtod(str,&endptr);
+                if((*endptr == 0) && (errno==0)) {}
+                else {
+                    goto format_error;
+                }
+                result.clock_break_fudge_seconds *= 1E-6; // convert from \mu s to s
+                have_fudge = true;
+            }
+            else {
+                cerr << "Error: too many values in old-style SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                goto format_error;
+            }
+        }
+        else {
+            // key@value
+            if(no_identifiers) {
+                cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.  SC_GS_clock_break entry is '" << timeStr << "'" << endl;
+                goto format_error;
+            }
+            key = nestedkeyval.substr(0,splitat);
+            value = nestedkeyval.substr(splitat+1);
+            if(key == "start") {
+                if(have_start) {
+                    cerr << "Error: multiple 'start' keys in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                    goto format_error;
+                }
+                parseTimeFractional(value.c_str(), result.mjd_start, result.day_fraction_start, &endptr);
+                if((endptr == 0) || (*endptr != 0)) {
+                    goto format_error;
+                }
+                have_start = true;
+            }
+            else if(key == "sync") {
+                if(have_sync) {
+                    cerr << "Error: multiple 'sync' keys in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                    goto format_error;
+                }
+                parseTimeFractional(value.c_str(), result.mjd_sync, result.day_fraction_sync, &endptr);
+                if((endptr == 0) || (*endptr != 0)) {
+                    goto format_error;
+                }
+                have_sync = true;
+            }
+            else if(key == "clockfudge") {
+                if(have_fudge) {
+                    cerr << "Error: multiple 'fudge' keys in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                    goto format_error;
+                }
+                errno = 0;
+                result.clock_break_fudge_seconds = strtod(value.c_str(),&endptr);
+                if((*endptr == 0) && (errno==0)) {}
+                else {
+                    goto format_error;
+                }
+                result.clock_break_fudge_seconds *= 1E-6; // convert from \mu s to s
+                have_fudge = true;
+            }
+            else {
+                cerr << "Error: unrecognized SC_GS_clock_break sub-key '" << key << "' in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                goto format_error;
+            }
+        }
+        pos_count++;
+        last = at+1;
+    }
+    // Did we get everything we need?
+    if((have_start) && (have_sync)) {
+        // all we need
+    }
+    else {
+        cerr << "Error: not all required sub-keys were found in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+        goto format_error;
+    }
+    return result;
+
+format_error:
+	// No match
+	cerr << endl;
+	cerr << "Error: SC_GS_clock_break entry '" << timeStr << "' not parsable." << endl;
+	cerr << endl;
+        cerr << "SC_GS_clock_break should be given as start@MJD/sync@MJD/clockfudge@SS.SSS" << endl;
+        cerr << endl;
+	cerr << "Allowable MJD date formats are:" << endl;
+	cerr << "1. Straight MJD        54345.341944" << endl;
+	cerr << "2. Vex formatted date  2009y245d08h12m24s" << endl;
+	cerr << "3. VLBA-like format    2009SEP02-08:12:24" << endl;
+	cerr << "4. ISO 8601 format     2009-09-02T08:12:24" << endl;
+	cerr << endl;
+        cerr << "Clock fudge should be specified as a floating point value such as:" << endl;
+        cerr << "1" << endl;
+        cerr << "1.2" << endl;
+        cerr << "1.2E3" << endl;
+        
+
+	exit(0);
+}
+
+
+
+simple3Vector parseSpacecraftsimple3Vector(const string &vecStr)
+{
+	const char* const str = vecStr.c_str();
+	const char *p;
+	char* endptr;
+        simple3Vector result;
+
+        p = str;
+        endptr = 0;
+        errno=0;
+        result.X = strtod(p, &endptr);
+        if((endptr == 0) || (endptr == p) || (errno != 0) || (*endptr == 0)) {
+            goto format_error;
+        }
+        p = endptr + 1;
+        endptr = 0;
+        result.Y = strtod(p, &endptr);
+        if((endptr == 0) || (endptr == p) || (errno != 0) || (*endptr == 0)) {
+            goto format_error;
+        }
+        p = endptr + 1;
+        endptr = 0;
+        result.Z = strtod(p, &endptr);
+        if((endptr == 0) || (endptr == p) || (errno != 0) || (*endptr != 0)) {
+            goto format_error;
+        }
+        return result;
+
+format_error:
+	// No match
+	cerr << endl;
+	cerr << "Error: simple3Vector values not parsable: " << vecStr << endl;
+	cerr << endl;
+        cerr << "simple3Vector entries should be provided as" << endl;
+        cerr << "NUMBER,NUMBER,NUMBER" << endl;
+        cerr << "with no whitespace between entries" << endl;
+	cerr << endl;
+
+	exit(0);
+}
+
+
+
+
+
+
+        
 
 double parseCoord(const char *str, char type)
 {
@@ -315,6 +645,8 @@ CorrSetup::CorrSetup(const std::string &name) : corrSetupName(name)
 	nOutputChan = 0;
 	doPolar = true;
 	doAuto = true;
+        doMSAcalibration = false;
+        MC_table_output_interval = DIFXIO_DEFAULT_POLY_INTERVAL;
 	fringeRotOrder = 1;
 	strideLength = 0;
 	xmacLength = 0;
@@ -392,6 +724,24 @@ int CorrSetup::setkv(const std::string &key, const std::string &value)
 	else if(key == "doAuto")
 	{
 		doAuto = isTrue(value);
+	}
+	else if(key == "doMSAcalibration")
+	{
+		doMSAcalibration = isTrue(value);
+	}
+	else if(key == "MC_tab_interval")
+	{
+                ss >> MC_table_output_interval;
+                if(MC_table_output_interval < 0.0)
+                {
+                    std::cerr << "Warning: SETUP: parameter 'MC_tab_interval' must be non-negative, but is provided as " << MC_table_output_interval << "." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                else if(MC_table_output_interval < 0.01)
+                {
+                    std::cerr << "Warning: SETUP: parameter 'MC_tab_interval' (" << MC_table_output_interval << " s) is very small.  Are you sure this value is correct?" << std::endl;
+                    nWarn++;
+                }
 	}
 	else if(key == "subintNS")
 	{
@@ -715,14 +1065,17 @@ void PhaseCentre::initialise(double r, double d, std::string name)
 {
 	ra = r;
 	dec = d;
+        sc_epoch = 0.0; // use the defualt mode for spacecraft
 	difxName = name;
 	calCode = ' ';
 	ephemDeltaT = 24.0;	// seconds; 24 seconds is perfectly matched to the default behavior of calcif2
 	ephemStellarAber = 0.0;	// 0 = don't correct; 1 = correct.  Other values interpolate/extrapolate correction by factor provided
 	qualifier = 0;
+        ephemType = "";
 	ephemClockError = 0.0;	// sec
 	ephemObject = "";
 	ephemFile = "";
+        orientationFile = "";
 	naifFile = "";  
 	gpsId = 0;		// not a GPS satellite
 }
@@ -769,9 +1122,20 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 	{
 		ss >> pc->calCode;
 	}
+	else if(key == "sc_epoch")
+	{
+            std::string es;
+            ss >> es;
+            double ed = parseTime(es);
+	    pc->sc_epoch = ed;
+	}
 	else if(key == "name" || key == "newName")
 	{
 		ss >> pc->difxName;
+	}
+	else if(key == "ephemType")
+	{
+		ss >> pc->ephemType;
 	}
 	else if(key == "ephemObject")
 	{
@@ -780,8 +1144,18 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 	else if(key == "ephemFile")
 	{
 		ss >> pc->ephemFile;
+                if(pc->ephemType.size() == 0) {
+                    pc->ephemType = "SPICE"; // defualt to SPICE for spacecraft
+                }
 	}
-	else if(key == "ephemDeltaT")
+	else if(key == "orientationFile")
+	{
+		ss >> pc->orientationFile;
+                if(pc->ephemType.size() == 0) {
+                    pc->ephemType = "SPICE"; // defualt to SPICE for spacecraft
+                }
+	}
+	else if(key == "ephem DeltaT")
 	{
 		ss >> pc->ephemDeltaT;
 	}
@@ -800,7 +1174,10 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 	else if(key == "naifFile")
 	{
 		ss >> pc->naifFile;
-		if(pc->naifFile < "naif0010.tls")
+                // find filename exclusing the path
+                size_t dir_pos = pc->naifFile.find_last_of("/\\");
+                std::naifFile_filename = pc->naifFile.substr(dir_pos+1);
+		if(naifFile_filename < "naif0010.tls")
 		{
 			if(time(0) > 1341100800)	// July 1, 2012
 			{
@@ -840,6 +1217,12 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 			at = value.find_first_of('/', last);
 			nestedkeyval = value.substr(last, at-last);
 			splitat = nestedkeyval.find_first_of('@');
+                        const std::string parameter_key = nestedkeyval.substr(0,splitat);
+                        if(parameter_key == "addPhaseCentre" || key == "addPhaseCenter")
+                        {
+                            std::cerr << "Warning: addPhaseCenter key contains nested addPhaseCenter key name.  Offending key lies within addPhaseCenter value " << value << std::endl;
+                            nWarn++;
+                        }
 			setkv(nestedkeyval.substr(0,splitat), nestedkeyval.substr(splitat+1), newpc);
 			last = at+1;
 		}
@@ -866,7 +1249,24 @@ void ZoomFreq::initialise(double freq, double bw, bool corrparent, int specavg)
 	spectralaverage = specavg;
 }
 
-AntennaSetup::AntennaSetup(const std::string &name) : vexName(name)
+AntennaSetup::AntennaSetup(const std::string &name) :
+        vexName(name),
+        calcName(""),
+        SC_recording_delay(0.0),
+        GS_exists(false),
+        GS_Name(""),
+        GS_difxName(""),
+        GS_calcName(""),
+        GS_X(0.0), GS_Y(0.0), GS_Z(0.0),
+        GS_dX(0.0), GS_dY(0.0), GS_dZ(0.0),
+        GS_pos_epoch(0.0),
+        GS_axisType(""),
+        GS_axisOffset0(0.0),GS_axisOffset1(0.0),GS_axisOffset2(0.0),
+        GS_clockorder(-1),
+        GS_clock0(0.0),GS_clock1(0.0),GS_clock2(0.0),GS_clock3(0.0),GS_clock4(0.0),GS_clock5(0.0),
+        GS_clockEpoch(0.0),
+        SC_pos_offset_refmjd(0.0),
+        SC_pos_offsetorder(-1)
 {
 	polSwap = false;
 	X = 0.0;
@@ -889,6 +1289,15 @@ AntennaSetup::AntennaSetup(const std::string &name) : vexName(name)
 	tcalFrequency = -1;
 	dataSource = DataSourceNone;
 	dataSampling = NumSamplingTypes;	// flag that no sampling is is identified here
+        // spacecraft ephemeris
+	ephemDeltaT = 24.0; //seconds; 24 seconds is perfectly matched to the default behavior of calcif2
+        ephemType = "";
+	ephemObject = "";
+	ephemFile = "";
+        orientationFile = "";
+	naifFile = "";
+        JPLplanetaryephem = "";
+        ephemClockError = 0.0;
 
 	// antenna is by default not constrained in start time
 	mjdStart = -1.0;
@@ -1212,7 +1621,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			++nWarn;
 		}
 
-		ss >> clock2;
+		clock2 = parseDouble(value);
 		if(clockorder < 2)
 		{
 			clockorder = 2;
@@ -1227,7 +1636,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			++nWarn;
 		}
 
-		ss >> clock3;
+		clock3 = parseDouble(value);
 		if(clockorder < 3)
 		{
 			clockorder = 3;
@@ -1242,7 +1651,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			++nWarn;
 		}
 
-		ss >> clock4;
+		clock4 = parseDouble(value);
 		if(clockorder < 4)
 		{
 			clockorder = 4;
@@ -1257,7 +1666,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			++nWarn;
 		}
 
-		ss >> clock5;
+		clock5 = parseDouble(value);
 		if(clockorder < 5)
 		{
 			clockorder = 5;
@@ -1531,6 +1940,412 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			last = at+1;
 		}
 	}
+	else if(key == "ephemType")
+	{
+		ss >> ephemType;
+	}
+	else if(key == "ephemObject")
+	{
+		ss >> ephemObject;
+	}
+	else if(key == "ephemFile")
+	{
+		ss >> ephemFile;
+                if(ephemType.size() == 0) {
+                    ephemType = "SPICE"; // defualt to SPICE for spacecraft
+                }
+	}
+	else if(key == "orientationFile")
+	{
+		ss >> orientationFile;
+                if(ephemType.size() == 0) {
+                    ephemType = "SPICE"; // defualt to SPICE for spacecraft
+                }
+	}
+	else if(key == "naifFile")
+	{
+		ss >> naifFile;
+                // find filename exclusing the path
+                size_t dir_pos = naifFile.find_last_of("/\\");
+                std::naifFile_filename = naifFile.substr(dir_pos+1);
+		if(naifFile_filename < "naif0010.tls")
+		{
+			if(time(0) > 1341100800)	// July 1, 2012
+			{
+				std::cout << "Error: naif0010.tls or newer is needed for correct ephemeris evaluation.  An old or unrecognized file, " << pc->naifFile << " was supplied." << std::endl;
+
+				exit(EXIT_FAILURE);
+			}
+			else
+			{
+				std::cout << "Warning: Using old NAIF file: " << naifFile << ".  Please upgrade to naif0010.tls or newer." << std::endl;
+				std::cout << "After July 1, 2012, this will be an error and vex2difx will not run." << std::endl;
+				nWarn++;
+			}
+		}
+	}
+	else if(key == "JPLplanetaryephem")
+	{
+		ss >> JPLplanetaryephem;
+	}
+	else if(key == "ephemDeltaT")
+	{
+		ss >> ephemDeltaT;
+	}
+	else if(key == "ephemClockError")
+	{
+		ss >> ephemClockError;
+	}
+	else if(key == "SC_time_type")
+	{
+		ss >> spacecraft_time_type;
+                if(stringToSpacecraftTimeType(spacecraft_time_type.c_str()) == SpacecraftTimeOther) {
+                    std::cerr << "Warning: antenna " << vexName << " has unrecognized SC_time_type value" << std::endl;
+			nWarn++;
+		}
+	}
+	else if(key == "SC_GS_clock_break")
+	{
+            std::string str;
+            ss >> str;
+            SpacecraftGroundClockBreak cb = parseSpacecraftGroundClockBreak(str, &nWarn);
+            spacecraft_ground_clock_recording_breaks.push_back(cb);
+	}
+	else if(key == "SC_rec_delay")
+	{
+		ss >> SC_recording_delay;
+	}
+	else if(key == "GS_Name")
+	{
+            ss >> GS_Name;
+            GS_exists = true;
+	}
+	else if(key == "GS_difxName")
+	{
+            ss >> GS_Name;
+            GS_exists = true;
+	}
+	else if(key == "GS_calcName")
+	{
+            ss >> GS_Name;
+            GS_exists = true;
+	}
+	else if(key == "GS_X" || key == "GS_x")
+	{
+		if(GS_X != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_X definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_X;
+            GS_exists = true;
+	}
+	else if(key == "GS_Y" || key == "GS_y")
+	{
+		if(GS_Y != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_Y definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_Y;
+            GS_exists = true;
+	}
+	else if(key == "GS_Z" || key == "GS_z")
+	{
+		if(GS_Z != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_Z definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_Z;
+            GS_exists = true;
+	}
+	else if(key == "GS_dX" || key == "GS_dx")
+	{
+		if(GS_dX != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_dX definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_dX;
+                GS_dX /= 365.25*86400.0; // convert from m/yr to m/s
+            GS_exists = true;
+	}
+	else if(key == "GS_dY" || key == "GS_dy")
+	{
+		if(GS_dY != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_dY definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_dY;
+                GS_dY /= 365.25*86400.0; // convert from m/yr to m/s
+            GS_exists = true;
+	}
+	else if(key == "GS_dZ" || key == "GS_dz")
+	{
+		if(GS_dZ != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_dZ definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_dZ;
+                GS_dZ /= 365.25*86400.0; // convert from m/yr to m/s
+            GS_exists = true;
+	}
+	else if(key == "GS_pos_epoch")
+	{
+		if(GS_pos_epoch != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_pos_epoch definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_pos_epoch;
+            GS_exists = true;
+	}
+	else if(key == "GS_axisType")
+	{
+            ss >> GS_axisType;
+            GS_exists = true;
+	}
+	else if(key == "GS_axisOffset0")
+	{
+		if(GS_axisOffset0 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_axisOffset0 definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_axisOffset0;
+            GS_exists = true;
+	}
+	else if(key == "GS_axisOffset1")
+	{
+		if(GS_axisOffset1 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_axisOffset1 definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_axisOffset1;
+            GS_exists = true;
+	}
+	else if(key == "GS_axisOffset2")
+	{
+		if(GS_axisOffset2 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_axisOffset2 definitions" << std::endl;
+			nWarn++;
+		}
+		ss >> GS_axisOffset2;
+            GS_exists = true;
+	}
+	else if(key == "GS_clock0")
+	{
+		if(GS_clock0 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_clock0 definitions" << std::endl;
+			nWarn++;
+		}
+
+		GS_clock0 = parseDouble(value);
+		if(GS_clockorder < 0)
+		{
+			GS_clockorder = 0;
+		}
+		GS_clock0 /= 1.0e6;	// convert from us to sec
+	}
+	else if(key == "GS_clock1")
+	{
+		if(GS_clock1 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_clock1 definitions" << std::endl;
+			nWarn++;
+		}
+
+		GS_clock1 = parseDouble(value);
+		if(GS_clockorder < 1)
+		{
+			GS_clockorder = 1;
+		}
+		GS_clock1 /= 1.0e6;	// convert from us/sec^1 to sec/sec^1
+	}
+	else if(key == "GS_clock2")
+	{
+		if(GS_clock2 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_clock2 definitions" << std::endl;
+			nWarn++;
+		}
+
+		GS_clock2 = parseDouble(value);
+		if(GS_clockorder < 2)
+		{
+			GS_clockorder = 2;
+		}
+		GS_clock2 /= 1.0e6;	// convert from us/sec^2 to sec/sec^2
+	}
+	else if(key == "GS_clock3")
+	{
+		if(GS_clock3 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_clock3 definitions" << std::endl;
+			nWarn++;
+		}
+
+		GS_clock3 = parseDouble(value);
+		if(GS_clockorder < 3)
+		{
+			GS_clockorder = 3;
+		}
+		GS_clock3 /= 1.0e6;	// convert from us/sec^3 to sec/sec^3
+	}
+	else if(key == "GS_clock4")
+	{
+		if(GS_clock4 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_clock4 definitions" << std::endl;
+			nWarn++;
+		}
+
+		GS_clock4 = parseDouble(value);
+		if(GS_clockorder < 4)
+		{
+			GS_clockorder = 4;
+		}
+		GS_clock4 /= 1.0e6;	// convert from us/sec^4 to sec/sec^4
+	}
+	else if(key == "GS_clock5")
+	{
+		if(GS_clock5 != 0.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_clock5 definitions" << std::endl;
+			nWarn++;
+		}
+
+		GS_clock5 = parseDouble(value);
+		if(GS_clockorder < 5)
+		{
+			GS_clockorder = 5;
+		}
+		GS_clock5 /= 1.0e6;	// convert from us/sec^5 to sec/sec^5
+	}
+	else if(key == "GS_clockEpoch")
+	{
+		if(GS_clockEpoch > 50001.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple GS_clockEpoch definitions" << std::endl;
+			nWarn++;
+		}
+		GS_clockEpoch = parseTime(value);
+	}
+	else if(key == "SC_pos_offsetEpoch")
+	{
+		if(SC_pos_offset_refmjd > 50001.0)
+		{
+			std::cerr << "Warning: antenna " << vexName << " has multiple SC_pos_offsetEpoch definitions" << std::endl;
+			nWarn++;
+		}
+                std::string str;
+                ss >> str;
+                char* endptr = 0;
+                parseTimeFractional(str.c_str(), SC_pos_offset_refmjd,
+                                   SC_pos_offset_reffracDay, &endptr);
+	}
+	else if(key == "SC_pos_offset0")
+	{
+            if((SC_pos_offset0.X != 0.0) || (SC_pos_offset0.Y != 0.0) || (SC_pos_offset0.Z != 0.0))
+            {
+                std::cerr << "Warning: antenna " << vexName << " has multiple SC_pos_offset1 definitions" << std::endl;
+                nWarn++;
+            }
+            
+            std::string str;
+            ss >> str;
+            SC_pos_offset0 = parseSpacecraftsimple3Vector(str);
+            if(SC_pos_offsetorder < 0)
+            {
+                SC_pos_offsetorder = 0;
+            }
+	}
+	else if(key == "SC_pos_offset1")
+	{
+            if((SC_pos_offset1.X != 0.0) || (SC_pos_offset1.Y != 0.0) || (SC_pos_offset1.Z != 0.0))
+            {
+                std::cerr << "Warning: antenna " << vexName << " has multiple SC_pos_offset0 definitions" << std::endl;
+                nWarn++;
+            }
+            
+            std::string str;
+            ss >> str;
+            SC_pos_offset1 = parseSpacecraftsimple3Vector(str);
+            if(SC_pos_offsetorder < 1)
+            {
+                SC_pos_offsetorder = 1;
+            }
+	}
+	else if(key == "SC_pos_offset2")
+	{
+            if((SC_pos_offset2.X != 0.0) || (SC_pos_offset2.Y != 0.0) || (SC_pos_offset2.Z != 0.0))
+            {
+                std::cerr << "Warning: antenna " << vexName << " has multiple SC_pos_offset2 definitions" << std::endl;
+                nWarn++;
+            }
+            
+            std::string str;
+            ss >> str;
+            SC_pos_offset2 = parseSpacecraftsimple3Vector(str);
+            if(SC_pos_offsetorder < 2)
+            {
+                SC_pos_offsetorder = 2;
+            }
+	}
+	else if(key == "SC_pos_offset3")
+	{
+            if((SC_pos_offset3.X != 0.0) || (SC_pos_offset3.Y != 0.0) || (SC_pos_offset3.Z != 0.0))
+            {
+                std::cerr << "Warning: antenna " << vexName << " has multiple SC_pos_offset3 definitions" << std::endl;
+                nWarn++;
+            }
+            
+            std::string str;
+            ss >> str;
+            SC_pos_offset3 = parseSpacecraftsimple3Vector(str);
+            if(SC_pos_offsetorder < 3)
+            {
+                SC_pos_offsetorder = 3;
+            }
+	}
+	else if(key == "SC_pos_offset4")
+	{
+            if((SC_pos_offset4.X != 0.0) || (SC_pos_offset4.Y != 0.0) || (SC_pos_offset4.Z != 0.0))
+            {
+                std::cerr << "Warning: antenna " << vexName << " has multiple SC_pos_offset4 definitions" << std::endl;
+                nWarn++;
+            }
+            
+            std::string str;
+            ss >> str;
+            SC_pos_offset4 = parseSpacecraftsimple3Vector(str);
+            if(SC_pos_offsetorder < 4)
+            {
+                SC_pos_offsetorder = 4;
+            }
+	}
+	else if(key == "SC_pos_offset5")
+	{
+            if((SC_pos_offset5.X != 0.0) || (SC_pos_offset5.Y != 0.0) || (SC_pos_offset5.Z != 0.0))
+            {
+                std::cerr << "Warning: antenna " << vexName << " has multiple SC_pos_offset5 definitions" << std::endl;
+                nWarn++;
+            }
+            
+            std::string str;
+            ss >> str;
+            SC_pos_offset5 = parseSpacecraftsimple3Vector(str);
+            if(SC_pos_offsetorder < 5)
+            {
+                SC_pos_offsetorder = 5;
+            }
+	}
 	else if(key == "mjdStart")
 	{
 		ss >> mjdStart;
@@ -1662,7 +2477,7 @@ void CorrParams::defaults()
 	jobSeries = "job";
 	threadsFile = "";
 	minSubarraySize = 2;
-	maxGap = 180.0/86400.0;		// 3 minutes
+	maxGap = 180.0/SEC_DAY;		// 3 minutes
 	singleScan = false;
 	fakeDatasource = false;
 	singleSetup = true;
@@ -1670,8 +2485,10 @@ void CorrParams::defaults()
 	mediaSplit = true;
 	padScans = true;
 	simFXCORR = false;
-	maxLength = 7200/86400.0;	// 2 hours
-	minLength = 2/86400.0;		// 2 seconds
+        DelayPolyOrder = DIFXIO_DEFAULT_POLY_ORDER;
+        DelayPolyInterval = DIFXIO_DEFAULT_POLY_INTERVAL; // 2 minutes
+	maxLength = 7200/SEC_DAY;	// 2 hours
+	minLength = 2/SEC_DAY;		// 2 seconds
 	maxSize = 2e9;			// 2 GB
 	mjdStart = 0.0;
 	mjdStop = 1.0e7;
@@ -1753,7 +2570,7 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	else if(key == "maxGap")
 	{
 		ss >> maxGap;
-		maxGap /= 86400.0;	// convert to seconds from days
+		maxGap /= SEC_DAY;	// convert to seconds from days
 	}
 	else if(key == "singleScan")
 	{
@@ -1786,12 +2603,12 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	else if(key == "maxLength")
 	{
 		ss >> maxLength;
-		maxLength /= 86400.0;	// convert to seconds from days
+		maxLength /= SEC_DAY;	// convert to seconds from days
 	}
 	else if(key == "minLength")
 	{
 		ss >> minLength;
-		minLength /= 86400.0;	// convert to seconds from days
+		minLength /= SEC_DAY;	// convert to seconds from days
 	}
 	else if(key == "maxSize")
 	{
@@ -1858,6 +2675,26 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	else if(key == "tweakIntTime")
 	{
 		tweakIntTime = isTrue(value);
+	}
+	else if(key == "DelayPolyOrder")
+	{
+		ss >> DelayPolyOrder;
+		if((DelayPolyOrder < 2) || (DelayPolyOrder > MAX_MODEL_ORDER))
+		{
+                    std::cerr << "Error: DelayPolyOrder (" << DelayPolyOrder << ") outside of valid range 2 < DelayPolyOrder <= " << MAX_MODEL_ORDER << std::endl;
+			
+			exit(EXIT_FAILURE);
+		}
+	}
+	else if(key == "DelayPolyInterval")
+	{
+		ss >> DelayPolyInterval;
+		if((DelayPolyInterval < 10) || (DelayPolyInterval > 600))
+		{
+                    std::cerr << "Error: DelayPolyInterval (" << DelayPolyInterval << ") outside of valid range 10 <= DelayPolyInterval <= " << 600 << std::endl;
+			
+			exit(EXIT_FAILURE);
+		}
 	}
 	else if(key == "antennas")
 	{
@@ -2668,6 +3505,23 @@ const AntennaSetup *CorrParams::getAntennaSetup(const std::string &name) const
 	return a;
 }
 
+const AntennaSetup *CorrParams::getAntennaSetupExact(const std::string &name) const
+{
+	int i, n;
+	const AntennaSetup *a = 0;
+
+	for(std::vector<AntennaSetup>::const_iterator it = antennaSetups.begin(); it != antennaSetups.end(); ++it)
+	{
+		if(name == it->.vexName)
+		{
+                        a = &(*it);
+			break;
+		}
+	}
+
+	return a;
+}
+
 const GlobalZoom *CorrParams::getGlobalZoom(const std::string &name) const
 {
 	const GlobalZoom *z = 0;
@@ -2897,6 +3751,10 @@ std::ostream& operator << (std::ostream &os, const SourceSetup &x)
 	{
 		os << "  pointing centre dec=" << x.pointingCentre.dec << " # J2000" << std::endl;
 	}
+	if(x.pointingCentre.sc_epoch > 0.0)
+	{
+		os << "  pointing centre spacecraft epoch=" << x.pointingCentre.sc_epoch << std::endl;
+	}
 	if(x.pointingCentre.calCode != ' ')
 	{
 		os << "  pointing centre calCode=" << x.pointingCentre.calCode << std::endl;
@@ -2942,6 +3800,9 @@ std::ostream& operator << (std::ostream &os, const AntennaSetup &x)
 	}
 	os << "  phaseCalInt=" << x.phaseCalIntervalMHz << std::endl;
 	os << "  tcalFreq=" << x.tcalFrequency << std::endl;
+	if(x.ephemFile.size() > 0) {
+		os << "	 # antenna is a spacecraft" << dataSourceNames[x.dataSource] << std::endl;
+	}
 
 	os << "}" << std::endl;
 
@@ -2977,9 +3838,9 @@ std::ostream& operator << (std::ostream &os, const CorrParams &x)
 	os << "visBufferLength=" << x.visBufferLength << std::endl;
 
 	os.precision(6);
-	os << "maxGap=" << x.maxGap*86400.0 << " # seconds" << std::endl;
-	os << "maxLength=" << x.maxLength*86400.0 << " # seconds" << std::endl;
-	os << "minLength=" << x.minLength*86400.0 << " # seconds" << std::endl;
+	os << "maxGap=" << x.maxGap*SEC_DAY << " # seconds" << std::endl;
+	os << "maxLength=" << x.maxLength*SEC_DAY << " # seconds" << std::endl;
+	os << "minLength=" << x.minLength*SEC_DAY << " # seconds" << std::endl;
 	os << "maxSize=" << x.maxSize/1000000.0 << " # MB" << std::endl;
 	os.precision(13);
 

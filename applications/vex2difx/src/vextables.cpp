@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2012, 2014 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -322,7 +322,7 @@ int VexMode::getPols(char *pols) const
 		}
 		else
 		{
-			std::cerr << "Error: VexMode::getPols: subband with illegal polarization (" << it->pol << ") encountered." << std::endl;
+			std::cerr << "Error: VexMode::getPols: subband with illegal polarization (" << it->pol << ") encountered in def '" << defName << "'." << std::endl;
 			
 			exit(EXIT_FAILURE);
 		}
@@ -723,11 +723,13 @@ VexSource *VexData::newSource()
 double VexAntenna::getVexClocks(double mjd, double *coeffs) const
 {
 	double epoch = -1.0;
+        double last_mjdStart = -1.0;
 
 	for(std::vector<VexClock>::const_iterator it = clocks.begin(); it != clocks.end(); ++it)
 	{
-		if(it->mjdStart <= mjd)
+            if((it->mjdStart <= mjd) && (it->mjdStart >= last_mjdStart))
 		{
+                    last_mjdStart = it->mjdStart;
 			epoch = it->offset_epoch;
 			coeffs[0] = it->offset;
 			coeffs[1] = it->rate;
