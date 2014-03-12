@@ -67,6 +67,10 @@ Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snu
 	noDataOnModule = false;
 	nReads = 0;
 	jobEndMJD = conf->getStartMJD() + (conf->getStartSeconds() + conf->getExecuteSeconds() + 1)/86400.0;
+	nGap = 0;
+	nExcess = 0;
+
+	mk5pointer = new long long[readbufferslots];
 
 	readbufferslots = 8;
 	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*21/10;
@@ -247,6 +251,7 @@ void Mark5BMark5DataStream::mark5threadfunction()
 			}
 
 			// This is where the actual reading from the Mark5 device happens
+			mk5pointer[readbufferwriteslot] = readpointer;
 			xlrRC = difxMark5Read(xlrDevice, readpointer, readbuffer + readbufferwriteslot*readbufferslotsize, bytes, readDelayMicroseconds);
 
 			if(xlrRC != XLR_SUCCESS)
@@ -755,7 +760,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 	fixReturn = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
 	if(fixReturn < 0)
 	{
-		cwarn << startl << "mark5bfix returned " << fixReturn << endl;
+		cwarn << startl << "mark5bfix returned " << fixReturn << " startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " readbytes=" << readbytes << endl;
 	}
 	if(startOutputFrameNumber >= 0 && m5bstats.srcUsed <= 0)
 	{
@@ -799,13 +804,47 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 			if(m5bstats.srcUsed < m5bstats.destUsed - 10*10016)
 			{
 				// Warn if more than 10 frames of data are missing
-				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
+				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " readbytes=" << readbytes << endl;
+
+				++nGap;
+				if(nGap < 10)
+				{
+					char fn[100];
+					FILE *out;
+					long long rp = mk5pointer[n1] + fixindex % readbufferslotsize;
+
+					snprintf(fn, 100, "/tmp/%s.gap.%d.m5b", datafilenames[0][0].c_str(), nGap);
+					cwarn << startl << "Writing relevant buffer to file: " << fn << "  corresponding module read pointer is: " << rp << endl;
+
+					out = fopen(fn, "w");
+
+					fwrite(readbuffer+fixindex, 1, bytesvisible, out);
+
+					fclose(out);
+				}
 			}
 			else if(m5bstats.srcUsed > m5bstats.destUsed + 10*10016)
 			{
 				// Warn if more than 10 frames of unexpected data found
 				// Note that 5008 bytes of extra data at scan ends is not uncommon, so specifically don't warn for that.
-				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
+				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " readbytes=" << readbytes << endl;
+
+				++nExcess;
+				if(nExcess < 10)
+				{
+					char fn[100];
+					FILE *out;
+					long long rp = mk5pointer[n1] + fixindex % readbufferslotsize;
+
+					snprintf(fn, 100, "/tmp/%s.excess.%d.m5b", datafilenames[0][0].c_str(), nExcess);
+					cwarn << startl << "Writing relevant buffer to file: " << fn << "  corresponding module read pointer is: " << rp << endl;
+
+					out = fopen(fn, "w");
+
+					fwrite(readbuffer+fixindex, 1, bytesvisible, out);
+
+					fclose(out);
+				}
 			}
 			startOutputFrameNumber = -1;
 		}
