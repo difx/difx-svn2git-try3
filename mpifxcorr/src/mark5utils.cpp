@@ -199,6 +199,11 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 
 				usleep(readDelayMicroseconds);
 				WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
+
+				if(*watermarkSpot == XLR_WATERMARK_VALUE && (nWatermarkFound & (nWatermarkFound-1)) == 0)
+				{
+					cwarn << startl << "Reread did not help!" << endl;
+				}
 			}
 		}
 	}
