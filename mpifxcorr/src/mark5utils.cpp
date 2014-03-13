@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2013 by Walter Brisken                             *
+ *   Copyright (C) 2008-2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -34,6 +34,8 @@
 #include "alert.h"
 #include "mark5dir.h"
 #include "watchdog.h"
+
+#define XLR_WATERMARK_VALUE	0x0FF00FFFF0005555LL
 
 int dirCallback(int scan, int nscan, int status, void *data)
 {
@@ -136,6 +138,8 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 
 	for(int offset = 0; offset < bytes; offset += readSize)
 	{
+		long long *watermarkSpot;
+
 		if(offset + readSize > bytes)
 		{
 			readSize = bytes - offset;
@@ -152,6 +156,10 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 		{
 			usleep(readDelayMicroseconds);
 		}
+
+		// place watermark at end of buffer
+		watermarkSpot = reinterpret_cast<long long *>(dest + offset) - 1;
+		*watermarkSpot = XLR_WATERMARK_VALUE;
 
 		WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
 		
@@ -174,6 +182,19 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 				if( (nHighZeroRate & (nHighZeroRate-1)) == 0)
 				{
 					cwarn << startl << "High zero rate=" << nZero << "/" << 400 <<" in this data.  rereading!  readpointer=" << (readpointer + offset) << " readsize=" << readSize << " N=" << nHighZeroRate << endl;
+				}
+
+				usleep(readDelayMicroseconds);
+				WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
+			}
+			else if(*watermarkSpot == XLR_WATERMARK_VALUE)
+			{
+				static int nWatermarkFound = 0;
+
+				++nWatermarkFound;
+				if( (nWatermarkFound & (nWatermarkFound-1)) == 0)
+				{
+					cwarn << startl << "XLR Read incomplete.  rereading!  readpointer=" << (readpointer + offset) << "readSize=" << readSize << " N=" << nWatermarkFound << endl;
 				}
 
 				usleep(readDelayMicroseconds);
