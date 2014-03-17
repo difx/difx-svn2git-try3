@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008, 2014 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -39,12 +39,20 @@ const char antennaMountTypeNames[][MAX_ANTENNA_MOUNT_NAME_LENGTH] =
 {
 	"AZEL",
 	"EQUA",
-	"SPACE",	/* note: this will fall back to AZEL in calcserver */
+	"SPAC",		/* spacecraft */
 	"XYEW",
 	"NASR",		/* note: this will correctly fall back to AZEL in calcserver */
 	"NASL",		/* note: this will correctly fall back to AZEL in calcserver */
 	"XYNS",		/* note: no FITS-IDI support */
-	"OTHER"		/* don't expect the right parallactic angle or delay model! */
+	"OTHR"		/* don't expect the right parallactic angle or delay model! */
+};
+
+/* These names must match what VEX expects */
+const char antennaSiteTypeNames[][MAX_ANTENNA_SITE_NAME_LENGTH] =
+{
+	"fixed",
+	"earth_orbit",
+        "OTHER"
 };
 
 enum AntennaMountType stringToMountType(const char *str)
@@ -63,7 +71,9 @@ enum AntennaMountType stringToMountType(const char *str)
 		return AntennaMountEquatorial;
 	}
 	if(strcasecmp(str, "SPACE") == 0 ||
+	   strcasecmp(str, "SPAC") == 0 ||
 	   strcasecmp(str, "ORBIT") == 0 ||
+	   strcasecmp(str, "ORBI") == 0 ||
 	   strcasecmp(str, "ORBITING") == 0)
 	{
 		return AntennaMountOrbiting;
@@ -93,6 +103,21 @@ enum AntennaMountType stringToMountType(const char *str)
 	
 }
 
+enum AntennaSiteType stringToSiteType(const char *str)
+{
+	if(strcasecmp(str, "fixed") == 0)
+	{
+		return AntennaSiteFixed;
+	}
+	if(strcasecmp(str, "earth_orbit") == 0)
+	{
+		return AntennaSiteEarth_Orbiting;
+	}
+	
+	return AntennaSiteOther;
+	
+}
+
 DifxAntenna *newDifxAntennaArray(int nAntenna)
 {
 	DifxAntenna* da;
@@ -102,6 +127,8 @@ DifxAntenna *newDifxAntennaArray(int nAntenna)
 	for(a = 0; a < nAntenna; a++)
 	{
 		da[a].spacecraftId = -1;
+                da[a].mount = AntennaMountOther;
+                da[a].sitetype = AntennaSiteOther;
 		for(i=0; i<MAX_MODEL_ORDER; i++)
 		{
 			da[a].clockcoeff[i] = 0.0;
@@ -128,6 +155,7 @@ void fprintDifxAntenna(FILE *fp, const DifxAntenna *da)
 			da->clockcoeff[i], i);
 	}
 	fprintf(fp, "    Mount = %d = %s\n", da->mount, antennaMountTypeNames[da->mount]);
+	fprintf(fp, "    SiteType = %d = %s\n", da->sitetype, antennaSiteTypeNames[da->sitetype]);
 	fprintf(fp, "    Offset = %f, %f, %f m\n", 
 		da->offset[0], da->offset[1], da->offset[2]);
 	fprintf(fp, "    X, Y, Z = %f, %f, %f m\n", da->X, da->Y, da->Z);
@@ -145,6 +173,7 @@ void fprintDifxAntennaSummary(FILE *fp, const DifxAntenna *da)
 	fprintf(fp, "    Clock: Ref time %f, Order = %d, linear approx %e us + %e us/s\n", 
 		da->clockrefmjd, da->clockorder, da->clockcoeff[0], da->clockcoeff[1]);
 	fprintf(fp, "    Mount = %s\n", antennaMountTypeNames[da->mount]);
+	fprintf(fp, "    SiteType = %s\n", antennaSiteTypeNames[da->sitetype]);
 	fprintf(fp, "    Offset = %f, %f, %f m\n", 
 		da->offset[0], da->offset[1], da->offset[2]);
 	fprintf(fp, "    X, Y, Z = %f, %f, %f m\n", da->X, da->Y, da->Z);
@@ -161,13 +190,21 @@ void printDifxAntennaSummary(const DifxAntenna *da)
 
 int isSameDifxAntenna(const DifxAntenna *da1, const DifxAntenna *da2)
 {
-	if(strcmp(da1->name, da2->name) == 0 &&
-	   fabs(da1->X - da2->X) < 1.0 &&
-	   fabs(da1->Y - da2->Y) < 1.0 &&
-	   fabs(da1->Z - da2->Z) < 1.0)
-	{
+        if(strcmp(da1->name, da2->name) == 0)
+        {
+            if((da1->spacecraftId == -1) && (da2->spacecraftId == -1) &&
+               fabs(da1->X - da2->X) < 1.0 &&
+               fabs(da1->Y - da2->Y) < 1.0 &&
+               fabs(da1->Z - da2->Z) < 1.0)
+            {
 		return 1;
-	}
+            }
+            else if((da1->spacecraftId >= 0) && (da2->spacecraftId >= 0))
+            {
+                return 1;
+            }
+            return 0;
+        }
 	else
 	{
 		return 0;
@@ -220,6 +257,7 @@ void copyDifxAntenna(DifxAntenna *dest, const DifxAntenna *src)
 		dest->clockcoeff[i] = src->clockcoeff[i];
 	}
 	dest->mount = src->mount;
+	dest->sitetype = src->sitetype;
 	for(i = 0; i < 3; i++)
 	{
 		dest->offset[i] = src->offset[i];
@@ -320,7 +358,8 @@ DifxAntenna *mergeDifxAntennaArrays(const DifxAntenna *da1, int nda1,
 }
 
 int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da, 
-	int doMount, int doOffset, int doCoords, int doClock, int doShelf)
+                          int doMount, int doOffset, int doCoords, int doClock,
+                          int doShelf, int doSpacecraftID)
 {
 	int n;	/* number of lines written */
 	int i, j;
@@ -348,8 +387,14 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 		n++;
 		if(doMount)
 		{
+			writeDifxLine1(out, "TELESCOPE %d CALCNAME", i,
+				da[i].calcname);
+			n++;
 			writeDifxLine1(out, "TELESCOPE %d MOUNT", i,
 				antennaMountTypeNames[da[i].mount]);
+			n++;
+			writeDifxLine1(out, "TELESCOPE %d SITETYPE", i,
+				antennaSiteTypeNames[da[i].sitetype]);
 			n++;
 		}
 		if(doOffset)
@@ -388,6 +433,21 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 			writeDifxLine1(out, "TELESCOPE %d SHELF", i,
 				da[i].shelf);
 			n++;
+		}
+		if(doSpacecraftID)
+		{
+                        if(((da[i].sitetype == AntennaSiteEarth_Orbiting)
+                           && (da[i].spacecraftId >= 0))
+                          || ((da[i].sitetype == AntennaSiteFixed)
+                             && (da[i].spacecraftId == -1)))
+                        {
+                            writeDifxLineInt1(out, "TELESCOPE %d S/CRAFT ID", i, da[i].spacecraftId);
+                            n++;
+                        }
+                        else {
+                            fprintf(stderr, "Error: TELESCOPE %s has mismatched sitetype and spacecraftID\n", da[i].name);
+                            exit(1);
+                        }
 		}
 	}
 

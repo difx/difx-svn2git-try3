@@ -4,7 +4,8 @@ h_sources = \
 	parsevis.h \
 	difx_write.h \
 	difx_calculator.h \
-	difx_tcal.h
+	difx_tcal.h \
+	hermite.h
 c_sources = \
 	difx_input.c \
 	difx_input_merge.c \
@@ -36,6 +37,8 @@ c_sources = \
 	remap.c \
 	parsedifx.c \
 	parsevis.c
+cpp_sources = \
+	hermite.cpp
 
 library_includedir = $(includedir)/difxio
 library_include_HEADERS = $(h_sources)
@@ -45,6 +48,6 @@ INCLUDES = -I$(top_srcdir)
 lib_LTLIBRARIES = \
 	libdifxio.la
 
-libdifxio_la_SOURCES = $(h_sources) $(c_sources)
+libdifxio_la_SOURCES = $(h_sources) $(c_sources) $(cpp_sources)
 libdifxio_la_LDFLAGS = $(spicelibs) -version-info $(LIBRARY_VERSION)
 

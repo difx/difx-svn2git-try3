@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *   Copyright (C) 2008-2010, 2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -676,6 +676,12 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 			writeDifxLine(out, "WRITE AUTOCORRS", "TRUE");
 		else
 			writeDifxLine(out, "WRITE AUTOCORRS", "FALSE");
+		if(config->doMSAcalibration)
+			writeDifxLine(out, "WRITE MSA CALIB", "TRUE");
+		else
+			writeDifxLine(out, "WRITE MSA CALIB", "FALSE");
+		writeDifxLineDouble(out, "MC TABLE INTERVAL", "%8.6f",
+			config->MC_table_output_interval);
 		if(config->pulsarId >= 0 && pulsar)
 		{
 			writeDifxLine(out, "PULSAR BINNING", "TRUE");

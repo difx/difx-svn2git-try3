@@ -885,6 +885,10 @@ int writeDifxDatastream(FILE *out, const DifxDatastream *dd)
 	for(i = 0; i < dd->nRecBand; ++i)
 	{
 		pol[0] = dd->recBandPolName[i];
+                if((pol[0] == ' ') || (pol[0] == 0))
+                {
+                    fprintf(stderr, "Error: Unknown polarization for telescope index %d band %d\n", dd->antennaId, i);
+                }
 		writeDifxLine1(out, "REC BAND %d POL", i, pol);
 		writeDifxLineInt1(out, "REC BAND %d INDEX", i, dd->recBandFreqId[i]);
 	}

@@ -80,7 +80,7 @@ int writeDifxIM(const DifxInput *D)
 	writeDifxLineInt(out, "INTERVAL (SECS)", D->job->polyInterval);
 	writeDifxLine(out, "ABERRATION CORR", aberCorrStrings[D->job->aberCorr]);
 
-	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 0, 0, 0, 0, 0);
+	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 0, 0, 0, 0, 0, 0);
 
 	writeDifxLineInt(out, "NUM SCANS", D->nScan);
 
@@ -133,10 +133,13 @@ int writeDifxIM(const DifxInput *D)
 					writeDifxLineArray2(out, "SRC %d ANT %d DELAY (us)", i, a, scan->im[a][i][p].delay, order+1);
 					writeDifxLineArray2(out, "SRC %d ANT %d DRY (us)", i, a, scan->im[a][i][p].dry, order+1);
 					writeDifxLineArray2(out, "SRC %d ANT %d WET (us)", i, a, scan->im[a][i][p].wet, order+1);
+					writeDifxLineArray2(out, "SRC %d ANT %d SC_GS_DELAY (us)", i, a, scan->im[a][i][p].sc_gs_delay, order+1);
+					writeDifxLineArray2(out, "SRC %d ANT %d GS_CLOCK_DELAY (us)", i, a, scan->im[a][i][p].gs_clock_delay, order+1);
 					writeDifxLineArray2(out, "SRC %d ANT %d AZ", i, a, scan->im[a][i][p].az, order+1);
 			//		writeDifxLineArray2(out, "SRC %d ANT %d EL CORR", i, a, scan->im[a][i][p].elcorr, order+1);
 					writeDifxLineArray2(out, "SRC %d ANT %d EL GEOM", i, a, scan->im[a][i][p].elgeom, order+1);
 			//		writeDifxLineArray2(out, "SRC %d ANT %d PAR ANGLE", i, a, scan->im[a][i][p].parangle, order+1);
+					writeDifxLineArray2(out, "SRC %d ANT %d MSA (rad)", i, a, scan->im[a][i][p].msa, order+1);
 					writeDifxLineArray2(out, "SRC %d ANT %d U (m)", i, a, scan->im[a][i][p].u, order+1);
 					writeDifxLineArray2(out, "SRC %d ANT %d V (m)", i, a, scan->im[a][i][p].v, order+1);
 					writeDifxLineArray2(out, "SRC %d ANT %d W (m)", i, a, scan->im[a][i][p].w, order+1);

@@ -36,7 +36,7 @@
  */
 #define	MAX_DIFX_INPUT_LINE_LENGTH	8192
 
-#define MAX_DIFX_KEY_LEN		32
+#define MAX_DIFX_KEY_LEN		40
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,7 +130,7 @@ int DifxParametersfind2_limited(const DifxParameters *dp, int start_row, int max
 const char *DifxParametersvalue(const DifxParameters *dp, int row);
 
 /* find row indicies for several keys */
-int DifxParametersbatchfind(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int n, int rows[]);
+, 2014int DifxParametersbatchfind(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int n, int rows[]);
 int DifxParametersbatchfind1(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int index1, int n, int rows[]);
 int DifxParametersbatchfind2(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int index1, int index2, int n, int rows[]);
 

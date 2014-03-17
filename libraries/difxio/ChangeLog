@@ -1,3 +1,6 @@
+3.4.1
+* Changes for space VLBI correlation
+
 3.4.0
 * Fix X/Y polarization issue
 * Change internal representation of networkPort from integer to string to accomodate ethernet device names

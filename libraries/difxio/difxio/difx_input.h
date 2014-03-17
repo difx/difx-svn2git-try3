@@ -38,6 +38,8 @@
 #define MAX_ABER_CORR_STRING_LENGTH	16
 #define MAX_DATA_SOURCE_NAME_LENGTH	16
 #define MAX_ANTENNA_MOUNT_NAME_LENGTH	8
+#define MAX_ANTENNA_SITE_NAME_LENGTH    16
+#define MAX_SPACECRAFT_TIME_NAME_LENGTH 16
 #define MAX_SAMPLING_NAME_LENGTH	16
 #define MAX_TONE_SELECTION_STRING_LENGTH 12
 
@@ -61,6 +63,15 @@
 #define DIFXIO_POL_ERROR		0x100
 #define DIFXIO_POL_RL			(DIFXIO_POL_R | DIFXIO_POL_L)
 #define DIFXIO_POL_XY			(DIFXIO_POL_X | DIFXIO_POL_Y)
+
+#define DIFXIO_DEFAULT_POLY_ORDER	 5
+#define DIFXIO_DEFAULT_POLY_INTERVAL	 120
+#define DIFXIO_SPACECRAFT_MAX_POLY_ORDER 6     
+#define DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER 4 /* should be even ??? */
+#if(DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER>DIFXIO_SPACECRAFT_MAX_POLY_ORDER)
+#  error "Bad DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER"
+#endif
+                                                  
 
 #ifdef __cplusplus
 extern "C" {
@@ -133,6 +144,26 @@ enum AntennaMountType
 	NumAntennaMounts		/* must remain as last entry */
 };
 
+/* keep this current with antennaSiteTypeNames in difx_antenna.c */
+enum AntennaSiteType
+{
+	AntennaSiteFixed = 0,
+	AntennaSiteEarth_Orbiting = 1,
+        AntennaSiteOther = 2,
+	NumAntennaSites		/* must remain as last entry */
+};
+
+/* keep this current with spacecraftTimeTypeNames in difx_spacecraft.c */
+enum SpacecraftTimeType
+{
+	SpacecraftTimeLocal = 0,
+	SpacecraftTimeGroundReception = 1,
+        SpacecraftTimeGroundClock = 2,
+        SpacecraftTimeOther = 3,
+	NumSpacecraftTimes		/* must remain as last entry */
+};
+
+
 enum OutputFormatType
 {
 	OutputFormatDIFX = 0,
@@ -141,6 +172,8 @@ enum OutputFormatType
 };
 
 extern const char antennaMountTypeNames[][MAX_ANTENNA_MOUNT_NAME_LENGTH];
+extern const char antennaSiteTypeNames[][MAX_ANTENNA_SITE_NAME_LENGTH];
+extern const char spacecraftTimeTypeNames[][MAX_SPACECRAFT_TIME_NAME_LENGTH];
 
 /* keep this current with toneSelectionNames[] in difx_input.c */
 enum ToneSelection
@@ -239,6 +272,24 @@ typedef struct
 	int polMask;		/* bit field using DIFX_POL_x from above */
 	int doPolar;		/* >0 if cross hands to be correlated */
 	int doAutoCorr;		/* >0 if autocorrelations are to be written to disk */
+        int doMSAcalibration;   /* calculate the mount-source angle
+                                   (parallactic angle for on-axis
+                                   sources with traditional
+                                   telescopes) correction and apply
+                                   this in the FITS (delay) model components
+                                   (MC) table output during conversion
+                                   to FITS.  Defaults to 0.
+                                */
+        double MC_table_output_interval; /* The time interval, in seconds, at
+                                   which to report the (delay) model component
+                                   (MC table) values in the output FITS files.
+                                   The default value of 0.0 results in
+                                   the tabulated values occuring at polyInterval
+                                   seconds (defualts to
+                                   DIFXIO_DEFAULT_POLY_INTERVAL).  Note that in
+                                   any case, the interval will be no longer than
+                                   polyInterval seconds.
+                                         */
 	int quantBits;		/* 1 or 2 */
 	int nAntenna;
 	int nDatastream;	/* number of datastreams attached */
@@ -329,11 +380,15 @@ typedef struct
 typedef struct
 {
 	char name[DIFXIO_NAME_LENGTH];		/* null terminated */
+	char calcname[DIFXIO_NAME_LENGTH];	/* null terminated */
+                                /* Antenna name (if different) to provide to the
+                                   delay model software (CALC) */
 	int origId;		/* antennaId before a sort */
 	double clockrefmjd;	/* Reference time for clock polynomial */
 	int clockorder;		/* Polynomial order of the clock model */
 	double clockcoeff[MAX_MODEL_ORDER+1];	/* clock polynomial coefficients (us, us/s, us/s^2... */
 	enum AntennaMountType mount;
+        enum AntennaSiteType sitetype;
 	double offset[3];	/* axis offset, (m) */
 	double X, Y, Z;		/* telescope position, (m) */
 	double dX, dY, dZ;	/* telescope position derivative, (m/s) */
@@ -348,6 +403,10 @@ typedef struct
 	char calCode[DIFXIO_CALCODE_LENGTH];	/* usually only 1 char long */
 	int qual;		/* source qualifier */
 	int spacecraftId;	/* -1 if not spacecraft */
+        double sc_epoch;        /* MJD at which to evaluate the spacecraft
+                                   position. If sc_epoch==0.0,
+                                   use the default evaluation as a function of
+                                   time */
 	int numFitsSourceIds;	/* Should be equal to the number of configs */
 				/* FITS source IDs are filled in in deriveFitsSourceIds */
 	int *fitsSourceIds;	/* 0-based FITS source id */
@@ -370,6 +429,10 @@ typedef struct
 	double elcorr[MAX_MODEL_ORDER+1];	/* el (corrected for refraction; i.e., the one used for pointing) (deg) */
 	double elgeom[MAX_MODEL_ORDER+1];	/* el (uncorrected for refraction) (deg) */
 	double parangle[MAX_MODEL_ORDER+1];	/* parallactic angle (deg) */
+        double msa[MAX_MODEL_ORDER+1];		/* (rad/sec^n), mount-source angle */
+        double sc_gs_delay[MAX_MODEL_ORDER+1];  /* (us/sec^n) */
+        double gs_clock_delay[MAX_MODEL_ORDER+1];  /* (us/sec^n) */
+                                                /* see CALCServer.h for the msa specification */
 	double u[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
 	double v[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
 	double w[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
@@ -410,17 +473,117 @@ typedef struct
 
 typedef struct
 {
+    double X, Y, Z;	/* (m, m/s, m s^{-2}, ...) */
+} simple3Vector;
+
+typedef struct
+{
 	int mjd;
 	double fracDay;
 	long double X, Y, Z;	/* (m) */
 	long double dX, dY, dZ;	/* (m/sec) */
+                                /* Warning! evaluateDifxSpacecraftSource
+                                   returns units of m/day for velocities */
 } sixVector;
 
 typedef struct
 {
+	int mjd;
+	double fracDay;
+	double X, Y, Z;	        /* (m) */
+	double dX, dY, dZ;	/* (m/s) */
+	double ddX, ddY, ddZ;	/* (m/s/s) */
+} nineVector;
+
+typedef struct
+{
+    double Delta_t;             /* the difference in time between the
+                                   spacecraft and TT time frames, in seconds,
+                                   such that the spacecraft clock reads
+                                   TT + \Delta t seconds at TT MJD time
+                                   mjd.fracDay.
+                                   T_{SC} = TT + \Delta t
+                                   (s) */
+    double dtdtau;              /* The rate of \Delta t
+                                   (s/s) */
+} spacecraftTimeFrameOffset;
+
+typedef struct
+{
+    double X[3];                /* unit vector for X axis (usually up or North)*/
+    double Y[3];                /* unit vector for Y axis */
+    double Z[3];                /* unit vector for Z axis (toward source) */
+} spacecraftAxisVectors;
+
+typedef struct
+{
 	char name[DIFXIO_NAME_LENGTH];	/* name of spacecraft */
+	int is_antenna; 	/* spacecraft can be antennas or sources */
+                                /* sources have different light travel time */
+                                /* corrections in position calculations */
+        /* spacecraft ground station (GS) information */
+        int GS_exists;          /* Is there a ground station for this antenna? */
+        char GS_Name[DIFXIO_NAME_LENGTH];     /* Ground station name */
+        char GS_calcName[DIFXIO_NAME_LENGTH]; /* Ground station name (if different) to provide to the */
+                                /*     delay model software (CALC) */
+        enum SpacecraftTimeType spacecraft_time_type;
+        int GS_mjd_sync;        /* TT MJD at which the spacecraft and
+                                   ground station clocks are synced */
+        double GS_dayfraction_sync;/* TT time at which the spacecraft and
+                                      ground station clocks are synced */
+        double GS_clock_break_fudge_sec;/* Extra offset term for
+                                      ground station recording offsets, in units
+                                      of seconds, from what it should
+                                      nominally be.  This has the same sign
+                                      as GS_clockcoeff[0] (so it is the amount
+                                      of time that the clock is late).  This
+                                      term arrises because of a bug in the
+                                      Pushchino ground station for RadioAstron
+                                      that sometimes starts recording some
+                                      milliseconds off from the time it
+                                      writes to the header as the start time.
+                                      Note that GS_dayfraction_sync should
+                                      already be corrected for this term
+                                      when an instance of this struct is
+                                      generated.
+                                    */
+        double SC_recording_delay; /* This is the time between reception of the
+                                      wavefront by the antenna and the
+                                      transmission of the data by the
+                                      spacecraft to the ground station, in s.
+                                      If the SpacecraftTimeType is local
+                                      (timestamp from its own local clock),
+                                      then this is not used.  The regular
+                                      clock offset should be used instead. */
+        double GS_recording_delay; /* for the SpacecraftTimeGroundReception
+                                      time type, this gives the delay between
+                                      transmission of signal from the spacecraft
+                                      and recording at the ground station [s] */
+        double GS_clock_delay;     /* Internal variable to store the ground
+                                      station clock offset used for a specific
+                                      time evaluation [s].
+                                   */
+	enum AntennaMountType GS_mount;
+	double GS_offset[3];	/* axis offset, (m) */
+	double GS_X, GS_Y, GS_Z;       /* telescope position, (m) */
+ 	double GS_clockrefmjd;	/* Reference time for GS clock polynomial */
+	int GS_clockorder;	/* Polynomial order of the GS clock model */
+	double GS_clockcoeff[MAX_MODEL_ORDER+1]; /* GS clock polynomial 
+				   coefficients (us, us/s, us/s^2... */
+       /* spacecraft J2000 Earth center position information */
 	int nPoint;		/* number of entries in ephemeris */
 	sixVector *pos;		/* array of positions and velocities */
+        spacecraftTimeFrameOffset* TFrameOffset; /* array of time frame offsets*/
+        spacecraftAxisVectors* SCAxisVectors; /* array of axis vectors */
+        int SC_pos_offset_refmjd; /* Reference MJD for the spacecraft
+                                     position offset information */
+        double SC_pos_offset_reffracDay; /* Reference MJD fractional day
+                                     for the spacecraft
+                                     position offset information */
+        int SC_pos_offsetorder; /* Order of SC pos offset poly */
+        simple3Vector SC_pos_offset[MAX_MODEL_ORDER+1]; /* spacecraft
+                                      position offset polynomial information, as
+                                      m, m/s, m/s^2, ... */
 } DifxSpacecraft;
 
 typedef struct
@@ -566,6 +729,7 @@ int writeDifxFreqArray(FILE *out, int nFreq, const DifxFreq *df);
 
 /* DifxAntenna functions */
 enum AntennaMountType stringToMountType(const char *str);
+enum AntennaSiteType stringToSiteType(const char *str);
 DifxAntenna *newDifxAntennaArray(int nAntenna);
 void deleteDifxAntennaArray(DifxAntenna *da, int nAntenna);
 void printDifxAntenna(const DifxAntenna *da);
@@ -579,7 +743,7 @@ DifxAntenna *mergeDifxAntennaArrays(const DifxAntenna *da1, int nda1,
 	const DifxAntenna *da2, int nda2, int *antennaIdRemap,
 	int *nda);
 int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
-        int doMount, int doOffset, int doCoords, int doClock, int doShelf);
+        int doMount, int doOffset, int doCoords, int doClock, int doShelf, int doSpacecraftID);
 
 /* DifxDatastream functions */
 enum DataSource stringToDataSource(const char *str);
@@ -746,16 +910,60 @@ DifxEOP *mergeDifxEOPArrays(const DifxEOP *de1, int nde1, const DifxEOP *de2, in
 int writeDifxEOPArray(FILE *out, int nEOP, const DifxEOP *de);
 
 /* DifxSpacecraft functions */
+enum SpacecraftTimeType stringToSpacecraftTimeType(const char *str);
 DifxSpacecraft *newDifxSpacecraftArray(int nSpacecraft);
 DifxSpacecraft *dupDifxSpacecraftArray(const DifxSpacecraft *src, int n);
+DifxSpacecraft *mergeDifxSpacecraft(const DifxSpacecraft *ds1, int nds1,
+	const DifxSpacecraft *ds2, int nds2, int *spacecraftIdRemap, int *nds);
 void deleteDifxSpacecraftInternals(DifxSpacecraft *ds);
 void deleteDifxSpacecraftArray(DifxSpacecraft *ds, int nSpacecraft);
 void printDifxSpacecraft(const DifxSpacecraft *ds);
 void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds);
-int computeDifxSpacecraftEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *name, const char *naifFile, const char *ephemFile, double ephemStellarAber, double ephemClockError);
-DifxSpacecraft *mergeDifxSpacecraft(const DifxSpacecraft *ds1, int nds1, const DifxSpacecraft *ds2, int nds2, int *spacecraftIdRemap, int *nds);
-int evaluateDifxSpacecraft(const DifxSpacecraft *sc, int mjd, double fracMjd, sixVector *interpolatedPosition);
+int shiftSpacecraftClockPolys(DifxInput *D);
+int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *name, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem);
+int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *name, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem);
+int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplanetaryephem);
+int computeDifxSpacecraftEphemerisOffsets(DifxSpacecraft *ds);
+int DiFX_model_scpacecraft_time_delay_qromb(const DifxSpacecraft* const spacecraft, 
+                                            const int mjd0, const double frac0,
+                                            const int mjd1, const double frac1,
+                                            const double fractional_error,
+                                            const double absolute_error,
+                                            double* delay,
+                                                      /* cumulative differential
+                                                         delay, in seconds */
+                                            double* delta_delay,
+                                                      /* uncertainty in delay */
+                                            double* t1_rate
+                                                      /* differential rate at
+                                                         time 1, in s/s */
+                                            );
+int DiFX_model_spacecraft_time_frame_delay_rate(const DifxSpacecraft* const spacecraft, 
+                                                const int MJD_TT,
+                                                const double frac_TT,
+                                                double* const rate);
+int evaluateDifxSpacecraftSource(const DifxSpacecraft *sc, int mjd, double fracMjd, sixVector *interpolatedPosition);
+int evaluateDifxSpacecraftAntenna(const DifxSpacecraft *sc, int mjd, double fracMjd, nineVector *interpolatedPosition);
+int evaluateDifxSpacecraftAntennaTimeFrameOffset(const DifxSpacecraft *sc,
+                                                 int mjd,
+                                                 double fracMjd,
+                                                 spacecraftTimeFrameOffset *interpolated_timeoffset);
+int evaluateDifxSpacecraftAntennaAxisVectors(const DifxSpacecraft *sc,
+                                             int mjd,
+                                             double fracMjd,
+                                             spacecraftAxisVectors* direction,
+                                             spacecraftAxisVectors* velocity);
+int evaluateDifxSpacecraftAntennaOffset(const DifxSpacecraft *sc, int mjd,
+                                        double fracMjd,
+                                        nineVector *interpolatedOffset);
 int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds);
+void get_next_Russian_scf_line(char * const line, const int MAX_LEN, FILE *fp);
+int read_Russian_scf_file(const char * const filename, const char * const spacecraftname, const double MJD_start, const double MJD_end, const double MJD_delta, DifxSpacecraft * const ds);
+int read_Russian_scf_axes_file(const char * const filename,
+                               const double MJD_start,
+                               const double MJD_end,
+                               DifxSpacecraft * const ds);
+
 
 /* DifxSource functions */
 DifxSource *newDifxSourceArray(int nSource);

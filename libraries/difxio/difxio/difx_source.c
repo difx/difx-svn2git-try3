@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2011 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2007-2011, 2014 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -43,6 +43,7 @@ DifxSource *newDifxSourceArray(int nSource)
 	for(s = 0; s < nSource; s++)
 	{
 		ds[s].spacecraftId = -1;
+                ds[s].sc_epoch = 0.0;
 		ds[s].numFitsSourceIds = 0;
 		ds[s].fitsSourceIds = 0;
 		ds[s].pmRA = 0.0;
@@ -82,6 +83,7 @@ void fprintDifxSource(FILE *fp, const DifxSource *ds)
 	fprintf(fp, "    Calcode = %s\n", ds->calCode);
 	fprintf(fp, "    Qualifier = %d\n", ds->qual);
 	fprintf(fp, "    SpacecraftId = %d\n", ds->spacecraftId);
+	fprintf(fp, "    SC_Epoch = %11.7f\n", ds->sc_epoch);
 	fprintf(fp, "    Num FITS SourceIds = %d\n", ds->numFitsSourceIds);
 	for(i=0;i<ds->numFitsSourceIds;i++)
 	{
@@ -104,6 +106,7 @@ void fprintDifxSourceSummary(FILE *fp, const DifxSource *ds)
 	if(ds->spacecraftId >= 0)
 	{
 		fprintf(fp, "    SpacecraftId = %d\n", ds->spacecraftId);
+                fprintf(fp, "    SC_Epoch = %11.7f\n", ds->sc_epoch);
 	}
 }
 
@@ -123,6 +126,7 @@ int isSameDifxSource(const DifxSource *ds1, const DifxSource *ds2)
            strcmp(ds1->calCode,ds2->calCode) == 0     &&
            ds1->qual             == ds2->qual         &&
            ds1->spacecraftId     == ds2->spacecraftId &&
+           ds1->sc_epoch         == ds2->sc_epoch     &&
            ds1->numFitsSourceIds == ds2->numFitsSourceIds &&
 	   ds1->pmRA             == ds2->pmRA         &&
 	   ds1->pmDec            == ds2->pmDec        &&
@@ -151,6 +155,7 @@ void copyDifxSource(DifxSource *dest, const DifxSource *src)
         dest->dec          = src->dec;
         dest->qual         = src->qual;
         dest->spacecraftId = src->spacecraftId;
+        dest->sc_epoch     = src->sc_epoch;
         dest->numFitsSourceIds = src->numFitsSourceIds;
         dest->pmRA         = src->pmRA;
 	dest->pmDec        = src->pmDec;
@@ -247,6 +252,15 @@ int writeDifxSourceArray(FILE *out, int nSource, const DifxSource *ds,
                 if(doSpacecraftID)
 		{
                         writeDifxLineInt1(out, "SOURCE %d S/CRAFT ID", i, ds[i].spacecraftId);
+                        n++;
+                        if(ds[i].sc_epoch==0.0)
+                        {
+                            writeDifxLineDouble1(out, "SOURCE %d SC_EPOCH", i, "%3.1f",  ds[i].sc_epoch);
+                        }
+                        else
+                        {
+                            writeDifxLineDouble1(out, "SOURCE %d SC_EPOCH", i, "%18.12f",  ds[i].sc_epoch);
+                        }
                         n++;
                 }
         }
