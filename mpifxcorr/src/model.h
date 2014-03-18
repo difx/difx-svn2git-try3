@@ -56,6 +56,8 @@ class Model{
 
     /// Types of antenna axis
     enum axistype {ALTAZ=0, RADEC=1, ORB=2, XY=3};
+    // Types of antenna sites
+    enum sitetypeenum {SITEFIXED=0, SITEEARTHORBITING=1, SITEOTHER=2};
 
     /// Constants
     static const int MAX_POLY_ORDER = 10;
@@ -65,6 +67,8 @@ class Model{
       string name;
       double x,y,z,axisoffset;
       axistype mount;
+      sitetypeenum sitetype;
+      int spacecraft_id;
     } station;
 
     typedef struct {
@@ -73,6 +77,7 @@ class Model{
       double ra, dec;
       int qual;
       string calcode;
+      int spacecraft_id;
     } source;
 
     typedef struct {
@@ -93,6 +98,7 @@ class Model{
       double * vx;
       double * vy;
       double * vz;
+      bool is_antenna;
     } spacecraft;
 
     /**
@@ -223,6 +229,9 @@ class Model{
       f64 **** elcorr;
       f64 **** elgeom;
       f64 **** parang;
+      f64 **** msa;
+      f64 **** sc_gs_delay;
+      f64 **** gs_clock_delay;
       f64 *** clock;
     } scan;
 
@@ -235,10 +244,12 @@ class Model{
     bool readScanData(ifstream * input);
     bool readPolynomialSamples(ifstream * input);
     bool fillPolyRow(f64* vals, string line, int npoly);
+    bool fillPolyRow(f64* vals, double fill, int npoly);
     axistype getMount(string mount);
+    sitetypeenum getSiteType(string sitetype_);
 
     int modelmjd, modelstartseconds, numstations, numsources, numscans, numeops, numspacecraft;
-    int polyorder, modelincsecs;
+, 2014    int polyorder, modelincsecs;
     long long estimatedbytes;
     bool opensuccess;
     Configuration * config;

@@ -20,6 +20,7 @@
 //
 //============================================================================
 #include <mpi.h>
+#include <iostream>
 #include <string.h>
 #include <climits>
 #include <ctype.h>
@@ -1069,7 +1070,9 @@ bool Configuration::processConfig(ifstream * input)
       maxnumbufferedffts = configs[i].numbufferedffts;
     getinputline(input, &line, "WRITE AUTOCORRS");
     configs[i].writeautocorrs = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
-    getinputline(input, &line, "PULSAR BINNING");
+    // skip over "WRITE MSA CALIB"
+    // skip over "MC TABLE INTERVAL"
+    getinputline(input, &line, "PULSAR BINNING", false,10);
     configs[i].pulsarbin = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
     if(configs[i].pulsarbin)
     {
@@ -2899,7 +2902,7 @@ bool Configuration::fillHeaderData(ifstream * input, int & baselinenum, int & mj
   input->read((char*)(&sync), 4);
   if(sync != Visibility::SYNC_WORD)
   {
-    if(sync != 'BASE')
+      if(sync != (('B' << 24) + ('A' << 16) + ('S' << 8) + 'E'))    // if(sync != 'BASE')
       return false;
 
     //if we get.d2 here, must be an old style ascii file
@@ -2982,42 +2985,79 @@ void Configuration::getinputkeyval(ifstream * input, std::string * key, std::str
   *key = key->substr(0, key->find_first_of(':'));
 }
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, bool verbose) const
+bool Configuration::getinputline(ifstream * input, std::string * line, cosnt std::string &startofheader, bool warnOnFailure, int maxSkipLines) const
 {
+  static const char ERROR_MSG[] = "Error reading in getinputline";
   if(input->eof())
-    cerror << startl << "Trying to read past the end of file!" << endl;
+      cerror << startl << "Trying to read past the end of file!" << endl;
+  int startofheaderlength = startofheader.length();
+  std::streampos orig_pos = input->tellg();
   getline(*input,*line);
-  while(line->length() > 0 && line->at(0) == COMMENT_CHAR) { // a comment
-    //if(mpiid == 0) //only write one copy of this error message
-    //  cverbose << startl << "Skipping comment " << line << endl;
-    getline(*input, *line);
+  int line_length = line->length();
+  while((line_length > 0 && line->at(0) == COMMENT_CHAR) || (line_length == 0)) { // a comment
+      //if(mpiid == 0) //only write one copy of this error message
+      //  cverbose << startl << "Skipping comment " << line << endl;
+      if(line_length == 0) {
+          cerror << startl << "blank line found in input while searching for " << startofheader << endl;
+      }
+      getline(*input, *line);
+      line_length = line->length();
   }
   int keylength = line->find_first_of(':') + 1;
   if(keylength < DEFAULT_KEY_LENGTH)
-    keylength = DEFAULT_KEY_LENGTH;
-  if(startofheader.compare((*line).substr(0, startofheader.length())) != 0) //not what we expected
-  {
-    if (verbose) 
-      cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << (*line).substr(0, keylength) << "'" << endl;
-    else {
-      *line = "";
-      return;
-    }
+      keylength = DEFAULT_KEY_LENGTH;
+  if((startofheaderlength > line_length) || (startofheader.compare((*line).substr(0, startofheader.length())) != 0)) {
+      //not what we expected
+      if(warnOnFailure) {
+          cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << *line << "'" << endl;
+          cout << "Input file read error: full information '" << startofheader << "' '" << (*line).substr(0, keylength) << "' " << endl;
+      }
+      if(((maxSkipLines))&&(!input->eof())) {
+          return getinputline(input, line, startofheader, warnOnFailure, maxSkipLines-1);
+      }
+      *line = ERROR_MSG;
+      input->seekg(orig_pos, std::ios::beg);
+      if(warnOnFailure) {
+          cerror << startl  << "Could not find '" << startofheader << "'.  Seeking back to original point in file." << endl;
+      }
+      return false;
   }
+  //cerr << "DEBUG PRINT LINE '" << *line << "' ### " << keylength << " ### Wanted '" << startofheader << '\'' << endl;
   *line = line->substr(keylength);
+  return true;
 }
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader) const
-{
-  getinputline(input, line, startofheader, true);
-}
-
-
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, int intval) const
+bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, bool warnOnFailure, int maxSkipLines) const
 {
   char buffer[MAX_KEY_LENGTH+1];
-  sprintf(buffer, "%s%i", startofheader.c_str(), intval);
-  getinputline(input, line, string(buffer), true);
+  snprintf(buffer, MAX_KEY_LENGTH, "%s%i", startofheader.c_str(), intval);
+  buffer[MAX_KEY_LENGTH] = 0;
+  return getinputline(input, line, string(buffer), warnOnFailure, maxSkipLines);
+}
+
+bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure, int maxSkipLines) const
+{
+  char buffer[MAX_KEY_LENGTH+1];
+  snprintf(buffer, MAX_KEY_LENGTH, "%s%i%s", startofheader.c_str(), intval, headerPartTwo);
+  buffer[MAX_KEY_LENGTH] = 0;
+  return getinputline(input, line, string(buffer), warnOnFailure, maxSkipLines);
+}
+
+bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, bool warnOnFailure, int maxSkipLines) const
+{
+  char buffer[MAX_KEY_LENGTH+1];
+  snprintf(buffer, MAX_KEY_LENGTH, "%s%i%s%i", startofheader.c_str(), intval, headerPartTwo, intvalTwo);
+  buffer[MAX_KEY_LENGTH] = 0;
+  return getinputline(input, line, string(buffer), warnOnFailure, maxSkipLines);
+}
+
+
+bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, const char *headerPartThree, bool warnOnFailure, int maxSkipLines) const
+{
+  char buffer[MAX_KEY_LENGTH+1];
+  snprintf(buffer, MAX_KEY_LENGTH, "%s%i%s%i%s", startofheader.c_str(), intval, headerPartTwo, intvalTwo, headerPartThree);
+  buffer[MAX_KEY_LENGTH] = 0;
+  return getinputline(input, line, string(buffer), warnOnFailure, maxSkipLines);
 }
 
 void Configuration::getMJD(int & d, int & s, int year, int month, int day, int hour, int minute, int second) const
@@ -3027,7 +3067,7 @@ void Configuration::getMJD(int & d, int & s, int year, int month, int day, int h
   s = 3600*hour + 60*minute + second;
 }
 
-void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day) const
+, 2014void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day) const
 {
   int j = mjd + 32044 + 2400001;
   int g = j / 146097;

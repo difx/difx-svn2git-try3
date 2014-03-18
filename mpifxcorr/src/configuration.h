@@ -557,8 +557,11 @@ public:
   * @param input Open input stream to read from
   * @param line Existing string to store value in
   * @param startofheader The start of the expected keyword, to compare to the actual keyword which will be read
+  * @param warnOnFailure Write a warning message if this call fails
+  * @param maxSkipLines maximum number of lines to skip if no match found
+  * @return Whether the input line was correctly read
   */
-  void getinputline(ifstream * input, std::string * line, std::string startofheader) const;
+    bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
  /**
   * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
@@ -566,11 +569,53 @@ public:
   * @param line Existing string to store value in
   * @param startofheader The start of the expected keyword, to compare to the actual keyword which will be read
   * @param intval An integer value which should follow startofheader
+  * @param warnOnFailure Write a warning message if this call fails
+  * @param maxSkipLines maximum number of lines to skip if no match found
+  * @return Whether the input line was correctly read
   */
-  void getinputline(ifstream * input, std::string * line, std::string startofheader, int intval) const;
+  bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
-  /** Actual function **/
-  void getinputline(ifstream * input, std::string * line, std::string startofheader, bool verbose) const;
+ /**
+  * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
+  * @param input Open input stream to read from
+  * @param line Existing string to store value in
+  * @param startofheader The start of the expected keyword, to compare to the actual keyword which will be read
+  * @param intval An integer value which should follow startofheader
+  * @param headerPartTwo An extra part after the integer number that is expected to follow.
+  * @param warnOnFailure Write a warning message if this call fails
+  * @param maxSkipLines maximum number of lines to skip if no match found
+  * @return Whether the input line was correctly read
+  */
+  bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX const);
+
+ /**
+  * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
+  * @param input Open input stream to read from
+  * @param line Existing string to store value in
+  * @param startofheader The start of the expected keyword, to compare to the actual keyword which will be read
+  * @param intval An integer value which should follow startofheader
+  * @param headerPartTwo An extra part after the integer number that is expected to follow.
+  * @param intvalTwo An integer value which should follow headerPartTwo
+  * @param warnOnFailure Write a warning message if this call fails
+  * @param maxSkipLines maximum number of lines to skip if no match found
+  * @return Whether the input line was correctly read
+  */
+  bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
+
+ /**
+  * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
+  * @param input Open input stream to read from
+  * @param line Existing string to store value in
+  * @param startofheader The start of the expected keyword, to compare to the actual keyword which will be read
+  * @param intval An integer value which should follow startofheader
+  * @param headerPartTwo An extra part after the integer number that is expected to follow.
+  * @param intvalTwo An integer value which should follow headerPartTwo
+  * @param headerPartThree An extra part after the intvalTwo number that is expected to follow.
+  * @param warnOnFailure Write a warning message if this call fails
+  * @param maxSkipLines maximum number of lines to skip if no match found
+  * @return Whether the input line was correctly read
+  */
+  bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, const char *headerPartThree, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
  /**
   * Utility method which reads a line from a file, splitting it into a key and a value and storing both
@@ -908,7 +953,7 @@ private:
   double restartseconds;
   int maxnumchannels, maxnumpulsarbins, maxthreadresultlength, maxcoreresultlength, maxnumbufferedffts, mtu;
   int stadumpchannels, ltadumpchannels;
-  int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength;
+, 2014  int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength;
   long long estimatedbytes;
   string calcfilename, modelfilename, coreconffilename, outputfilename, jobname, obscode;
   int * numprocessthreads;

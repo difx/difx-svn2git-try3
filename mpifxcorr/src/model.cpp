@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009 by Adam Deller                                     *
+ *   Copyright (C) 2009, 2014 by Adam Deller                                     *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at  http://cira.ivec.org/dokuwiki/doku.php/difx/documentation for     *
@@ -126,6 +126,9 @@ Model::~Model()
             vectorFree(scantable[i].elcorr[j][k][l]);
             vectorFree(scantable[i].elgeom[j][k][l]);
             vectorFree(scantable[i].parang[j][k][l]);
+            vectorFree(scantable[i].msa[j][k][l]);
+            vectorFree(scantable[i].sc_gs_delay[j][k][l]);
+            vectorFree(scantable[i].gs_clock_delay[j][k][l]);
           }
           delete [] scantable[i].u[j][k];
           delete [] scantable[i].v[j][k];
@@ -138,9 +141,12 @@ Model::~Model()
           delete [] scantable[i].elcorr[j][k];
           delete [] scantable[i].elgeom[j][k];
           delete [] scantable[i].parang[j][k];
+          delete [] scantable[i].msa[j][k];
+          delete [] scantable[i].sc_gs_delay[j][k];
+          delete [] scantable[i].gs_clock_delay[j][k];
         }
         for(int k=0;k<numstations;k++)
-          delete [] scantable[i].clock[j][k];
+            vectorFree(scantable[i].clock[j][k]);
         delete [] scantable[i].u[j];
         delete [] scantable[i].v[j];
         delete [] scantable[i].w[j];
@@ -152,6 +158,9 @@ Model::~Model()
         delete [] scantable[i].elcorr[j];
         delete [] scantable[i].elgeom[j];
         delete [] scantable[i].parang[j];
+        delete [] scantable[i].msa[j];
+        delete [] scantable[i].sc_gs_delay[j];
+        delete [] scantable[i].gs_clock_delay[j];
         delete [] scantable[i].clock[j];
       }
       delete [] scantable[i].u;
@@ -165,6 +174,9 @@ Model::~Model()
       delete [] scantable[i].elcorr;
       delete [] scantable[i].elgeom;
       delete [] scantable[i].parang;
+      delete [] scantable[i].msa;
+      delete [] scantable[i].sc_gs_delay;
+      delete [] scantable[i].gs_clock_delay;
       delete [] scantable[i].clock;
       delete [] scantable[i].phasecentres;
     }
@@ -426,6 +438,9 @@ bool Model::readCommonData(ifstream * input)
   //ignore the next two lines, not relevant to the correlator
   config->getinputline(input, &line, "SPECTRAL AVG");
   config->getinputline(input, &line, "TAPER FUNCTION");
+  //ignore the next two lines, the actual values used are in the .im file
+  config->getinputline(input, &line, "DELAY POLY ORDER");
+  config->getinputline(input, &line, "DELAY POLY INTERVAL");
   return true;
 }
 
@@ -437,21 +452,35 @@ bool Model::readStationData(ifstream * input)
   numstations = atoi(line.c_str());
   stationtable = new station[numstations];
   for(int i=0;i<numstations;i++) {
-    config->getinputline(input, &(stationtable[i].name), "TELESCOPE ", i);
+    config->getinputline(input, &(stationtable[i].name), "TELESCOPE ", i, " NAME", true, 0);
     //trim the whitespace off the end
     while((stationtable[i].name).at((stationtable[i].name).length()-1) == ' ')
       stationtable[i].name = (stationtable[i].name).substr(0, (stationtable[i].name).length()-1);
-    config->getinputline(input, &line, "TELESCOPE ", i);
+    config->getinputline(input, &line, "TELESCOPE ", i, " CALCNAME", false, 0); //ignore this, it's the CALC name
+    config->getinputline(input, &line, "TELESCOPE ", i, " MOUNT", true, 0);
     stationtable[i].mount = getMount(line);
-    config->getinputline(input, &line, "TELESCOPE ", i);
+    if(!config->getinputline(input, &line, "TELESCOPE ", i, " SITETYPE", false, 0))
+    {
+        // if the SITETYPE key is not present, assume a regular fixed station
+        line = "fixed";
+    }
+    stationtable[i].sitetype = getSiteType(line);
+    config->getinputline(input, &line, "TELESCOPE ", i, " OFFSET (m)", true, 0);
     stationtable[i].axisoffset = atoi(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i);
-    stationtable[i].x = atoi(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i);
-    stationtable[i].y = atoi(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i);
-    stationtable[i].z = atoi(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i); //ignore this, its the shelf
+    config->getinputline(input, &line, "TELESCOPE ", i, " X (m)", true, 0);
+    stationtable[i].x = atof(line.c_str());
+    config->getinputline(input, &line, "TELESCOPE ", i, " Y (m)", true, 0);
+    stationtable[i].y = atof(line.c_str());
+    config->getinputline(input, &line, "TELESCOPE ", i, " Z (m)", true, 0);
+    stationtable[i].z = atof(line.c_str());
+    config->getinputline(input, &line, "TELESCOPE ", i, " SHELF", false, 0); //ignore this, it's the shelf
+    if(config->getinputline(input, &line, "TELESCOPE ", i, " S/CRAFT ID", false, 0))
+    {
+        stationtable[i].spacecraft_id = atoi(line.c_str());
+    }
+    else {
+        stationtable[i].spacecraft_id = -1;
+    }
   }
   maxrate = new double[numstations];
   for(int i=0;i<numstations;i++)
@@ -467,17 +496,25 @@ bool Model::readSourceData(ifstream * input)
   sourcetable = new source[numsources];
   for(int i=0;i<numsources;i++) {
     sourcetable[i].index = i;
-    config->getinputline(input, &(sourcetable[i].name), "SOURCE ", i);
+    config->getinputline(input, &(sourcetable[i].name), "SOURCE ", i, " NAME", true, 0);
     //trim the whitespace off the end
     while((sourcetable[i].name).at((sourcetable[i].name).length()-1) == ' ')
       sourcetable[i].name = (sourcetable[i].name).substr(0, (sourcetable[i].name).length()-1);
-    config->getinputline(input, &line, "SOURCE ", i);
+    config->getinputline(input, &line, "SOURCE ", i, " RA", true, 0);
     sourcetable[i].ra = atof(line.c_str());
-    config->getinputline(input, &line, "SOURCE ", i);
+    config->getinputline(input, &line, "SOURCE ", i, " DEC", true, 0);
     sourcetable[i].dec = atof(line.c_str());
-    config->getinputline(input, &(sourcetable[i].calcode), "SOURCE ", i);
-    config->getinputline(input, &line, "SOURCE ", i);
+    config->getinputline(input, &(sourcetable[i].calcode), " SOURCE ", i, "CALCODE", true, 0); //ignore this, it's the CALCODE
+    config->getinputline(input, &line, "SOURCE ", i, " QUAL", true, 0);
     sourcetable[i].qual = atoi(line.c_str());
+    if(config->getinputline(input, &line, "SOURCE ", i, " S/CRAFT ID", false, 0))
+    {
+        sourcetable[i].spacecraft_id = atoi(line.c_str());
+    }
+    else {
+        sourcetable[i].spacecraft_id = -1;
+    }
+    config->getinputline(input, &line, "SOURCE ", i, " SC_EPOCH", false, 0); //ignore this, it's the spacecraft epoch
   }
   return true;
 }
@@ -547,13 +584,26 @@ bool Model::readEOPData(ifstream * input)
 bool Model::readSpacecraftData(ifstream * input)
 {
   string line = "";
+  bool retval;
+  bool old_style_state_info_warning = false;
 
   config->getinputline(input, &line, "NUM SPACECRAFT");
   numspacecraft = atoi(line.c_str());
   spacecrafttable = new spacecraft[numspacecraft];
   for(int i=0;i<numspacecraft;i++) {
     config->getinputline(input, &spacecrafttable[i].name, "SPACECRAFT ", i);
-    config->getinputline(input, &line, "SPACECRAFT ", i);
+    retval = config->getinputline(input, &line, "SPACECRAFT ", i, " ISANT", false);
+    spacecrafttable[i].is_antenna = false;
+    if(retval && ((line[0] == '1') || (line[0] == 'T') || (line[0] == 't')))
+    {
+        spacecrafttable[i].is_antenna = true;
+    }
+    // now get the position/velocity information, skipping up to 50
+    // uninteresting lines
+    retval = config->getinputline(input, &line, "SPACECRAFT ", i, " ROWS", false,50);
+    if(!retval) {
+        return false;
+    }
     spacecrafttable[i].numsamples = atoi(line.c_str());
     spacecrafttable[i].samplemjd = new double[spacecrafttable[i].numsamples];
     spacecrafttable[i].x  = new double[spacecrafttable[i].numsamples];
@@ -563,14 +613,40 @@ bool Model::readSpacecraftData(ifstream * input)
     spacecrafttable[i].vy = new double[spacecrafttable[i].numsamples];
     spacecrafttable[i].vz = new double[spacecrafttable[i].numsamples];
     for(int j=0;j<spacecrafttable[i].numsamples;j++) {
-      config->getinputline(input, &line, "SPACECRAFT ", i);
-      spacecrafttable[i].samplemjd[j] = atof(line.substr(0,17).c_str());
-      spacecrafttable[i].x[j] = atof(line.substr(18,18).c_str());
-      spacecrafttable[i].y[j] = atof(line.substr(37,18).c_str());
-      spacecrafttable[i].z[j] = atof(line.substr(56,18).c_str());
-      spacecrafttable[i].vx[j] = atof(line.substr(75,18).c_str());
-      spacecrafttable[i].vy[j] = atof(line.substr(94,18).c_str());
-      spacecrafttable[i].vz[j] = atof(line.substr(103,18).c_str());
+      config->getinputline(input, &line, "SPACECRAFT ", i, " ROW ", j);
+      // Do we have the old style or the new style spacecraft state vectors?
+      if((line.length()>20)&&(line[5]=='.')) {
+        if(!old_style_state_info_warning) {
+          cerror << startl  << "Old style spacecraft state vector information found.  Please consider rerunning vex2difx and calcif2 with a newer DiFX." << endl;
+          old_style_state_info_warning = true;
+        }
+            
+        spacecrafttable[i].samplemjd[j] = atof(line.substr(0,17).c_str());
+        spacecrafttable[i].x[j] = atof(line.substr(18,18).c_str());
+        spacecrafttable[i].y[j] = atof(line.substr(37,18).c_str());
+        spacecrafttable[i].z[j] = atof(line.substr(56,18).c_str());
+        spacecrafttable[i].vx[j] = atof(line.substr(75,18).c_str());
+        spacecrafttable[i].vy[j] = atof(line.substr(94,18).c_str());
+        spacecrafttable[i].vz[j] = atof(line.substr(103,18).c_str());
+      }
+      else {
+        // new style state vector data
+        int mjd;
+        double fracDay;
+        int n = sscanf(line.c_str(), "%d %lf %lf %lf %lf %lf %lf %lf",
+                      &mjd, &fracDay,
+                      &(spacecrafttable[i].x[j]),
+                      &(spacecrafttable[i].y[j]),
+                      &(spacecrafttable[i].z[j]),
+                      &(spacecrafttable[i].vx[j]),
+                      &(spacecrafttable[i].vy[j]),
+                      &(spacecrafttable[i].vz[j]));
+        if(n!= 8) {
+          cerror << startl  << "Could not read spacecraft state vector information for spacecraft " << i << " row " << j << endl;
+          return false;
+        }
+        spacecrafttable[i].samplemjd[j] = mjd + fracDay;
+      }
     }
   }
   return true;
@@ -645,7 +721,7 @@ bool Model::readPolynomialSamples(ifstream * input)
     return false;
   }
   for(int i=0;i<numscans;i++) {
-    config->getinputline(input, &line, "SCAN ", i);
+      config->getinputline(input, &line, "SCAN ", i, " POINTING SRC");
     if(line.compare((scantable[i].pointingcentre)->name) != 0) {
       cfatal << startl << "IM file and CALC file disagree on scan " << i << " pointing centre - aborting!!!" << endl;
       return false;
@@ -662,7 +738,7 @@ bool Model::readPolynomialSamples(ifstream * input)
         return false;
       }
     }
-    config->getinputline(input, &line, "SCAN ", i);
+    config->getinputline(input, &line, "SCAN ", i, " NUM POLY");
     scantable[i].nummodelsamples = atoi(line.c_str());
     scantable[i].u = new f64***[scantable[i].nummodelsamples];
     scantable[i].v = new f64***[scantable[i].nummodelsamples];
@@ -675,11 +751,14 @@ bool Model::readPolynomialSamples(ifstream * input)
     scantable[i].elcorr = new f64***[scantable[i].nummodelsamples];
     scantable[i].elgeom = new f64***[scantable[i].nummodelsamples];
     scantable[i].parang = new f64***[scantable[i].nummodelsamples];
+    scantable[i].msa = new f64***[scantable[i].nummodelsamples];
+    scantable[i].sc_gs_delay = new f64***[scantable[i].nummodelsamples];
+    scantable[i].gs_clock_delay = new f64***[scantable[i].nummodelsamples];
     scantable[i].clock = new f64**[scantable[i].nummodelsamples];
     for(int j=0;j<scantable[i].nummodelsamples;j++) {
-      config->getinputline(input, &line, "SCAN ", i);
+        config->getinputline(input, &line, "SCAN ", i, " POLY ", j, " MJD");
       mjd = atoi(line.c_str());
-      config->getinputline(input, &line, "SCAN ", i);
+      config->getinputline(input, &line, "SCAN ", i, " POLY ", j, " SEC");
       daysec = atoi(line.c_str());
       if(j==0) {
         scantable[i].polystartmjd = mjd;
@@ -700,6 +779,9 @@ bool Model::readPolynomialSamples(ifstream * input)
       scantable[i].elcorr[j] = new f64**[scantable[i].numphasecentres+1];
       scantable[i].elgeom[j] = new f64**[scantable[i].numphasecentres+1];
       scantable[i].parang[j] = new f64**[scantable[i].numphasecentres+1];
+      scantable[i].msa[j] = new f64**[scantable[i].numphasecentres+1];
+      scantable[i].sc_gs_delay[j] = new f64**[scantable[i].numphasecentres+1];
+      scantable[i].gs_clock_delay[j] = new f64**[scantable[i].numphasecentres+1];
       scantable[i].clock[j] = new f64*[numstations];
       for(int k=0;k<numstations;k++)
         scantable[i].clock[j][k] = vectorAlloc_f64(polyorder+1);
@@ -715,8 +797,12 @@ bool Model::readPolynomialSamples(ifstream * input)
         scantable[i].elcorr[j][k] = new f64*[numstations];
         scantable[i].elgeom[j][k] = new f64*[numstations];
         scantable[i].parang[j][k] = new f64*[numstations];
+        scantable[i].msa[j][k] = new f64*[numstations];
+        scantable[i].sc_gs_delay[j][k] = new f64*[numstations];
+        scantable[i].gs_clock_delay[j][k] = new f64*[numstations];
         for(int l=0;l<numstations;l++) {
-          estimatedbytes += 6*8*(polyorder + 1);
+          bool retval;
+          estimatedbytes += 14*8*(polyorder + 1);
           scantable[i].u[j][k][l] = vectorAlloc_f64(polyorder+1);
           scantable[i].v[j][k][l] = vectorAlloc_f64(polyorder+1);
           scantable[i].w[j][k][l] = vectorAlloc_f64(polyorder+1);
@@ -728,45 +814,104 @@ bool Model::readPolynomialSamples(ifstream * input)
           scantable[i].elcorr[j][k][l] = vectorAlloc_f64(polyorder+1);
           scantable[i].elgeom[j][k][l] = vectorAlloc_f64(polyorder+1);
           scantable[i].parang[j][k][l] = vectorAlloc_f64(polyorder+1);
-          config->getinputline(input, &line, "SRC ", k);
+          scantable[i].msa[j][k][l] = vectorAlloc_f64(polyorder+1);
+          scantable[i].sc_gs_delay[j][k][l] = vectorAlloc_f64(polyorder+1);
+          scantable[i].gs_clock_delay[j][k][l] = vectorAlloc_f64(polyorder+1);
+          //look for required "DELAY" delay subcomponent
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " DELAY (us)", true, 0);
           polyok = polyok && fillPolyRow(scantable[i].delay[j][k][l], line, polyorder+1);
           if(fabs(scantable[i].delay[j][k][l][1]) > fabs(maxrate[l]) &&
              (scantable[i].delay[j][k][l][0] > 0.0 || stationtable[l].mount == ORB))
             //ignore rates from Earth-based antennas when the delay is negative - they are junk
             maxrate[l] = fabs(scantable[i].delay[j][k][l][1]);
-          config->getinputkeyval(input, &key, &line);
-          if(key.find("DRY") != string::npos) { //look for optional "DRY" delay subcomponent
+          //look for optional "DRY" delay subcomponent
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " DRY (us)", false, 0);
+          if(retval) {
             polyok = polyok && fillPolyRow(scantable[i].dry[j][k][l], line, polyorder+1);
-            config->getinputkeyval(input, &key, &line);
           }
-          if(key.find("WET") != string::npos) { //look for optional "WET" delay subcomponent
+          else {
+              fillPolyRow(scantable[i].dry[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "WET" delay subcomponent
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " WET (us)", false, 0);
+          if(retval) {
             polyok = polyok && fillPolyRow(scantable[i].wet[j][k][l], line, polyorder+1);
-            config->getinputkeyval(input, &key, &line);
           }
-          if(key.find("ADJ") != string::npos) { //look for optional "ADJ" delay subcomponent (usually for phased arrays)
+          else {
+              fillPolyRow(scantable[i].wet[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "ADJ" delay subcomponent
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " ADJ (us)", false, 0);
+          if(retval) {
             polyok = polyok && fillPolyRow(scantable[i].adj[j][k][l], line, polyorder+1);
-            config->getinputkeyval(input, &key, &line);
           }
-          if(key.find("AZ") != string::npos) { //look for optional "AZ" azimuth specification
+          else {
+              fillPolyRow(scantable[i].adj[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "SC_GS_DELAY" delay subcomponent
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " SC_GS_DELAY (us)", false, 0);
+          if(retval) {
+            polyok = polyok && fillPolyRow(scantable[i].sc_gs_delay[j][k][l], line, polyorder+1);
+          }
+          else {
+              fillPolyRow(scantable[i].sc_gs_delay[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "GS_CLOCK_DELAY" delay subcomponent
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " GS_CLOCK_DELAY (us)", false, 0);
+          if(retval) {
+            polyok = polyok && fillPolyRow(scantable[i].gs_clock_delay[j][k][l], line, polyorder+1);
+          }
+          else {
+              fillPolyRow(scantable[i].gs_clock_delay[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "AZ" azimuth specification
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " AZ", false, 0);
+          if(retval) {
             polyok = polyok && fillPolyRow(scantable[i].az[j][k][l], line, polyorder+1);
-            config->getinputkeyval(input, &key, &line);
           }
-          if(key.find("CORR") != string::npos) { //look for optional "EL CORR" refraction-corrected elevation specification
+          else {
+              fillPolyRow(scantable[i].az[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "EL CORR" refraction-corrected elevation specification
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " EL CORR", false, 0);
+          if(retval) {
             polyok = polyok && fillPolyRow(scantable[i].elcorr[j][k][l], line, polyorder+1);
-            config->getinputkeyval(input, &key, &line);
           }
-          if(key.find("GEOM") != string::npos) { //look for optional "EL GEOM" geometric elevation specification
+          else {
+              fillPolyRow(scantable[i].elcorr[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "EL GEOM" geometric elevation specification
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " EL GEOM", false, 0);
+          if(retval) {
             polyok = polyok && fillPolyRow(scantable[i].elgeom[j][k][l], line, polyorder+1);
-            config->getinputkeyval(input, &key, &line);
           }
-          if(key.find("PAR") != string::npos) { //look for optional "PAR ANGLE" parallactic angle specification
+          else {
+              fillPolyRow(scantable[i].elgeom[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "PAR ANGLE" parallactic angle specification
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " PAR ANGLE", false, 0);
+          if(retval) {
             polyok = polyok && fillPolyRow(scantable[i].parang[j][k][l], line, polyorder+1);
-            config->getinputkeyval(input, &key, &line);
           }
+          else {
+              fillPolyRow(scantable[i].parang[j][k][l], 0.0, polyorder+1);
+          }
+          //look for optional "MSA" delay subcomponent
+          retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " MSA (rad)", false, 0);
+          if(retval) {
+            polyok = polyok && fillPolyRow(scantable[i].msa[j][k][l], line, polyorder+1);
+          }
+          else {
+              fillPolyRow(scantable[i].msa[j][k][l], -999.0, polyorder+1);
+          }
+          //look for required "U" baseline subcomponent
+          config->getinputline(input, &line, "SRC ", k, " ANT ", l, " U (m)", true, 0);
           polyok = polyok && fillPolyRow(scantable[i].u[j][k][l], line, polyorder+1);
-          config->getinputline(input, &line, "SRC ", k);
+          //look for required "V" baseline subcomponent
+          config->getinputline(input, &line, "SRC ", k, " ANT ", l, " V (m)", true, 0);
           polyok = polyok && fillPolyRow(scantable[i].v[j][k][l], line, polyorder+1);
-          config->getinputline(input, &line, "SRC ", k);
+          //look for required "W" baseline subcomponent
+          config->getinputline(input, &line, "SRC ", k, " ANT ", l, " W (m)", true, 0);
           polyok = polyok && fillPolyRow(scantable[i].w[j][k][l], line, polyorder+1);
           if(!polyok) {
             cfatal << startl << "IM file has problem with polynomials - aborting!" << endl;
@@ -794,6 +939,15 @@ bool Model::fillPolyRow(f64* vals, string line, int npoly)
   return true;
 }
 
+//zero an array of doubles
+bool Model::fillPolyRow(f64* vals, double fill, int npoly)
+{
+  for(int i=0;i<npoly;i++) {
+      vals[i] = fill;
+  }
+  return true;
+}
+
 //utility routine which returns an integer which FITS expects based on the type of mount
 Model::axistype Model::getMount(string mount)
 {
@@ -803,11 +957,30 @@ Model::axistype Model::getMount(string mount)
     return RADEC;
   if(strcasecmp(mount.c_str(), "orbi") == 0) //orbital mount
     return ORB;
+  if(strcasecmp(mount.c_str(), "orbit") == 0) //orbital mount
+    return ORB;
+  if(strcasecmp(mount.c_str(), "orbiting") == 0) //orbital mount
+    return ORB;
+  if(strcasecmp(mount.c_str(), "space") == 0) //orbital mount
+    return ORB;
+  if(strcasecmp(mount.c_str(), "spac") == 0) //orbital mount
+    return ORB;
   if(strcasecmp(mount.substr(0,2).c_str(), "xy") == 0) //xy mount
     return XY;
 
   //otherwise unknown
   cerror << startl << "Warning - unknown mount type: Assuming Az-El" << endl;
   return ALTAZ;
+}
+Model::sitetypeenum Model::getSiteType(string sitetype_)
+{
+  if(strcasecmp(sitetype_.c_str(), "fixed") == 0) 
+    return SITEFIXED;
+  if(strcasecmp(sitetype_.c_str(), "earth_orbit") == 0)
+    return SITEEARTHORBITING;
+
+  //otherwise unknown
+  cerror << startl << "Warning - unknown site type: Assuming OTHER" << endl;
+  return SITEOTHER;
 }
 // vim: shiftwidth=2:softtabstop=2:expandtab
