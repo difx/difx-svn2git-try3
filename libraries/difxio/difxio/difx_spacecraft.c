@@ -374,6 +374,7 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double m
 #if HAVE_SPICE
 	int spiceHandle;
 	int p;
+        int retcode;
 
 	ldpool_c(naifFile);
 	spklef_c(ephemFile, &spiceHandle);
@@ -540,6 +541,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 	const SpiceInt MaxLineLength = 512;
 	const SpiceInt firstYear = 2000;
 	int p;
+        int retcode;
 	doublereal elems[MaxEphemElementSets][NElement];
 	SpiceDouble epochs[MaxEphemElementSets];
 	int nSet = 0;

@@ -2323,6 +2323,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		for(s = 0; s < D->nSpacecraft; ++s)
 		{
                     char testc;
+                    const char* str;
                     N = DifxParametersbatchfind1(cp, rows[N_SPACECRAFT_ROWS-1], spacecraftKeys, s, N_SPACECRAFT_ROWS, rows);
                     if(N < N_SPACECRAFT_ROWS)
                     {
@@ -3070,6 +3071,7 @@ static DifxInput *deriveFitsSourceIds(DifxInput *D)
 	
 static void setOrbitingAntennas(DifxInput *D)
 {
+        int a;
 	if(!D)
 	{
 		return;
@@ -3077,8 +3079,6 @@ static void setOrbitingAntennas(DifxInput *D)
 	
 	if(D->nSpacecraft > 0 && D->nAntenna > 0)
 	{
-		int a;
-
 		for(a = 0; a < D->nAntenna; ++a)
 		{
 			int sc;

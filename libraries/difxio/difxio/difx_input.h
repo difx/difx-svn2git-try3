@@ -920,8 +920,8 @@ void deleteDifxSpacecraftArray(DifxSpacecraft *ds, int nSpacecraft);
 void printDifxSpacecraft(const DifxSpacecraft *ds);
 void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds);
 int shiftSpacecraftClockPolys(DifxInput *D);
-int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *name, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem);
-int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *name, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem);
+int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError);
+int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemClockError);
 int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplanetaryephem);
 int computeDifxSpacecraftEphemerisOffsets(DifxSpacecraft *ds);
 int DiFX_model_scpacecraft_time_delay_qromb(const DifxSpacecraft* const spacecraft, 
@@ -958,11 +958,8 @@ int evaluateDifxSpacecraftAntennaOffset(const DifxSpacecraft *sc, int mjd,
                                         nineVector *interpolatedOffset);
 int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds);
 void get_next_Russian_scf_line(char * const line, const int MAX_LEN, FILE *fp);
-int read_Russian_scf_file(const char * const filename, const char * const spacecraftname, const double MJD_start, const double MJD_end, const double MJD_delta, DifxSpacecraft * const ds);
-int read_Russian_scf_axes_file(const char * const filename,
-                               const double MJD_start,
-                               const double MJD_end,
-                               DifxSpacecraft * const ds);
+int read_Russian_scf_file(const char * const filename,const char * const spacecraftname, const double MJD_start, const double MJD_end, const double MJD_delta, const double ephemClockError, DifxSpacecraft * const ds);
+int read_Russian_scf_axes_file(const char * const filename, const double MJD_start, const double MJD_end, const double ephemClockError, DifxSpacecraft * const ds);
 
 
 /* DifxSource functions */

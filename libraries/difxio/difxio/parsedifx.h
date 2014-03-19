@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2012 by Walter Brisken                             *
+ *   Copyright (C) 2007-2012, 2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -130,7 +130,7 @@ int DifxParametersfind2_limited(const DifxParameters *dp, int start_row, int max
 const char *DifxParametersvalue(const DifxParameters *dp, int row);
 
 /* find row indicies for several keys */
-, 2014int DifxParametersbatchfind(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int n, int rows[]);
+int DifxParametersbatchfind(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int n, int rows[]);
 int DifxParametersbatchfind1(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int index1, int n, int rows[]);
 int DifxParametersbatchfind2(const DifxParameters *dp, int start, const char keys[][MAX_DIFX_KEY_LEN], int index1, int index2, int n, int rows[]);
 

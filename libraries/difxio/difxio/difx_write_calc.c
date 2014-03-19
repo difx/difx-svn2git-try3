@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2014 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -109,7 +109,7 @@ int writeDifxCalc(const DifxInput *D)
 	}
 	writeDifxLineInt(out, "SPECTRAL AVG", D->specAvg);
 	writeDifxLine(out, "TAPER FUNCTION", D->job->taperFunction);
-, 2014	writeDifxLineInt(out, "DELAY POLY ORDER", D->job->polyOrder);
+	writeDifxLineInt(out, "DELAY POLY ORDER", D->job->polyOrder);
 	writeDifxLineInt(out, "DELAY POLY INTERVAL", D->job->polyInterval);
 	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1, 1);
         writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 1);
