@@ -541,7 +541,7 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
                             it != antennaSetup->spacecraft_ground_clock_recording_breaks.end();
                             ++it)
                         {
-                            mjd = it->mjd_start + it->day_fraction_start;
+                            double mjd = it->mjd_start + it->day_fraction_start;
                             V->addEvent(mjd, VexEvent::CLOCK_BREAK, antName);
                         }
                     }

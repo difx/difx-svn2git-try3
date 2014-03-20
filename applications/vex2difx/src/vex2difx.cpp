@@ -746,7 +746,7 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 			if(ant->dataSource == DataSourceNetwork)
 			{
 				dd->windowSize = antennaSetup->windowSize;
-				dd->networkPort = antennaSetup->networkPort;
+				snprintf(dd->networkPort, DIFXIO_ETH_DEV_SIZE, "%d", antennaSetup->networkPort);
 			}
 
 			if(antennaSetup->dataSampling < NumSamplingTypes)
@@ -1229,7 +1229,7 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 		if(chanBW > 0.51 && firstChanBWWarning)
 		{
 			firstChanBWWarning = 0;
-			cout << "Warning: channel bandwidth is " << chanBW << " MHZ, which is larger than the minimum recommended 0.5 MHz.  Consider decreasing the output spectral resolution." << endl;
+			cout << "Warning: channel bandwidth is " << chanBW << " MHz, which is larger than the minimum recommended 0.5 MHz.  Consider decreasing the output spectral resolution." << endl;
 		}
 
 		// This is to correct for the fact that mpifxcorr does not know about oversampling
@@ -3237,9 +3237,21 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 
                 for(int c = 0; c < D->nConfig; c++) {
+                    const VexMode *mode;
+                    
                     mode = V->getModeByDefName(configs[c].first);
                     corrSetup = P->getCorrSetup(configs[c].second);
-                    worstcaseguardns = calculateWorstcaseGuardNS_spacecraft(max_speed, mode->sampRate, D->config[c].subintNS);
+                    {
+                        double max_sampRate = 0.0;
+                        for(map<string,VexSetup>::const_iterator sp = mode->setups.begin(); sp != mode->setups.end(); ++sp)
+                        {
+                            if(sp->second.sampRate > max_sampRate)
+                            {
+                                max_sampRate = sp->second.sampRate;
+                            }
+                        }
+                        worstcaseguardns = calculateWorstcaseGuardNS_spacecraft(max_speed, max_sampRate, D->config[c].subintNS);
+                    }
                     
                     if(D->config[c].guardNS < worstcaseguardns)
                     {

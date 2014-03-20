@@ -271,17 +271,17 @@ format_error:
 // 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
 // 3. VLBA-like time               2009MAR08-12:34:56.121
 // 4. vex time                     2009y061d12h34m56.121s
-SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr, int* nWarn)
+SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const std::string &timeStr, int* nWarn)
 {
     bool have_start = false;
     bool have_sync = false;
     bool have_fudge = false;
     bool no_identifiers = false;
     int pos_count = 0;
-    string::size_type at, last, splitat;
-    string nestedkeyval;
-    string key;
-    string value;
+    std::string::size_type at, last, splitat;
+    std::string nestedkeyval;
+    std::string key;
+    std::string value;
     const char* str;
     const char* p;
     char* endptr = 0;
@@ -289,21 +289,21 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr
    
     last = 0;
     at = 0;
-    while(at != string::npos)
+    while(at != std::string::npos)
     {
         at = timeStr.find_first_of('/', last);
         nestedkeyval = timeStr.substr(last, at-last);
         splitat = nestedkeyval.find_first_of('@');
-        if(splitat == string::npos)
+        if(splitat == std::string::npos)
         {
             if(pos_count == 0)
             {
-                cerr << "Warning: old style SC_GS_clock_break entry without key@value pairs found.  Assuming the values come in the correct order" << endl;
+                std::cerr << "Warning: old style SC_GS_clock_break entry without key@value pairs found.  Assuming the values come in the correct order" << std::endl;
                 *nWarn++;
                 no_identifiers = true;
             }
             else if(!no_identifiers) {
-                cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.  SC_GS_clock_break entry is '" << timeStr << "'" << endl;
+                std::cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.  SC_GS_clock_break entry is '" << timeStr << "'" << std::endl;
                 goto format_error;
             }
             str = nestedkeyval.c_str();
@@ -332,21 +332,21 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr
                 have_fudge = true;
             }
             else {
-                cerr << "Error: too many values in old-style SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                std::cerr << "Error: too many values in old-style SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
                 goto format_error;
             }
         }
         else {
             // key@value
             if(no_identifiers) {
-                cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.  SC_GS_clock_break entry is '" << timeStr << "'" << endl;
+                std::cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.  SC_GS_clock_break entry is '" << timeStr << "'" << std::endl;
                 goto format_error;
             }
             key = nestedkeyval.substr(0,splitat);
             value = nestedkeyval.substr(splitat+1);
             if(key == "start") {
                 if(have_start) {
-                    cerr << "Error: multiple 'start' keys in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                    std::cerr << "Error: multiple 'start' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
                     goto format_error;
                 }
                 parseTimeFractional(value.c_str(), result.mjd_start, result.day_fraction_start, &endptr);
@@ -357,7 +357,7 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr
             }
             else if(key == "sync") {
                 if(have_sync) {
-                    cerr << "Error: multiple 'sync' keys in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                    std::cerr << "Error: multiple 'sync' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
                     goto format_error;
                 }
                 parseTimeFractional(value.c_str(), result.mjd_sync, result.day_fraction_sync, &endptr);
@@ -368,7 +368,7 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr
             }
             else if(key == "clockfudge") {
                 if(have_fudge) {
-                    cerr << "Error: multiple 'fudge' keys in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                    std::cerr << "Error: multiple 'fudge' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
                     goto format_error;
                 }
                 errno = 0;
@@ -381,7 +381,7 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr
                 have_fudge = true;
             }
             else {
-                cerr << "Error: unrecognized SC_GS_clock_break sub-key '" << key << "' in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+                std::cerr << "Error: unrecognized SC_GS_clock_break sub-key '" << key << "' in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
                 goto format_error;
             }
         }
@@ -393,28 +393,28 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const string &timeStr
         // all we need
     }
     else {
-        cerr << "Error: not all required sub-keys were found in SC_GS_clock_break entry '" << timeStr << "'" << endl;
+        std::cerr << "Error: not all required sub-keys were found in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
         goto format_error;
     }
     return result;
 
 format_error:
 	// No match
-	cerr << endl;
-	cerr << "Error: SC_GS_clock_break entry '" << timeStr << "' not parsable." << endl;
-	cerr << endl;
-        cerr << "SC_GS_clock_break should be given as start@MJD/sync@MJD/clockfudge@SS.SSS" << endl;
-        cerr << endl;
-	cerr << "Allowable MJD date formats are:" << endl;
-	cerr << "1. Straight MJD        54345.341944" << endl;
-	cerr << "2. Vex formatted date  2009y245d08h12m24s" << endl;
-	cerr << "3. VLBA-like format    2009SEP02-08:12:24" << endl;
-	cerr << "4. ISO 8601 format     2009-09-02T08:12:24" << endl;
-	cerr << endl;
-        cerr << "Clock fudge should be specified as a floating point value such as:" << endl;
-        cerr << "1" << endl;
-        cerr << "1.2" << endl;
-        cerr << "1.2E3" << endl;
+	std::cerr << std::endl;
+	std::cerr << "Error: SC_GS_clock_break entry '" << timeStr << "' not parsable." << std::endl;
+        std::cerr << std::endl;
+        std::cerr << "SC_GS_clock_break should be given as start@MJD/sync@MJD/clockfudge@SS.SSS" << std::endl;
+        std::cerr << std::endl;
+	std::cerr << "Allowable MJD date formats are:" << std::endl;
+	std::cerr << "1. Straight MJD        54345.341944" << std::endl;
+	std::cerr << "2. Vex formatted date  2009y245d08h12m24s" << std::endl;
+	std::cerr << "3. VLBA-like format    2009SEP02-08:12:24" << std::endl;
+	std::cerr << "4. ISO 8601 format     2009-09-02T08:12:24" << std::endl;
+	std::cerr << std::endl;
+        std::cerr << "Clock fudge should be specified as a floating point value such as:" << std::endl;
+        std::cerr << "1" << std::endl;
+        std::cerr << "1.2" << std::endl;
+        std::cerr << "1.2E3" << std::endl;
         
 
 	exit(0);
@@ -422,7 +422,7 @@ format_error:
 
 
 
-simple3Vector parseSpacecraftsimple3Vector(const string &vecStr)
+simple3Vector parseSpacecraftsimple3Vector(const std::string &vecStr)
 {
 	const char* const str = vecStr.c_str();
 	const char *p;
@@ -452,13 +452,13 @@ simple3Vector parseSpacecraftsimple3Vector(const string &vecStr)
 
 format_error:
 	// No match
-	cerr << endl;
-	cerr << "Error: simple3Vector values not parsable: " << vecStr << endl;
-	cerr << endl;
-        cerr << "simple3Vector entries should be provided as" << endl;
-        cerr << "NUMBER,NUMBER,NUMBER" << endl;
-        cerr << "with no whitespace between entries" << endl;
-	cerr << endl;
+	std::cerr << std::endl;
+	std::cerr << "Error: simple3Vector values not parsable: " << vecStr << std::endl;
+	std::cerr << std::endl;
+        std::cerr << "simple3Vector entries should be provided as" << std::endl;
+        std::cerr << "NUMBER,NUMBER,NUMBER" << std::endl;
+        std::cerr << "with no whitespace between entries" << std::endl;
+	std::cerr << std::endl;
 
 	exit(0);
 }
@@ -1176,7 +1176,7 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 		ss >> pc->naifFile;
                 // find filename exclusing the path
                 size_t dir_pos = pc->naifFile.find_last_of("/\\");
-                std::naifFile_filename = pc->naifFile.substr(dir_pos+1);
+                std::string naifFile_filename = pc->naifFile.substr(dir_pos+1);
 		if(naifFile_filename < "naif0010.tls")
 		{
 			if(time(0) > 1341100800)	// July 1, 2012
@@ -1967,12 +1967,12 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 		ss >> naifFile;
                 // find filename exclusing the path
                 size_t dir_pos = naifFile.find_last_of("/\\");
-                std::naifFile_filename = naifFile.substr(dir_pos+1);
+                std::string naifFile_filename = naifFile.substr(dir_pos+1);
 		if(naifFile_filename < "naif0010.tls")
 		{
 			if(time(0) > 1341100800)	// July 1, 2012
 			{
-				std::cout << "Error: naif0010.tls or newer is needed for correct ephemeris evaluation.  An old or unrecognized file, " << pc->naifFile << " was supplied." << std::endl;
+				std::cout << "Error: naif0010.tls or newer is needed for correct ephemeris evaluation.  An old or unrecognized file, " << naifFile << " was supplied." << std::endl;
 
 				exit(EXIT_FAILURE);
 			}
@@ -3507,12 +3507,11 @@ const AntennaSetup *CorrParams::getAntennaSetup(const std::string &name) const
 
 const AntennaSetup *CorrParams::getAntennaSetupExact(const std::string &name) const
 {
-	int i, n;
 	const AntennaSetup *a = 0;
 
 	for(std::vector<AntennaSetup>::const_iterator it = antennaSetups.begin(); it != antennaSetups.end(); ++it)
 	{
-		if(name == it->.vexName)
+		if(name == it->vexName)
 		{
                         a = &(*it);
 			break;
