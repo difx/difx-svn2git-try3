@@ -51,7 +51,8 @@ typedef struct
 	CLIENT *clnt;
 } CalcParams;
 
-int difxCalcInit(const DifxInput *D, CalcParams *p);
+int difxCalcInit(const DifxInput *D, CalcParams *p, int verbose);
+int CheckInputForSpacecraft(const DifxInput *D, CalcParams *p);
 int difxCalc(DifxInput *D, CalcParams *p, const char *prefix, int verbose);
 
 #endif

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2013 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2014 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -47,7 +47,7 @@
 const char program[] = "calcif2";
 const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
 const char version[] = VERSION;
-const char verdate[] = "20121231";
+const char verdate[] = "20140320";
 
 typedef struct
 {
@@ -152,9 +152,9 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 
 	opts = (CommandLineOptions *)calloc(1, sizeof(CommandLineOptions));
 	opts->delta = 0.0001;
-	opts->polyOrder = 5;
+	opts->polyOrder = 0;    /* default to value in the .calc file */
 	opts->polyOversamp = 1;
-	opts->polyInterval = 120;
+	opts->polyInterval = 0; /* default to value in the .calc file */
 	opts->interpol = 0;	/* usual solve */
 	opts->aberCorr = AberCorrExact;
 
@@ -281,7 +281,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 		++die;
 	}
 
-	if(opts->polyOrder < 2 || opts->polyOrder > MAX_MODEL_ORDER)
+	if(((opts->polyOrder)) && (opts->polyOrder < 2 || opts->polyOrder > MAX_MODEL_ORDER))
 	{
 		fprintf(stderr, "Error: calcif2 Polynomial order must be in range [2, %d]\n", MAX_MODEL_ORDER);
 		++die;
@@ -299,7 +299,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 		fprintf(stderr, "Note: oversampling increased to 2 because polynomial fitting is being used.\n");
 	}
 
-	if(opts->polyInterval < 10 || opts->polyInterval > 600)
+	if(((opts->polyInterval)) && (opts->polyInterval < 10 || opts->polyInterval > 600))
 	{
 		fprintf(stderr, "Error: calcif2: Interval must be in range [10, 600] sec\n");
 		++die;
@@ -339,7 +339,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			v = snprintf(opts->calcServer, DIFXIO_NAME_LENGTH, "%s", cs ? cs : "localhost");
 			if(v >= DIFXIO_NAME_LENGTH)
 			{
-				fprintf(stderr, "Error: env var CALC_SERVER is set to a name that is too long, %s (should be < 32 chars)\n", cs ? cs : "localhost");
+                            fprintf(stderr, "Error: calcif2: env var CALC_SERVER is set to a name that is too long, %s (should be < %d chars)\n", cs ? cs : "localhost", DIFXIO_NAME_LENGTH);
 				++die;
 			}
 		}
@@ -643,6 +643,14 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 
 		return 0;
 	}
+
+        (void) CheckInputForSpacecraft(D, p);
+        if((p->order)) {
+            D->job->polyOrder = p->order;
+        }
+        if((p->increment)) {
+            D->job->polyInterval = p->increment;
+        }
 	
 	if(difxVersion && D->job->difxVersion[0])
 	{
@@ -677,7 +685,7 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 		printDifxInput(D);
 	}
 
-	v = difxCalcInit(D, p);
+	v = difxCalcInit(D, p, opts->verbose);
 	if(v < 0)
 	{
 		deleteDifxInput(D);
