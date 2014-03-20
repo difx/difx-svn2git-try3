@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009 by Adam Deller                                     *
+ *   Copyright (C) 2009, 2014 by Adam Deller                                     *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at  http://cira.ivec.org/dokuwiki/doku.php/difx/documentation for     *
@@ -249,7 +249,7 @@ class Model{
     sitetypeenum getSiteType(string sitetype_);
 
     int modelmjd, modelstartseconds, numstations, numsources, numscans, numeops, numspacecraft;
-, 2014    int polyorder, modelincsecs;
+    int polyorder, modelincsecs;
     long long estimatedbytes;
     bool opensuccess;
     Configuration * config;

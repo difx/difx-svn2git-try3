@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006 by Adam Deller                                     *
+ *   Copyright (C) 2006, 2014 by Adam Deller                                     *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -2985,7 +2985,7 @@ void Configuration::getinputkeyval(ifstream * input, std::string * key, std::str
   *key = key->substr(0, key->find_first_of(':'));
 }
 
-bool Configuration::getinputline(ifstream * input, std::string * line, cosnt std::string &startofheader, bool warnOnFailure, int maxSkipLines) const
+bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, bool warnOnFailure, int maxSkipLines) const
 {
   static const char ERROR_MSG[] = "Error reading in getinputline";
   if(input->eof())
@@ -3067,7 +3067,7 @@ void Configuration::getMJD(int & d, int & s, int year, int month, int day, int h
   s = 3600*hour + 60*minute + second;
 }
 
-, 2014void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day) const
+void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day) const
 {
   int j = mjd + 32044 + 2400001;
   int g = j / 146097;

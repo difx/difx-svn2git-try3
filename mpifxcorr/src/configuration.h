@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006 by Adam Deller                                     *
+ *   Copyright (C) 2006, 2014 by Adam Deller                                     *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <math.h>
+#include <climits>
 #include "polyco.h"
 #include "model.h"
 #include "mark5access.h"
@@ -586,7 +587,8 @@ public:
   * @param maxSkipLines maximum number of lines to skip if no match found
   * @return Whether the input line was correctly read
   */
-  bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX const);
+  bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
+
 
  /**
   * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
@@ -953,7 +955,7 @@ private:
   double restartseconds;
   int maxnumchannels, maxnumpulsarbins, maxthreadresultlength, maxcoreresultlength, maxnumbufferedffts, mtu;
   int stadumpchannels, ltadumpchannels;
-, 2014  int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength;
+  int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength;
   long long estimatedbytes;
   string calcfilename, modelfilename, coreconffilename, outputfilename, jobname, obscode;
   int * numprocessthreads;
