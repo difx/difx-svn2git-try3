@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2013 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2014 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -77,6 +77,7 @@ static int check_calcserver_operation(const DifxInput *D, CalcParams *p, int ver
      char   stnnamea[8], srcname[12], axistypea[12];
      char   stnnameb[8], axistypeb[12];
      int    i, v, mode_failures, return_code;
+     int need_spacecraft_antennas;
      long calcserver_version;
      enum clnt_stat clnt_stat;
 
@@ -283,6 +284,8 @@ static int check_calcserver_operation(const DifxInput *D, CalcParams *p, int ver
              }
          }
      }
+     
+     need_spacecraft_antennas = CheckInputForSpacecraft(D, p);
      if(calcserver_version >= CALC_SERVER_STRUCT_CODE_5_1_0)
      {
          strcpy (stnnameb, "RA");
@@ -362,8 +365,7 @@ static int check_calcserver_operation(const DifxInput *D, CalcParams *p, int ver
      }
      else {
          /* do we have spacecraft or otherwise need version 5 0 0? */
-         int need_spacecraft = CheckInputForSpacecraft(D, p);
-         if((need_spacecraft)) {
+         if((need_spacecraft_antennas)) {
              fprintf(stderr, "Error: spacecraft delay calculation needs CALCServer version 0x%lX or above\n", (long)(CALC_SERVER_STRUCT_CODE_5_1_0));
              return_code = -5;
          }
@@ -466,10 +468,6 @@ int difxCalcInit(const DifxInput *D, CalcParams *p, int verbose)
 int CheckInputForSpacecraft(const DifxInput *D, CalcParams *p)
 {
     int sc;
-    if(p->allowNegDelay)
-    {
-        return;
-    }
     for(sc = 0; sc < D->nSpacecraft; sc++)
     {
         if((D->spacecraft[sc].is_antenna))
@@ -986,7 +984,7 @@ static double computePolyModel(DifxPolyModel *im, struct modelTemp *mod, double 
 	computePoly2(im->elgeom,         mod->elgeom,		im->order+1, oversamp, deltaT, interpolationType);
         unwrap_deg_array_for_poly((im->order+1)*oversamp, mod->parangle);
 	computePoly2(im->parangle,       mod->parangle,	im->order+1, oversamp, deltaT, interpolationType);
-        unwrap_array_for_poly((im->order+1)*oversamp, 2014, mod->msa);
+        unwrap_array_for_poly((im->order+1)*oversamp, mod->msa);
         computePoly2(im->msa,            mod->msa,		im->order+1, oversamp, deltaT, interpolationType);
         computePoly2(im->sc_gs_delay,    mod->sc_gs_delay,	im->order+1, oversamp, deltaT, interpolationType);
         computePoly2(im->gs_clock_delay, mod->gs_clock_delay,	im->order+1, oversamp, deltaT, interpolationType);
@@ -1391,7 +1389,7 @@ static int adjustSpacecraftAntennaCalcResults(struct modelTemp *mod, int index, 
         spacecraftTimeFrameOffset offset;
         int retval;
         retarded_date = request->date;
-        retarded_day_fraction = request->time - (im->delay[index]*1E-6)/86400.0;
+        retarded_day_fraction = request->time - (mod->delay[index]*1E-6)/86400.0;
         mjd_offset = (int)(floor(retarded_day_fraction));
         retarded_date += mjd_offset;
         retarded_day_fraction -= mjd_offset;
@@ -1422,7 +1420,7 @@ static int adjustSpacecraftAntennaCalcResults(struct modelTemp *mod, int index, 
     }
     
 #ifdef CALCIF2_DEBUG
-    fprintf(stderr, "CALCIF2_DEBUG: Have GS_recording_delay=%E s, SC_recording_delay=%E s, gs_clock_offset=%E s,  with geometric target delay=%E s\n", sc_gs_delay, sc->SC_recording_delay, gs_clock_offset, im->delay[index]*1E-6);
+    fprintf(stderr, "CALCIF2_DEBUG: Have GS_recording_delay=%E s, SC_recording_delay=%E s, gs_clock_offset=%E s,  with geometric target delay=%E s\n", sc_gs_delay, sc->SC_recording_delay, gs_clock_offset, mod->delay[index]*1E-6);
 #endif /* CALCIF2_DEBUG */
     /* correct the delay to account for the sc_gs_delay and the
        SC_recording_delay.  The *spacecraft* clock delay will be added in later
