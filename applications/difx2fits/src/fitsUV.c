@@ -1141,6 +1141,7 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D, struct fits_keywords *p_fi
 	int jobId;
 	int nDifxVis;
 	int dvId;
+        int next_message = 1000;
 #ifdef HAVE_FFTW
 	Sniffer *S = 0;
 #endif
@@ -1425,7 +1426,7 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D, struct fits_keywords *p_fi
                             if(nWritten >= next_message)
                             {
                                 next_message = nWritten+1000;
-                                printf("Writing record %7d for MJD %.0f days + %6.0f seconds\n", nWritten, dv->mjd, dv->iat*86400.);
+                                printf("Writing record %7d for MJD %.0f days + %6.0f seconds\n", nWritten, dv->mjd, dv->utc*86400.);
                             }
                         }
 
