@@ -1145,7 +1145,7 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D, struct fits_keywords *p_fi
 #ifdef HAVE_FFTW
 	Sniffer *S = 0;
 #endif
-
+        
 	/* define the columns in the UV data FITS Table */
 	struct fitsBinTableColumn columns[] =
 	{
