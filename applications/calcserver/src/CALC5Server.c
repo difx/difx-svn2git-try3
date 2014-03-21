@@ -292,6 +292,7 @@ SVCXPRT *pTransport;
     double  mjd_time, partials[28], outval;
     char    *destdotaddr, mjd_str[24], filename[256], hostname[24];
 
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 0\n");    
     tp = &timep;
     time (tp);
 
@@ -332,6 +333,7 @@ SVCXPRT *pTransport;
          ifirst = 1;
        }
     }
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 1\n"); 
     /* handle null procedure */
     if (pRequest->rq_proc == NULLPROC)
 	{
@@ -340,6 +342,7 @@ SVCXPRT *pTransport;
 	return;
 	}
 
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 2\n"); 
     /* handle unimplemented procedure number */
     if (pRequest->rq_proc != GETCALC)
 	{
@@ -347,6 +350,7 @@ SVCXPRT *pTransport;
 	return;
 	}
 
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 3\n"); 
     /* get RPC input argument */
     bzero (&argument, sizeof (argument));    /* see "The Art of DA" p193 */
     if (!svc_getargs (pTransport, xdr_getCALC_arg, (char *)&argument))
@@ -355,7 +359,8 @@ SVCXPRT *pTransport;
 	return;
 	}
 
-#ifdef VERBOSE_DEBUG    
+#ifdef VERBOSE_DEBUG
+    printf ("Processing for station: %s\n", argument.station_b);
     printf ("request arg: date = %d\n", argument.date);
     printf ("request arg: time = %e\n", argument.time);
     printf ("request arg: src  = %s\n", argument.source);
@@ -428,27 +433,33 @@ SVCXPRT *pTransport;
     calcinit_ (&jobnum, &imjd, kflags, &iret);
     if (ifirst == 1) fflush(flog);
 
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4\n");
     calcmodl2_ (&imjd, &radtime, &source_index, &station_index_a,
                    &station_index_b,
-		   &delay, &rate, &u, &v, &w, atmos, datmos,
-		   &accel,
-		   &risetime, &settime, xelev, relev, 
+        	   &delay, &rate, &u, &v, &w, atmos, datmos,
+        	   &accel,
+        	   &risetime, &settime, xelev, relev,
                    xaz, raz, xmsa, rmsa,
                    baselineJ2000, partials, &iret);
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4.1\n"); 
 
     delay *= 1.0e-6;
 
 #ifdef VERBOSE_DEBUG
     printf ("CALCServer: delay = %20.14e\n", delay);
     printf ("CALCServer: rate  = %e\n", rate);
-    printf ("CALCServer: dry, wet = %e %e\n", 
-            atmos[0], atmos[1]);
+    printf ("CALCServer: dry, wet = %e %e\n", atmos[0], atmos[1]);
 #endif
 
     time (tp);
 
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4.2\n");
     sock_in = svc_getcaller (pTransport);
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4.3\n");
+    fprintf(stderr, "JMA DEBUG: sock_in = %p\n", sock_in);
+    fprintf(stderr, "JMA DEBUG: sock_in->sin_addr = 0x%8.8X\n", sock_in->sin_addr.s_addr);
     destdotaddr = inet_ntoa(sock_in->sin_addr);
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 5\n"); 
 
     if (strcmp(getenv("SERVERLOG"), "ON") == 0)
     {
@@ -460,6 +471,7 @@ SVCXPRT *pTransport;
              argument.source, mjd_str, delay, ctime (tp));
        fflush (flog);
     }
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 6\n"); 
     /* outval goes nowhere for now */
     outval = 0.0;
     if ((n_Horizons_rows > 0) &&
@@ -512,6 +524,7 @@ SVCXPRT *pTransport;
     result.getCALC_res_u.record.baselineA2000[0] = baselineJ2000[6];
     result.getCALC_res_u.record.baselineA2000[1] = baselineJ2000[7];
     result.getCALC_res_u.record.baselineA2000[2] = baselineJ2000[8];
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 7\n"); 
 
     result.error = 0;
     ifirst = 0;
@@ -527,9 +540,11 @@ SVCXPRT *pTransport;
         }
 
     /* return result to client */
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 8\n"); 
 
     if (!svc_sendreply (pTransport, xdr_getCALC_res, (char *)&result))
 	svcerr_systemerr (pTransport);
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 9\n"); 
 
     /* free any memory allocated by xdr routines when argument was decoded */
     if (!svc_freeargs (pTransport, xdr_getCALC_arg, (char *)&argument))
@@ -537,6 +552,7 @@ SVCXPRT *pTransport;
 	syslog (LOG_ERR, "unable to free arguments %m\n");
 	exit(EXIT_FAILURE);
 	}
+    fprintf(stderr, "JMA DEBUG: inside calcprog_1 10\n"); 
 }
 
 /*++****************************************************************************

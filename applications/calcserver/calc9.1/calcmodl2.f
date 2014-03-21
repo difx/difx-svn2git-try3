@@ -83,11 +83,15 @@ C----------------------------------------------------------------------
 C     Call the CALC DRIVR subroutine that does it all.
 C----------------------------------------------------------------------
 C
+      PRINT*, 'JMA in calcmodl2 before DRIVR'
       CALL DRIVR (BSLN,SRC,EARTH,SRCELEV)
       IF (IRET.EQ.1) THEN
          IRETURN = IRET
          RETURN
       END IF
+      PRINT*, 'JMA in calcmodl2 after DRIVR'
+      print *, 'JMA DEBUG: RETURN'
+      RETURN
 C
 C     Retrieve CALC delay and rate from COMMON variables
       XDELAY = PUTDLY(1) + PUTDLY(2)
@@ -442,6 +446,7 @@ c     .                      dterm_b/term_b )                 !derivative
       DO I= 1, 3
          GEO_SC(I)   = RC_GEO(I)
       END DO
+      PRINT*, 'JMA in calcmodl2 GEO_SC'
 
 C
 C    Evaluate eqn. 3.14
@@ -477,6 +482,7 @@ c      write (6,*) "Calc9.1 Earth grav   = ", earthgrav
           plangravdly = plangravdly + gravdly
 c         write (6,*) "JPL eqn. 3.14, Planet = ", gravdly
       END DO
+      PRINT*, 'JMA in calcmodl2 PLANGRAV'
      
 c      write (6,*) "Calc sun      = ", SUN_CNTRB(1)
 c      write (6,*) "delta_t_grav  = ", DELTGRAV
@@ -504,7 +510,8 @@ c      write (6,3001) "corrected total delay   = ", delay
  4003 format(1x,a,f16.12)
  4004 format(1x,a,f18.2)
  900  CONTINUE
-      PRINT*, 'JMA in calcmodl2 ', DELAY
+      PRINT*, 'JMA in calcmodl2 DELAY=', DELAY
+      PRINT*, 'JMA in calcmodl2 DONE', DELAY
       RETURN
       END                                                                     
       SUBROUTINE JPL314 (C_TERM, TERM4,

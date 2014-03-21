@@ -809,7 +809,6 @@ C
      +           IVARB(1,1,1) = I_FTOC(JOBNUM,'source',1,'HASSVEC')
              IF (fstrcmp(VARNAM,'HASPOINTVEC   ').eq.0) 
      +           IVARB(1,1,1) = I_FTOC(JOBNUM,'source',1,'HASPOINTVEC')
-             GO TO 900
           END IF
 C
 C         Changed by Adam Deller to not skip first station on 
@@ -840,19 +839,6 @@ C                 orbiting antenna.
                 GO TO 900
              END IF
 C
-C  Load the Calc sources table with all sources in the correlator
-C   job script table
-C
-             IF (fstrcmp(VARNAM,'STARREFFRAME  ').eq.0) THEN
-                NROWS = N_ROWS(JOBNUM,'source')
-                IF (NROWS.LT.NDIM2.OR.NROWS.LE.0) GO TO 900
-                DO I = 1, NDIM1
-                   IVARB(I,1,1) = I_FTOC(JOBNUM,'source',I-1,
-     &                  'STARREFFRAME')
-                END DO
-                GO TO 900
-             END IF
-C
              IF (fstrcmp(VARNAM,'BASELINE      ').EQ.0) THEN
                 IVARB(1,1,1) = GETSIT(1)
                 IVARB(2,1,1) = GETSIT(2)
@@ -868,6 +854,19 @@ C
                 IVARB(5,1,1) = GETTAG(5)
                 GO TO 900
              END IF
+          END IF
+C
+C  Load the Calc sources table with all sources in the correlator
+C   job script table
+C
+          IF (fstrcmp(VARNAM,'STARREFFRAME  ').eq.0) THEN
+             NROWS = N_ROWS(JOBNUM,'source')
+             IF (NROWS.LT.NDIM2.OR.NROWS.LE.0) GO TO 900
+             DO I = 1, NDIM1
+                IVARB(I,1,1) = I_FTOC(JOBNUM,'source',I-1,
+     &               'STARREFFRAME')
+             END DO
+             GO TO 900
           END IF
 C
  900     CONTINUE
