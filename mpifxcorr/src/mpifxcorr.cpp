@@ -283,6 +283,8 @@ int main(int argc, char *argv[])
   }
 
   cinfo << startl << "MPI Process " << myID << " is running on host " << processor_name << endl;
+
+  cwarn << startl << "This is a DEBUG version of mpifxcorr compiled on " << __DATE__ << " at " << __TIME__ << endl;
  
   for(int i=2;i<argc;i++)
   {
