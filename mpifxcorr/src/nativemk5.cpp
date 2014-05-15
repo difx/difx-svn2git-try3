@@ -882,7 +882,7 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 					sprintf(fileName, "/scratch/TimeFail_%Ld+%d", readpointer, readbytes);
 					cinfo << startl << "Baseband data for this read were saved to file " << fileName << endl;
 					out = fopen(fileName, "w");
-					fwrite(buf, 1, readSize, out);
+					fwrite(buf, 1, readbytes, out);
 					fclose(out);
 				}
 			}

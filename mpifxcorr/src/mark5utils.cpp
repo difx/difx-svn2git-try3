@@ -267,7 +267,7 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 					char fileName[100];
 					FILE *out;
 
-					sprintf(fileName, "/scratch/WatermarkFail_%Ld+%d", readpointer+offset, readsize);
+					sprintf(fileName, "/scratch/WatermarkFail_%Ld+%d", readpointer+offset, readSize);
 					cinfo << startl << "Baseband data for this read were saved to file " << fileName << endl;
 					out = fopen(fileName, "w");
 					fwrite(dest+offset, 1, readSize, out);
