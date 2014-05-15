@@ -136,13 +136,18 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 	int nRead = bytes/(maxReadBytes-1) + 1;
 	int readSize = (bytes / nRead + 7) & 0xFFFFFFF8;
 
+	cinfo << startl << "Read of " << bytes << " bytes broken into " << nRead << " read chunks of size " << readSize << endl;
+
 	for(int offset = 0; offset < bytes; offset += readSize)
 	{
 		long long *watermarkSpot;
+		int nWatermarkFound;
 
 		if(offset + readSize > bytes)
 		{
 			readSize = bytes - offset;
+
+			cinfo << startl << "Last read size reduced to " << readSize << " bytes" << endl;
 		}
 
 		// set up the XLR info
@@ -158,8 +163,18 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 		}
 
 		// place watermark at end of buffer
-		watermarkSpot = reinterpret_cast<long long *>(dest + offset + readSize) - 1;
-		*watermarkSpot = XLR_WATERMARK_VALUE;
+		
+		// Original, one-word watermark:
+		//watermarkSpot = reinterpret_cast<long long *>(dest + offset + readSize) - 1;
+		//*watermarkSpot = XLR_WATERMARK_VALUE;
+
+		// More invasive, complete watermarking
+		watermarkSpot = reinterpret_cast<long long *>(dest + offset);
+		for(int i = 0; i < readSize/8; ++i)
+		{
+			watermarkSpot[i] = XLR_WATERMARK_VALUE;
+		}
+
 
 		WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
 		
@@ -198,6 +213,8 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 				usleep(readDelayMicroseconds);
 				WATCHDOG( xlrRC = XLRReadData(xlrDevice, xlrRD.BufferAddr, xlrRD.AddrHi, xlrRD.AddrLo, xlrRD.XferLength) );
 			}
+// Original single-point watermark test
+#if 0
 			else if(*watermarkSpot == XLR_WATERMARK_VALUE)
 			{
 				static int nWatermarkFound = 0;
@@ -227,7 +244,37 @@ XLR_RETURN_CODE difxMark5Read(SSHANDLE xlrDevice, long long readpointer, unsigne
 			{
 				xlrRC = XLR_SUCCESS;
 			}
+#endif
+// More complete every word watermark test
+			nWatermarkFound = 0;
+			for(int i = 0; i < readSize/8; ++i)
+			{
+				if(watermarkSpot[i] == XLR_WATERMARK_VALUE)
+				{
+					++nWatermarkFound;
+				}
+			}
+			if(nWatermarkFound > 0)
+			{
+				static int nwe = 0;
 
+				cwarn << startl << "Watermark test failed: " << nWatermarkFound << " words out of " << readSize/8 << " were found  readpointer=" << (readpointer+offset) << " readsize=" << readSize << endl;
+
+				++nwe;
+
+				if(nwe < 10)
+				{
+					char fileName[100];
+					FILE *out;
+
+					sprintf(fileName, "/scratch/WatermarkFail_%Ld+%d", readpointer+offset, readsize);
+					cinfo << startl << "Baseband data for this read were saved to file " << fileName << endl;
+					out = fopen(fileName, "w");
+					fwrite(dest+offset, 1, readSize, out);
+					fclose(out);
+				}
+			}
+	
 			if(xlrRC != XLR_SUCCESS)
 			{
 				XLR_ERROR_CODE xlrError;

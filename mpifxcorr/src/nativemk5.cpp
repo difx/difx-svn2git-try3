@@ -785,6 +785,8 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 		readto = (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
 		bufferinfo[buffersegment].validbytes = datamuxer->multiplex((u8*)readto); //this corrects validbytes, which may have been corrupted by multiple moduleReads
 		obytes = bufferinfo[buffersegment].validbytes; //this is the number of bytes relevant for downstream processing
+
+		csevere << startl << "Error: datamuxer is turned on!" << endl;
 	}
 	else
 	{
@@ -867,8 +869,22 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 			// Data will be invalid this time through, but should be OK next time
 			if(!noDataOnModule)
 			{
+				static int nte = 0;
 				cwarn << startl << "Nudged time just a bit; sec2 was " << sec2 << " and ns was " << readnanoseconds << ", now sec = " << sec << " and ns = " << ns << endl;
 				cwarn << startl << "The difference between ns_old and ns_new was " << ns - readnanoseconds << endl;
+
+				++nte;
+				if(nte < 10)
+				{
+					char fileName[100];
+					FILE *out;
+
+					sprintf(fileName, "/scratch/TimeFail_%Ld+%d", readpointer, readbytes);
+					cinfo << startl << "Baseband data for this read were saved to file " << fileName << endl;
+					out = fopen(fileName, "w");
+					fwrite(buf, 1, readSize, out);
+					fclose(out);
+				}
 			}
 			readseconds += (sec-sec2);
 			readnanoseconds = (int)(ns + 0.4);
