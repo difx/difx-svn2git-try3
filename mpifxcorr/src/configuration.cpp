@@ -938,6 +938,7 @@ bool Configuration::processBaselineTable(ifstream * input)
         }
       }
     }
+
     if(freqtable[f].correlatedagainstupper) //need to alter all freqindices to be the equivalent USB
     {
       matchfindex = 0;
@@ -958,6 +959,11 @@ bool Configuration::processBaselineTable(ifstream * input)
           }
         }
       }
+    }
+    else
+    {
+      // If all bands are being converted to USB, there better be USB zoom band waiting for this result.  Complain otherwise.
+      cerror << startl << "freqtable[" << f << "] is a lowersideband zoom band but there is no corresponing USB!" << endl;
     }
   }
   for(int f=0;f<freqtablelength;f++)
@@ -1392,7 +1398,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
         }
         if (highbandedge <= parenthighbandedge && lowbandedge >= parentlowbandedge) {
           datastreamtable[i].zoomfreqparentdfreqindices[j] = k;
-          datastreamtable[i].zoomfreqchanneloffset[j] = (int)(((lowbandedge - parentlowbandedge)/freqtable[datastreamtable[i].recordedfreqtableindices[0]].bandwidth)*freqtable[datastreamtable[i].recordedfreqtableindices[0]].numchannels);
+          datastreamtable[i].zoomfreqchanneloffset[j] = (int)(((lowbandedge - parentlowbandedge)/freqtable[datastreamtable[i].recordedfreqtableindices[0]].bandwidth)*freqtable[datastreamtable[i].recordedfreqtableindices[0]].numchannels+0.01);
           //if (freqtable[datastreamtable[i].zoomfreqtableindices[j]].lowersideband)
           //  datastreamtable[i].zoomfreqchanneloffset[j] += freqtable[datastreamtable[i].zoomfreqtableindices[j]].numchannels;
         }
@@ -2800,7 +2806,6 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 bool Configuration::setPolycoFreqInfo(int configindex)
 {
   bool ok = true;
-  datastreamdata d = datastreamtable[getMaxNumFreqDatastreamIndex(configindex)];	/* FIXME: This value is never used */
   double * frequencies = new double[freqtablelength];
   double * bandwidths = new double[freqtablelength];
   int * numchannels = new int[freqtablelength];

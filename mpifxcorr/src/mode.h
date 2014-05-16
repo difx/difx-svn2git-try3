@@ -237,7 +237,7 @@ protected:
   int fringerotationorder, arraystridelength, numfrstrides, numfracstrides;
   double recordedbandwidth, blockclock, sampletime; //MHz, microseconds
   double a0, b0, c0, a, b, c, quadadd1, quadadd2;
-  double fftstartmicrosec, fftdurationmicrosec, intclockseconds;
+  double fftstartmicrosec, intclockseconds;
   f32 dataweight;
   int samplesperblock, samplesperlookup, numlookups, flaglength, autocorrwidth;
   int datascan, datasec, datans, datalengthbytes, usecomplex, usedouble;

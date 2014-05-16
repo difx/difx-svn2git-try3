@@ -69,7 +69,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
   if (usecomplex) numfracstrides *= 2;
   sampletime = 1.0/(2.0*recordedbandwidth); //microseconds
   if (usecomplex) sampletime *= 2.0;
-  fftdurationmicrosec = fftchannels*sampletime;  // This is never used??
   flaglength = blockspersend/FLAGS_PER_INT;
   if(blockspersend%FLAGS_PER_INT > 0)
     flaglength++;
@@ -634,6 +633,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
   }
 
   fftcentre = index+0.5;
+  // FIXME: WFB: AverageDelay below here is the middle-of-integration delay!
   averagedelay = interpolator[0]*fftcentre*fftcentre + interpolator[1]*fftcentre + interpolator[2];
   fftstartmicrosec = index*fftchannels*sampletime; //CHRIS CHECK
   starttime = (offsetseconds-datasec)*1000000.0 + (static_cast<long long>(offsetns) - static_cast<long long>(datans))/1000.0 + fftstartmicrosec - averagedelay;
@@ -769,14 +769,6 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     if (deltapoloffsets) {
       fracsampptr1B = &(fracsamprotatorB[0]);
       fracsampptr2B = &(fracsamprotatorB[arraystridelength]);
-    }
-    if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
-    {
-      // WFB: convert LSB to USB by flipping sign of alternate samples
-      for(int j = 1; j < unpacksamples; j += 2)
-      {
-      	unpackedarrays[i][j] = -unpackedarrays[i][j];
-      }
     }
 
     looff = false;
@@ -1040,7 +1032,21 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
       if(config->matchingRecordedBand(configindex, datastreamindex, i, j))
       {
         indices[count++] = j;
-        switch(fringerotationorder) {
+	    
+        // FIXME: WFB: need to handle complex case for LSB->USB conversion
+        if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+        {
+	  int nu = nearestsample - unpackstartsamples;
+	  nu -= (nu % 1);	// start on an even sample number
+          // WFB: convert LSB to USB by flipping sign of alternate samples
+          // FIXME: Below is wrong.  Need to respect actual array indices used below.
+          for(int k = 1; k < fftchannels; k += 2)
+          {
+      	    unpackedarrays[j][nu + k] *= -1;
+          }
+        }
+        
+	switch(fringerotationorder) {
           case 0: //post-F
 	    fftptr = fftoutputs[j][subloopindex];
 
@@ -1060,20 +1066,17 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
           case 1: // Linear
           case 2: // Quadratic
             if (usecomplex) {
-	      // FIXME: WFB: need to handle complex case for LSB->USB conversion
               status = vectorMul_cf32(complexrotator, &unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
               if (status != vecNoErr)
-                csevere << startl << "Error in real->complex conversion" << endl; // Wrong error message here
+                csevere << startl << "Error in application of fringe rotation on complex data" << endl;
             } else {
               status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
               if (status != vecNoErr)
                 csevere << startl << "Error in real->complex conversion" << endl;
               status = vectorMul_cf32_I(complexrotator, complexunpacked, fftchannels);
-              //if(status != vecNoErr)
-              //	csevere << startl << "Error in fringe rotation!!!" << status << endl;
+              if(status != vecNoErr)
+                csevere << startl << "Error in fringe rotation!!!" << status << endl;
             }
-
-            // FIXME: WFB: should be able to FFT straight into fftoutputs[j] rather than to fftd and then copy
 
             if(isfft) {
               status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
@@ -1095,6 +1098,19 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
 	    if(status != vecNoErr)
               csevere << startl << "Error copying FFT results!!!" << endl;
             break;
+        }
+	// Here we flip the signs back the way they were before.  Not pretty... Needs a better mechanism...  Will fix once this works at all...
+        // FIXME: WFB: need to handle complex case for LSB->USB conversion
+        if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+        {
+	  int nu = nearestsample - unpackstartsamples;
+	  nu -= (nu % 1);	// start on an even sample number
+          // WFB: convert USB back to LSB by flipping sign of alternate samples
+          // FIXME: Below is wrong.  Need to respect actual array indices used below.
+          for(int k = 1; k < fftchannels; k += 2)
+          {
+      	    unpackedarrays[j][nu + k] *= -1;
+          }
         }
 
         if(dumpkurtosis) //do the necessary accumulation
