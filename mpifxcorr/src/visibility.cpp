@@ -792,8 +792,9 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
         for(int k=0;k<config->getDNumTotalBands(currentconfigindex, i); k++)
         {
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
-          if(config->anyUsbXLsb(currentconfigindex) && config->getFreqTableLowerSideband(freqindex) && config->getFreqTableCorrelatedAgainstUpper(freqindex))
+          if(config->getFreqTableLowerSideband(freqindex))
           {
+	    // FIXME: WFB: currently it is not guaranteed that all LSBs have equivalent USB freq indexes
             freqindex = config->getOppositeSidebandFreqIndex(freqindex);
             if(freqindex < 0)
             {

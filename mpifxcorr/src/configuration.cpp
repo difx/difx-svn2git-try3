@@ -857,7 +857,6 @@ bool Configuration::processBaselineTable(ifstream * input)
     baselinetable[i].datastream2index = atoi(line.c_str());
     getinputline(input, &line, "NUM FREQS ", i);
     baselinetable[i].numfreqs = atoi(line.c_str());
-    baselinetable[i].oddlsbfreqs = new int[baselinetable[i].numfreqs];
     baselinetable[i].numpolproducts = new int[baselinetable[i].numfreqs];
     baselinetable[i].datastream1bandindex = new int*[baselinetable[i].numfreqs];
     baselinetable[i].datastream2bandindex = new int*[baselinetable[i].numfreqs];
@@ -865,7 +864,6 @@ bool Configuration::processBaselineTable(ifstream * input)
     baselinetable[i].polpairs = new char**[baselinetable[i].numfreqs];
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
-      baselinetable[i].oddlsbfreqs[j] = 0;
       getinputline(input, &line, "POL PRODUCTS ", i);
       baselinetable[i].numpolproducts[j] = atoi(line.c_str());
       baselinetable[i].datastream1bandindex[j] = new int[baselinetable[i].numpolproducts[j]];
@@ -2487,25 +2485,12 @@ bool Configuration::consistencyCheck()
           //correlating a USB with an LSB
           if(mpiid == 0) //only write one copy of this error message
             cinfo << startl << "Baseline " << i << " frequency " << j << " is correlating an USB frequency with a LSB frequency" << endl;
-          if(freqtable[freq1index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] = 1; //datastream1 has the LSB (2 is USB)
-          else
-            baselinetable[i].oddlsbfreqs[j] = 2; //datastream2 has the LSB (1 is USB)
         }
         else
         {
           if(mpiid == 0) //only write one copy of this error message
             cwarn << startl << "Baseline table entry " << i << ", frequency " << j << " is trying to correlate two different frequencies!  Correlation will go on, but the results for these bands will probably be garbage!" << endl;
-          if(freqtable[freq1index].lowersideband && !freqtable[freq2index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] = 1;
-          else if(freqtable[freq2index].lowersideband && !freqtable[freq1index].lowersideband)
-            baselinetable[i].oddlsbfreqs[j] = 2;
         }
-      }
-      //catch the case of LSB against LSB where there is a USB somewhere
-      else if(freqtable[freq1index].lowersideband && freqtable[freq2index].correlatedagainstupper)
-      {
-        baselinetable[i].oddlsbfreqs[j] = 3; //both are lower, but still need to be shifted
       }
       for(int k=0;k<baselinetable[i].numpolproducts[j];k++)
       {
@@ -2544,20 +2529,6 @@ bool Configuration::consistencyCheck()
             cfatal << startl << "Baseline table entry " << i << ", frequency " << j << ", polarisation product " << k << " for datastream 2 does not match the frequency of the first polarisation product - aborting!!!" << endl;
           return false;
         }
-      }
-    }
-  }
-
-  //for each config, check if there are any USB x LSB correlations 
-  for(int i=0;i<numconfigs;i++)
-  {
-    configs[i].anyusbxlsb = false;
-    for(int j=0;j<numbaselines;j++)
-    {
-      for(int k=0;k<baselinetable[j].numfreqs;k++)
-      {
-        if(baselinetable[j].oddlsbfreqs[k] > 0)
-          configs[i].anyusbxlsb = true;
       }
     }
   }

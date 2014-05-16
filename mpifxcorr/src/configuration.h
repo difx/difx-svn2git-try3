@@ -89,7 +89,6 @@ public:
   inline long long getEstimatedBytes() const { return estimatedbytes; }
   inline int getVisBufferLength() const { return visbufferlength; }
   inline bool consistencyOK() const { return consistencyok; }
-  inline bool anyUsbXLsb(int configindex) const { return configs[configindex].anyusbxlsb; }
   inline bool phasedArrayOn(int configindex) const { return configs[configindex].phasedarray; }
   inline int getArrayStrideLength(int configindex) const { return configs[configindex].arraystridelen; }
   inline int getXmacStrideLength(int configindex) const { return configs[configindex].xmacstridelen; }
@@ -239,7 +238,6 @@ public:
     { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].freqtableindices[baselinefreqindex];
     }
   inline int getBLocalFreqIndex(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].localfreqindices[freqtableindex]; }
-  inline int getBFreqOddLSB(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].oddlsbfreqs[freqtableindex]; }
   inline int getBNumPolProducts(int configindex, int configbaselineindex, int baselinefreqindex) const
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].numpolproducts[baselinefreqindex]; }
   inline int getBDataStream1BandIndex(int configindex, int configbaselineindex, int baselinefreqindex, int baselinefreqdatastream1index) const
@@ -636,7 +634,6 @@ private:
     int numfreqs;
     int totalbands;
     int * freqtableindices;
-    int * oddlsbfreqs;
     int * localfreqindices; //given a freq table index, what local freq does it correspond to (-1 = none)
     int * numpolproducts;
     int ** datastream1bandindex;
@@ -665,7 +662,6 @@ private:
     int coreresultlength;
     bool scrunchoutput;
     int numphasecentres;
-    bool anyusbxlsb;
     string pulsarconfigfilename;
     string phasedarrayconfigfilename;
     outputformat paoutputformat;
