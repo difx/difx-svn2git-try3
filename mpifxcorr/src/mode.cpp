@@ -635,7 +635,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
 {
   double phaserotation, averagedelay, nearestsampletime, starttime, lofreq, walltimesecs, fracwalltime, fftcentre, d0, d1, d2, fraclooffset;
   f32 phaserotationfloat, fracsampleerror;
-  int status, count, nearestsample, integerdelay, acoffset, RcpIndex, LcpIndex, freqindex, intwalltime;
+  int status, count, nearestsample, integerdelay, RcpIndex, LcpIndex, intwalltime;
   cf32* fftptr;
   cf32 *fracsampptr1A, *fracsampptr2A, *fracsampptr1B, *fracsampptr2B;
   f32* currentstepchannelfreqs;
@@ -790,7 +790,6 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     //updated so that Nyquist channel is not accumulated for either USB or LSB data
     //and is excised entirely, so both USB and LSB data start at the same place (no sidebandoffset)
     currentstepchannelfreqs = stepchannelfreqs;
-    acoffset = 0;
     fracsampptr1A = &(fracsamprotatorA[0]);
     fracsampptr2A = &(fracsamprotatorA[arraystridelength]);
     if (deltapoloffsets) {
@@ -800,11 +799,6 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
     {
       currentstepchannelfreqs = lsbstepchannelfreqs;
-      freqindex = config->getDRecordedFreqFreqTableIndex(configindex, datastreamindex, i);
-      if(config->getFreqTableCorrelatedAgainstUpper(freqindex))
-      {
-        acoffset++;
-      }
     }
 
     looff = false;
@@ -1169,8 +1163,8 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
           csevere << startl << "Error in conjugate!!!" << status << endl;
 
 	if (!linear2circular) {
-	  //do the autocorrelation (skipping Nyquist channel - if any LSB * USB correlations, shift all LSB bands to appear as USB)
-	  status = vectorAddProduct_cf32(fftoutputs[j][subloopindex]+acoffset, conjfftoutputs[j][subloopindex]+acoffset, autocorrelations[0][j]+acoffset, recordedbandchannels-acoffset);
+	  //do the autocorrelation (skipping Nyquist channel)
+	  status = vectorAddProduct_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex], autocorrelations[0][j], recordedbandchannels);
 	  if(status != vecNoErr)
 	    csevere << startl << "Error in autocorrelation!!!" << status << endl;
 
@@ -1225,10 +1219,10 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
 
       //if we need to, do the cross-polar autocorrelations
       if(calccrosspolautocorrs) {
-	status = vectorAddProduct_cf32(fftoutputs[indices[0]][subloopindex]+acoffset, conjfftoutputs[indices[1]][subloopindex]+acoffset, autocorrelations[1][indices[0]]+acoffset, recordedbandchannels-acoffset);
+	status = vectorAddProduct_cf32(fftoutputs[indices[0]][subloopindex], conjfftoutputs[indices[1]][subloopindex], autocorrelations[1][indices[0]], recordedbandchannels);
 	if(status != vecNoErr)
 	  csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-	status = vectorAddProduct_cf32(fftoutputs[indices[1]][subloopindex]+acoffset, conjfftoutputs[indices[0]][subloopindex]+acoffset, autocorrelations[1][indices[1]]+acoffset, recordedbandchannels-acoffset);
+	status = vectorAddProduct_cf32(fftoutputs[indices[1]][subloopindex], conjfftoutputs[indices[0]][subloopindex], autocorrelations[1][indices[1]], recordedbandchannels);
 	if(status != vecNoErr)
 	  csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
       
@@ -1240,8 +1234,8 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     
     if (linear2circular) {// Delay this as it is possible for linear2circular to be active, but just one pol present
       for (int k=0; k<count; k++) {
-	//do the autocorrelation (skipping Nyquist channel - if any LSB * USB correlations, shift all LSB bands to appear as USB)
-	status = vectorAddProduct_cf32(fftoutputs[indices[k]][subloopindex]+acoffset, conjfftoutputs[indices[k]][subloopindex]+acoffset, autocorrelations[0][indices[k]]+acoffset, recordedbandchannels-acoffset);
+	//do the autocorrelation (skipping Nyquist channel)
+	status = vectorAddProduct_cf32(fftoutputs[indices[k]][subloopindex], conjfftoutputs[indices[k]][subloopindex], autocorrelations[0][indices[k]], recordedbandchannels);
 	if(status != vecNoErr)
 	  csevere << startl << "Error in autocorrelation!!!" << status << endl;
 
