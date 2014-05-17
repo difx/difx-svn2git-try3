@@ -294,11 +294,9 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     /*cout << "subfracsamparg is " << subfracsamparg << endl;
     cout << "subfracsampsin is " << subfracsampsin << endl;
     cout << "subfracsampcos is " << subfracsampcos << endl;
-    cout << "subchannelfreqs is " << subchannelfreqs << endl;
-    cout << "lsbsubchannelfreqs is " << lsbsubchannelfreqs << endl;*/
+    cout << "subchannelfreqs is " << subchannelfreqs << endl; */
     for(int i=0;i<arraystridelength;i++) {
       subchannelfreqs[i] = (float)((TWO_PI*(i)*recordedbandwidth)/recordedbandchannels);
-      //lsbsubchannelfreqs[i] = (float)((-TWO_PI*(arraystridelength-(i+1))*recordedbandwidth)/recordedbandchannels);
     }
 
     stepfracsamparg = vectorAlloc_f32(numfracstrides/2);
@@ -311,7 +309,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
     for(int i=0;i<numfracstrides/2;i++) {
       stepchannelfreqs[i] = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels);
-      lsbstepchannelfreqs[i] = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength-1)*recordedbandwidth)/recordedbandchannels);
+      lsbstepchannelfreqs[i] = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels);
     }
 
     deltapoloffsets = false;
@@ -544,7 +542,6 @@ Mode::~Mode()
   vectorFree(subfracsampsin);
   vectorFree(subfracsampcos);
   vectorFree(subchannelfreqs);
-  //vectorFree(lsbsubchannelfreqs);
 
   vectorFree(stepfracsamparg);
   vectorFree(stepfracsampsin);
