@@ -786,6 +786,12 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     lofreq = config->getDRecordedFreq(configindex, datastreamindex, i);
     if (config->getDRecordedLowerSideband(configindex, datastreamindex, i))
     {
+static int first = 1
+if(first == 1)
+{
+first = 0;
+printf("lofreq was %f and is now %f\n", lofreq, lofreq-config->getDRecordedBandwidth(configindex, datastreamindex, i));
+}
       // WFB: If band was flipped from LSB to USB, then effective LO must be changed to bottom of band
       lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i);
     }
@@ -1037,7 +1043,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
         if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
         {
 	  int nu = nearestsample - unpackstartsamples;
-	  nu -= (nu % 1);	// start on an even sample number
+	  nu -= (nu % 2);	// start on an even sample number
           // WFB: convert LSB to USB by flipping sign of alternate samples
           // FIXME: Below is wrong.  Need to respect actual array indices used below.
           for(int k = 1; k < fftchannels; k += 2)
@@ -1104,7 +1110,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
         if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
         {
 	  int nu = nearestsample - unpackstartsamples;
-	  nu -= (nu % 1);	// start on an even sample number
+	  nu -= (nu % 2);	// start on an even sample number
           // WFB: convert USB back to LSB by flipping sign of alternate samples
           // FIXME: Below is wrong.  Need to respect actual array indices used below.
           for(int k = 1; k < fftchannels; k += 2)
