@@ -1083,14 +1083,14 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
             if (usecomplex) {
               status = vectorMul_cf32(complexrotator, &unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
               if (status != vecNoErr)
-                csevere << startl << "Error in real->complex conversion" << endl;
+                csevere << startl << "Error in complex fringe rotation" << endl;
             } else {
               status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
               if (status != vecNoErr)
                 csevere << startl << "Error in real->complex conversion" << endl;
               status = vectorMul_cf32_I(complexrotator, complexunpacked, fftchannels);
-              //if(status != vecNoErr)
-              //	csevere << startl << "Error in fringe rotation!!!" << status << endl;
+              if(status != vecNoErr)
+              	csevere << startl << "Error in fringe rotation!!!" << status << endl;
             }
             if(isfft) {
               status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
@@ -1106,8 +1106,8 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
 	      if (usecomplex) {
 		if (usedouble) {
-		  status = vectorFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2);
-		  status = vectorFlip_cf32(&fftd[recordedbandchannels/2], &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels/2);
+		  status = vectorFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
+		  status = vectorFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
 		} else {
               status = vectorCopy_cf32(&(fftd[1]), fftoutputs[j][subloopindex], recordedbandchannels - 1);
               fftoutputs[j][subloopindex][recordedbandchannels - 1] = fftd[0];
