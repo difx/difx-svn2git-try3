@@ -17,7 +17,7 @@ C -------------------------------------------------------------------
 C     Get the file names.
 C
       GOTSUM = .FALSE.
-100   WRITE(*,*) 'Name of weights file (<256 char): '
+100   WRITE(*,*) 'Name of weights file (<80 char): '
       READ(*,'(A)') WTFILE
       IER = VLBOPE( INUNIT, WTFILE, 'TEXT', 'OLD', CBUFF )
       IF( IER .NE. 1 ) GO TO 100
