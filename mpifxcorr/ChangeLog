@@ -1,3 +1,8 @@
+Version 2.3.1
+~~~~~~~~~~~~~
+* Fix 0.5 ns jitter issue with 2 Gbps Mark5B format
+* Patch release Feb 23, 2015
+
 Version 2.3
 ~~~~~~~~~~~
 * LO offset correction is now always done with fringe rotation (so in the 
