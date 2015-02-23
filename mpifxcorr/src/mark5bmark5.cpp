@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2013 by Walter Brisken and Adam Deller             *
+ *   Copyright (C) 2007-2015 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -399,6 +399,12 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 	framebytes = config->getFrameBytes(configindex, streamnum);
 	framespersecond = config->getFramesPerSecond(configindex, streamnum);
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
+
+	framegranularity = framespersecond/12800;
+	if(framegranularity < 1)
+	{
+		framegranularity = 1;
+	}
 
 	startOutputFrameNumber = -1;
 
