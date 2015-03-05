@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #**************************************************************************
-#   Copyright (C) 2009-2013 by Walter Brisken                             *
+#   Copyright (C) 2009-2014 by Walter Brisken                             *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -38,9 +38,9 @@ from os.path import isfile, isdir, getsize
 from time import gmtime, time
 
 program = 'makefits'
-version = '0.8'
+version = '1.0'
 author  = 'Walter Brisken'
-verdate = '20131121'
+verdate = '20140213'
 
 calfiles = 'tsys flag pcal weather *.*.flag *.*.weather *.*.pcal *.*.tsys *.*.cablecal *.*.gain'
 
@@ -227,21 +227,39 @@ class JobList:
 		else:
 			if difxVersion != self.kv['DiFX']:
 				if override:
-					print 'Overriding version mismatch: %s != %s' % \
-						(difxVersion, self.kv['DiFX'])
+					print 'Overriding version mismatch: %s != %s' % (difxVersion, self.kv['DiFX'])
 					difxVersion = 'unknown'
 				else:
 					print 'Error: file DiFX version = %s' % self.kv['DiFX']
-					print 'and current DiFX version = %s' % difxVersion
+					print 'and environment DiFX version = %s' % difxVersion
 					exit(0)
-			difxLabel = getenv('DIFX_LABEL')
-			if difxLabel != None:
-				if difxLabel != self.kv['DiFX']:
-					self.kv['DiFX'] = difxLabel
 
-		return difxVersion
+		difxLabel = getenv('DIFX_LABEL')
+		if difxLabel != None:
+			if not 'label' in self.kv:
+				if override:
+					print 'Override causing DiFX label to be set to %s' % difxLabel
+					self.kv['label'] = difxLabel
+					difxVersion = 'unknown'
+				else:
+					print 'Error: file DiFX label is not set but environment DiFX label is %s' % difxLabel
+					exit(0)
+			if difxLabel != self.kv['label']:
+				if override:
+					print 'Overriding DiFX label mismatch: %s != %s' % (difxLabel, self.kv['label'])
+					difxVersion = 'unknown'
+					self.kv['label'] = difxLabel
+		elif 'label' in self.kv:
+			if override:
+				print 'Override causing DiFX label to be unset (it was %s)' % self.kv['label']
+				del self.kv['label']
+			else:
+				print 'Error: file DiFX label is set to %s but environment DiFX label not set' % self.kv['label']
+				exit(0)
 
 	def makefits(self, queuedir, verbose, sniff, usecwd, options=''):
+
+		nSizeError = 0
 
 		groupId = getenv('DIFX_GROUP_ID')
 
@@ -315,43 +333,49 @@ class JobList:
 			print "archived or are not required"
 			exit(0)
 		out = open(fitslistfile, 'w')
-		out.write('exper=%s  pass=%s  jobs=%s  mjd=%9.7f  DiFX=%s  difx2fits=0\n' % \
+		out.write('exper=%s  pass=%s  jobs=%s  mjd=%9.7f  DiFX=%s  difx2fits=0' % \
 			(self.kv['exper'], self.kv['pass'], self.filename, getmjd(t), self.kv['DiFX']))
+		if 'label' in self.kv:
+			out.write('  label=%s' % self.kv['label'])
+		out.write('\n')
 		nDigit = countDigits(indices[-1][0])
 		nBinDigits = countDigits(binrange)
 		nSrcDigits = countDigits(self.nsrcfiles)
 		format = 'VLBA_%%s_%%s_BIN%%0%dd_SRC%%0%dd_%%0%dd_%%s.idifits' % (nBinDigits, nSrcDigits, nDigit)
 		for i in indices:
-			fn = '%s.%d.bin%04d.source%04d.FITS' % (expt, i[0], i[1], i[2])
-			size = getsize(fn)/1000000.0
-			archfile = format % (self.kv['exper'], self.kv['pass'], i[1], i[2], i[0], datestr)
-			out.write('%s %4.2f %s\n' % (archfile, size, fn))
-			cmd = 'mv %s %s/%s' % (fn, dir, archfile)
+			fileName = '%s.%d.bin%04d.source%04d.FITS' % (expt, i[0], i[1], i[2])
+			archiveFile = format % (self.kv['exper'], self.kv['pass'], i[1], i[2], i[0], datestr)
+			size = getsize(fileName)
+			if size % 2880 != 0:
+				print 'ERROR!!! %s is not a multiple of 2880 bytes!' % archiveFile
+				nSizeError += 1
+			out.write('%s %4.2f %s\n' % (archiveFile, size/1000000.0, fileName))
+			cmd = 'mv %s %s/%s' % (fileName, dir, archiveFile)
 			if verbose:
 				print 'Executing: %s' % cmd
 			system(cmd)
 			if groupId != None:
 				# make sure anyone in the difx group can remove the file later
-				cmd = 'chown -R :%s %s/%s' % (groupId, dir, archfile)
+				cmd = 'chown -R :%s %s/%s' % (groupId, dir, archiveFile)
 				if verbose:
 					print 'Executing: %s' % cmd
 				system(cmd)
-			j = j + 1
+			j += 1
 		out.close()
 
 		j = 1
 		format = 'VLBA_%%s_%%s_BIN%%0%dd_SRC%%0%dd_%%0%dd_%%s.jobmatrix.txt' % (nBinDigits, nSrcDigits, nDigit)
 		for i in indices:
-			fn = '%s.%d.bin%04d.source%04d.jobmatrix' % (expt, i[0], i[1], i[2])
-			if isfile(fn):
-				archfile = format % (self.kv['exper'], self.kv['pass'], i[1], i[2], i[0], datestr)
-				cmd = 'mv %s %s/%s' % (fn, dir, archfile)
+			fileName = '%s.%d.bin%04d.source%04d.jobmatrix' % (expt, i[0], i[1], i[2])
+			if isfile(fileName):
+				archiveFile = format % (self.kv['exper'], self.kv['pass'], i[1], i[2], i[0], datestr)
+				cmd = 'mv %s %s/%s' % (fileName, dir, archiveFile)
 				if verbose:
 					print 'Executing: %s' % cmd
 				system(cmd)
 				if groupId != None:
 					# make sure anyone in the difx group can remove the file later
-					cmd = 'chown -R :%s %s/%s' % (groupId, dir, archfile)
+					cmd = 'chown -R :%s %s/%s' % (groupId, dir, archiveFile)
 					if verbose:
 						print 'Executing: %s' % cmd
 					system(cmd)
@@ -362,9 +386,9 @@ class JobList:
 		cmd = 'cat'
 		nLog = 0
 		for j in self.jobs:
-			fn = dir + '/' + j.name + '.difxlog'
-			if isfile(fn):
-				cmd = cmd + ' ' + fn
+			fileName = dir + '/' + j.name + '.difxlog'
+			if isfile(fileName):
+				cmd = cmd + ' ' + fileName
 				nLog += 1
 		if nLog > 0:
 			cmd = cmd + ' > ' + logFile
@@ -412,7 +436,10 @@ class JobList:
 		if isdir(tmp):
 			print 'Warning: unexpected files left in %s' % tmp
 
-		return True
+		if nSizeError > 0:
+			return False
+		else:
+			return True
 
 	def verify(self, queuedir, allowPartial, usecwd):
 		if usecwd:
@@ -538,6 +565,9 @@ for arg in args:
 		exit(0)
 
 	OK = jl.makefits(difxQueueBase, verbose, sniff, usecwd, opts)
+
+	if not OK:
+		print 'Serious errors were detected!'
 
 if len(gcFilesMissing) > 0:
 	print '\nWarning: some gain curve files were not found:'

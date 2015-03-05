@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012, 2014 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -97,7 +97,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	char *p_fitsbuf, *fitsbuf;
 	int nBand, nPol;
 	int b, j, s, p, np, a;
-        int found_MC_interval, MC_interval;
+    int found_MC_interval, MC_interval;
 	float LOOffset[array_MAX_BANDS];
 	float LORate[array_MAX_BANDS];
 	float dispDelay;
@@ -106,39 +106,40 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	const DifxScan *scan;
 	const DifxPolyModel *P;
 	double time, deltat, deltat2, deltatn;
-        double x, x_j, x_j_m1;
+    double x, x_j, x_j_m1;
 	double delay, delayRate;
 	double atmosDelay, atmosRate;
 	double clock, clockRate, c1, c2;
-        double sc_gs_delay, sc_gs_rate;
-        double gs_clock_delay, gs_clock_rate;
-        double msa, msa_rate;
+    double sc_gs_delay, sc_gs_rate;
+    double gs_clock_delay, gs_clock_rate;
+    double msa, msa_rate;
 	int configId, dsId, antId;
 	int *skip;
 	int skipped=0;
 	int printed=0;
-        int has_no_spacecraft=1;
+    int has_no_spacecraft=1;
 	/* 1-based indices for FITS file */
 	int32_t antId1, arrayId1, sourceId1, freqId1;
+	int polyDuration = 0;
 
 	if(D == 0)
 	{
 		return 0;
 	}
 
-        /* Find out whether or not there are spacecraft antennas. */
-        /* Because of the way that AIPS loads in FITS files, if */
-        /* any job of an experiment has a spacecraft antenna, then */
-        /* all jobs of the experiment must write out information */
-        /* for the spacecraft antenna mode. */
+    /* Find out whether or not there are spacecraft antennas. */
+    /* Because of the way that AIPS loads in FITS files, if */
+    /* any job of an experiment has a spacecraft antenna, then */
+    /* all jobs of the experiment must write out information */
+    /* for the spacecraft antenna mode. */
 	for(s = 0; s < D->nSpacecraft; s++)
 	{
-            if((D->spacecraft[s].is_antenna))
-            {
-                has_no_spacecraft = 0;
-                break;
-            }
+        if((D->spacecraft[s].is_antenna))
+        {
+            has_no_spacecraft = 0;
+            break;
         }
+    }
 
 	nBand = p_fits_keys->no_band;
 	sprintf (bandFormFloat, "%1dE", nBand);  
@@ -146,34 +147,34 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	nPol = D->nPol;
 	if(nPol == 2)
 	{
-            if((has_no_spacecraft))
-            {
-		nColumn = NELEMENTS(columns);
-            }
-            else
-            {
-                nColumn = NELEMENTS(columns_with_spacecraft);
-            }
-	}
-	else	/* don't populate last 6 columns if not full polar */
-	{
-            if((has_no_spacecraft))
-            {
-		nColumn = NELEMENTS(columns) - 6;
-            }
-            else
-            {
-                nColumn = NELEMENTS(columns_with_spacecraft) - 6;
-            }
-	}
         if((has_no_spacecraft))
         {
-            nRowBytes = FitsBinTableSize(columns, nColumn);
+            nColumn = NELEMENTS(columns);
         }
         else
         {
-            nRowBytes = FitsBinTableSize(columns_with_spacecraft, nColumn);
+            nColumn = NELEMENTS(columns_with_spacecraft);
         }
+	}
+	else	/* don't populate last 6 columns if not full polar */
+	{
+        if((has_no_spacecraft))
+        {
+            nColumn = NELEMENTS(columns) - 6;
+        }
+        else
+        {
+            nColumn = NELEMENTS(columns_with_spacecraft) - 6;
+        }
+	}
+    if((has_no_spacecraft))
+    {
+        nRowBytes = FitsBinTableSize(columns, nColumn);
+    }
+    else
+    {
+        nRowBytes = FitsBinTableSize(columns_with_spacecraft, nColumn);
+    }
 
 	/* calloc space for storing table in FITS order */
 	fitsbuf = (char *)calloc(nRowBytes, 1);
@@ -182,14 +183,23 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		return 0;
 	}
   
+	for(a = 0; a < D->nAntenna; ++a)
+	{
+		if(D->scan->im[a])
+		{
+			polyDuration = D->scan->im[a][0][0].validDuration;
+			break;
+		}
+	}
+
 	if((has_no_spacecraft))
-        {
-            fitsWriteBinTable(out, nColumn, columns, nRowBytes, "MODEL_COMPS");
-        }
-        else
-        {
-            fitsWriteBinTable(out, nColumn, columns_with_spacecraft, nRowBytes, "MODEL_COMPS");
-        }
+    {
+        fitsWriteBinTable(out, nColumn, columns, nRowBytes, "MODEL_COMPS");
+    }
+    else
+    {
+        fitsWriteBinTable(out, nColumn, columns_with_spacecraft, nRowBytes, "MODEL_COMPS");
+    }
 	arrayWriteKeys(p_fits_keys, out);
 	fitsWriteInteger(out, "NO_POL", nPol, "");
 	fitsWriteInteger(out, "FFT_SIZE", D->nInChan*2, "");
@@ -197,6 +207,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	fitsWriteInteger(out, "ZERO_PAD", 0, "");
 	fitsWriteInteger(out, "FFT_TWID", 1, "Version of FFT twiddle table used");
 	fitsWriteString(out, "TAPER_FN", D->job->taperFunction, "");
+#warning "polyDiration is not the same as the MC_table_output_interval
+	fitsWriteFloat(out, "DELTAT", polyDuration/86400.0, "");
 	fitsWriteInteger(out, "TABREV", 1, "");
 #warning "populate the new keyword below"
 	//fitsWriteDouble(out, "DELTAT", , "DAYS");
@@ -427,7 +439,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
                         } /* found_MC_interval loop */
                 } /* Intervals in scan loop */
 	} /* Scan loop */
- 
+
 	if(printed)
 	{
 		printf("\n                            ");

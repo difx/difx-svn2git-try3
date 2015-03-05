@@ -313,11 +313,14 @@ static int populateDifxTSys(float tSys[][array_MAX_BANDS], const DifxInput *D, i
 				tCal = getDifxTcal(T, D->mjdStart, D->antenna[antId].name, dc->IF[i].rxName, D->config[configId].pol[polId], freq);
 				if(tCal > 0.0)
 				{
-					tSys[p][i] = tCal*unscaledTsys(average + r);
-					if(tSys[p][i] < 0.0)
+					double ts;
+
+					ts = tCal*unscaledTsys(average + r);
+					if(ts > 0.0)
 					{
-						tSys[p][i] = 999.0;
+						tSys[p][i] = ts;
 					}
+					/* else { don't set -- it should stay NaN; } */
 				}
 			}
 		}
@@ -859,7 +862,7 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D, struct fits_keywords *p_fi
 		v = setDifxTcalDIFX(T, tcalFilename);
 		if(v < 0)
 		{
-			fprintf(stderr, "Error initializing VLBA Tcal values\n");
+			fprintf(stderr, "Problem with TCal file: %s\n", tcalFilename);
 
 			exit(EXIT_FAILURE);
 		}
