@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2014 by Walter Brisken                             *
+ *   Copyright (C) 2009-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -47,8 +47,8 @@
 
 const double MJD_UNIX0 = 40587.0;	// MJD at beginning of unix time
 const double SEC_DAY = 86400.0;
-const int    MJD_UNIX0_INT = 40587;
-const int    SEC_DAY_INT = 86400;
+const int	 MJD_UNIX0_INT = 40587;
+const int	 SEC_DAY_INT = 86400;
 const double MUSEC_DAY = 86400000000.0;
 
 const double PhaseCentre::DEFAULT_RA  = -999.9;
@@ -90,9 +90,9 @@ bool isPower2(int n)
 
 // Turns a string into MJD 
 // The following formats are allowed:
-// 1. decimal mjd:  55345.113521
+// 1. decimal mjd:	55345.113521
 // 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
-// 3. VLBA-like time:   2009MAR08-12:34:56.121
+// 3. VLBA-like time:	2009MAR08-12:34:56.121
 // 4. vex time: 2009y245d08h12m24s"
 double parseTime(const std::string &timeStr)
 {
@@ -100,12 +100,12 @@ double parseTime(const std::string &timeStr)
 	const char* const str = timeStr.c_str();
 	const char *p;
 	double t;
-        double f;
+	double f;
 	int n;
 	struct tm tm;
-        bool need_s = false;
+	bool need_s = false;
 	char dummy;
-        char* endptr;
+	char* endptr;
 
 	// Test for ISO 8601
 	p = strptime(str, "%FT%T", &tm);
@@ -731,17 +731,17 @@ int CorrSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "MC_tab_interval")
 	{
-                ss >> MC_table_output_interval;
-                if(MC_table_output_interval < 0.0)
-                {
-                    std::cerr << "Warning: SETUP: parameter 'MC_tab_interval' must be non-negative, but is provided as " << MC_table_output_interval << "." << std::endl;
-                    exit(EXIT_FAILURE);
-                }
-                else if(MC_table_output_interval < 0.01)
-                {
-                    std::cerr << "Warning: SETUP: parameter 'MC_tab_interval' (" << MC_table_output_interval << " s) is very small.  Are you sure this value is correct?" << std::endl;
-                    nWarn++;
-                }
+        ss >> MC_table_output_interval;
+        if(MC_table_output_interval < 0.0)
+        {
+            std::cerr << "Warning: SETUP: parameter 'MC_tab_interval' must be non-negative, but is provided as " << MC_table_output_interval << "." << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        else if(MC_table_output_interval < 0.01)
+        {
+            std::cerr << "Warning: SETUP: parameter 'MC_tab_interval' (" << MC_table_output_interval << " s) is very small.  Are you sure this value is correct?" << std::endl;
+            nWarn++;
+        }
 	}
 	else if(key == "subintNS")
 	{
@@ -1065,19 +1065,19 @@ void PhaseCentre::initialise(double r, double d, std::string name)
 {
 	ra = r;
 	dec = d;
-        sc_epoch = 0.0; // use the defualt mode for spacecraft
+    sc_epoch = 0.0; // use the defualt mode for spacecraft
 	difxName = name;
 	calCode = ' ';
 	ephemDeltaT = 24.0;	// seconds; 24 seconds is perfectly matched to the default behavior of calcif2
 	ephemStellarAber = 0.0;	// 0 = don't correct; 1 = correct.  Other values interpolate/extrapolate correction by factor provided
 	qualifier = 0;
-        ephemType = "";
+    ephemType = "";
 	ephemClockError = 0.0;	// sec
 	ephemObject = "";
 	ephemFile = "";
-        orientationFile = "";
+    orientationFile = "";
 	naifFile = "";  
-	gpsId = 0;		// not a GPS satellite
+	X = Y = Z = 0.0;	// not a geosyncronous satellite
 }
 
 SourceSetup::SourceSetup(const std::string &name) : vexName(name)
@@ -1144,18 +1144,18 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 	else if(key == "ephemFile")
 	{
 		ss >> pc->ephemFile;
-                if(pc->ephemType.size() == 0) {
-                    pc->ephemType = "SPICE"; // defualt to SPICE for spacecraft
-                }
+        if(pc->ephemType.size() == 0) {
+            pc->ephemType = "SPICE"; // defualt to SPICE for spacecraft
+        }
 	}
 	else if(key == "orientationFile")
 	{
 		ss >> pc->orientationFile;
-                if(pc->ephemType.size() == 0) {
-                    pc->ephemType = "SPICE"; // defualt to SPICE for spacecraft
-                }
+        if(pc->ephemType.size() == 0) {
+            pc->ephemType = "SPICE"; // defualt to SPICE for spacecraft
+        }
 	}
-	else if(key == "ephem DeltaT")
+	else if(key == "ephemDeltaT")
 	{
 		ss >> pc->ephemDeltaT;
 	}
@@ -1167,28 +1167,51 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 	{
 		ss >> pc->ephemClockError;
 	}
-	else if(key == "gpsId")
+	else if(key == "X" || key == "x")
 	{
-		ss >> pc->gpsId;
+		if(pc->X != 0.0)
+		{
+			std::cerr << "Warning: phase centre " << pc->difxName << " has multiple X definitions" << std::endl;
+			++nWarn;
+		}
+		ss >> pc->X;
+	}
+	else if(key == "Y" || key == "y")
+	{
+		if(pc->Y != 0.0)
+		{
+			std::cerr << "Warning: phase centre " << pc->difxName << " has multiple Y definitions" << std::endl;
+			++nWarn;
+		}
+		ss >> pc->Y;
+	}
+	else if(key == "Z" || key == "z")
+	{
+		if(pc->Z != 0.0)
+		{
+			std::cerr << "Warning: phase centre " << pc->difxName << " has multiple Z definitions" << std::endl;
+			++nWarn;
+		}
+		ss >> pc->Z;
 	}
 	else if(key == "naifFile")
 	{
 		ss >> pc->naifFile;
-                // find filename exclusing the path
-                size_t dir_pos = pc->naifFile.find_last_of("/\\");
-                std::string naifFile_filename = pc->naifFile.substr(dir_pos+1);
-		if(naifFile_filename < "naif0010.tls")
+        // find filename excluding the path
+        size_t dir_pos = pc->naifFile.find_last_of("/\\");
+        std::string naifFile_filename = pc->naifFile.substr(dir_pos+1);
+		if(naifFile_filename < "naif0011.tls")
 		{
-			if(time(0) > 1341100800)	// July 1, 2012
+            if(time(0) > 1435708800) // 2015 Jul 01
 			{
-				std::cout << "Error: naif0010.tls or newer is needed for correct ephemeris evaluation.  An old or unrecognized file, " << pc->naifFile << " was supplied." << std::endl;
+				std::cout << "Error: naif0011.tls or newer is needed for correct ephemeris evaluation.  An old or unrecognized file, " << pc->naifFile << " was supplied." << std::endl;
 
 				exit(EXIT_FAILURE);
 			}
 			else
 			{
-				std::cout << "Warning: Using old NAIF file: " << pc->naifFile << ".  Please upgrade to naif0010.tls or newer." << std::endl;
-				std::cout << "After July 1, 2012, this will be an error and vex2difx will not run." << std::endl;
+				std::cout << "Warning: Using old NAIF file: " << pc->naifFile << ".  Please upgrade to naif0011.tls or newer." << std::endl;
+				std::cout << "After July 1, 2015, this will be an error and vex2difx will not run." << std::endl;
 				nWarn++;
 			}
 		}
@@ -1217,12 +1240,12 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 			at = value.find_first_of('/', last);
 			nestedkeyval = value.substr(last, at-last);
 			splitat = nestedkeyval.find_first_of('@');
-                        const std::string parameter_key = nestedkeyval.substr(0,splitat);
-                        if(parameter_key == "addPhaseCentre" || key == "addPhaseCenter")
-                        {
-                            std::cerr << "Warning: addPhaseCenter key contains nested addPhaseCenter key name.  Offending key lies within addPhaseCenter value " << value << std::endl;
-                            nWarn++;
-                        }
+            const std::string parameter_key = nestedkeyval.substr(0,splitat);
+            if(parameter_key == "addPhaseCentre" || key == "addPhaseCenter")
+            {
+                std::cerr << "Warning: addPhaseCenter key contains nested addPhaseCenter key name.  Offending key lies within addPhaseCenter value " << value << std::endl;
+                nWarn++;
+            }
 			setkv(nestedkeyval.substr(0,splitat), nestedkeyval.substr(splitat+1), newpc);
 			last = at+1;
 		}
@@ -1281,7 +1304,7 @@ AntennaSetup::AntennaSetup(const std::string &name) :
 	clock3 = 0.0;
 	clock4 = 0.0;
 	clock5 = 0.0;
-	networkPort = 0;
+	networkPort = "0";
 	windowSize = 0;
 	phaseCalIntervalMHz = -1;
 	toneGuardMHz = -1.0;
@@ -1289,15 +1312,15 @@ AntennaSetup::AntennaSetup(const std::string &name) :
 	tcalFrequency = -1;
 	dataSource = DataSourceNone;
 	dataSampling = NumSamplingTypes;	// flag that no sampling is is identified here
-        // spacecraft ephemeris
+    // spacecraft ephemeris
 	ephemDeltaT = 24.0; //seconds; 24 seconds is perfectly matched to the default behavior of calcif2
-        ephemType = "";
+    ephemType = "";
 	ephemObject = "";
 	ephemFile = "";
-        orientationFile = "";
+    orientationFile = "";
 	naifFile = "";
-        JPLplanetaryephem = "";
-        ephemClockError = 0.0;
+    JPLplanetaryephem = "";
+    ephemClockError = 0.0;
 
 	// antenna is by default not constrained in start time
 	mjdStart = -1.0;
@@ -1362,19 +1385,18 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
     enum stateType state = START;
     enum charType what;
 
-    int i;
+    unsigned int i;
     for (i=0 ; i<value.length(); i++) {
       what = whatChar(value[i]);
-      
-      if (what==CHARERROR) {
-	std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-	value = "";
-	return 1; 
-      }
       
       switch (state) {
       case START:
 	switch (what) {
+	case CHARERROR:
+	  std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
+	  value = "";
+	  return 1; 
+	  break;
 	case SIGN:
 	  state = STARTINT;
 	  break;
@@ -1394,6 +1416,11 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
 	
       case STARTINT:
 	switch (what) {
+	case CHARERROR:
+	  std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
+	  value = "";
+	  return 1; 
+	  break;
 	case SIGN:
 	case E:
 	  state = ERROR;
@@ -1410,6 +1437,11 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
 
       case INTEGER:
 	switch (what) {
+	case CHARERROR:
+	  std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
+	  value = "";
+	  return 1; 
+	  break;
 	case DIGIT:
 	  break;
 	case SIGN:
@@ -1426,6 +1458,11 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
 	
       case DECIMAL:
 	switch (what) {
+	case CHARERROR:
+	  std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
+	  value = "";
+	  return 1; 
+	  break;
 	case DIGIT:
 	  break;
 	case SIGN:
@@ -1443,6 +1480,11 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
 	
       case STARTEXP:
 	switch (what) {
+	case CHARERROR:
+	  std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
+	  value = "";
+	  return 1; 
+	  break;
 	case SIGN:
 	case DIGIT:
 	  state = EXPONENT;
@@ -1457,6 +1499,11 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
 	
       case EXPONENT:
 	switch (what) {
+	case CHARERROR:
+	  std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
+	  value = "";
+	  return 1; 
+	  break;
 	case SPACE:
 	case SIGN:
 	  state = END;
@@ -1468,6 +1515,10 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
 	  state = ERROR;
 	  break;
 	}
+	break;
+
+      case ERROR:
+      case END:
 	break;
 	
       }
@@ -1498,7 +1549,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFr
   int getOp(std::string &value, int &plus) {
     enum charType what;
 
-    int i;
+    unsigned int i;
     for (i=0 ; i<value.length(); i++) {
       what = whatChar(value[i]);
       
@@ -2485,8 +2536,8 @@ void CorrParams::defaults()
 	mediaSplit = true;
 	padScans = true;
 	simFXCORR = false;
-        DelayPolyOrder = DIFXIO_DEFAULT_POLY_ORDER;
-        DelayPolyInterval = DIFXIO_DEFAULT_POLY_INTERVAL; // 2 minutes
+    DelayPolyOrder = DIFXIO_DEFAULT_POLY_ORDER;
+    DelayPolyInterval = DIFXIO_DEFAULT_POLY_INTERVAL; // 2 minutes
 	maxLength = 7200/SEC_DAY;	// 2 hours
 	minLength = 2/SEC_DAY;		// 2 seconds
 	maxSize = 2e9;			// 2 GB
@@ -2802,7 +2853,8 @@ int CorrParams::load(const std::string &fileName)
 		PARSE_MODE_SOURCE,
 		PARSE_MODE_ANTENNA,
 		PARSE_MODE_GLOBAL_ZOOM,
-		PARSE_MODE_EOP
+		PARSE_MODE_EOP,
+		PARSE_MODE_COMMENT
 	};
 
 	const int MaxLineLength = 4*1024;
@@ -2873,7 +2925,20 @@ int CorrParams::load(const std::string &fileName)
 	for(std::vector<std::string>::const_iterator i = tokens.begin(); i != tokens.end(); ++i)
 	{
 		keyWaitingTemp = false;
-		if(*i == "SETUP")
+		if(parseMode == PARSE_MODE_COMMENT)
+		{
+			if(*i == "}")
+			{
+				v2dComment += '\n';
+				parseMode = PARSE_MODE_GLOBAL;
+			}
+			else
+			{
+				v2dComment += *i;
+				v2dComment += ' ';
+			}
+		}
+		else if(*i == "SETUP")
 		{
 			if(parseMode != PARSE_MODE_GLOBAL)
 			{
@@ -2971,6 +3036,25 @@ int CorrParams::load(const std::string &fileName)
 			key = "";
 			parseMode = PARSE_MODE_ANTENNA;
 		}
+		else if(*i == "COMMENT")
+		{
+			if(parseMode != PARSE_MODE_GLOBAL)
+			{
+				std::cerr << "Error: COMMENT out of place." << std::endl;
+
+				exit(EXIT_FAILURE);
+			}
+			++i;
+			if(*i != "{")
+			{
+				std::cerr << "Error: COMMENT: '{' expected." << std::endl;
+
+				exit(EXIT_FAILURE);
+			}
+			key = "";
+			v2dComment += "\n";
+			parseMode = PARSE_MODE_COMMENT;
+		}
 		else if(*i == "ZOOM")
 		{
 			if(parseMode != PARSE_MODE_GLOBAL)
@@ -3061,6 +3145,9 @@ int CorrParams::load(const std::string &fileName)
 				break;
 			case PARSE_MODE_GLOBAL_ZOOM:
 				nWarn += globalZoom->setkv(key, value);
+				break;
+			case PARSE_MODE_COMMENT:
+				// nothing to do here
 				break;
 			}
 		}

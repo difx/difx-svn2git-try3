@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012, 2014 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -153,12 +153,14 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 
 	if(bbcSideBand == 'U')
 	{
-		firstToneMHz = static_cast<int>((bbcFreq + epsilonHz)*1.0e-6 + toneIntervalMHz);
+		int m = static_cast<int>( (bbcFreq + epsilonHz)*1.0e-6/toneIntervalMHz );
+		firstToneMHz = (m+1)*toneIntervalMHz;
 		tonesInBand = static_cast<int>((bbcFreq + bbcBandwidth)*1.0e-6 - firstToneMHz)/toneIntervalMHz + 1;
 	}
 	else
 	{
-		firstToneMHz = static_cast<int>((bbcFreq - epsilonHz)*1.0e-6);
+		int m = static_cast<int>( (bbcFreq - epsilonHz)*1.0e-6/toneIntervalMHz );
+		firstToneMHz = m*toneIntervalMHz;
 		tonesInBand = static_cast<int>(firstToneMHz - (bbcFreq - bbcBandwidth)*1.0e-6)/toneIntervalMHz + 1;
 	}
 
@@ -190,8 +192,14 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 		// Nothing to do
 		break;
 	case ToneSelectionEnds:
-		tones.push_back(0);
-		tones.push_back(tonesInBand - 1);
+		if(tonesInBand > 0)
+		{
+			tones.push_back(0);
+		}
+		if(tonesInBand > 1)
+		{
+			tones.push_back(tonesInBand - 1);
+		}
 		break;
 	case ToneSelectionAll:
 		for(int i = 0; i < tonesInBand; ++i)
@@ -200,42 +208,55 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 		}
 		break;
 	case ToneSelectionSmart:
-		for(int i = 0; i < tonesInBand; ++i)
+		if(tonesInBand == 1)
 		{
-			if(bbcSideBand == 'U')
+			tones.push_back(0);
+		}
+		else if(tonesInBand == 2)
+		{
+			tones.push_back(0);
+			tones.push_back(1);
+		}
+		else if(tonesInBand > 2)
+		{
+			for(int i = 0; i < tonesInBand; ++i)
 			{
-				double f = firstToneMHz + i*toneIntervalMHz;
-				if(f > (bbcFreq*1.0e-6+guardBandMHz) && f < ((bbcFreq+bbcBandwidth)*1.0e-6-guardBandMHz))
+				if(bbcSideBand == 'U')
 				{
-					if(tones.size() < 2)
+					double f = firstToneMHz + i*toneIntervalMHz;
+					if(f > (bbcFreq*1.0e-6+guardBandMHz) && f < ((bbcFreq+bbcBandwidth)*1.0e-6-guardBandMHz))
 					{
-						tones.push_back(i);
-					}
-					else
-					{
-						tones[1] = i;
+						if(tones.size() < 2)
+						{
+							tones.push_back(i);
+						}
+						else
+						{
+							tones[1] = i;
+						}
 					}
 				}
-			}
-			else
-			{
-				double f = firstToneMHz - i*toneIntervalMHz;
-				if(f < (bbcFreq*1.0e-6-guardBandMHz) && f > ((bbcFreq-bbcBandwidth)*1.0e-6+guardBandMHz))
+				else
 				{
-					if(tones.size() < 2)
+					double f = firstToneMHz - i*toneIntervalMHz;
+					if(f < (bbcFreq*1.0e-6-guardBandMHz) && f > ((bbcFreq-bbcBandwidth)*1.0e-6+guardBandMHz))
 					{
-						tones.push_back(i);
-					}
-					else
-					{
-						tones[1] = i;
+						if(tones.size() < 2)
+						{
+							tones.push_back(i);
+						}
+						else
+						{
+							tones[1] = i;
+						}
 					}
 				}
 			}
 		}
-		if(tones.size() < 2 && guardBandMHz > bbcBandwidth*1.0e-6/200)
+		if(tonesInBand > 2 && tones.size() < 2 && guardBandMHz > bbcBandwidth*1.0e-6/2000)
 		{
 			// If not enough tones are found, recurse a bit...
+			printf("Recursing %f\n", guardBandMHz/2.0);
 			selectTones(toneIntervalMHz, selection, guardBandMHz/2.0);	
 		}
 		break;
@@ -259,7 +280,7 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 				}
 			}
 		}
-		if(tones.size() < 2 && guardBandMHz > bbcBandwidth*1.0e-6/200)
+		if(tones.size() < tonesInBand && tones.size() < 2 && guardBandMHz > bbcBandwidth*1.0e-6/2000)
 		{
 			// If not enough tones are found, recurse a bit...
 			selectTones(toneIntervalMHz, selection, guardBandMHz/2.0);	
@@ -723,13 +744,13 @@ VexSource *VexData::newSource()
 double VexAntenna::getVexClocks(double mjd, double *coeffs) const
 {
 	double epoch = -1.0;
-        double last_mjdStart = -1.0;
+	double last_mjdStart = -1.0;
 
 	for(std::vector<VexClock>::const_iterator it = clocks.begin(); it != clocks.end(); ++it)
 	{
-            if((it->mjdStart <= mjd) && (it->mjdStart >= last_mjdStart))
+		if((it->mjdStart <= mjd) && (it->mjdStart >= last_mjdStart))
 		{
-                    last_mjdStart = it->mjdStart;
+			last_mjdStart = it->mjdStart;
 			epoch = it->offset_epoch;
 			coeffs[0] = it->offset;
 			coeffs[1] = it->rate;
@@ -1301,6 +1322,23 @@ const VexScan *VexData::getScanByDefName(const std::string &defName) const
 	return 0;
 }
 
+const VexScan *VexData::getScanByAntennaTime(const std::string &antName, double mjd) const
+{
+	for(std::vector<VexScan>::const_iterator it = scans.begin(); it != scans.end(); ++it)
+	{
+		const VexInterval *interval = it->getAntennaInterval(antName);
+		if(interval)
+		{
+			if(interval->contains(mjd))
+			{
+				return &(*it);
+			}
+		}
+	}
+
+	return 0;
+}
+
 unsigned int VexScan::nAntennasWithRecordedData(const VexData *V) const
 {
 	unsigned int nAnt = 0;
@@ -1314,7 +1352,7 @@ unsigned int VexScan::nAntennasWithRecordedData(const VexData *V) const
 	for(std::map<std::string,VexInterval>::const_iterator it = stations.begin(); it != stations.end(); ++it)
 	{
 		std::map<std::string,VexSetup>::const_iterator S = M->setups.find(it->first);
-		if(S != M->setups.end() && S->second.nRecordChan > 0 && S->second.formatName != "NONE")
+		if(S != M->setups.end() && S->second.nRecordChan > 0 && S->second.formatName != "NONE" && getRecordEnable(it->first) == true)
 		{
 			++nAnt;
 		}
@@ -1342,6 +1380,19 @@ unsigned int VexScan::nRecordChan(const VexData *V, const std::string &antName) 
 	}
 
 	return nRecChan;
+}
+
+bool VexScan::getRecordEnable(const std::string &antName) const
+{
+	std::map<std::string,bool>::const_iterator it = recordEnable.find(antName);
+	if(it != recordEnable.end())
+	{
+		return it->second;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 const VexInterval *VexScan::getAntennaInterval(const std::string &antName) const
@@ -1560,6 +1611,32 @@ const VexMode *VexData::getModeByDefName(const std::string &defName) const
 	}
 
 	return 0;
+}
+
+int VexData::getAntennaIdByName(const std::string &antName) const
+{
+	for(std::vector<VexAntenna>::const_iterator it = antennas.begin(); it != antennas.end(); ++it)
+	{
+		if(it->name == antName)
+		{
+			return it - antennas.begin();
+		}
+	}
+
+	return -1;
+}
+
+int VexData::getAntennaIdByDefName(const std::string &antName) const
+{
+	for(std::vector<VexAntenna>::const_iterator it = antennas.begin(); it != antennas.end(); ++it)
+	{
+		if(it->defName == antName)
+		{
+			return it - antennas.begin();
+		}
+	}
+
+	return -1;
 }
 
 int VexData::getModeIdByDefName(const std::string &defName) const

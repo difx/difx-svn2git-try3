@@ -842,8 +842,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 			}
 
 			vex_field(T_STATION, p, 7, &link, &name, &value, &units);
-			recordEnable[stationName] = (atoi(value) != 0);
-//printf("***** record: %i for %s for scan %s\n", (recordEnable[stationName]?1:0), stationName.c_str(), scanId);
+			recordEnable[stationName] = (atoi(value) > 0);
 
 			stations[stationName] = VexInterval(startAnt, stopAnt);
 
@@ -1539,7 +1538,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 					}
 					else
 					{
-						setup.channels.back().selectTones(vif->phaseCalIntervalMHz, ToneSelectionVex, 0);
+						setup.channels.back().selectTones(vif->phaseCalIntervalMHz, ToneSelectionSmart, bandwidth/1000000.0/8.0);
 					}
 				}
 				else

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012, 2014 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -130,6 +130,7 @@ public:
 	unsigned int nAntennasWithRecordedData(const VexData *V) const;
 	unsigned int nRecordChan(const VexData *V, const std::string &antName) const;
 	const VexInterval *getAntennaInterval(const std::string &antName) const;
+	bool getRecordEnable(const std::string &antName) const;
 };
 
 class VexSource
@@ -192,7 +193,7 @@ public:
 	double getLowerEdgeFreq() const;
 
 	std::string name;
-	double ifSSLO;		// SSLO of the IF
+	double ifSSLO;		// [Hz] SSLO of the IF
 	char ifSideBand;	// U or L
 	char pol;		// R or L
 	int phaseCalIntervalMHz;// MHz, typically 1 or 5 (or 0 if none)
@@ -276,7 +277,7 @@ public:
 	std::vector<VexClock> clocks;
 	std::vector<VexBasebandFile> basebandFiles;
 	enum DataSource	dataSource;
-        enum AntennaSiteType sitetype;
+	enum AntennaSiteType sitetype;
 };
 
 class VexEOP
@@ -394,10 +395,13 @@ public:
 	unsigned int nScan() const { return scans.size(); }
 	const VexScan *getScan(unsigned int num) const;
 	const VexScan *getScanByDefName(const std::string &defName) const;
+	const VexScan *getScanByAntennaTime(const std::string &antName, double mjd) const;
 	void setScanSize(unsigned int num, double size);
 	void getScanList(std::list<std::string> &scans) const;
 
 	unsigned int nAntenna() const { return antennas.size(); }
+	int getAntennaIdByName(const std::string &antName) const;
+	int getAntennaIdByDefName(const std::string &antName) const;
 	const VexAntenna *getAntenna(unsigned int num) const;
 	const VexAntenna *getAntenna(const std::string &name) const;
 	double getAntennaStartMJD(const std::string &name) const;
