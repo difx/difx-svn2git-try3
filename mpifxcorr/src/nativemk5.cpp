@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2013 by Walter Brisken and Adam Deller             *
+ *   Copyright (C) 2007-2014 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -101,38 +101,12 @@ void NativeMk5DataStream::openStreamstor()
 {
 	XLR_RETURN_CODE xlrRC;
 
-	sendMark5Status(MARK5_STATE_OPENING, 0, 0.0, 0.0);
-
-	cinfo << startl << "Opening Streamstor" << endl;
-	WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
-  
-  	if(xlrRC == XLR_FAIL)
-	{
-#if HAVE_MARK5IPC
-                unlockMark5();
-#endif
-		WATCHDOG( XLRClose(xlrDevice) );
-		cfatal << startl << "Cannot open Streamstor device.  Either this Mark5 unit has crashed, you do not have read/write permission to /dev/windrvr6, or some other process has full control of the Streamstor device." << endl;
-		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
-	else
-	{
-		cinfo << startl << "Success opening Streamstor device" << endl;
-	}
-
-	// FIXME: for non-bank-mode operation, need to look at the modules to determine what to do here.
-	WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
+	xlrRC = openMark5(&xlrDevice);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		cerror << startl << "Cannot put Mark5 unit in bank mode" << endl;
+		cfatal << startl << "openMark5 did not return XLR_SUCCESS.  Must abort." << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
-
-	WATCHDOG( XLRSetMode(xlrDevice, SS_MODE_SINGLE_CHANNEL) );
-	WATCHDOG( XLRClearChannels(xlrDevice) );
-	WATCHDOG( XLRSelectChannel(xlrDevice, 0) );
-	WATCHDOG( XLRBindOutputChannel(xlrDevice, 0) );
-
-	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 }
 
 void NativeMk5DataStream::closeStreamstor()
@@ -189,7 +163,9 @@ NativeMk5DataStream::NativeMk5DataStream(const Configuration * conf, int snum,
                 }
         }
 #endif
+	sendMark5Status(MARK5_STATE_OPENING, 0, 0.0, 0.0);
 	openStreamstor();
+	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 
         // Start up mark5 watchdog thread
         perr = initWatchdog();
@@ -544,24 +520,48 @@ void NativeMk5DataStream::initialiseFile(int configindex, int fileindex)
 		cinfo << startl << "Scan info. start = " << scanPointer->start << " off = " << scanPointer->frameoffset << " size = " << scanPointer->framebytes << endl;
 	}
 
-        if(readpointer == -1)
+	if(readpointer >= 0)
+	{
+		cinfo << startl << "The frame start day is " << scanPointer->mjd << ", the frame start seconds is " << scanPointer->secStart() << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << ", readpointer is " << readpointer << endl;
+
+		/* look for format mismatch */
+		if( (format == Configuration::MARK5B   && module.scans[scanNum].format != MK5_FORMAT_MARK5B) ||
+		    (format == Configuration::VDIF     && module.scans[scanNum].format != MK5_FORMAT_VDIF)   ||
+		    (format == Configuration::VDIFL    && module.scans[scanNum].format != MK5_FORMAT_VDIFL)  ||
+		    (format == Configuration::VLBA     && module.scans[scanNum].format != MK5_FORMAT_VLBA)   ||
+		    (format == Configuration::VLBN     && module.scans[scanNum].format != MK5_FORMAT_VLBA)   ||
+		    (format == Configuration::MKIV     && module.scans[scanNum].format != MK5_FORMAT_MARK4)  ||
+		    (format == Configuration::K5VSSP   && module.scans[scanNum].format != MK5_FORMAT_K5)     ||
+		    (format == Configuration::K5VSSP32 && module.scans[scanNum].format != MK5_FORMAT_K5)     ||
+		    (format == Configuration::KVN5B    && (module.scans[scanNum].format != MK5_FORMAT_MARK5B || module.scans[scanNum].format != MK5_FORMAT_KVN5B))
+		    )
+
+		{
+			cerror << startl << "Error! A " << formatname << " scan was expected (based on the .input file), but the scan for the matching time is not in " << formatname << " format!  The actual format number (as found in the .dir file) is: " << module.scans[scanNum].format << endl;
+
+			readpointer = -1;
+		}
+	}
+
+        if(readpointer <= -1)
         {
-		cwarn << startl << "No data for this job on this module" << endl;
+		cwarn << startl << "initialiseFile: No data for this job on this module" << endl;
 		scanPointer = 0;
+		scanNum = 0;
 		dataremaining = false;
 		keepreading = false;
 		noMoreData = true;
+		readseconds = 0;
+		readnanoseconds = 0;
 		sendMark5Status(MARK5_STATE_NOMOREDATA, 0, 0.0, 0.0);
 
 		return;
         }
 
 	sendMark5Status(MARK5_STATE_GOTDIR, readpointer, scanPointer->mjdStart(), 0.0);
-
+	
 	newscan = 1;
 
-	cinfo << startl << "The frame start day is " << scanPointer->mjd << ", the frame start seconds is " << scanPointer->secStart()
-		<< ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
 
 	/* update all the configs - to ensure that the nsincs and 
 	 * headerbytes are correct
@@ -624,7 +624,7 @@ int NativeMk5DataStream::readonedemux(bool resetreference, int buffersegment)
   }
 
   //cinfo << startl << "At the beginning of readonedemux, readpointer is " << readpointer << endl;
-  rbytes = moduleRead((unsigned long*)datamuxer->getCurrentDemuxBuffer(), datamuxer->getSegmentBytes(), readpointer, buffersegment);
+  rbytes = moduleRead((u32 *)datamuxer->getCurrentDemuxBuffer(), datamuxer->getSegmentBytes(), readpointer, buffersegment);
   //the main readpointer will be updated outside of this routine, use localreadpointer for here
   localreadpointer = readpointer + rbytes;
   if(rbytes != datamuxer->getSegmentBytes()) {
@@ -634,7 +634,7 @@ int NativeMk5DataStream::readonedemux(bool resetreference, int buffersegment)
   while(fixbytes > 0) {
     ++nfix;
     readto = reinterpret_cast<char*>(datamuxer->getCurrentDemuxBuffer()) + rbytes - fixbytes;
-    moduleRead(reinterpret_cast<unsigned long*>(readto), fixbytes, localreadpointer, buffersegment);
+    moduleRead(reinterpret_cast<u32 *>(readto), fixbytes, localreadpointer, buffersegment);
     readpointer += fixbytes; //but if we need extra reads, then we must add these "extra" values to the readpointer
     localreadpointer += fixbytes; //and to the local one also of course
     fixbytes = datamuxer->datacheck(datamuxer->getCurrentDemuxBuffer(), rbytes, rbytes - fixbytes);
@@ -651,7 +651,7 @@ int NativeMk5DataStream::readonedemux(bool resetreference, int buffersegment)
   return rbytes;
 }
 
-int NativeMk5DataStream::moduleRead(unsigned long *destination, int nbytes, long long start, int buffersegment)
+int NativeMk5DataStream::moduleRead(u32 *destination, int nbytes, long long start, int buffersegment)
 {
 	int bytes = nbytes;
 	XLR_RETURN_CODE xlrRC;
@@ -704,7 +704,7 @@ int NativeMk5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 			// first fill buffer with fill pattern
 			for(int w = 0; w < bytes/4; ++w)
 			{
-				(reinterpret_cast<unsigned int *>(destination))[w] = MARK5_FILL_PATTERN;
+				destination[w] = MARK5_FILL_PATTERN;
 			}
 
 			// then try to reset card
@@ -736,7 +736,7 @@ int NativeMk5DataStream::moduleRead(unsigned long *destination, int nbytes, long
 
 void NativeMk5DataStream::moduleToMemory(int buffersegment)
 {
-	unsigned long *buf, *data;
+	u32 *buf, *data;
 	char *readto;
 	int rbytes, obytes;
 	double tv_us;
@@ -750,7 +750,7 @@ void NativeMk5DataStream::moduleToMemory(int buffersegment)
 	int n = 0;
 
 	/* All reads of a module must be 64 bit aligned */
-	data = buf = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+	data = buf = reinterpret_cast<u32 *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	waitForBuffer(buffersegment);
 

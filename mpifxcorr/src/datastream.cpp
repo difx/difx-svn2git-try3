@@ -104,7 +104,14 @@ DataStream::~DataStream()
 void DataStream::initialise()
 {
   int status, currentconfigindex, currentoverflowbytes, overflowbytes = 0;
-  bufferbytes = databufferfactor*config->getMaxDataBytes(streamnum);
+  int maxbytes = config->getMaxDataBytes(streamnum);
+
+  if ((uint64_t)maxbytes*databufferfactor>4294967296LL) { // Will overflow 32bit int
+    cfatal << startl << "Datastream " << mpiid << " cannot allocate databuffer of " << (uint64_t)maxbytes*databufferfactor/1024/1024/1024 << " GB - 32bit overflow. Aborting!!!" << endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  bufferbytes = databufferfactor*maxbytes;
   readbytes = bufferbytes/numdatasegments;
   estimatedbytes = config->getEstimatedBytes();
   consumedbytes = 0;
@@ -1171,7 +1178,6 @@ int DataStream::openrawstream(const char *device)
 	struct ifreq ifr;
 	struct sockaddr_ll sll;
 	struct timeval tv;
-		
 
         socketnumber = 0;
 
@@ -1195,6 +1201,30 @@ int DataStream::openrawstream(const char *device)
 		return -3;
 	}
 
+        /* is the interface up? */
+        ioctl(s, SIOCGIFFLAGS, &ifr);
+        if( (ifr.ifr_flags & IFF_UP) == 0)
+        {
+                close(s);
+
+                cerror << startl << "DataStream::openrawstream: interface " << device << " is not up." << endl;
+
+                return -5;
+        }
+
+        /* set promisc flag -- sometimes this is needed.  Othertimes it doesn't seem to hurt */
+        ifr.ifr_flags |= IFF_PROMISC;
+        if(ioctl (s, SIOCSIFFLAGS, &ifr) == -1)
+        {
+                close(s);
+
+                cerror << startl << "DataStream::openrawstream: cannot enter PROMISC mode on device " << device << endl;
+
+                return -6;
+        }
+
+        ioctl(s, SIOCGIFINDEX, &ifr);
+
         sll.sll_family = AF_PACKET;
         sll.sll_ifindex = ifr.ifr_ifindex;
         sll.sll_protocol = htons(ETH_P_ALL);
@@ -1212,6 +1242,10 @@ int DataStream::openrawstream(const char *device)
         tv.tv_sec = 0;
         tv.tv_usec = 100000;
         setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+        int rawbufbytes;
+        rawbufbytes = 16*1024*1024;
+        setsockopt(s, SOL_SOCKET, SO_RCVBUF, (char *) &rawbufbytes, sizeof(rawbufbytes));
 
         socketnumber = s;
 #else
@@ -1328,11 +1362,12 @@ void DataStream::closestream()
 uint64_t DataStream::openframe()
 {
   char *buf;
-  short fnamesize;
-  int ntoread, nread, status;
+  unsigned int ntoread, nread;
+  int status;
   uint64_t framesize;
+  uint16_t fnamesize;
 
-  ntoread = sizeof(long long) + sizeof(short);
+  ntoread = sizeof(uint64_t) + sizeof(uint16_t);
 
   buf = (char*)malloc(LBA_HEADER_LENGTH); // Minimum size of file header
 
@@ -1354,7 +1389,7 @@ uint64_t DataStream::openframe()
 	
   // Read totalnumber of expected bytes and filename size
   memcpy(&framesize,  buf, sizeof(uint64_t));
-  memcpy(&fnamesize,  buf+sizeof(uint64_t), sizeof(short));
+  memcpy(&fnamesize,  buf+sizeof(uint64_t), sizeof(uint16_t));
   
   framesize = framesize - LBA_HEADER_LENGTH;
 
@@ -1481,8 +1516,8 @@ int DataStream::initialiseFrame(char * frameheader)
 void DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
   char *ptr;
-  unsigned int bytestoread;
-  int nread, status, synccatchbytes, previoussegment;
+  unsigned int bytestoread, nread;
+  int status, synccatchbytes, previoussegment;
   long long validns, nextns;
   int bytestocopy;
 
@@ -1572,7 +1607,7 @@ void DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaini
     keepreading = false;
 }
 
-int DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
+int DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread)
 {
   int nr;
 
@@ -1598,7 +1633,7 @@ int DataStream::readnetwork(int sock, char* ptr, int bytestoread, int* nread)
   return(1);
 }
 
-int DataStream::readrawnetwork(int sock, char* ptr, int bytestoread, int* nread, int packetsize, int stripbytes)
+int DataStream::readrawnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread, int packetsize, int stripbytes)
 {
   const int MaxPacketSize = 20000;
   int length;

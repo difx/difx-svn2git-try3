@@ -67,9 +67,10 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	}
 
 	// Set some VDIF muxer parameters
-	nSort = 64;	// allow data to be this many frames out of order without any loss at read boundaries
+	nSort = 32;	// allow data to be this many frames out of order without any loss at read boundaries
 	nGap = 1000;	// a gap of this many frames will trigger an interruption of muxing
 	startOutputFrameNumber = -1;
+	memset(&vm, 0, sizeof(vm));
 
 	// Make read buffer a bit bigger than a data segment size so extra bytes can be filtered out 
 	// The excess should be limited to avoid large memory moves of extra data
@@ -218,6 +219,12 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 	// bufferindex was previously computed assuming no framing overhead
 	framesin = vlbaoffset/payloadbytes;
 
+	// here we enforce frame granularity.  We simply back up to the previous frame that is a multiple of the frame granularity.
+	if(framesin % vm.frameGranularity != 0)
+	{
+		framesin -= (framesin % vm.frameGranularity);
+	}
+
 	// Note here a time is needed, so we only count payloadbytes
 	long long segoffns = bufferinfo[atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
 	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + ((int)(segoffns/1000000000));
@@ -296,14 +303,23 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
+	if(nGap > 1024)
+	{
+		nGap = 1024;
+	}
 	startOutputFrameNumber = -1;
-
-	outputframebytes = (inputframebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
 
 	nthreads = config->getDNumMuxThreads(configindex, streamnum);
 	threads = config->getDMuxThreadMap(configindex, streamnum);
 
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	rv = configurevdifmux(&vm, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, VDIF_MUX_FLAG_RESPECTGRANULARITY);
+	if(rv < 0)
+	{
+		cfatal << startl << "configurevmux failed with return code " << rv << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
 	if(fanout != 1)
 	{
 		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
@@ -327,7 +343,6 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 
 	// If verbose...
 	printvdiffilesummary(&fileSummary);
-
 
 	// Here set readseconds to time since beginning of job
 	readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
@@ -410,7 +425,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 		// If there is some data left over, just demux that and send it out
 		if(readbufferleftover > minleftoverdata)
 		{
-			vdifmux(destination, readbytes, readbuffer, readbufferleftover, inputframebytes, framespersecond, muxBits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+			vdifmux(destination, readbytes, readbuffer, readbufferleftover, &vm, startOutputFrameNumber, &vstats);
 			readbufferleftover = 0;
 			bufferinfo[buffersegment].validbytes = vstats.destUsed;
 
@@ -435,7 +450,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 	bytesvisible = readbufferleftover + bytes;
 
 	// multiplex and corner turn the data
-	muxReturn = vdifmux(destination, readbytes, readbuffer, bytesvisible, inputframebytes, framespersecond, muxBits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	muxReturn = vdifmux(destination, readbytes, readbuffer, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 
 	if(muxReturn < 0)
 	{
@@ -526,9 +541,9 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 void VDIFDataStream::diskToMemory(int buffersegment)
 {
-	unsigned long *buf;
+	u32 *buf;
 
-	buf = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+	buf = reinterpret_cast<u32 *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	//do the buffer housekeeping
 	waitForBuffer(buffersegment);

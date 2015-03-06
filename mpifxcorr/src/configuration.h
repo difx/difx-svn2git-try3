@@ -324,6 +324,12 @@ public:
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
     return (f == INTERLACEDVDIF && s == MK5MODULE);
   }
+  inline bool isNetwork(int datastreamindex) const
+  {
+    datasource s;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (s == NETWORKSTREAM);
+  }
   inline bool isVDIFNetwork(int datastreamindex) const
   {
     dataformat f;
@@ -523,6 +529,12 @@ public:
   * @return The maximum length of a data message from the specified datastream and configuration
   */
   int getDataBytes(int configindex, int datastreamindex) const;
+
+ /**
+  * @param pols Pointer to array of 4 chars to receive list of polarizations used
+  * @return The total number of unique polarizations in the configuration file
+  */
+  int getRecordedPolarisations(char *pols) const;
 
  /**
   * @param configindex The index of the configuration being used (from the table in the input file)

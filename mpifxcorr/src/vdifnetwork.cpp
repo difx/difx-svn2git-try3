@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <cmath>
 #include <sys/time.h>
+#include <sys/socket.h>
 #include <mpi.h>
 #include <unistd.h>
 #include <vdifio.h>
@@ -46,13 +47,13 @@ VDIFNetworkDataStream::VDIFNetworkDataStream(const Configuration * conf, int snu
 
 	readbufferslots = 8;
 	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*21LL/10LL;
-	readbufferslotsize -= (readbufferslotsize % 8); // make it a multiple of 8 bytes
+	readbufferslotsize -= (readbufferslotsize % config->getFrameBytes(0, streamnum)); // make it a multiple of frame size
 	readbuffersize = readbufferslots * readbufferslotsize;
 	// Note: the read buffer is allocated in vdiffile.cpp by VDIFDataStream::initialse()
 	// the above values override defaults for file-based VDIF
 
-cinfo << startl << "VDIFNetworkDataStream::VDIFNetworkDataStream: Set readbuffersize to " << readbuffersize << endl;
-cinfo << startl << "mdb = " << conf->getMaxDataBytes(streamnum) << "  rbslots=" << readbufferslots << "  readbufferslotsize=" << readbufferslotsize << endl;
+	cinfo << startl << "VDIFNetworkDataStream::VDIFNetworkDataStream: Set readbuffersize to " << readbuffersize << endl;
+	cinfo << startl << "mdb = " << conf->getMaxDataBytes(streamnum) << "  rbslots=" << readbufferslots << "  readbufferslotsize=" << readbufferslotsize << endl;
 
 	// set up network reader thread
 	networkthreadstop = false;
@@ -61,7 +62,7 @@ cinfo << startl << "mdb = " << conf->getMaxDataBytes(streamnum) << "  rbslots=" 
 
 	perr = pthread_barrier_init(&networkthreadbarrier, 0, 2);
 	networkthreadmutex = new pthread_mutex_t[readbufferslots];
-	for(unsigned int m = 0; m < readbufferslots; ++m)
+	for(int m = 0; m < readbufferslots; ++m)
 	{
 		if(perr == 0)
 		{
@@ -95,12 +96,86 @@ VDIFNetworkDataStream::~VDIFNetworkDataStream()
 
 	pthread_join(networkthread, 0);
 
-	for(unsigned int m = 0; m < readbufferslots; ++m)
+	for(int m = 0; m < readbufferslots; ++m)
 	{
 		pthread_mutex_destroy(networkthreadmutex + m);
 	}
 	delete [] networkthreadmutex;
 	pthread_barrier_destroy(&networkthreadbarrier);
+}
+
+int VDIFNetworkDataStream::readrawnetworkVDIF(int sock, char* ptr, int bytestoread, unsigned int* nread, int packetsize, int stripbytes)
+{
+	const int MaxPacketSize = 20000;
+	int length;
+	int goodbytes = packetsize - stripbytes;
+	char *ptr0 = ptr;
+	char *end = ptr + bytestoread - goodbytes;
+	char workbuffer[MaxPacketSize];
+	const vdif_header *vh;
+
+	vh = reinterpret_cast<const vdif_header *>(workbuffer + stripbytes);
+
+	if(packetsize > MaxPacketSize)
+	{
+		cfatal << startl << "Error: readrawnetworkVDIF wants to read packets of size " << packetsize << " where MaxPacketSize=" << MaxPacketSize << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+
+	*nread = 0;
+
+	while(ptr <= end)
+	{
+		length = recvfrom(sock, workbuffer, MaxPacketSize, 0, 0, 0);
+		if(length <= 0)
+		{
+			// timeout on read?
+			break;
+		}
+		else if(length == packetsize)
+		{
+			memcpy(ptr, workbuffer + stripbytes, goodbytes);
+			ptr += goodbytes;
+
+			if( (vh->frame == 0) && (vh->threadid == 0) && (vh->seconds % 10 == 0) )
+			{
+				/* first frame of the 10 second interval.  Compare with local clock time for kicks */
+				struct timespec ck;
+				double deltat;		// [sec]
+
+#ifdef __MACH__                 // OS X does not have clock_gettime, use gettimeofday
+				struct timeval now;
+				int status;
+				status = gettimeofday(&now, NULL);
+				ck.tv_sec = now.tv_sec;
+				ck.tv_nsec = now.tv_usec*1000;
+#else
+				clock_gettime(CLOCK_REALTIME, &ck);
+#endif
+				deltat = (ck.tv_sec % 10) - (vh->seconds % 10);
+				deltat += ck.tv_nsec*1.0e-9;
+				if(deltat < -3.0)
+				{
+					deltat += 10.0;
+				}
+				if(deltat > 5)
+				{
+					deltat -= 10.0;
+				}
+				int p = cinfo.precision();
+				cinfo.precision(6);
+				cinfo << startl << "VDIF clock is " << deltat << " seconds behind system clock for antenna " << stationname << endl;
+				cinfo.precision(p);
+			}
+		}
+	}
+
+	if(nread)
+	{
+		*nread = ptr - ptr0;
+	}
+
+	return 1;
 }
 
 // this function implements the network reader.  It is continuously either filling data into a ring buffer or waiting for a mutex to clear.
@@ -111,9 +186,9 @@ void VDIFNetworkDataStream::networkthreadfunction()
 	int stripbytes;				// for raw packets; strip this many bytes from beginning of RX packets
 
 	stripbytes = tcpwindowsizebytes/1024;
-	packetsize = config->getFrameBytes(0, streamnum); + stripbytes;
+	packetsize = config->getFrameBytes(0, streamnum) + stripbytes;
 
-cinfo << startl << "stripbytes=" << stripbytes << " packetsize=" << packetsize << endl;
+	cinfo << startl << "stripbytes=" << stripbytes << " packetsize=" << packetsize << endl;
 
 	for(;;)
 	{
@@ -121,8 +196,6 @@ cinfo << startl << "stripbytes=" << stripbytes << " packetsize=" << packetsize <
 
 		/* First barrier is before the locking of slot number 1 */
 		pthread_barrier_wait(&networkthreadbarrier);
-
-cinfo << startl << "barrier 1" << endl;
 
 		readbufferwriteslot = 1;	// always 
 		pthread_mutex_lock(networkthreadmutex + (readbufferwriteslot % lockmod));
@@ -133,33 +206,25 @@ cinfo << startl << "barrier 1" << endl;
 		/* Second barrier is after the locking of slot number 1 */
 		pthread_barrier_wait(&networkthreadbarrier);
 
-cinfo << startl << "barrier 2" << endl;
 		while(!networkthreadstop)
 		{
-			int bytes;
+			unsigned int bytes;
 			bool endofscan = false;
 			int status;
 
-
-for(int ii = 0; ii < 1000; ++ii)
-{
 			// This is where the actual read from the Mark5 unit happens
-		cinfo << startl << "Reading... " << ii << endl;
 			if(ethernetdevice.empty())
 			{
 				// TCP or regular UDP
 				status = readnetwork(socketnumber, (char *)(readbuffer + readbufferwriteslot*readbufferslotsize), readbufferslotsize, &bytes);
-		cinfo << startl << "UDP bytes read = " << bytes << endl;
 			}
 			else
 			{
 				// Raw socket or trimmed UDP
-				status = readrawnetwork(socketnumber, (char *)(readbuffer + readbufferwriteslot*readbufferslotsize), readbufferslotsize, &bytes, packetsize, stripbytes);
-		cinfo << startl << "Raw bytes read = " << bytes << endl;
+				status = readrawnetworkVDIF(socketnumber, (char *)(readbuffer + readbufferwriteslot*readbufferslotsize), readbufferslotsize, &bytes, packetsize, stripbytes);
 			}
-			if(bytes > 0) break;
-}
-			if(bytes <= 0)
+
+			if(bytes == 0)
 			{
 				status = -1;
 		// Not sure what to do here
@@ -170,7 +235,7 @@ for(int ii = 0; ii < 1000; ++ii)
 				endofscan = true;
 				lastslot = readbufferwriteslot;
 				endindex = lastslot*readbufferslotsize + bytes; // No data in this slot from here to end
-				cverbose << startl << "gap in data seen; read only " << bytes << " bytes where " << readbufferslotsize << " bytes were requested" << endl;
+				cverbose << startl << "Short read: only " << bytes << " bytes where " << readbufferslotsize << " bytes were requested" << endl;
 			}
 
 			// FIXME: do the right thing in various error conditions.  code block below is if data is good
@@ -190,6 +255,19 @@ for(int ii = 0; ii < 1000; ++ii)
 				if(!dataremaining)
 				{
 					endofscan = true;
+				}
+			}
+			else
+			{
+				static int nBadReadStatus = 0;
+				++nBadReadStatus;
+				if((nBadReadStatus & (nBadReadStatus - 1)) == 0)
+				{
+					cwarn << startl << "read returned status=" << status << " N=" << nBadReadStatus << endl;
+				}
+				if(nBadReadStatus > 1)
+				{
+					keepreading = false;
 				}
 			}
 			if(endofscan || !keepreading)
@@ -222,7 +300,7 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
 	Configuration::datasampling sampling;
 	Configuration::dataformat format;
 	double bw;
-
+	int rv;
 	double startmjd;
 	int doUpdate = 0;
 
@@ -235,14 +313,23 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
+	if(nGap > 1024)
+	{
+		nGap = 1024;
+	}
 	startOutputFrameNumber = -1;
-
-        outputframebytes = (inputframebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
 
 	nthreads = config->getDNumMuxThreads(configindex, streamnum);
 	threads = config->getDMuxThreadMap(configindex, streamnum);
 
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	rv = configurevdifmux(&vm, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, VDIF_MUX_FLAG_RESPECTGRANULARITY);
+	if(rv < 0)
+	{
+		cfatal << startl << "configurevmux failed with return code " << rv << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
         if(fanout != 1)
         {
 		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
@@ -362,11 +449,34 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 
 	bytesvisible = muxend - muxindex;
 
+//cverbose << "About to mux " << readbytes << " from slot(s) " << n1 << "-" << n2 << endl;
+
 	// multiplex and corner turn the data
-	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, inputframebytes, framespersecond, muxBits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 	if(muxReturn < 0)
 	{
 		cwarn << startl << "vdifmux returned " << muxReturn << endl;
+	}
+
+	if(vstats.startFrameNumber % vm.frameGranularity != 0)
+	{
+		/* This should never happen.  Maybe this test gets removed some day */
+		csevere << startl << "Input startFrameNumber was " << startOutputFrameNumber << " and Output startFrameNumber was " << vstats.startFrameNumber << " flags=" << vm.flags << " frameGranularity=" << vm.frameGranularity << " trying again." << endl;
+
+		muxindex += vm.frameGranularity*vm.inputFrameSize;
+		bytesvisible -= vm.frameGranularity*vm.inputFrameSize;
+		muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
+	}
+
+	if(0)
+	{
+		static int C = 0;
+
+		if(C % 400 == 0)
+		{
+			cinfo << startl << "C=" << C << " VDIF multiplexing statistics: nValidFrame=" << vstats.nValidFrame << " nInvalidFrame=" << vstats.nInvalidFrame << " nDiscardedFrame=" << vstats.nDiscardedFrame << " nWrongThread=" << vstats.nWrongThread << " nSkippedByte=" << vstats.nSkippedByte << " nFillByte=" << vstats.nFillByte << " nDuplicateFrame=" << vstats.nDuplicateFrame << " bytesProcessed=" << vstats.bytesProcessed << " nGoodFrame=" << vstats.nGoodFrame << " nCall=" << vstats.nCall << " destUsed=" << vstats.destUsed << " srcUsed=" << vstats.srcUsed << endl;
+		}
+		++C;
 	}
 
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
@@ -380,6 +490,7 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 		// FIXME: below assumes each scan is < 86400 seconds long
 		bufferinfo[buffersegment].scan = readscan;
 		bufferinfo[buffersegment].scanseconds = (vstats.startFrameNumber / framespersecond)%86400 + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+
 		if(bufferinfo[buffersegment].scanseconds > 86400/2)
 		{
 			bufferinfo[buffersegment].scanseconds -= 86400;
@@ -404,11 +515,22 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 			if(deltaDataFrames < -10)
 			{
 				static int nGapWarn = 0;
+				int nSkip;
+
 
 				++nGapWarn;
-				if( (nGapWarn & (nGapWarn - 1)) == 0)
+				if( (nGapWarn & (nGapWarn - 1)) == 0 || nGapWarn <= 10)
 				{
-					cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nGapWarn << endl;
+					cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " deltaDataFrames=" << deltaDataFrames << " N=" << nGapWarn << endl;
+				}
+
+				nSkip = bytesvisible/2;
+				nSkip -= (nSkip % inputframebytes);
+				muxindex += nSkip;
+
+				if(nGapWarn > 6)
+				{
+					dataremaining = false;
 				}
 			}
 			else if(deltaDataFrames > 10)
@@ -418,7 +540,8 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 				++nExcessWarn;
 				if( (nExcessWarn & (nExcessWarn - 1)) == 0)
 				{
-					cwarn << startl << "Data excess of " << (vstats.srcUsed-vstats.destUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nExcessWarn << endl;
+					cwarn << startl << "Data excess of " << (vstats.srcUsed-vstats.destUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " deltaDataFrames=" << deltaDataFrames << " N=" << nExcessWarn << endl;
+					cwarn << startl << "readbufferslotsize=" << readbufferslotsize << " n1=" << n1 << " n2=" << n2 << endl;
 				}
 			}
 			startOutputFrameNumber = -1;
@@ -511,7 +634,6 @@ void VDIFNetworkDataStream::loopnetworkread()
 
 	if(ethernetdevice.empty())
 	{
-cinfo << startl << "VDIFNetworkDataStream::loopnetworkread: running openstream" << endl;
 		openstream(portnumber, tcpwindowsizebytes/1024);
 	}
 	else
@@ -529,6 +651,7 @@ cinfo << startl << "VDIFNetworkDataStream::loopnetworkread: running openstream" 
 
 	initialiseFile(bufferinfo[0].configindex, 0);
 
+	dataremaining = true;
 
 	if(keepreading)
 	{

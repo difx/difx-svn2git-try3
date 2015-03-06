@@ -87,7 +87,9 @@ Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snu
 		}
 	}
 #endif
+	sendMark5Status(MARK5_STATE_OPENING, 0, 0.0, 0.0);
 	openStreamstor();
+	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 
         // Start up mark5 watchdog thread
         perr = initWatchdog();
@@ -108,7 +110,7 @@ Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snu
 
 	perr = pthread_barrier_init(&mark5threadbarrier, 0, 2);
 	mark5threadmutex = new pthread_mutex_t[readbufferslots];
-	for(unsigned int m = 0; m < readbufferslots; ++m)
+	for(int m = 0; m < readbufferslots; ++m)
 	{
 		if(perr == 0)
 		{
@@ -148,7 +150,7 @@ Mark5BMark5DataStream::~Mark5BMark5DataStream()
 	unlockMark5();
 #endif
 
-	for(unsigned int m = 0; m < readbufferslots; ++m)
+	for(int m = 0; m < readbufferslots; ++m)
 	{
 		pthread_mutex_destroy(mark5threadmutex + m);
 	}
@@ -398,6 +400,12 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 	framespersecond = config->getFramesPerSecond(configindex, streamnum);
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
+	framegranularity = framespersecond/12800;
+	if(framegranularity < 1)
+	{
+		framegranularity = 1;
+	}
+
 	startOutputFrameNumber = -1;
 
 	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
@@ -590,7 +598,19 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 		}
 	}
 
-        if(readpointer == -1)
+	if(readpointer >= 0)
+	{
+		cinfo << startl << "The frame start day is " << scanPointer->mjd << ", the frame start seconds is " << scanPointer->secStart() << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << ", readpointer is " << readpointer << endl;
+
+		if(module.scans[scanNum].format != MK5_FORMAT_MARK5B)
+		{
+			cerror << startl << "Error! A Mark5B scan was expected (based on the .input file), but the scan for the matching time is not Mark5B formatted!  The actual format number (as found in the .dir file) is: " << module.scans[scanNum].format << endl;
+
+			readpointer = -1;
+		}
+	}
+
+        if(readpointer <= -1)
         {
 		cwarn << startl << "initialiseFile: No data for this job on this module" << endl;
 		scanPointer = 0;
@@ -606,10 +626,6 @@ void Mark5BMark5DataStream::initialiseFile(int configindex, int fileindex)
 
 		return;
         }
-	else
-	{
-		cinfo << startl << "The frame start day is " << scanPointer->mjd << ", the frame start seconds is " << scanPointer->secStart() << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << ", readpointer is " << readpointer << endl;
-	}
 
 	sendMark5Status(MARK5_STATE_GOTDIR, readpointer, scanPointer->mjdStart(), 0.0);
 
@@ -671,9 +687,10 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 	// Note: here readbytes is actually the length of the buffer segment, i.e., the amount of data wanted to be "read" by calling processes. 
 	// In this threaded approach the actual size of reads off Mark5 modules (as implemented in the ring buffer writing thread) is generally larger.
 
-	unsigned long *destination = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+	unsigned char *destination = reinterpret_cast<unsigned char *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 	int n1, n2;	/* slot number range of data to be processed.  Either n1==n2 or n1+1==n2 */
-	unsigned int fixend, bytesvisible;
+	unsigned int fixend;
+	int bytesvisible;
 	int lockmod = readbufferslots - 1;
 	int fixReturn;
 
@@ -758,7 +775,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 	bytesvisible = fixend - fixindex;
 
 	// "fix" Mark5B data: remove stray packets/byts and put good frames on a uniform grid
-	fixReturn = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
+	fixReturn = mark5bfix(destination, readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
 	if(fixReturn < 0)
 	{
 		cwarn << startl << "mark5bfix returned " << fixReturn << endl;
@@ -769,7 +786,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 
 		startOutputFrameNumber = -1;
 
-		fixReturn = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
+		fixReturn = mark5bfix(destination, readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
 
 		cwarn << startl << "Just used zero bytes in fix operation.  Tried again.  startOutputFrame: " << lastOFN << " -> -1 -> " << (m5bstats.startFrameNumber + m5bstats.destUsed/10016) << endl;
 	}
@@ -798,7 +815,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 
 		if(m5bstats.destUsed == m5bstats.srcUsed)
 		{
-			startOutputFrameNumber = m5bstats.startFrameNumber + m5bstats.destUsed/10016;
+			startOutputFrameNumber = (m5bstats.startFrameNumber + m5bstats.destUsed/10016) % framespersecond;
 		}
 		else
 		{
@@ -1149,33 +1166,12 @@ void Mark5BMark5DataStream::openStreamstor()
 {
 	XLR_RETURN_CODE xlrRC;
 
-	sendMark5Status(MARK5_STATE_OPENING, 0, 0.0, 0.0);
-
-	WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
-  
-  	if(xlrRC == XLR_FAIL)
-	{
-#if HAVE_MARK5IPC
-                unlockMark5();
-#endif
-		WATCHDOG( XLRClose(xlrDevice) );
-		cfatal << startl << "Cannot open Streamstor device.  Either this Mark5 unit has crashed, you do not have read/write permission to /dev/windrvr6, or some other process has full control of the Streamstor device." << endl;
-		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
-
-	// FIXME: for non-bank-mode operation, need to look at the modules to determine what to do here.
-	WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
+	xlrRC = openMark5(&xlrDevice);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		cerror << startl << "Cannot put Mark5 unit in bank mode" << endl;
+		cfatal << startl << "openMark5 did not return XLR_SUCCESS.  Must abort." << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
-
-	WATCHDOG( XLRSetMode(xlrDevice, SS_MODE_SINGLE_CHANNEL) );
-	WATCHDOG( XLRClearChannels(xlrDevice) );
-	WATCHDOG( XLRSelectChannel(xlrDevice, 0) );
-	WATCHDOG( XLRBindOutputChannel(xlrDevice, 0) );
-
-	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 }
 
 void Mark5BMark5DataStream::closeStreamstor()

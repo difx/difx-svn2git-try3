@@ -171,7 +171,8 @@ protected:
   
   const int databufferfactor, numdatasegments;
   int activescan, activesec, activens;
-  int streamnum, atsegment, readscan, readseconds, corrstartday, corrstartseconds, readbytes, bufferbytes, readnanoseconds, intclockseconds;
+  int streamnum, atsegment, readscan, readseconds, corrstartday, corrstartseconds, readbytes, readnanoseconds, intclockseconds;
+  uint32_t bufferbytes; // Maybe should be 64bit, but that then will fail on 32bit machines
   long long estimatedbytes;
   bool dataremaining;
   readinfo * bufferinfo;
@@ -265,7 +266,7 @@ protected:
   * @param bytestoread The number of bytes to read from the socket
   * @param nread The number of bytes actually read
   */
-  virtual int readnetwork(int sock, char* ptr, int bytestoread, int* nread);
+  virtual int readnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread);
 
  /** 
   * Reads the specified number of bytes from the specified raw socket into the provided buffer
@@ -276,7 +277,7 @@ protected:
   * @param packetsize Reject all packets not this size
   * @param stripbytes Remove this many bytes from the begining of each packet before storing
   */
-  virtual int readrawnetwork(int sock, char* ptr, int bytestoread, int* nread, int packetsize, int stripbytes);
+  virtual int readrawnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread, int packetsize, int stripbytes);
 
  /**
   * Tests that sync has not been lost (assuming the format supports this)

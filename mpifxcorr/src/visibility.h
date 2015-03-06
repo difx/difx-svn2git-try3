@@ -71,6 +71,11 @@ public:
   bool addData(cf32* subintresults);
 
  /**
+  * For all datastreams with pulse cal extraction enabled, write some comments to the beginning of the pulse cal file
+  */
+  void initialisePcalFiles();
+
+ /**
   * Writes this Visibility's integrated results to disk, after amplitude calibration
   */
   void writedata();

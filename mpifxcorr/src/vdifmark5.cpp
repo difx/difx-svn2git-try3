@@ -83,7 +83,9 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, i
 		}
 	}
 #endif
+	sendMark5Status(MARK5_STATE_OPENING, 0, 0.0, 0.0);
 	openStreamstor();
+	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 
         // Start up mark5 watchdog thread
         perr = initWatchdog();
@@ -104,7 +106,7 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, i
 
 	perr = pthread_barrier_init(&mark5threadbarrier, 0, 2);
 	mark5threadmutex = new pthread_mutex_t[readbufferslots];
-	for(unsigned int m = 0; m < readbufferslots; ++m)
+	for(int m = 0; m < readbufferslots; ++m)
 	{
 		if(perr == 0)
 		{
@@ -144,7 +146,7 @@ VDIFMark5DataStream::~VDIFMark5DataStream()
 	unlockMark5();
 #endif
 
-	for(unsigned int m = 0; m < readbufferslots; ++m)
+	for(int m = 0; m < readbufferslots; ++m)
 	{
 		pthread_mutex_destroy(mark5threadmutex + m);
 	}
@@ -352,7 +354,6 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	Configuration::dataformat format;
 	double bw;
 	int rv;
-
 	char defaultDirPath[] = ".";
 	double startmjd;
 	long long n;
@@ -369,14 +370,23 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
+	if(nGap > 1024)
+	{
+		nGap = 1024;
+	}
 	startOutputFrameNumber = -1;
-
-        outputframebytes = (inputframebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
 
 	nthreads = config->getDNumMuxThreads(configindex, streamnum);
 	threads = config->getDMuxThreadMap(configindex, streamnum);
 
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, outputframebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	rv = configurevdifmux(&vm, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, VDIF_MUX_FLAG_RESPECTGRANULARITY);
+	if(rv < 0)
+	{
+		cfatal << startl << "configurevmux failed with return code " << rv << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
         if(fanout != 1)
         {
 		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
@@ -558,7 +568,20 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 		}
 	}
 
-        if(readpointer == -1)
+
+	if(readpointer >= 0)
+	{
+		cinfo << startl << "The frame start day is " << scanPointer->mjd << ", the frame start seconds is " << scanPointer->secStart() << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << ", readpointer is " << readpointer << endl;
+
+		if(module.scans[scanNum].format != MK5_FORMAT_VDIF)
+		{
+			cerror << startl << "Error! A VDIF scan was expected (based on the .input file), but the scan for the matching time is not VDIF formatted!  The actual format number (as found in the .dir file) is: " << module.scans[scanNum].format << endl;
+
+			readpointer = -1;
+		}
+	}
+
+        if(readpointer <= -1)
         {
 		cwarn << startl << "initialiseFile: No data for this job on this module" << endl;
 		scanPointer = 0;
@@ -574,10 +597,6 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 
 		return;
         }
-	else
-	{
-		cinfo << startl << "The frame start day is " << scanPointer->mjd << ", the frame start seconds is " << scanPointer->secStart() << ", readscan is " << readscan << ", readseconds is " << readseconds << ", readnanoseconds is " << readnanoseconds << endl;
-	}
 
 	sendMark5Status(MARK5_STATE_GOTDIR, readpointer, scanPointer->mjdStart(), 0.0);
 
@@ -644,7 +663,8 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 
 	unsigned char *destination = reinterpret_cast<unsigned char *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 	int n1, n2;	/* slot number range of data to be processed.  Either n1==n2 or n1+1==n2 */
-	unsigned int muxend, bytesvisible;
+	unsigned int muxend;
+	int bytesvisible;
 	int lockmod = readbufferslots - 1;
 	int muxReturn;
 	int muxBits;
@@ -745,7 +765,7 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 	bytesvisible = muxend - muxindex;
 
 	// multiplex and corner turn the data
-	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, inputframebytes, framespersecond, muxBits, nthreads, threads, nSort, nGap, startOutputFrameNumber, &vstats);
+	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 	if(muxReturn < 0)
 	{
 		cwarn << startl << "vdifmux returned " << muxReturn << endl;
@@ -790,7 +810,7 @@ int VDIFMark5DataStream::dataRead(int buffersegment)
 				++nGapWarn;
 				if( (nGapWarn & (nGapWarn - 1)) == 0)
 				{
-					cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nGapWarn << endl;
+					cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nGapWarn << " deltaDataFrames=" << deltaDataFrames << endl;
 				}
 			}
 			else if(deltaDataFrames > 10)
@@ -1125,33 +1145,12 @@ void VDIFMark5DataStream::openStreamstor()
 {
 	XLR_RETURN_CODE xlrRC;
 
-	sendMark5Status(MARK5_STATE_OPENING, 0, 0.0, 0.0);
-
-	WATCHDOG( xlrRC = XLROpen(1, &xlrDevice) );
-  
-  	if(xlrRC == XLR_FAIL)
-	{
-#if HAVE_MARK5IPC
-                unlockMark5();
-#endif
-		WATCHDOG( XLRClose(xlrDevice) );
-		cfatal << startl << "Cannot open Streamstor device.  Either this Mark5 unit has crashed, you do not have read/write permission to /dev/windrvr6, or some other process has full control of the Streamstor device." << endl;
-		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
-
-	// FIXME: for non-bank-mode operation, need to look at the modules to determine what to do here.
-	WATCHDOG( xlrRC = XLRSetBankMode(xlrDevice, SS_BANKMODE_NORMAL) );
+	xlrRC = openMark5(&xlrDevice);
 	if(xlrRC != XLR_SUCCESS)
 	{
-		cerror << startl << "Cannot put Mark5 unit in bank mode" << endl;
+		cfatal << startl << "openMark5 did not return XLR_SUCCESS.  Must abort." << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
-
-	WATCHDOG( XLRSetMode(xlrDevice, SS_MODE_SINGLE_CHANNEL) );
-	WATCHDOG( XLRClearChannels(xlrDevice) );
-	WATCHDOG( XLRSelectChannel(xlrDevice, 0) );
-	WATCHDOG( XLRBindOutputChannel(xlrDevice, 0) );
-
-	sendMark5Status(MARK5_STATE_OPEN, 0, 0.0, 0.0);
 }
 
 void VDIFMark5DataStream::closeStreamstor()

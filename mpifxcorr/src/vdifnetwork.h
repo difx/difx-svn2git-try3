@@ -45,18 +45,20 @@ public:
 protected:
 	virtual int dataRead(int buffersegment);
 	static void *launchnetworkthreadfunction(void *self);
+	int readrawnetworkVDIF(int sock, char* ptr, int bytestoread, unsigned int* nread, int packetsize, int stripbytes);
 	void networkthreadfunction();
 	virtual void loopnetworkread();
 
 private:
-	unsigned int readbufferslots, readbufferslotsize;
+	int readbufferslots;
+	unsigned int readbufferslotsize;
 	pthread_t networkthread;
 	pthread_mutex_t *networkthreadmutex;
 	pthread_barrier_t networkthreadbarrier;
 	bool networkthreadstop;
 	int lockstart, lockend, lastslot;
 	unsigned int endindex, muxindex;
-	unsigned int readbufferwriteslot;
+	int readbufferwriteslot;
 	double jobEndMJD;
 
 	// network parameters

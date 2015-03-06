@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2013 by Adam Deller and Walter Brisken             *
+ *   Copyright (C) 2006-2015 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -66,6 +66,9 @@ Mark5BDataStream::Mark5BDataStream(const Configuration * conf, int snum, int id,
 		switchedpower = 0;
 	}
 
+	// By default assume frame granularity of 2 (the most common case, e.g., 2048 Mbps), but maybe override later
+	framegranularity = 2;
+
 	// Set some Mark5B fixer parameters
 	startOutputFrameNumber = -1;
 
@@ -74,7 +77,7 @@ Mark5BDataStream::Mark5BDataStream(const Configuration * conf, int snum, int id,
 	// But the amount of excess should be large enough to encompass all reasonable amounts of interloper data
 	// Here we choose 1/10 extra as a compromise.  Might be worth a revisit in the future.
 
-	readbuffersize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*11/10;
+	readbuffersize = static_cast<int>((bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*11LL/10LL);
 	readbuffersize -= (readbuffersize % 8); // make it a multiple of 8 bytes
 	readbufferleftover = 0;
 	readbuffer = 0;	// to be allocated via initialize();
@@ -88,7 +91,7 @@ Mark5BDataStream::Mark5BDataStream(const Configuration * conf, int snum, int id,
 
 Mark5BDataStream::~Mark5BDataStream()
 {
-	long long bytesProcessed = (m5bstats.nValidFrame + m5bstats.nLostPacket)*10016 + m5bstats.nFillByte + m5bstats.nSkippedByte;
+	long long bytesProcessed = (m5bstats.nValidFrame + m5bstats.nLostPacket)*10016LL + m5bstats.nFillByte + m5bstats.nSkippedByte;
 	cinfo << startl << "Mark5B fixing statistics: nValidFrame=" << m5bstats.nValidFrame << " nInvalidFrame=" << m5bstats.nInvalidFrame << " nSkippedByte=" << m5bstats.nSkippedByte << " nFillByte=" << m5bstats.nFillByte << " nLostPacket=" << m5bstats.nLostPacket << " nCall=" << m5bstats.nCall << endl;
 
 	if(m5bstats.nFillByte > 3*bytesProcessed/4)
@@ -200,11 +203,20 @@ int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offset
 	// bufferindex was previously computed assuming no framing overhead
 	framesin = vlbaoffset/payloadbytes;
 
+	// here we enforce frame granularity.  We simply back up to the previous frame that is a multiple of the frame granularity.
+	if(framesin % framegranularity != 0)
+	{
+		framesin -= (framesin % framegranularity);
+		if(framesin < 0)
+		{
+			framesin += framegranularity;
+		}
+	}
 
 	// Note here a time is needed, so we only count payloadbytes
-	long long segoffns = bufferinfo[atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
-	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + ((int)(segoffns/1000000000));
-	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = ((int)(segoffns%1000000000));
+	long long segoffns = bufferinfo[atsegment].scanns + static_cast<long long>((1000000000LL*framesin)/framespersecond);
+	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + static_cast<int>(segoffns/1000000000LL);
+	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = static_cast<int>(segoffns%1000000000LL);
 
 	//go back to nearest frame -- here the total number of bytes matters
 	bufferindex = atsegment*readbytes + framesin*framebytes;
@@ -213,7 +225,7 @@ int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offset
 	if(bufferindex == bufferbytes)
 	{
 		if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
-		   ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
+		   ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000LL +
 		   bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
 		{
 			cwarn << startl << "bufferindex == bufferbytes --> Mode::INVALID_SUBINT" << endl;
@@ -252,11 +264,11 @@ void Mark5BDataStream::updateConfig(int segmentindex)
 	int fps = config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum);
 
 	//correct the nsinc - should be number of output frames*frame time
-	bufferinfo[segmentindex].nsinc = int(((bufferbytes/numdatasegments)/fb)*(1000000000.0/double(fps)) + 0.5);
+	bufferinfo[segmentindex].nsinc = static_cast<int>(((bufferbytes/numdatasegments)/fb)*(1000000000.0/double(fps)) + 0.5);
 
 	//take care of the case where an integral number of frames is not an integral number of blockspersend - ensure sendbytes is long enough
 	//note below, the math should produce a pure integer, but add 0.5 to make sure that the fuzziness of floats doesn't cause an off-by-one error
-	bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getSubintNS(bufferinfo[segmentindex].configindex)))/(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex)) + 0.5));
+	bufferinfo[segmentindex].sendbytes = static_cast<int>((static_cast<double>(bufferinfo[segmentindex].sendbytes)*static_cast<double>(config->getSubintNS(bufferinfo[segmentindex].configindex)))/(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex)) + 0.5);
 }
 
 void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
@@ -277,6 +289,12 @@ void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
 	framebytes = config->getFrameBytes(configindex, streamnum);
 	framespersecond = config->getFramesPerSecond(configindex, streamnum);
+
+	framegranularity = framespersecond/12800;
+	if(framegranularity < 1)
+	{
+		framegranularity = 1;
+	}
 
 	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
@@ -325,7 +343,7 @@ void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
 		const int n=10016, d=10000;	// numerator and denominator of framesize/payload ratio
 
 		// set byte offset to the requested time
-		dataoffset = static_cast<long long>(jumpseconds*mark5bfilesummarygetbitrate(&fileSummary)/d*n/8 + 0.5);
+		dataoffset = static_cast<long long>(jumpseconds*static_cast<long long>(mark5bfilesummarygetbitrate(&fileSummary))/d*n/8 + 0.5);
 
 		readseconds += jumpseconds;
 	}
@@ -386,11 +404,11 @@ int Mark5BDataStream::testForSync(int configindex, int buffersegment)
 // read data left over in the read buffer ready for next time
 int Mark5BDataStream::dataRead(int buffersegment)
 {
-	unsigned long *destination;
+	u32 *destination;
 	int bytes;
 	int fixReturn;
 
-	destination = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+	destination = reinterpret_cast<u32 *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	// Bytes to read
 	bytes = readbuffersize - readbufferleftover;
@@ -423,16 +441,16 @@ int Mark5BDataStream::dataRead(int buffersegment)
 	input.read(reinterpret_cast<char *>(readbuffer + readbufferleftover), bytes);
 	bytes = input.gcount();
 
-	// "fix" Mark5B data: remove stray packets/byts and put good frames on a uniform grid
-	fixReturn = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, framespersecond,  startOutputFrameNumber, &m5bstats);
+	// "fix" Mark5B data: remove stray packets/bytes and put good frames on a uniform grid
+	fixReturn = mark5bfix(reinterpret_cast<unsigned char *>(destination), readbytes, readbuffer, readbufferleftover + bytes, framespersecond, startOutputFrameNumber, &m5bstats);
 	if(fixReturn < 0)
 	{
-		cerror << startl << "mark5bfix returned " << fixReturn << endl;
+		cerror << startl << "mark5bfix returned " << fixReturn << " destsize=" << readbytes << " srcsize=" << (readbufferleftover + bytes) << " framespersecond=" << framespersecond << " startOutputFrameNumber=" << startOutputFrameNumber << " nCall=" << m5bstats.nCall << endl;
 
 		keepreading = false;
 		dataremaining = false;
 	}
-	if(fixReturn == 0)
+	else if(fixReturn == 0)
 	{
 		cwarn << startl << "mark5bfix returned zero.  Going to next record scan..." << endl;
 
@@ -461,8 +479,7 @@ int Mark5BDataStream::dataRead(int buffersegment)
 
 		if(m5bstats.destUsed == m5bstats.destSize)
 		{
-			// FIXME: the line below should help things, but it causes first output frame to be invalid.  Hmmm....
-			startOutputFrameNumber = m5bstats.startFrameNumber + m5bstats.destUsed/10016;
+			startOutputFrameNumber = (m5bstats.startFrameNumber + m5bstats.destUsed/10016) % framespersecond;
 		}
 		else
 		{
@@ -512,9 +529,9 @@ int Mark5BDataStream::dataRead(int buffersegment)
 
 void Mark5BDataStream::diskToMemory(int buffersegment)
 {
-	unsigned long *buf;
+	u32 *buf;
 
-	buf = reinterpret_cast<unsigned long *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+	buf = reinterpret_cast<u32 *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	//do the buffer housekeeping
 	waitForBuffer(buffersegment);
