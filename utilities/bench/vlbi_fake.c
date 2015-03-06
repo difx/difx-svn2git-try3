@@ -477,7 +477,7 @@ int main(int argc, char * const argv[]) {
 
     for(i=0;i<numthread;i++) {
 
-      status = createVDIFHeader(&vdif_headers[i], bufsize, i, bits, numchan, complex, "Tt");
+      status = createVDIFHeader(&vdif_headers[i], bufsize-VDIF_HEADER_BYTES, i, bits, numchan, complex, "Tt");
       if (status!=VDIF_NOERROR) {
         fprintf(stderr, "Error creating header (%d)\n", status);
         exit(1);
@@ -485,7 +485,7 @@ int main(int argc, char * const argv[]) {
     
       mjdsec = lround(mjd*24*60*60);
       setVDIFEpoch(&vdif_headers[i],mjdsec/(24*60*60));
-      setVDIFMJDSec(&vdif_headers[i], mjdsec);
+      setVDIFFrameMJDSec(&vdif_headers[i], mjdsec);
       if (status!=VDIF_NOERROR) {
         fprintf(stderr, "Error setting VDIF file (%d)\n", status);
         exit(1);
