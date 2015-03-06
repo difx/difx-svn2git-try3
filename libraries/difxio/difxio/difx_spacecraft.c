@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2014 by Walter Brisken                             *
- *                 2012, 2014 by James M Anderson                          *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
+ *                 2012-2015 by James M Anderson                          *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -51,8 +51,8 @@ const char spacecraftTimeTypeNames[][MAX_SPACECRAFT_TIME_NAME_LENGTH] =
 {
 	"Local",
 	"GroundReception",
-        "GroundClock"
-        "OTHER"
+	"GroundClock"
+	"OTHER"
 };
 
 enum SpacecraftTimeType stringToSpacecraftTimeType(const char *str)
@@ -70,7 +70,6 @@ enum SpacecraftTimeType stringToSpacecraftTimeType(const char *str)
 		return SpacecraftTimeGroundClock;
 	}
 	return SpacecraftTimeOther;
-	
 }
 
 
@@ -153,7 +152,7 @@ void deleteDifxSpacecraftArray(DifxSpacecraft *ds, int nSpacecraft)
 
 void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds)
 {
-        int i;
+	int i;
 	fprintf(fp, "  DifxSpacecraft : %p\n", ds);
 	if(!ds)
 	{
@@ -161,25 +160,25 @@ void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds)
 	}
 	fprintf(fp, "    Name = %s\n", ds->name);
 	fprintf(fp, "    Num points = %d\n", ds->nPoint);
-	fprintf(fp, "    Has ground station = %d\n", (ds->GS_exists) ? 'T':'F');
-        if(ds->GS_exists) {
-            fprintf(fp, "    GS_Name = %s\n", ds->GS_Name);
-            fprintf(fp, "    GS_calcName = %s\n", ds->GS_calcName);
-            fprintf(fp, "    spacecraft_time_type = %s\n", spacecraftTimeTypeNames[ds->spacecraft_time_type]);
-            fprintf(fp, "    GS_mjd_sync = %d\n", ds->GS_mjd_sync);
-            fprintf(fp, "    GS_dayfraction_sync = %.16E\n", ds->GS_dayfraction_sync);
-            fprintf(fp, "    GS_clock_break_fudge_sec = %.16E\n", ds->GS_clock_break_fudge_sec);
-            fprintf(fp, "    SC_recording_delay = %.16E\n", ds->SC_recording_delay);
-            fprintf(fp, "    GS_mount = %s\n", antennaMountTypeNames[ds->GS_mount]);
-            fprintf(fp, "    GS_X = %.5f\n", ds->GS_X);
-            fprintf(fp, "    GS_Y = %.5f\n", ds->GS_Y);
-            fprintf(fp, "    GS_Z = %.5f\n", ds->GS_Z);
-            fprintf(fp, "    GS_clockrefmjd = %.15f\n", ds->GS_clockrefmjd);
-            fprintf(fp, "    GS_clockorder = %d\n", ds->GS_clockorder);
-            for(i=0; i < ds->GS_clockorder+1; ++i) {
-                fprintf(fp, "    GS_clockcoeff[%d] = %24.15E\n", i, ds->GS_clockcoeff[i]);
-            }
-        }
+	fprintf(fp, "	 Has ground station = %d\n", (ds->GS_exists) ? 'T':'F');
+	if(ds->GS_exists) {
+		fprintf(fp, "	 GS_Name = %s\n", ds->GS_Name);
+		fprintf(fp, "	 GS_calcName = %s\n", ds->GS_calcName);
+		fprintf(fp, "	 spacecraft_time_type = %s\n", spacecraftTimeTypeNames[ds->spacecraft_time_type]);
+		fprintf(fp, "	 GS_mjd_sync = %d\n", ds->GS_mjd_sync);
+		fprintf(fp, "	 GS_dayfraction_sync = %.16E\n", ds->GS_dayfraction_sync);
+		fprintf(fp, "	 GS_clock_break_fudge_sec = %.16E\n", ds->GS_clock_break_fudge_sec);
+		fprintf(fp, "	 SC_recording_delay = %.16E\n", ds->SC_recording_delay);
+		fprintf(fp, "	 GS_mount = %s\n", antennaMountTypeNames[ds->GS_mount]);
+		fprintf(fp, "	 GS_X = %.5f\n", ds->GS_X);
+		fprintf(fp, "	 GS_Y = %.5f\n", ds->GS_Y);
+		fprintf(fp, "	 GS_Z = %.5f\n", ds->GS_Z);
+		fprintf(fp, "	 GS_clockrefmjd = %.15f\n", ds->GS_clockrefmjd);
+		fprintf(fp, "	 GS_clockorder = %d\n", ds->GS_clockorder);
+		for(i=0; i < ds->GS_clockorder+1; ++i) {
+			fprintf(fp, "	 GS_clockcoeff[%d] = %24.15E\n", i, ds->GS_clockcoeff[i]);
+		}
+	}
 }
 
 void printDifxSpacecraft(const DifxSpacecraft *ds)
@@ -360,6 +359,79 @@ int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplan
 }
 
 
+#if HAVE_SPICE
+static void ECI2J2000(doublereal et, doublereal state[6])
+{
+	doublereal precm[36];
+	doublereal invprecm[36];
+	doublereal tmpstate[6];
+	int six = 6;
+	int i;
+
+	/* Rotate from ECI to J2000 frame */
+	/* Get rotation matrix from TEME @ET (sec past J2000 epoch) to J2000 */
+	/* PRECM is 6x6, goes from J2000 -> TEME */
+	zzteme_(&et, precm);
+	/* Invert state transformation matrix to go from TEME -> J2000 */
+	invstm_(precm, invprecm);
+	/* Do transformation of state from EV2LIN's TEME to J2000 */
+	mxvg_(invprecm, state, &six, &six, tmpstate);
+	for(i = 0; i < 6; ++i)
+	{
+		state[i] = tmpstate[i];
+	}
+}
+#endif
+
+int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, double X, double Y, double Z, const char *naifFile, double ephemClockError)
+{
+#if HAVE_SPICE
+	doublereal state[6];
+	int p;
+
+	ds->nPoint = nPoint;
+	ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
+
+	state[0] = X/1000.0;
+	state[1] = Y/1000.0;
+	state[2] = Z/1000.0;
+	state[3] = state[4] = state[5] = 0.0;
+
+	ldpool_c(naifFile);
+
+	for(p = 0; p < nPoint; ++p)
+	{
+		long double mjd, jd;
+		char jdstr[24];
+		doublereal et;
+
+		mjd = mjd0 + p*deltat;
+		jd = mjd + 2400000.5 + ephemClockError/86400.0;
+		sprintf(jdstr, "JD %18.12Lf", jd);
+		str2et_c(jdstr, &et);
+
+		ECI2J2000(et, state);
+
+		ds->pos[p].mjd = mjd;
+		ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
+		ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+		ds->pos[p].Y = state[1]*1000.0;
+		ds->pos[p].Z = state[2]*1000.0;
+		ds->pos[p].dX = state[3]*1000.0;
+		ds->pos[p].dY = state[4]*1000.0;
+		ds->pos[p].dZ = state[5]*1000.0;
+	}
+
+	clpool_c();
+
+	return 0;
+#else
+	fprintf(stderr, "Error: computeDifxSpacecraftEphemerisFromXYZ: spice not compiled into difxio.\n");
+	
+	return -1;
+#endif
+}
+
 
 
 
@@ -369,12 +441,12 @@ int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplan
 static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
 {
 	ds->is_antenna = 0;
-        if(strcmp(ephemType, "SPICE")==0)
-        {
+	if(strcmp(ephemType, "SPICE")==0)
+	{
 #if HAVE_SPICE
 	int spiceHandle;
 	int p;
-        int retcode;
+	int retcode;
 
 	ldpool_c(naifFile);
 	spklef_c(ephemFile, &spiceHandle);
@@ -464,12 +536,12 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double m
 	
 	return -1;
 #endif
-        }
-        else
-        {
-                fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris_bsp: Unknown ephemType '%s'.\n", ephemType);
 	}
-        return -1;
+	else
+	{
+		fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris_bsp: Unknown ephemType '%s'.\n", ephemType);
+	}
+	return -1;
 }
 
 #if HAVE_SPICE
@@ -518,30 +590,46 @@ void evaluateTLE(doublereal et, doublereal *elems, doublereal *state)
 		1.0			/* AE: Distance units/earth radius (normally 1) */
 	};
 
-	ev2lin_(&et, geophysConsts, elems, state);
+	if(elems[8] >= 2.0*M_PI/225.0)
+	{
+		ev2lin_(&et, geophysConsts, elems, state);
 
-	R = sqrt(state[0]*state[0] + state[1]*state[1] + state[2]*state[2]);
+		R = sqrt(state[0]*state[0] + state[1]*state[1] + state[2]*state[2]);
 
-	/* Adjust for light travel time from Earth Center to object */
-	/* R comes out in km, et is in seconds */
-	et -= R/299792.458;
+		/* Adjust for light travel time from Earth Center to object */
+		/* R comes out in km, et is in seconds */
+		et -= R/299792.458;
 
-	ev2lin_(&et, geophysConsts, elems, state);
+		ev2lin_(&et, geophysConsts, elems, state);
+	}
+	else
+	{
+		dpspce_(&et, geophysConsts, elems, state);
+
+		R = sqrt(state[0]*state[0] + state[1]*state[1] + state[2]*state[2]);
+
+		/* Adjust for light travel time from Earth Center to object */
+		/* R comes out in km, et is in seconds */
+		et -= R/299792.458;
+
+		dpspce_(&et, geophysConsts, elems, state);
+	}
+
 }
 #endif
 
 static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
 {
 	ds->is_antenna = 0;
-        if(strcmp(ephemType, "SPICE")==0)
-        {
+	if(strcmp(ephemType, "SPICE")==0)
+	{
 #if HAVE_SPICE
 	const int NElement = 10;
 	const int MaxEphemElementSets = 30;
 	const SpiceInt MaxLineLength = 512;
 	const SpiceInt firstYear = 2000;
 	int p;
-        int retcode;
+	int retcode;
 	doublereal elems[MaxEphemElementSets][NElement];
 	SpiceDouble epochs[MaxEphemElementSets];
 	int nSet = 0;
@@ -620,7 +708,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 		fprintf(stderr, "Warning: computeDifxSpacecraftSourceEphemeris_tle: spacecraft name %s is too long %d > %d\n", objectName, p, DIFXIO_NAME_LENGTH-1);
 	}
 	ds->nPoint = nPoint;
-        free(ds->pos);
+	free(ds->pos);
 	ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
 
 	for(p = 0; p < nPoint; ++p)
@@ -661,6 +749,8 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 				state[j] = f*state[j] + (1.0-f)*state2[j];
 			}
 		}
+
+		ECI2J2000(et, state);
 
 		ds->pos[p].mjd = mjd;
 		ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
@@ -706,12 +796,12 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 	
 	return -1;
 #endif
-        }
-        else
-        {
-                fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris_tle: Unknown ephemType '%s'.\n", ephemType);
 	}
-        return -1;
+	else
+	{
+		fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris_tle: Unknown ephemType '%s'.\n", ephemType);
+	}
+	return -1;
 }
 
 int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
@@ -726,23 +816,23 @@ int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double
         l = strlen(ephemFile);
 	if(l > 4 && strcmp(ephemFile+l-4, ".bsp") == 0)
 	{
-            return computeDifxSpacecraftSourceEphemeris_bsp(ds, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
+		return computeDifxSpacecraftSourceEphemeris_bsp(ds, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
 	}
 	else if(l > 4 && strcmp(ephemFile+l-4, ".tle") == 0)
 	{
-            return computeDifxSpacecraftSourceEphemeris_tle(ds, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
+		return computeDifxSpacecraftSourceEphemeris_tle(ds, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
 	}
 	else
 	{
-            fprintf(stderr, "Error: ephemFile (%s) is not of a recognized ephemeris type.  The file should end in .tle or .bsp .\n", ephemFile);
+		fprintf(stderr, "Error: ephemFile (%s) is not of a recognized ephemeris type.  The file should end in .tle or .bsp .\n", ephemFile);
 		
-            return -1;
+		return -1;
 	}
-    }
-    else {
-        fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris: Unknown ephemType '%s'.\n", ephemType);
-    }
-    return -1;
+	}
+	else {
+		fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris: Unknown ephemType '%s'.\n", ephemType);
+	}
+	return -1;
 }
 
 int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemClockError)
@@ -911,7 +1001,7 @@ int computeDifxSpacecraftEphemerisOffsets(DifxSpacecraft *ds)
 static void copySpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src)
 {
 	snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name);
-        dest->is_antenna = src->is_antenna;
+	dest->is_antenna = src->is_antenna;
 	dest->nPoint = src->nPoint;
 	dest->pos = (sixVector *)calloc(dest->nPoint, sizeof(sixVector));
 	memcpy(dest->pos, src->pos, dest->nPoint*sizeof(sixVector));
@@ -919,10 +1009,40 @@ static void copySpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src)
 
 static void mergeSpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src1, const DifxSpacecraft *src2)
 {
+	double end1;
+	int j;
 	snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src1->name);
 	
-#warning "FIXME: write me! for now just copy the first one found"
-	copySpacecraft(dest, src1);
+	/* put in time order */
+	if(src1->pos->mjd + src1->pos->fracDay > src2->pos->mjd + src2->pos->fracDay)
+	{
+		const DifxSpacecraft *tmp;
+
+		tmp = src1;
+		src1 = src2;
+		src2 = tmp;
+	}
+
+	end1 = src1->pos[src1->nPoint-1].mjd + src1->pos[src1->nPoint-1].fracDay;
+	for(j = 0; j < src2->nPoint; ++j)
+	{
+		double end;
+
+		end = src2->pos[j].mjd + src2->pos[j].fracDay;
+
+		if(end > end1)
+		{
+			break;
+		}
+	}
+#error  "Fixme to account for all pointer stuff and regular members"
+	dest->nPoint = src1->nPoint + src2->nPoint - j;
+	dest->pos = (sixVector *)calloc(dest->nPoint, sizeof(sixVector));
+	memcpy(dest->pos, src1->pos, src1->nPoint*sizeof(sixVector));
+	if(j < src2->nPoint)
+	{
+		memcpy(dest->pos + src1->nPoint, src2->pos + j, (src2->nPoint - j)*sizeof(sixVector));
+	}
 }
 
 /* note: returns number of spacecraft on call stack */
@@ -1132,8 +1252,8 @@ int evaluateDifxSpacecraftSource(const DifxSpacecraft *sc, int mjd, double fracM
 	const sixVector *pos;
 	long double t0, t1, tMod, t, deltat;
 	long double xPoly[DIFXIO_SPACECRAFT_MAX_POLY_ORDER];
-        long double yPoly[DIFXIO_SPACECRAFT_MAX_POLY_ORDER];
-        long double zPoly[DIFXIO_SPACECRAFT_MAX_POLY_ORDER];
+	long double yPoly[DIFXIO_SPACECRAFT_MAX_POLY_ORDER];
+	long double zPoly[DIFXIO_SPACECRAFT_MAX_POLY_ORDER];
 	int r, r0, r1;
 	long double X, Y, Z, dX, dY, dZ;
 	
@@ -1156,12 +1276,12 @@ int evaluateDifxSpacecraftSource(const DifxSpacecraft *sc, int mjd, double fracM
 	}
 	if(r == nRow)
 	{
-            if(tMod == t1) {
-                r--;
-            }
-            else {
-		return -1;
-            }
+		if(tMod == t1) {
+			r--;
+		}
+		else {
+			return -1;
+		}
 	}
 
 	/* calculate polynomial for X, Y, Z */
@@ -1170,9 +1290,9 @@ int evaluateDifxSpacecraftSource(const DifxSpacecraft *sc, int mjd, double fracM
 	deltat = t1 - t0;
 	t = (tMod - t0)/deltat; /* time, fraction of interval, between 0 and 1 */
 
-	if(fabs(t) > 0.01 && fabs(t-1) > 0.01)
+	if(t < -0.01 || t > 1.01)
 	{
-		fprintf(stderr, "WARNING: potentially unhealthy interpolation of state vector occurring\n");
+		fprintf(stderr, "WARNING: potentially unhealthy interpolation of state vector occurring mjd=%14.8Lf t0=%14.8Lf t1=%14.8Lf\n", tMod, t0, t1);
 	}
 
 	xPoly[0] = pos[r0].X;
@@ -1503,8 +1623,8 @@ int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds)
 	int i, j, v;
 	char value[MaxLineLength];
 	const sixVector *V;
-        const spacecraftTimeFrameOffset* STFO;
-        const spacecraftAxisVectors* SAV;
+	const spacecraftTimeFrameOffset* STFO;
+	const spacecraftAxisVectors* SAV;
 	long double mjd;
 
 	writeDifxLineInt(out, "NUM SPACECRAFT", nSpacecraft);
@@ -1581,25 +1701,25 @@ int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds)
 		for(j = 0; j < ds[i].nPoint; ++j)
 		{
 			V = ds[i].pos + j;
-                        STFO = ds[i].TFrameOffset + j;
-                        SAV = ds[i].SCAxisVectors + j;
+			STFO = ds[i].TFrameOffset + j;
+			SAV = ds[i].SCAxisVectors + j;
 			mjd = V->mjd + V->fracDay;
 			v = snprintf(value, MaxLineLength,
-                                     "%5d %19.16f "
-                                     "%23.15Le %23.15Le %23.15Le "
-                                     "%23.15Le %23.15Le %23.15Le "
-                                     "%23.15e %23.15e "
-                                     "%23.15e %23.15e %23.15e "
-                                     "%23.15e %23.15e %23.15e "
-                                     "%23.15e %23.15e %23.15e", 
-                                     V->mjd, V->fracDay,
-                                     V->X, V->Y, V->Z,
-                                     V->dX, V->dY, V->dZ,
-                                     STFO->Delta_t, STFO->dtdtau,
-                                     SAV->X[0], SAV->X[1], SAV->X[2],
-                                     SAV->Y[0], SAV->Y[1], SAV->Y[2],
-                                     SAV->Z[0], SAV->Z[1], SAV->Z[2]
-                                     );
+						 "%5d %19.16f "
+						 "%23.15Le %23.15Le %23.15Le "
+						 "%23.15Le %23.15Le %23.15Le "
+						 "%23.15e %23.15e "
+						 "%23.15e %23.15e %23.15e "
+						 "%23.15e %23.15e %23.15e "
+						 "%23.15e %23.15e %23.15e", 
+						 V->mjd, V->fracDay,
+						 V->X, V->Y, V->Z,
+						 V->dX, V->dY, V->dZ,
+						 STFO->Delta_t, STFO->dtdtau,
+						 SAV->X[0], SAV->X[1], SAV->X[2],
+						 SAV->Y[0], SAV->Y[1], SAV->Y[2],
+						 SAV->Z[0], SAV->Z[1], SAV->Z[2]
+						 );
 			if(v >= MaxLineLength)
 			{
 				fprintf(stderr, "Error: Spacecraft %d row %d is too long!\n", i, j);

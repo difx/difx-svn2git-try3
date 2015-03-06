@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2014 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2007-2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -149,7 +149,7 @@ enum AntennaSiteType
 {
 	AntennaSiteFixed = 0,
 	AntennaSiteEarth_Orbiting = 1,
-        AntennaSiteOther = 2,
+	AntennaSiteOther = 2,
 	NumAntennaSites		/* must remain as last entry */
 };
 
@@ -158,8 +158,8 @@ enum SpacecraftTimeType
 {
 	SpacecraftTimeLocal = 0,
 	SpacecraftTimeGroundReception = 1,
-        SpacecraftTimeGroundClock = 2,
-        SpacecraftTimeOther = 3,
+	SpacecraftTimeGroundClock = 2,
+	SpacecraftTimeOther = 3,
 	NumSpacecraftTimes		/* must remain as last entry */
 };
 
@@ -272,24 +272,24 @@ typedef struct
 	int polMask;		/* bit field using DIFX_POL_x from above */
 	int doPolar;		/* >0 if cross hands to be correlated */
 	int doAutoCorr;		/* >0 if autocorrelations are to be written to disk */
-        int doMSAcalibration;   /* calculate the mount-source angle
-                                   (parallactic angle for on-axis
-                                   sources with traditional
-                                   telescopes) correction and apply
-                                   this in the FITS (delay) model components
-                                   (MC) table output during conversion
-                                   to FITS.  Defaults to 0.
-                                */
-        double MC_table_output_interval; /* The time interval, in seconds, at
-                                   which to report the (delay) model component
-                                   (MC table) values in the output FITS files.
-                                   The default value of 0.0 results in
-                                   the tabulated values occuring at polyInterval
-                                   seconds (defualts to
-                                   DIFXIO_DEFAULT_POLY_INTERVAL).  Note that in
-                                   any case, the interval will be no longer than
-                                   polyInterval seconds.
-                                         */
+	int doMSAcalibration;	/* calculate the mount-source angle
+							   (parallactic angle for on-axis
+							   sources with traditional
+							   telescopes) correction and apply
+							   this in the FITS (delay) model components
+							   (MC) table output during conversion
+							   to FITS.	 Defaults to 0.
+							*/
+	double MC_table_output_interval; /* The time interval, in seconds, at
+										which to report the (delay) model component
+										(MC table) values in the output FITS files.
+										The default value of 0.0 results in
+										the tabulated values occuring at polyInterval
+										seconds (defualts to
+										DIFXIO_DEFAULT_POLY_INTERVAL).	Note that in
+										any case, the interval will be no longer than
+										polyInterval seconds.
+									 */
 	int quantBits;		/* 1 or 2 */
 	int nAntenna;
 	int nDatastream;	/* number of datastreams attached */
@@ -388,7 +388,7 @@ typedef struct
 	int clockorder;		/* Polynomial order of the clock model */
 	double clockcoeff[MAX_MODEL_ORDER+1];	/* clock polynomial coefficients (us, us/s, us/s^2... */
 	enum AntennaMountType mount;
-        enum AntennaSiteType sitetype;
+	enum AntennaSiteType sitetype;
 	double offset[3];	/* axis offset, (m) */
 	double X, Y, Z;		/* telescope position, (m) */
 	double dX, dY, dZ;	/* telescope position derivative, (m/s) */
@@ -403,10 +403,10 @@ typedef struct
 	char calCode[DIFXIO_CALCODE_LENGTH];	/* usually only 1 char long */
 	int qual;		/* source qualifier */
 	int spacecraftId;	/* -1 if not spacecraft */
-        double sc_epoch;        /* MJD at which to evaluate the spacecraft
-                                   position. If sc_epoch==0.0,
-                                   use the default evaluation as a function of
-                                   time */
+	double sc_epoch;		/* MJD at which to evaluate the spacecraft
+							   position. If sc_epoch==0.0,
+							   use the default evaluation as a function of
+							   time */
 	int numFitsSourceIds;	/* Should be equal to the number of configs */
 				/* FITS source IDs are filled in in deriveFitsSourceIds */
 	int *fitsSourceIds;	/* 0-based FITS source id */
@@ -429,14 +429,42 @@ typedef struct
 	double elcorr[MAX_MODEL_ORDER+1];	/* el (corrected for refraction; i.e., the one used for pointing) (deg) */
 	double elgeom[MAX_MODEL_ORDER+1];	/* el (uncorrected for refraction) (deg) */
 	double parangle[MAX_MODEL_ORDER+1];	/* parallactic angle (deg) */
-        double msa[MAX_MODEL_ORDER+1];		/* (rad/sec^n), mount-source angle */
-        double sc_gs_delay[MAX_MODEL_ORDER+1];  /* (us/sec^n) */
-        double gs_clock_delay[MAX_MODEL_ORDER+1];  /* (us/sec^n) */
-                                                /* see CALCServer.h for the msa specification */
+	double msa[MAX_MODEL_ORDER+1];		/* (rad/sec^n), mount-source angle */
+	double sc_gs_delay[MAX_MODEL_ORDER+1];	/* (us/sec^n) */
+	double gs_clock_delay[MAX_MODEL_ORDER+1];  /* (us/sec^n) */
+	/* see CALCServer.h for the msa specification */
 	double u[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
 	double v[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
 	double w[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
 } DifxPolyModel;
+
+typedef struct
+{
+	/* essentially a matrix of partial derivatives with respect to source l, m */
+	/* of the full delay (including atmosphere) */
+	double delta;		/* (rad) displacement used in calculating derivatives */
+	double dDelay_dl[MAX_MODEL_ORDER+1];	/* (us/sec^n/rad); n=[0, order] (should be equiv to U but in time units) */
+	double dDelay_dm[MAX_MODEL_ORDER+1];	/* (us/sec^n/rad); n=[0, order] (should be equiv to V but in time units) */
+	double d2Delay_dldl[MAX_MODEL_ORDER+1];	/* (us/sec^n/rad^2); n=[0, order] */
+	double d2Delay_dldm[MAX_MODEL_ORDER+1];	/* (us/sec^n/rad^2); n=[0, order] */
+	double d2Delay_dmdm[MAX_MODEL_ORDER+1];	/* (us/sec^n/rad^2); n=[0, order] */
+} DifxPolyModelLMExtension;
+
+typedef struct
+{
+	/* essentially a matrix of partial derivatives with respect to source XYZ */
+	/* of the full delay (including atmosphere) */
+	double delta;		/* (m) displacement used in calculating derivatives */
+	double dDelay_dX[MAX_MODEL_ORDER+1];	/* (us/sec^n/m); n=[0, order] */
+	double dDelay_dY[MAX_MODEL_ORDER+1];	/* (us/sec^n/m); n=[0, order] */
+	double dDelay_dZ[MAX_MODEL_ORDER+1];	/* (us/sec^n/m); n=[0, order] */
+	double d2Delay_dXdX[MAX_MODEL_ORDER+1];	/* (us/sec^n/m^2); n=[0, order] */
+	double d2Delay_dXdY[MAX_MODEL_ORDER+1];	/* (us/sec^n/m^2); n=[0, order] */
+	double d2Delay_dXdZ[MAX_MODEL_ORDER+1];	/* (us/sec^n/m^2); n=[0, order] */
+	double d2Delay_dYdY[MAX_MODEL_ORDER+1];	/* (us/sec^n/m^2); n=[0, order] */
+	double d2Delay_dYdZ[MAX_MODEL_ORDER+1];	/* (us/sec^n/m^2); n=[0, order] */
+	double d2Delay_dZdZ[MAX_MODEL_ORDER+1];	/* (us/sec^n/m^2); n=[0, order] */
+} DifxPolyModelXYZExtension;
 
 typedef struct
 {
@@ -461,6 +489,8 @@ typedef struct
 				/*   src ranges over [0...nPhaseCentres] */
 				/*   poly ranges over [0 .. nPoly-1] */
 				/* NOTE : im[ant] can be zero -> no data */
+	DifxPolyModelLMExtension ***imLM;	/* Experimental feature; not usually used */
+	DifxPolyModelXYZExtension ***imXYZ;	/* Experimental feature; not usually used */
 } DifxScan;
 
 typedef struct
@@ -573,17 +603,17 @@ typedef struct
        /* spacecraft J2000 Earth center position information */
 	int nPoint;		/* number of entries in ephemeris */
 	sixVector *pos;		/* array of positions and velocities */
-        spacecraftTimeFrameOffset* TFrameOffset; /* array of time frame offsets*/
-        spacecraftAxisVectors* SCAxisVectors; /* array of axis vectors */
-        int SC_pos_offset_refmjd; /* Reference MJD for the spacecraft
-                                     position offset information */
-        double SC_pos_offset_reffracDay; /* Reference MJD fractional day
-                                     for the spacecraft
-                                     position offset information */
-        int SC_pos_offsetorder; /* Order of SC pos offset poly */
-        simple3Vector SC_pos_offset[MAX_MODEL_ORDER+1]; /* spacecraft
-                                      position offset polynomial information, as
-                                      m, m/s, m/s^2, ... */
+	spacecraftTimeFrameOffset* TFrameOffset; /* array of time frame offsets*/
+	spacecraftAxisVectors* SCAxisVectors; /* array of axis vectors */
+	int SC_pos_offset_refmjd; /* Reference MJD for the spacecraft
+								 position offset information */
+	double SC_pos_offset_reffracDay; /* Reference MJD fractional day
+										for the spacecraft
+										position offset information */
+	int SC_pos_offsetorder; /* Order of SC pos offset poly */
+	simple3Vector SC_pos_offset[MAX_MODEL_ORDER+1]; /* spacecraft
+													   position offset polynomial information, as
+													   m, m/s, m/s^2, ... */
 } DifxSpacecraft;
 
 typedef struct
@@ -773,6 +803,7 @@ DifxDatastream *mergeDifxDatastreamArrays(const DifxDatastream *dd1, int ndd1,
 int writeDifxDatastream(FILE *out, const DifxDatastream *dd);
 int DifxDatastreamGetRecBands(DifxDatastream *dd, int freqId, char *pols, int *recBands);
 int DifxDatastreamGetZoomBands(DifxDatastream *dd, int freqId, char *pols, int *zoomBands);
+char getDifxDatastreamBandPol(const DifxDatastream *dd, int band);
 
 /* DifxBaseline functions */
 DifxBaseline *newDifxBaselineArray(int nBaseline);
@@ -876,6 +907,14 @@ void deleteDifxPolyModelArray(DifxPolyModel ***dpm, int nAntenna, int nSrcs);
 void printDifxPolyModel(const DifxPolyModel *dpm);
 void fprintDifxPolyModel(FILE *fp, const DifxPolyModel *dpm);
 
+DifxPolyModelLMExtension ***newDifxPolyModelLMExtensionArray(int nAntenna, int nSrcs, int nPoly);
+DifxPolyModelLMExtension *dupDifxPolyModelLMExtensionColumn(const DifxPolyModelLMExtension *src, int nPoly);
+void deleteDifxPolyModelLMExtensionArray(DifxPolyModelLMExtension ***lme, int nAntenna, int nSrcs);
+
+DifxPolyModelXYZExtension ***newDifxPolyModelXYZExtensionArray(int nAntenna, int nSrcs, int nPoly);
+DifxPolyModelXYZExtension *dupDifxPolyModelXYZExtensionColumn(const DifxPolyModelXYZExtension *src, int nPoly);
+void deleteDifxPolyModelXYZExtensionArray(DifxPolyModelXYZExtension ***xyze, int nAntenna, int nSrcs);
+
 /* DifxScan functions */
 DifxScan *newDifxScanArray(int nScan);
 void deleteDifxScanInternals(DifxScan *ds);
@@ -913,14 +952,14 @@ int writeDifxEOPArray(FILE *out, int nEOP, const DifxEOP *de);
 enum SpacecraftTimeType stringToSpacecraftTimeType(const char *str);
 DifxSpacecraft *newDifxSpacecraftArray(int nSpacecraft);
 DifxSpacecraft *dupDifxSpacecraftArray(const DifxSpacecraft *src, int n);
-DifxSpacecraft *mergeDifxSpacecraft(const DifxSpacecraft *ds1, int nds1,
-	const DifxSpacecraft *ds2, int nds2, int *spacecraftIdRemap, int *nds);
+DifxSpacecraft *mergeDifxSpacecraft(const DifxSpacecraft *ds1, int nds1, const DifxSpacecraft *ds2, int nds2, int *spacecraftIdRemap, int *nds);
 void deleteDifxSpacecraftInternals(DifxSpacecraft *ds);
 void deleteDifxSpacecraftArray(DifxSpacecraft *ds, int nSpacecraft);
 void printDifxSpacecraft(const DifxSpacecraft *ds);
 void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds);
 int shiftSpacecraftClockPolys(DifxInput *D);
 int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError);
+int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, double X, double Y, double Z, const char *ephemType, const char *naifFile,  const char* orientationFile, double ephemClockError);
 int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemClockError);
 int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplanetaryephem);
 int computeDifxSpacecraftEphemerisOffsets(DifxSpacecraft *ds);
@@ -1011,6 +1050,7 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, int verbose
 int isAntennaFlagged(const DifxJob *J, double mjd, int antennaId);
 int DifxInputGetPointingSourceIdByJobId(const DifxInput *D, double mjd, int jobId);
 int DifxInputGetPointingSourceIdByAntennaId(const DifxInput *D, double mjd, int antennaId);
+const DifxSource *DifxInputGetSource(const DifxInput *D, const char *sourceName);
 int DifxInputGetScanIdByJobId(const DifxInput *D, double mjd, int jobId);
 int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd, int antennaId);
 int DifxInputGetAntennaId(const DifxInput *D, const char *antennaName);
