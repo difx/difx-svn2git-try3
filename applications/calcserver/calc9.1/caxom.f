@@ -473,7 +473,6 @@ C                                  GET Reference frequency added.
 C                    David Gordon  98.12.30 FEED.COR access code changed from
 C                                  a (2,2) array to a (2,1) array - sites 
 C                                  1 and 2 combined.
-C                    James M Anderson 12.02.23 Update for spacecraft
 C
 C 3.3   AXOG PROGRAM STRUCTURE
 C
@@ -498,8 +497,6 @@ C
 C
 C  Check for geocenter station
       IF (L. eq. Nzero) Go to 750
-C  Check for spacecraft antenna
-      IF (KAXIS(L).EQ. 6) GO TO 760
 C
 C    Identify the unit vector representing the antenna fixed axis in a
 C    topocentric reference system. The topocentric reference system sits on the
@@ -582,21 +579,17 @@ C    refraction.
 C
 C   Compute the zenith angle of the aberrated source.
         ZEN =  HALFPI - ELEV(L,1) 
-        IF(KAXIS(L).NE.6) THEN
 C   Compute the azimuth of the aberrated source.
-           AZMUTH = AZ(L,1) 
+        AZMUTH = AZ(L,1) 
 C   Compute values needed for function sbend.
-           El_Rad = elev(l,1)
-           Sithit = Sitheight(l)
-           Temp_K = 293.15 - (6.5D-3)*sithit
-           X = 1.D0 - (6.5D-3)*sithit/293.15D0
-           Press_Hg = 760.D0 * (X**5.26D0)
-           Humid_F = .5D0
+        El_Rad = elev(l,1)
+        Sithit = Sitheight(l)
+        Temp_K = 293.15 - (6.5D-3)*sithit
+        X = 1.D0 - (6.5D-3)*sithit/293.15D0
+        Press_Hg = 760.D0 * (X**5.26D0)
+        Humid_F = .5D0
 C   Compute atmospheric bending.
-           zencor = sbend(El_rad,Temp_K,Humid_F,Press_Hg)
-        ELSE
-           ZENCOR = 0.0D0
-        ENDIF
+        zencor = sbend(El_rad,Temp_K,Humid_F,Press_Hg)
 C
 C *************************************************************************
 C    Compute the corrected (aberrated/refracted) topocentric star unit
@@ -741,18 +734,13 @@ C
         ZA = ZEN - ZENCOR
         DZA = -ELEV(L,2)
         DAZM = AZ(l,2)
-       If (KAXIS(L) .EQ. 1) Then
+       If (KAXIS(L) .NE. 1) Then
+        CALL FBOX (TNCP, TCAXIS, CTCSTR, AZMUTH, DAZM, ZA, DZA, 
+     *            Rangl, dRangl)
+       Else
 C           Equatorial Mount, no feedbox rotation
         Rangl = 0.0D0
         dRangl = 0.0D0
-       ElseIf (KAXIS(L) .EQ. 6) Then
-C           Spacecraft, figure out in the future how to get in the full
-C           spacecraft orientation angle into CALC
-        Rangl = 0.0D0
-        dRangl = 0.0D0
-       Else
-        CALL FBOX (TNCP, TCAXIS, CTCSTR, AZMUTH, DAZM, ZA, DZA, 
-     *            Rangl, dRangl)
        Endif
 C
 C  Convert the feedbox rotation angle to degrees for this site. 
@@ -845,27 +833,6 @@ C
 C
   750 CONTINUE
 C   Handling of geocenter station, set axis offset quantities to zero.
-       do kx=1,3
-         axis2000(kx,L) = 0.0D0
-        daxis2000(kx,L) = 0.0D0
-       enddo
-        DCOMP(L,1) = 0.0D0 
-        DCOMP(L,2) = 0.0D0 
-        DCOMP_new(L,1) = 0.0D0
-        DCOMP_new(L,2) = 0.0D0 
-        udel_h(L,1) = 0.0D0 
-        udel_h(L,2) = 0.0D0 
-C    Ditto for the feedbox rotation quantities.
-       PANGL(L)      = 0.0D0      
-       FEED_COR(L,1) = 0.0D0
-       FEED_COR(L,2) = 0.0D0 
-C
-C     Close loop running over the observing sites.
-       GO TO 800
-  760 CONTINUE
-C   Handling of spacecraft antenna
-C   For now, zero out quantities, until a proper method to get the
-C   full spacecraft orientation into CALC is made.
        do kx=1,3
          axis2000(kx,L) = 0.0D0
         daxis2000(kx,L) = 0.0D0

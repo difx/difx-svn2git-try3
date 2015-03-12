@@ -3,12 +3,10 @@ C-------------------------------------------------------------------
 C
 C     Calls the initialization portions of CALC
 C
-C      IMPLICIT DOUBLE PRECISION (A-H, O-Z)                                    
-      IMPLICIT NONE
-      INTEGER*4 JOBN,IRETURN, KOUNT
-      INTEGER*4 MJD, EXTFLAGS(64), LASTFLAGS(64)
-      INTEGER*2 KFLAGS(64), NEWFLAGS
-      INTEGER I
+      IMPLICIT DOUBLE PRECISION (A-H, O-Z)                                    
+      INTEGER*4 JOBN,IRETURN,I4FLGS(60),IWORD,IERR,I_FTOC
+      INTEGER*4 MJD, EXTFLAGS(64), LASTFLAGS(64), extmsg1
+      INTEGER*2 IFLAG(63), KFLAGS(64), NEWFLAGS
 C
       include 'CALCIO.INC'
       include 'ccon.i'
@@ -18,7 +16,7 @@ C
       include 'cmxst.i'
 C
       Real*8    XCALC
-      Integer*2 NFLAG,NFLAGC,loadm(7),LFILE(3)
+      Integer*2 NFLAG,NFLAGC,loadm(7),LFILE(3),ISECU,IDISC,IOPEN
       Character*2  cval(0:9)
       Character*40 CalcVrsn(2)
       Character*64 Computing_center
@@ -32,6 +30,7 @@ C
       DATA  CalcVrsn /
      .'CALC Version 9.1 - /home/pecos2/jbenson/',
      .'pgm/calc9.1                             '/
+      DATA  KRUC / 2 /    
 C                                                    
 C--------------------------------------------------------------------
 C
@@ -77,7 +76,7 @@ C     Put the MJD into the CALCIO.INC global common
       MJDATE = MJD
 C
 C     Set all of the 'K' control flags to zero
-      DO 5 I = 1, 64
+      DO 5 I = 1, 63
          EXTFLAGS(I) = 0
  5    CONTINUE
 C
@@ -145,12 +144,6 @@ C     Turn parallax module off
       KPLXC = 0
 C     Feed horn rotation turned off
       KPANC = 1
-C     Topocentric observations
-C         0 turn off (standard CALC functionality, infinite sources, or
-C                     VLBA near field corrections)
-C         1 topo option 1 (Anderson near field corrections for spacecraft
-C                          tracking)
-      KTOPC = 0
 C
       KPEPD = 0
 C
@@ -164,14 +157,13 @@ C
       KDIUD = 0
       KTHED = 0
       KOCED = 0
-      KTOPD = 0
 C
       END IF
 C
 C     Check to see if a flag has changed since last calcinit call.
 C
       NEWFLAGS = 0
-      DO I = 1, 64
+      DO I = 1, 62
          IF (EXTFLAGS(I).NE.LASTFLAGS(I)) NEWFLAGS = 1
          LASTFLAGS(I) = EXTFLAGS(I)
       END DO
@@ -212,7 +204,6 @@ C
          CALL PUTA ('KSTAC      :  ', cval(KSTAC), 1, 1, 1) 
          CALL PUTA ('KPLXC      :  ', cval(KPLXC), 1, 1, 1) 
          CALL PUTA ('KPANC      :  ', cval(KPANC), 1, 1, 1) 
-         CALL PUTA ('KTOPC      :  ', cval(KTOPC), 1, 1, 1) 
       ENDIF
 
 C     The CALC subroutine TOCUP used to call the "A" modules. Do that

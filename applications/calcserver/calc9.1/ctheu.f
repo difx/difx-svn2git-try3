@@ -238,8 +238,8 @@ C         5. EARTH(3,3)  - The solar system barycentric Earth position
 C                          velocity, and acceleration vectors. The first index
 C                          runs over the vector components and the second runs
 C                          over the time derivatives. (m, m/sec, m/sec**2)
-C         6. EPBASE(3,3) - The J2000.0 baseline position,velocity,accel vectors.
-C                          (m, m/sec, m/sec/sec)
+C         6. EPBASE(3,2) - The J2000.0 baseline position and velocity vectors.
+C                          (m, m/sec)
 C         7. SITEA(3,2)  - The J2000.0 geocentric acceleration vectors of each 
 C                          observing site. (m/sec**2)
 C         8. SITEP(3,2)  - The J2000.0 geocentric position vectors of each
@@ -439,9 +439,6 @@ C   submicroseconds portion.
       CONDEL(1) = IDINT(xtg2_tg1 )
       CONDEL(2) = xtg2_tg1 - CONDEL(1)
       CONRAT = dtg2_tg1 
-      PRINT*, 'JMA in THERY ', CONDEL
-      PRINT*, 'JMA in THERY ', CONRAT
-      PRINT*, 'JMA in THERY ', CONSENSUS
 C
 C   Put the Consensus model theoretical delays and rates into the database.
       CALL PUT4 ('CONSNDEL      ', CONDEL, 2, 1, 1)
@@ -512,8 +509,8 @@ C                             velocity, and acceleration vectors. The first
 C                             index runs over the vector components and the
 C                             second runs over the time derivatives.
 C                             (m, m/sec, m/sec**2)
-C         3.  EPBASE(3,3)  -  The J2000.0 baseline position,velocity,acceleration
-C                             vectors.  (m, m/sec, m/sec/sec)
+C         3.  EPBASE(3,2)  -  The J2000.0 baseline position and velocity
+C                             vectors.  (m, m/sec)
 C         4.  SITEP(3,2)   -  The J2000.0 geocentric position vectors of each
 C                             observing site. (m)
 C         5.  SITEV(3,2)   -  The J2000.0 geocentric velocity vectors of each
@@ -618,7 +615,7 @@ C                         otherwise equals zero. For correlator usage.
 C
 C   Program Specifications -
       INTEGER*4 l,k
-      REAL*8 DATMC(2,2), SUN(3,2), EARTH(3,3), EPBASE(3,3), SITEA(3,2),
+      REAL*8 DATMC(2,2), SUN(3,2), EARTH(3,3), EPBASE(3,2), SITEA(3,2),
      .       STAR(3), SITEP(3,2), SITEV(3,2), XMOON(3,2), CON_CNTRB(2),
      .       SUN_CNTRB(2), DOTP, VECMG
       Real*8 XsubEarth(3), VsubEarth(3), AsubEarth(3)

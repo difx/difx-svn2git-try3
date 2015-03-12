@@ -24,25 +24,19 @@ C
 C       INPUT VARIABLES  -NONE
 C       OUTPUT VARAIBLES - NONE
 C
-C 1.2.2 COMMON BLOCKS USED - SITCM
-C     The SITCM common block is not actually used in this subroutine,
-C     but per the FORTRAN standard, it is included here so that
-C     calls among the subroutines called in this subroutine have
-C     a consisten SITCM block
-      INCLUDE 'cmxst.i'
+C 1.2.2 COMMON BLOCKS USED - NONE
 C
 C 1.2.3 PROGRAM SPECIFICATIONS -
       REAL*8 epsmd, omega, gastd, fa(5), fad(5), cent, dut1p(2,2)
       Real*8 AXOFF(2), CFBASE(3), CFLAT(3,2), CFLON(3,2), PANGL(2),
-     .       CFSITE(3,2), CFSITV(3,2), CFSITA(3,2), 
-     .       CFSITN(3,2), DEPS(2), DPSI(2), DIONC(2),
-     .       DPSID(2), DEPSD(2), EARTH(3,3), EPBASE(3,3), SUN(3,2),
+     .       CFSITE(3,2), CFSITN(3,2), DEPS(2), DPSI(2), DIONC(2),
+     .       DPSID(2), DEPSD(2), EARTH(3,3), EPBASE(3,2), SUN(3,2),
      .       EPLATP(3,2), EPLATV(3,2), EPLONP(3,2), EPLONV(3,2),
      .       EPS(2), EPSITN(3,2), GAST(2), OCEAMP(11,3,2),
      .       OCEPHS(11,3,2), R2000(3,3,3), RDNP(3,3), RN(3,3,2),
-     .       RP(3,3,2), RS(3,3,3), RW(3,3,2),SITEP(3,2),
-     .       SITEV(3,2), SITEA(3,2), SITLAT(2), SITLON(2), SITRAD(2), 
-     .       STAR(3,2), SUNCU(3), TCTOCF(3,3,2), DATMC(2,2), ZPATH(2),
+     .       RP(3,3,2), RS(3,3,3), RW(3,3,2),SITEA(3,2),SITEP(3,2),
+     .       SITEV(3,2), SITLAT(2), SITLON(2), SITRAD(2), STAR(3),
+     .       SUNCU(3), TCTOCF(3,3,2), DATMC(2,2), ZPATH(2),
      .       TIDEP(3,2), TIDEV(3,2), USITEP(3,2), USITEV(3,2),
      .       XLOADP(3,2), XLOADV(3,2), XMOON(3,2), DAXOC(2,2),
      .       POLTDP(3,2), POLTDV(3,2), AZ(2,2), ELEV(2,2),
@@ -50,7 +44,7 @@ C 1.2.3 PROGRAM SPECIFICATIONS -
       Real*8 AXIS2000(3,2), DAXIS2000(3,2), STAR_ABERRATED(3,2),
      .        dATMCdh(2,2)
 C-VLBA
-      Real*8 BSLN(3,3), SRC(3), EARTHX(3,3), SRCELEV(2,2)
+      Real*8 BSLN(3,2), SRC(3), EARTHX(3,3), SRCELEV(2,2)
       Integer*2 I, J
 C-VLBA
       Real*8 UTC, XJD, AT, DUTCAT, CT, DATDCT, DLPGR, DUT1AT, UT1,
@@ -62,12 +56,11 @@ C
       DATA SJD /-999.D6/
 C
 C 1.2.3.1   SAVE BLOCK - 
-       SAVE GAST, R2000, RDNP, RN, RP, RS, RW, SITEP, 
-     .      SITEV, SITEA, SITLAT, STAR, SUNCU, TCTOCF, TIDEP, SITRAD, 
+       SAVE GAST, R2000, RDNP, RN, RP, RS, RW, SITEA, SITEP, 
+     .      SITEV, SITLAT, STAR, SUNCU, TCTOCF, TIDEP, SITRAD, 
      .      TIDEV, XLOADP, XLOADV, ZPATH, DEPS, DPSI, EPS, DSTRP, 
      .      POLTDP, POLTDV, SUN, AXOFF, CFBASE, DIURNV, DLPGR, EPBASE,
-     .      CFSITE, CFSITV, CFSITA, CFSITN, CFLON, CFLAT, SITLON, 
-     .      OCEAMP, OCEPHS,
+     .      CFSITE, CFSITN, CFLON, CFLAT, SITLON, OCEAMP, OCEPHS,
      .      PANGL, AZ, ELEV, KAXIS, EARTH, EPSMNR, STAR_ABERRATED,
      .      EPSMD, OMEGA, GASTD, FA, FAD, DUT1P, XMOON, SITHEIGHT,
      .      NUTDIF, XJD, CT, SJD, TJD, OBSDIF, CENT, UT1, DUT1AT,
@@ -117,9 +110,8 @@ C                                DATA BASE. (RAD, RAD/SEC)
 C            10. EARTH(3,3)    - THE SOLAR SYSTEM BARYCENTRIC EARTH POSITION, 
 C                                VELOCITY, AND ACCELERATION VECTORS. 
 C                                (M, M/SEC, M/SEC**2)
-C            11. EPBASE(3,3)   - THE J2000.0 GEOCENTRIC BASELINE POSITION,
-C                                VELOCITY, AND ACCELERATION VECTORS. 
-C                                (M, M/SEC, M/SEC**2)
+C            11. EPBASE(3,2)   - THE J2000.0 GEOCENTRIC BASELINE POSITION AND
+C                                VELOCITY VECTORS. (M, M/SEC)
 C            12. EPS(2)        - THE TRUE OBLIQUITY OF THE ECLIPTIC AND ITS CT
 C                                TIME DERIVATIVE. (RAD, RAD/SEC)
 C            13. EPSMNR        - MEAN OBLIQUITY AT EPOCH J2000.0. (RAD)
@@ -136,9 +128,8 @@ C                                MORE DATA TO BE PROCESSED. KEND = 1 IF THE END
 C                                OF THE DATA HAS BEEN REACHED.
 C            20. KOUNT         - THE FLAG WHICH INITIALIZES THE COUNTING OF THE
 C                                OBSERVATION ITEMS.
-C            21. PANGL(2,2)    - THE PARALLACTIC ANGLE DUE TO FEED BOX ROTATION
-C                                AT EACH OBSERVATION SITE, AND ITS FIRST
-C                                CT TIME DERIVATIVE (RAD, RAD/SEC)
+C            21. PANGL(2)      - THE PARALLACTIC ANGLE DUE TO FEED BOX ROTATION
+C                                AT EACH OBSERVATION SITE. (RAD)
 C            22. POLTDP(3,2)   - GEOCENTRIC J2000.0 SITE POSITION CORRECTION FOR
 C                                THE EFFECTS OF THE POLE TIDE. (M)
 C            23. POLTDV(3,2)   - GEOCENTRIC J2000.0 SITE VELOCITY CORRECTION FOR
@@ -162,81 +153,68 @@ C                                1/SEC**2)
 C            29. RW(3,3,2)     - THE WOBBLE PORTION OF THE COMPLETE CRUST FIXED
 C                                TO J2000.0 ROTATION MATRIX and its time
 C                                derivative. (unitless, 1/sec)
-C            30. SITEP(3,2)    - THE J2000.0 GEOCENTRIC POSITION VECTORS OF EACH
+C            30. SITEA(3,2)    - THE J2000.0 GEOCENTRIC ACCELERATION VECTORS OF
+C                                EACH OBSERVATION SITE. (M/SEC**2)
+C            31. SITEP(3,2)    - THE J2000.0 GEOCENTRIC POSITION VECTORS OF EACH
 C                                OBSERVATION SITE. (M)
-C            31. SITEV(3,2)    - THE J2000.0 GEOCENTRIC VELOCITY VECTORS OF EACH
+C            32. SITEV(3,2)    - THE J2000.0 GEOCENTRIC VELOCITY VECTORS OF EACH
 C                                OBSERVATION SITE. (M/SEC)
-C            32. SITEA(3,2)    - THE J2000.0 GEOCENTRIC ACCELERATION VECTORS OF
-C                                EACH OBSERVATION SITE. (M/S/S)
 C            33. SITLAT(2)     - THE SITE GEODETIC LATITUDES. (RAD)
 C            34. SITLON(2)     - The site East longitudes. (rad)
 C            35. SITHEIGHT(2)  - The site heights above the geoid. (m)
-C            36. STAR(3,2)     - THE J2000.0 SOURCE UNIT VECTOR (UNITLESS)
-C                                FOR EACH SITE.
-C            37. POINTING(3,2) - THE J2000.0 POINTING DIRECTION UNIT VECTOR
-C                                (UNITLESS), WHICH MAY BE DIFFERENT FROM STAR,
-C                                FOR EACH SITE.
-C            38. STAR3D(3,2)   - THE J2000.0 SOURCE VECTOR (M) FOR EACH SITE.
-C            39. POINTING3D(3,2)-THE J2000.0 POINTING DIRECTION VECTOR (M),
-C                                WHICH MAY BE DIFFERENT FROM STAR, FOR EACH SITE.
-C            40. SUN(3,2)      - THE J2000.0 GEOCENTRIC SUN POSITION AND
+C            36. STAR(3)       - THE J2000.0 SOURCE UNIT VECTOR. (UNITLESS)
+C            37. SUN(3,2)      - THE J2000.0 GEOCENTRIC SUN POSITION AND
 C                                VELOCITY VECTORS. (M, M/SEC)
-C            41. TCTOCF(3,3,2) - THE ROTATION MATRIX WHICH ROTATES THE 
+C            38. TCTOCF(3,3,2) - THE ROTATION MATRIX WHICH ROTATES THE 
 C                                TOPOCENTRIC REFERENCE SYSTEM TO THE CRUST FIXED
 C                                REFERENCE SYSTEM AT EACH OBSERVATION SITE.
-C            42. TIDEP(3,2)    - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
+C            39. TIDEP(3,2)    - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
 C                                POSITION VECTORS DUE TO EARTH TIDE EFFECTS. (M)
-C            43. TIDEV(3,2)    - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
+C            40. TIDEV(3,2)    - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
 C                                VELOCITY VECTORS DUE TO EARTH TIDES. (M/SEC)
-C            44. WOBX          - THE LONG PERIOD WOBBLE X-OFFSET. (RAD)
-C            45. WOBY          - THE LONG PERIOD WOBBLE Y-OFFSET. (RAD)
+C            41. WOBX          - THE LONG PERIOD WOBBLE X-OFFSET. (RAD)
+C            42. WOBY          - THE LONG PERIOD WOBBLE Y-OFFSET. (RAD)
 C                                (NOTE: WOBY IS LEFT HANDED.)
-C            46. XLOADP(3,2)   - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
+C            43. XLOADP(3,2)   - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
 C                                POSITION VECTORS DUE TO OCEAN LOADING. (M)
-C            47. XLOADV(3,2)   - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
+C            44. XLOADV(3,2)   - THE CORRECTIONS TO THE J2000.0 GEOCENTRIC SITE
 C                                VELOCTY VECTORS DUE TO OCEAN LOADING. (M/SEC)
-C            48. ZPATH(2)      - THE ZENITH ELECTRICAL PATH LENGTH AT EACH
+C            45. ZPATH(2)      - THE ZENITH ELECTRICAL PATH LENGTH AT EACH
 C                                OBSERVATION SITE. (SEC)
-C            49. STAR_ABERRATED(3,2) - THE J2000.0 SOURCE UNIT VECTOR AT EACH
+C            46. STAR_ABERRATED(3,2) - THE J2000.0 SOURCE UNIT VECTOR AT EACH
 C                                SITE CORRECTED FOR ABERRATION. (UNITLESS)
-C            50. POINTING_ABERRATED(3,2) - THE J2000.0 POINTING UNIT VECTOR AT 
-C                                EACH SITE CORRECTED FOR ABERRATION. (UNITLESS)
-C            51. STAR_ABERRATED3D(3,2) - THE J2000.0 SOURCE VECTOR AT EACH
-C                                SITE CORRECTED FOR ABERRATION. (M)
-C            52. POINTING_ABERRATED3D(3,2) - THE J2000.0 POINTING VECTOR AT 
-C                                EACH SITE CORRECTED FOR ABERRATION. (M)
-C            53. axis2000(3,2) -  Vector axis offset of antenna in the J2000.0
+C            47. axis2000(3,2) -  Vector axis offset of antenna in the J2000.0
 C                                 frame (effect on baseline). First index is
 C                                 X,Y,Z (meters), second runs over sites.
-C            54. daxis2000(3,2) - Time derivative of axis2000, rate of change
+C            48. daxis2000(3,2) - Time derivative of axis2000, rate of change
 C                                 of vector axis offset of antenna in the
 C                                 J2000.0 frame (effect on baseline). First
 C                                 index is velocity, second runs over sites.
-C            55. ELEV(2,2)      - The elevation angle of the source corrrected
+C            49. ELEV(2,2)      - The elevation angle of the source corrrected
 C                                 for aberration and its CT time derivative at
 C                                 each site (rad,rad/sec)
-C            56. AZ(2,2)        - The azimuth angle of the source corrrected
+C            50. AZ(2,2)        - The azimuth angle of the source corrrected
 C                                 for aberration and its CT time derivative
 C                                 at each site (rad,rad/sec)
-C            57. DSTRP(2,2)     - Partial derivatives of the delay and delay
+C            51. DSTRP(2,2)     - Partial derivatives of the delay and delay
 C                                 rate with respect to source RA and Dec. First
 C                                 runs over RA and Dec, second runs over delay
 C                                 and delay rate. (sec/rad, sec/sec-rad
-C            58. NUTDIF(2,2)    - Nutation difference: IAU1980 minus IERS1996.
+C            52. NUTDIF(2,2)    - Nutation difference: IAU1980 minus IERS1996.
 C                                 First index over psi and epsilon; second
 C                                 index over difference and derivative of 
 C                                 difference. (radians, radians/sec)
-C            59. DNUTP(2,2)     - PARTIAL DERIVATIVES OF THE DELAY AND THE DELAY
+C            53. DNUTP(2,2)     - PARTIAL DERIVATIVES OF THE DELAY AND THE DELAY
 C                                 RATE W.R.T DPSI AND DEPS. (SEC/RAD, 
 C                                 SEC/SEC/RAD)
-C            60. RTTOCF(3,3,2)  - The rotation matrix which rotates the
+C            54. RTTOCF(3,3,2)  - The rotation matrix which rotates the
 C                                 'radial-transverse' reference system to the
 C                                 crust fixed reference system at each site.
-C            61. GEOLAT(2)      - The geocentric latitude at each site. (rad)
-C            62. SJD            - Time of the previous observation.
-C            63. XJD            - 
-C            64. UTC            - 
-C            65. FUKU(2)        - Correction in longitude for the effect of
+C            55. GEOLAT(2)      - The geocentric latitude at each site. (rad)
+C            56. SJD            - Time of the previous observation.
+C            57. XJD            - 
+C            58. UTC            - 
+C            59. FUKU(2)        - Correction in longitude for the effect of
 C                                 geodesic nutation, and its time derivative,
 C                                 according to Fukushima. (radians, radians/sec)
 C
@@ -340,8 +318,6 @@ C                    99.01.14  D. Gordon: Put TSKIP in Subroutine PEP
 C                              argument list to check new/repeat time in PEP.
 C                              PEP now does PUT's of Earth, Moon, and Sun 
 C                              coordinates.
-C                    James M Anderson 12.02.17 Update for spacecraft
-C                    James M Anderson 12.05.25 Update for spacecraft
 C
 C PROGRAM STRUCTURE
 C
@@ -368,8 +344,6 @@ C
 C     Call SITG for the geographical site data. SITG provides the following
 C     geocentric information for each observing site: the antenna axis offsets
 C     (AXOFF), the antenna types (KAXIS), the crust fixed site vectors (CFSITE),
-C     the crust fixed velocity vectors (CFSITV),
-C     the crust fixed acceleration vectors (CFSITA),
 C     the crust fixed baseline vector (CFBASE), the crust fixed site normal unit
 C     vectors (CFSITN), the geodetic latitudes (SITLAT), the site east
 C     longitudes (SITLON), the spherical Earth radii, the partial derivatives of
@@ -379,36 +353,11 @@ C     rotate the topocentric site reference system to the geocentric system at
 C     each site (TCTOCF), and the zenith tropospheric path delays at each
 C     observing site. SITG is the only routine which 'knows' which two sites are
 C     involved in the observation. All other routines merely work with site #1
-C     and site #2.  Note that in the case of spacecraft antennas, the
-C     CFSITE, CFSITV, and CFSITA vectors are actually in J2000 coordinates,
-C     and the CFBASE vector is invalid.
+C     and site #2.
 C
-      CALL SITG (AXOFF, CFBASE, CFLAT, CFLON, CFSITE, CFSITV, CFSITA,
-     *     CFSITN, KAXIS,
+      CALL SITG (AXOFF, CFBASE, CFLAT, CFLON, CFSITE, CFSITN, KAXIS,
      *     OCEAMP, OCEPHS, SITLAT, SITLON, SITRAD, TCTOCF, RTTOCF,
      *     ZPATH, SITHEIGHT, GEOLAT)
-      PRINT*, 'JMA 0 ', CFSITE
-      PRINT*, 'JMA SITG ZPATH ', ZPATH
-      PRINT*, 'JMA SITG AXOFF ', AXOFF
-      PRINT*, 'JMA SITG CFBASE ', CFBASE
-      PRINT*, 'JMA SITG CFLAT ', CFLAT
-      PRINT*, 'JMA SITG CFLON ', CFLON
-      PRINT*, 'JMA SITG CFSITE ', CFSITE
-      PRINT*, 'JMA SITG CFSITV ', CFSITV
-      PRINT*, 'JMA SITG CFSITA ', CFSITA
-      PRINT*, 'JMA SITG CFSITN ', CFSITN
-      PRINT*, 'JMA SITG KAXIS ', KAXIS
-      PRINT*, 'JMA SITG OCEAMP ', OCEAMP
-      PRINT*, 'JMA SITG OCEPHS ', OCEPHS
-      PRINT*, 'JMA SITG SITLAT ', SITLAT
-      PRINT*, 'JMA SITG SITLON ', SITLON
-      PRINT*, 'JMA SITG SITRAD ', SITRAD
-      PRINT*, 'JMA SITG TCTOCF ', TCTOCF
-      PRINT*, 'JMA SITG RTTOCF ', RTTOCF
-      PRINT*, 'JMA SITG ZPATH ', ZPATH
-      PRINT*, 'JMA SITG SITHEIGHT ', SITHEIGHT
-      PRINT*, 'JMA SITG GEOLAT ', GEOLAT
-
 C
 C     Call UTCTM for the UTC time fraction of the UTC day (UTC) and for 
 C     the Julian Date at zero hours UTC of the date in question (XJD).
@@ -428,10 +377,6 @@ C     site #1 (CT), the partial derivative of the atomic time with respect to
 C     the coordinate time (DATDCT), and the partial derivative of the long
 C     period terms in the 'AT minus CT' offset with respect to the coordinate
 C     time (DLPGR).
-C     Note that since correlator use always has site #1 at the center of the 
-C     Earth, there is no need to correct the equations in CTIMG for
-C     spacecraft velocities being different than a site fixed to the Earth
-C     solid body rotation.
       CALL CTIMG (AT, CFSITE, SITLON, UTC, XJD, CT, DATDCT, DLPGR)
 C
 C     Compute epoch and compare with previous observation. If same, set 
@@ -505,27 +450,25 @@ C     effects; the site accelerations (SITEA); the site normal unit vectors
 C     (EPSITN); and the partial derivatives of the site position and velocity
 C     vector components with respect to the site geodetic latitudes (EPLATP and
 C     EPLATV) and east longitudes (EPLONP and EPLONV).
-      CALL ROSIT (CFLAT, CFLON, CFSITE, CFSITV, CFSITA,
-     .     CFSITN, KAXIS, R2000, EPLATP, EPLATV,
+      CALL ROSIT (CFLAT, CFLON, CFSITE, CFSITN, R2000, EPLATP, EPLATV,
      .     EPLONP, EPLONV, EPSITN, SITEA, USITEP, USITEV)
-      PRINT*, 'JMA ROSIT ', USITEP
 C
 C      IF (TSKIP .NE. 1) THEN
 C     Call ETDG for the corrections to the J2000 site position vectors (TIDEP)
 C     and velocity vectors (TIDEV) due to Earth tide effects.
       CALL ETDG ( R2000, SITLAT, SITLON, SUN, TCTOCF, RTTOCF, 
      *            USITEP, USITEV, XMOON, EARTH, GAST, STAR, FA, 
-     *            FAD, CENT, GEOLAT, KAXIS, TIDEP, TIDEV)
+     *            FAD, CENT, GEOLAT, TIDEP, TIDEV)
 C
 C     Call 'PTDG' for the corrections to the J2000.0 site positions and site
 C     velocity vectors due to the solid Earth pole tide.
       CALL PTDG (SITLAT, SITLON, SITRAD, WOBXR, WOBYR, DIURNV,
-     .     TCTOCF, R2000, CENT, KAXIS, POLTDP, POLTDV)
+     .     TCTOCF, R2000, CENT, POLTDP, POLTDV)
 C
 C     Call OCEG for the corrections to the J2000.0 site position vectors
 C     (XLOADP) and velocity vectors (XLOADV) due to ocean loading effects.
-      CALL OCEG (CFSITE, UT1, OCEAMP, OCEPHS, R2000, XJD, TCTOCF,
-     .     KAXIS, TSKIP, XLOADP, XLOADV)
+      CALL OCEG (CFSITE, UT1, OCEAMP, OCEPHS, R2000, XJD, TCTOCF, TSKIP,
+     .     XLOADP, XLOADV)
 C
 C      END IF
 C
@@ -535,7 +478,6 @@ C     vectors (SITEV), and the J2000.0 baseline position and velocity vectors
 C     (EPBASE).
       CALL SITCR (TIDEP, TIDEV, USITEP, USITEV, XLOADP,
      .     XLOADV, EPBASE, SITEP, SITEV, POLTDP, POLTDV)
-      PRINT*, 'JMA SITCR ', SITEP
 C
 C     Call UVG to compute the (U,V) coordinates of the baseline, depending
 C      on the value of KASTC.
@@ -543,7 +485,7 @@ C      on the value of KASTC.
 C
 C     Call ATMG for the aberrated elevation and azimuth angles of the source and
 C     their CT time derivatives, and the aberrated source unit vector.
-      CALL ATMG (R2000, STAR, EARTH, TCTOCF, SITEV, KAXIS, AZ, ELEV,
+      CALL ATMG (R2000, STAR, EARTH, TCTOCF, SITEV, AZ, ELEV,
      .     STAR_ABERRATED )
 C
 C     Call AXOG for the J2000.0 vector axis offsets of the antennas and their
@@ -551,7 +493,6 @@ C     time derivatives at each site.
       CALL AXOG (KAXIS, R2000, SITLAT, STAR, TCTOCF, SITEV, AXOFF,
      .     EARTH, AZ, ELEV, STAR_ABERRATED, SITHEIGHT, AXIS2000,
      .     DAXIS2000)
-      PRINT*, 'JMA AXOG AXOFF ', AXOFF
 C
 C     Call PLXG to compute the parallax goemetry.
       CALL PLXG
@@ -566,7 +507,7 @@ C     parts of model modules. Note that the relativity partials are now in the
 C     THERY subroutine.
 C
 C     Compute the atmosphere partials.
-      CALL ATMP (ELEV, AZ, SITLAT, SITHEIGHT, XJD, CT, KAXIS, dATMCdh)
+      CALL ATMP (ELEV, AZ, SITLAT, SITHEIGHT, XJD, CT, dATMCdh)
 C
 C
 C     Compute the axis offset partials.
@@ -589,7 +530,7 @@ C     Compute the precession partials.
       CALL PREP (CFBASE, EPSMNR, RDNP, RN, RS, RW, STAR)
 C
 C     Compute the site partials.
-      CALL SITP (R2000, STAR, EARTH, SITEV, SITEA, KAXIS)
+      CALL SITP (R2000, STAR, EARTH, SITEV)
 C
 C     Compute the star partials.
       CALL STRP (EPBASE, STAR, EARTH, SITEV, DSTRP, CD, CRA, SD, SRA)
@@ -619,13 +560,9 @@ C     subroutine THERY.
 C
 C     Compute the atmosphere contributions.
       CALL ATMC (ZPATH, DATMC)
-      PRINT*, 'JMA ATMC ZPATH ', ZPATH
-      PRINT*, 'JMA ATMC DATMC ', DATMC
 C
 C     Compute the axis offset contributions.
       CALL AXOC (AXOFF, DAXOC)
-      PRINT*, 'JMA AXOC AXOFF ', AXOFF
-      PRINT*, 'JMA AXOC DAXOC ', DAXOC
 C
 C     Compute the earth tide contributions.
       CALL ETDC (TIDEP, TIDEV, STAR)
@@ -662,25 +599,13 @@ C     including the contributions and partials. This now includes only
 C     the Consensus relativity model computations:
       CALL THERY (DATMC, DAXOC, DIONC, DLPGR, EARTH, EPBASE,
      .     SITEP, SITEV, SITEA, SUN, STAR, XMOON, AT)
-      PRINT*, 'JMA THERY SITEP ', SITEP
-      PRINT*, 'JMA THERY STAR ', STAR
-      PRINT*, 'JMA THERY DATMC ', DATMC
-      PRINT*, 'JMA THERY DAXOC ', DAXOC
-      PRINT*, 'JMA THERY DIONC ', DIONC
-      PRINT*, 'JMA THERY DLPGR ', DLPGR
-      PRINT*, 'JMA THERY EARTH ', EARTH
-      PRINT*, 'JMA THERY EPBASE ', EPBASE
-      PRINT*, 'JMA THERY SITEV ', SITEV
-      PRINT*, 'JMA THERY SITEA ', SITEA
-      PRINT*, 'JMA THERY SUN ', SUN
-      PRINT*, 'JMA THERY XMOON ', XMOON
-      PRINT*, 'JMA THERY AT ', AT
 C
 C-VLBA
       DO 10 I = 1, 3
-         SRC(I)  = STAR(I,1)
+         BSLN(I,1) = EPBASE(I,1)
+         BSLN(I,2) = EPBASE(I,2)
+         SRC(I)  = STAR(I)
          DO 20 J = 1, 3
-            BSLN(I,J) = EPBASE(I,J)
             EARTHX(I,J) = EARTH(I,J)
  20         CONTINUE
  10      CONTINUE

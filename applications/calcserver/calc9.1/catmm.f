@@ -173,8 +173,8 @@ C
       END
 C
 C*******************************************************************************
-      SUBROUTINE ATMG ( R2000, STAR, EARTH, TCTOCF, SITEV, KAXIS,
-     .                  AZ, ELEV, STAR_ABERRATED )
+      SUBROUTINE ATMG ( R2000, STAR, EARTH, TCTOCF, SITEV, AZ, ELEV,
+     .                  STAR_ABERRATED )
       Implicit none
 C
 C       ATMG
@@ -201,7 +201,6 @@ C                                geocentric reference system at each observation
 C                                site. (unitless)
 C             5. SITEV(3,2)    - The J2000.0 geocentric velocity of each site.
 C                                (m/sec)
-C             6. KAXIS(2)      - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
 C           Output variables:
 C             1. STAR_ABERRATED(3,2) - The J2000 source unit vector with
 C                            aberration applied at each observing site.
@@ -252,7 +251,6 @@ C     Program specifications -
       Real*8 Vecmg, starcheck, K_Unit_Aberr(3)
       Real*8 AZQUAD
       Integer*4 I, L
-      Integer*2 KAXIS(2)
 C
 C      Database access  -
 C      PUT variables:
@@ -318,7 +316,6 @@ C        94.10.24  David Gordon  Removed computation of unmodified (unaberrated)
 C                                source elevations and azimuths.
 C        95.12.18  David Gordon  SITEV added to debug printout.
 C        98.08.05  David Gordon  Mods for geocenter station.
-C        12.02.23  James M Anderson Update for spacecraft
 C
 C  ATMG program structure
 C
@@ -328,8 +325,7 @@ C
       DO 500  L = 1,2
 C
 C  Check for geocenter station
-C  Check for spacecraft antenna
-       IF ((L .eq. Nzero).OR.(KAXIS(L).EQ. 6)) Go to 450
+       IF (L .eq. Nzero) Go to 450
 C
 C  Rotate the J2000.0 source unit vector to the topocentric system.
 C   (NOTE: The topocentric system sits at the observation site with the axes
@@ -390,7 +386,6 @@ C
 C
   450 CONTINUE
 C      Geocenter station special handling
-C      Spacecraft antenna special handling
 C            print *,'ATMG/Nzero: SITEV = ', SITEV
             call vecad(EARTH(1,2),SITEV(1,L),Earthplus)
             VR = DOTP(STAR,Earthplus)
@@ -443,8 +438,7 @@ C
       END
 C
 C******************************************************************************
-      SUBROUTINE ATMP (ELEV, AZ, SITLAT, SITHEIGHT, XJD, CT, KAXIS,
-     &     dATMCdh)
+      SUBROUTINE ATMP (ELEV, AZ, SITLAT, SITHEIGHT, XJD, CT, dATMCdh)
       Implicit none
 C
 C     ATMP is the atmosphere module partial derivatives section. ATMP computes
@@ -465,7 +459,6 @@ C          3. SITHEIGHT(2)-The site heights above the geoid. (meters)
 C          4. XJD       - Julian date at zero hours UTC of the date in question.
 C          5. CT        - The coordinate time fraction of the coordinate time
 C                         day.
-C          6. KAXIS(2)  - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
 C       'Output' variables:
 C          1. dATMCdh(2,2)-Derivative of the Niell dry atmosphere contribution
 C                          with respect to station height. First index runs over
@@ -474,7 +467,6 @@ C                          (sec/meter, sec/sec/meter)
 C 
       Real*8 ELEV(2,2), AZ(2,2), SITLAT(2), SITHEIGHT(2), XJD, CT, 
      *       dATMCdh(2,2) 
-      Integer*2 KAXIS(2)
 C
 C   Common blocks used:
 C
@@ -607,7 +599,6 @@ C              computation of Saastomoinen zenith dry and/or wet delays.
 C    98.11.19  David Gordon - Adding computation and put for atmosphere
 C              gradient partials, using the Niell dry mapping function. 
 C              Removed all old Chau computations and PUT's.
-C    12.02.24  James M Anderson Update for spacecraft
 C
 C 5.3   ATMP PROGRAM STRUCTURE
 C
@@ -615,14 +606,6 @@ C  Check to see if we are to use surface met data:
       metPR = 0 
       metTP = 0 
       metHM = 0 
-      PRINT*, 'JMA in ATMP ELEV ', ELEV
-      PRINT*, 'JMA in ATMP AZ ', AZ
-      PRINT*, 'JMA in ATMP SITLAT ', SITLAT
-      PRINT*, 'JMA in ATMP SITHEIGHT ', SITHEIGHT
-      PRINT*, 'JMA in ATMP XJD ', XJD
-      PRINT*, 'JMA in ATMP CT ', CT
-      PRINT*, 'JMA in ATMP KAXIS ', KAXIS
-      PRINT*, 'JMA in ATMP dATMCdh ', dATMCdh
        IF (Calc_user .eq. 'C') Then
          CALL GET4 ('ATM PRES      ', SurPR, 2, 2, 1, ND0, Kerr) 
            If (Kerr .eq. 0) metPR = 1
@@ -637,8 +620,7 @@ C  Now do Arthur Niell's mapping functions:
        Do N=1,2                                      ! Loop over sites
 C
 C   First check for geocenter station
-C   Check for spacecraft antennas
-        IF ((N .eq. Nzero).OR.(KAXIS(N).EQ. 6)) Go to 550 
+        IF (N .eq. Nzero) Go to 550 
 C
         Rlat = SITLAT(N)
         sithit = SITHEIGHT(N)
@@ -726,7 +708,6 @@ C    its time derivative
 C
  550   Continue
 C   Geocenter handling:
-C   Spacecraft handling:
         Datmp_hmf(N,1) = 0.0D0
         Datmp_hmf(N,2) = 0.0D0
         Datmp_wmf(N,1) = 0.0D0
@@ -741,8 +722,6 @@ C   Spacecraft handling:
         Ngrad(N,2,1)   = 0.0D0
         Ngrad(N,1,2)   = 0.0D0
         Ngrad(N,2,2)   = 0.0D0 
-C       Set index of refraction to 1, for spacecraft use
-        N_air(N) = 1.D0
 C
  600   Continue
 C
@@ -896,10 +875,6 @@ C
 C     ATMC Program Structure
 C
 C   Do the Niell dry and wet (Nhmf and Whmf) contributions:
-      PRINT*, 'JMA in ATMC Datmp_hmf ', Datmp_hmf
-      PRINT*, 'JMA in ATMC Datmp_wmf ', Datmp_wmf
-      PRINT*, 'JMA in ATMC Zen_dry ', Zen_dry
-      PRINT*, 'JMA in ATMC Zen_wet ', Zen_wet
       Do N=1,2 
        Datmc_hmf(N,1) = Datmp_hmf(N,1) * Zen_dry(N,1)
        Datmc_hmf(N,2) = Datmp_hmf(N,2) * Zen_dry(N,1)

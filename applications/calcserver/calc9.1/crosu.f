@@ -1,5 +1,4 @@
-      SUBROUTINE ROSIT ( CFLAT, CFLON, CFSITE, CFSITV, CFSITA,
-     1                    CFSITN, KAXIS, R2000, EPLATP,
+      SUBROUTINE ROSIT ( CFLAT, CFLON, CFSITE, CFSITN, R2000, EPLATP,
      1                    EPLATV, EPLONP, EPLONV, EPSITN, SITEA, USITEP,
      2                    USITEV )
       IMPLICIT None
@@ -30,15 +29,9 @@ C                               EAST LONGITUDES AT EACH OBSERVATION SITE.
 C                               (M/RAD) 
 C             3. CFSITE(3,2)  - THE GEOCENTRIC CRUST FIXED SITE VECTORS AT EACH
 C                               OBSERVATION SITE. (M)
-C                                   If antenna is a spacecraft, the coordinates
-C                                   are in the J2000 frame with respect to the
-C                                   center of the Earth
-C             4. CFSITV(3,2)  - THE VELOCITY VECTORS AT EACH SITE. (m/s)
-C             5. CFSITA(3,2)  - THE ACCELERATION VECTORS AT EACH SITE. (m/s/s)
-C             6. CFSITN(3,2)  - THE GEOCENTRIC CRUST FIXED SITE NORMAL UNIT
+C             4. CFSITN(3,2)  - THE GEOCENTRIC CRUST FIXED SITE NORMAL UNIT
 C                               VECTORS AT EACH OBSERVATION SITE. (UNITLESS)
-C             7. KAXIS(2)     - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
-C             8. R2000(3,3,3) - THE COMPLETE CRUST FIXED TO J2000.0 ROTATION
+C             5. R2000(3,3,3) - THE COMPLETE CRUST FIXED TO J2000.0 ROTATION
 C                               MATRIX AND ITS FIRST TWO CT TIME DERIVATIVES. 
 C                               (UNITLESS, 1/SEC, 1/SEC**2) 
 C 
@@ -85,14 +78,11 @@ C            VARIABLES 'TO': NONE
 C 
 C 1.2.3 PROGRAM SPECIFICATIONS -
 C 
-      Real*8     CFLAT(3,2), CFLON(3,2), CFSITE(3,2), CFSITV(3,2), 
-     1           CFSITA(3,2), CFSITN(3,2),
-     2           EPLATP(3,2), EPLATV(3,2), EPLONP(3,2), EPLONV(3,2),
-     3           EPSITN(3,2), R2000(3,3,3), SITEA(3,2), USITEP(3,2),
-     4           USITEV(3,2)
-      Real*8     LAT, LON, R
-      Integer*2  L, idm6, k
-      Integer*2 KAXIS(2)
+      Real*8     CFLAT(3,2), CFLON(3,2), CFSITE(3,2), CFSITN(3,2),
+     1           EPLATP(3,2), EPLATV(3,2), EPLONP(3,2), EPLONV(3,2),
+     2           EPSITN(3,2), R2000(3,3,3), SITEA(3,2), USITEP(3,2),
+     3           USITEV(3,2)
+      Integer*2  L, idm6
 C 
 C 1.2.4 DATA BASE ACCESS - NONE 
 C 
@@ -111,7 +101,6 @@ C                    PETER DENATALE 07/18/77
 C                    SAVITA GOEL    06/04/87 (CDS FOR A900)
 C                    Jim Ryan 89.07.25 Documentation simplified.
 C                    David Gordon 94.04.18 Converted to Implicit None.
-C                    James M Anderson 12.02.16 Update for spacecraft
 C
 C   ROSIT Program Structure
 C
@@ -121,42 +110,21 @@ C
 C   Loop twice for the geometry of the two sites.
       DO 160  L = 1,2
 C
-         IF(KAXIS(L).NE.6) THEN
-C           This is not a spacecraft, do things for normal ground-based
-C           antennas.
 C   Rotate the geocentric site vectors.
-            CALL VECRT ( R2000(1,1,1), CFSITE(1,L), USITEP(1,L) )
-            CALL VECRT ( R2000(1,1,2), CFSITE(1,L), USITEV(1,L) )
-            CALL VECRT ( R2000(1,1,3), CFSITE(1,L), SITEA(1,L) )
+        CALL VECRT ( R2000(1,1,1), CFSITE(1,L), USITEP(1,L) )
+        CALL VECRT ( R2000(1,1,2), CFSITE(1,L), USITEV(1,L) )
+        CALL VECRT ( R2000(1,1,3), CFSITE(1,L), SITEA(1,L) )
 C
 C   Rotate the geocentric site normal unit vectors.
-            CALL VECRT ( R2000(1,1,1), CFSITN(1,L), EPSITN(1,L) )
+        CALL VECRT ( R2000(1,1,1), CFSITN(1,L), EPSITN(1,L) )
 C
 C   Rotate the geodetic latitude partial derivatives.
-            CALL VECRT ( R2000(1,1,1), CFLAT(1,L), EPLATP(1,L) )
-            CALL VECRT ( R2000(1,1,2), CFLAT(1,L), EPLATV(1,L) )
+        CALL VECRT ( R2000(1,1,1), CFLAT(1,L), EPLATP(1,L) )
+        CALL VECRT ( R2000(1,1,2), CFLAT(1,L), EPLATV(1,L) )
 C
 C   Rotate the East longitude partial derivatives.
-            CALL VECRT ( R2000(1,1,1), CFLON(1,L), EPLONP(1,L) )
-            CALL VECRT ( R2000(1,1,2), CFLON(1,L), EPLONV(1,L) )
-         ELSE
-C           This is a spacecraft antenna.  The antenna information comes in
-C           in J2000 inertial coordinates.
-            DO 170 K=1,3
-               USITEP(K,L) = CFSITE(K,L)
-               USITEV(K,L) = CFSITV(K,L)
-               SITEA(K,L)  = CFSITA(K,L)
-C   The partial derivatives with respect to latitude and longitude make no sense
-C   for spacecraft, since the nutation and so on does not affect the spacecraft
-C   position, nor does the UT1 offset, and the determination of the 
-C   antenna position should be done in J2000 (x,y,z), not in crust-fixed lat,lon
-               EPLATP(K,L) = 0.0D0
-               EPLONP(K,L) = 0.0D0
-               EPLATV(K,L) = 0.0D0
-               EPLONV(K,L) = 0.0D0
- 170        CONTINUE
-         ENDIF
-
+        CALL VECRT ( R2000(1,1,1), CFLON(1,L), EPLONP(1,L) )
+        CALL VECRT ( R2000(1,1,2), CFLON(1,L), EPLONV(1,L) )
 C
 C   Close the loop over the sites.
   160 CONTINUE

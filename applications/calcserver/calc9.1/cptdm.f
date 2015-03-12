@@ -157,7 +157,7 @@ C     Normal conclusion.
 C
 C*******************************************************************************
       SUBROUTINE PTDG ( SITLAT, SITLON, SITRAD, WOBXR, WOBYR, DIURNV,
-     .                  TCTOCF, R2000, CENT, KAXIS, POLTDP, POLTDV )
+     .                  TCTOCF, R2000, CENT, POLTDP, POLTDV )
       IMPLICIT None
 C
 C 4.    PTDG
@@ -222,7 +222,6 @@ C                                MATRIX AND ITS FIRST TWO CT TIME DERIVATIVES
 C                                (UNITLESS, 1/SEC, 1/SEC**2)
 C           9. CENT           -  Number of Julian centuries elapsed since the
 C                                epoch January 1.5, 2000. (centuries)
-C          10. KAXIS(2)       - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
 C         OUTPUT VARIABLES: 
 C           1.  POLTDP(3,2)   -  THE CORRECTIONS TO THE J2000.0 GEOCENTRIC 
 C                                SITE POSITION VECTORS DUE TO POLE TIDAL 
@@ -284,7 +283,6 @@ C 4.2.3 PROGRAM SPECIFICATIONS -
      .       POLTDV(3,2), WOBXR, WOBYR, DIURNV, CENT,
      .       TCDSPX(3,2), TCDSPY(3,2), Tyr, WOBXd, WOBYd 
       Integer*4 L, I
-      Integer*2 KAXIS(2)
 C 
 C 4.2.6 SUBROUTINE INTERFACE -
 C             CALLER SUBROUTINES: DRIVG 
@@ -323,7 +321,6 @@ C                                 for a mean pole X and Y offsets and their
 C                                 removal from the pole tide correction. 
 C                    David Gordon 99.01.19 Added X_mean, Y_mean, and DPTDP to
 C                                 Common /PTDCM/.
-C                    James M Anderson 12.02.23 Update for spacecraft
 C
 C     PTDG PROGRAM STRUCTURE
 C
@@ -345,8 +342,7 @@ C
       DO 1200  L = 1,2
 C
 C      Check for Geocenter site:
-C      Also check for spacecraft
-        IF ((L .eq. Nzero).OR.(KAXIS(L).EQ. 6)) Then
+        IF (L .eq. Nzero) Then
          Do i=1,3 
            TCDISP(i,L) = 0.D0
            ZPLTDP(i,L) = 0.D0

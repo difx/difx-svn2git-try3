@@ -523,116 +523,9 @@ C
                 RVARB(2,I,1) = D_FTOC(JOBNUM,'station',I-1,'Y')
                 RVARB(3,I,1) = D_FTOC(JOBNUM,'station',I-1,'Z')
                 RVARB(4,I,1) = 0.0000D0
-                RVARB(5,I,1) = D_FTOC(JOBNUM,'station',I-1,'DX')
-                RVARB(6,I,1) = D_FTOC(JOBNUM,'station',I-1,'DY')
-                RVARB(7,I,1) = D_FTOC(JOBNUM,'station',I-1,'DZ')
-             END DO
-             GO TO 900
-          END IF
-
-C
-C  For spacecraft antennas, the position, velocity, and
-C  acceleration vectors are sent for antenna information.
-C  We dump this out when there is a call for
-C  SITERECA.  The ground site positions have already been updated,
-C  so there is no need to have an epoch date passed through, as in
-C  SITERECV.
-C
-          IF (fstrcmp(VARNAM,'SITERECA      ').eq.0) THEN
-             NROWS = N_ROWS(JOBNUM,'station')
-             IF (NROWS.LE.0)
-     +          CALL C2WRITE ('ERROR: CALC GET4, NROWS = 0 ',VARNAM)
-             IF (NROWS.LT.(NDIM3-1).OR.NROWS.LE.0) GO TO 900
-             DO IROW = 1,3
-                DO I = 1,3
-                   RVARB(I,IROW,1) = 0.0D0
-                END DO
-             END DO
-             IROW = 0
-             DO I = 1, NDIM3
-                RVARB(1,1,I) = D_FTOC(JOBNUM,'station',I-1,'X')
-                RVARB(2,1,I) = D_FTOC(JOBNUM,'station',I-1,'Y')
-                RVARB(3,1,I) = D_FTOC(JOBNUM,'station',I-1,'Z')
-                
-                RVARB(1,2,I) = D_FTOC(JOBNUM,'station',I-1,'DX')
-                RVARB(2,2,I) = D_FTOC(JOBNUM,'station',I-1,'DY')
-                RVARB(3,2,I) = D_FTOC(JOBNUM,'station',I-1,'DZ')
-
-                RVARB(1,3,I) = D_FTOC(JOBNUM,'station',I-1,'DDX')
-                RVARB(2,3,I) = D_FTOC(JOBNUM,'station',I-1,'DDY')
-                RVARB(3,3,I) = D_FTOC(JOBNUM,'station',I-1,'DDZ')
-             END DO
-             GO TO 900
-          END IF
-
-C
-C  For spacecraft antennas, the orientation is not trivially
-C  related to the source direction.  Pointing directions that
-C  are not equal to the source direction also complicate things.
-C  SITEPOINTPOS provides access to a set of three vectors
-C  describing the pointing direction of the three direction (not 
-C  mount) axes, with the z direction nominally the main 
-C  pointing direction of the telescope.
-C
-          IF (fstrcmp(VARNAM,'SITEPOINTPOS  ').eq.0) THEN
-             NROWS = N_ROWS(JOBNUM,'station')
-             IF (NROWS.LE.0)
-     +          CALL C2WRITE ('ERROR: CALC GET4, NROWS = 0 ',VARNAM)
-             IF (NROWS.LT.(NDIM3-1).OR.NROWS.LE.0) GO TO 900
-             DO IROW = 1,3
-                DO I = 1,3
-                   RVARB(I,IROW,1) = 0.0D0
-                END DO
-             END DO
-             IROW = 0
-             DO I = 1, NDIM3
-                RVARB(1,1,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSXX')
-                RVARB(2,1,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSXY')
-                RVARB(3,1,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSXZ')
-
-                RVARB(1,2,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSYX')
-                RVARB(2,2,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSYY')
-                RVARB(3,2,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSYZ')
-
-                RVARB(1,3,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSZX')
-                RVARB(2,3,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSZY')
-                RVARB(3,3,I) = D_FTOC(JOBNUM,'station',I-1,'POINTPOSZZ')
-             END DO
-             GO TO 900
-          END IF
-
-C
-C  For spacecraft antennas, the orientation is not trivially
-C  related to the source direction.  Pointing directions that
-C  are not equal to the source direction also complicate things.
-C  SITEPOINTVEL provides access to a set of three vectors
-C  describing the pointing direction velocities of the three direction (not 
-C  mount) axes, with the z direction nominally the main 
-C  pointing direction of the telescope.
-C
-          IF (fstrcmp(VARNAM,'SITEPOINTVEL  ').eq.0) THEN
-             NROWS = N_ROWS(JOBNUM,'station')
-             IF (NROWS.LE.0)
-     +          CALL C2WRITE ('ERROR: CALC GET4, NROWS = 0 ',VARNAM)
-             IF (NROWS.LT.(NDIM3-1).OR.NROWS.LE.0) GO TO 900
-             DO IROW = 1,3
-                DO I = 1,3
-                   RVARB(I,IROW,1) = 0.0D0
-                END DO
-             END DO
-             IROW = 0
-             DO I = 1, NDIM3
-                RVARB(1,1,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELXX')
-                RVARB(2,1,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELXY')
-                RVARB(3,1,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELXZ')
-
-                RVARB(1,2,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELYX')
-                RVARB(2,2,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELYY')
-                RVARB(3,2,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELYZ')
-
-                RVARB(1,3,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELZX')
-                RVARB(2,3,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELZY')
-                RVARB(3,3,I) = D_FTOC(JOBNUM,'station',I-1,'POINTVELZZ')
+                RVARB(5,I,1) = 0.0000D0
+                RVARB(6,I,1) = 0.0000D0
+                RVARB(7,I,1) = 0.0000D0
              END DO
              GO TO 900
           END IF
@@ -668,20 +561,6 @@ C
              DO I = 1, NDIM2
                 RVARB(1,I,1) = D_FTOC(JOBNUM,'source',I-1,'RA')
                 RVARB(2,I,1) = D_FTOC(JOBNUM,'source',I-1,'DEC')
-             END DO
-             GO TO 900
-          END IF
-C
-C  Load the Calc source vectors table with all sources in the correlator
-C   job script table
-C
-          IF (fstrcmp(VARNAM,'STAR2000VEC   ').eq.0) THEN
-             NROWS = N_ROWS(JOBNUM,'source')
-             IF (NROWS.LT.NDIM2.OR.NROWS.LE.0) GO TO 900
-             DO I = 1, NDIM2
-                RVARB(1,I,1) = D_FTOC(JOBNUM,'source',I-1,'SPOS_X')
-                RVARB(2,I,1) = D_FTOC(JOBNUM,'source',I-1,'SPOS_Y')
-                RVARB(3,I,1) = D_FTOC(JOBNUM,'source',I-1,'SPOS_Z')
              END DO
              GO TO 900
           END IF
@@ -805,10 +684,7 @@ C
      +           IVARB(1,1,1) = N_ROWS(JOBNUM,'source')
              IF (fstrcmp(VARNAM,'STAR ID       ').eq.0) 
      +           IVARB(1,1,1) = GETSRC
-             IF (fstrcmp(VARNAM,'HASSVEC       ').eq.0) 
-     +           IVARB(1,1,1) = I_FTOC(JOBNUM,'source',1,'HASSVEC')
-             IF (fstrcmp(VARNAM,'HASPOINTVEC   ').eq.0) 
-     +           IVARB(1,1,1) = I_FTOC(JOBNUM,'source',1,'HASPOINTVEC')
+             GO TO 900
           END IF
 C
 C         Changed by Adam Deller to not skip first station on 
@@ -829,12 +705,6 @@ C               Compare with axistypes and pass integer code
      +               IVARB(I,1,1) = 2
                   IF (fstrcmp(KEYNAME,'XYEW').eq.0)
      +               IVARB(I,1,1) = 4
-C                 Changed by James M Anderson to accept orbiting
-C                 antenna mount type.  Type 5 appears to be a code
-C                 for the Richmond antenna, so I adopt 6 for the
-C                 orbiting antenna.
-                  IF (fstrcmp(KEYNAME,'SPAC').eq.0)
-     +               IVARB(I,1,1) = 6
                 END DO
                 GO TO 900
              END IF
@@ -854,19 +724,6 @@ C
                 IVARB(5,1,1) = GETTAG(5)
                 GO TO 900
              END IF
-          END IF
-C
-C  Load the Calc sources table with all sources in the correlator
-C   job script table
-C
-          IF (fstrcmp(VARNAM,'STARREFFRAME  ').eq.0) THEN
-             NROWS = N_ROWS(JOBNUM,'source')
-             IF (NROWS.LT.NDIM2.OR.NROWS.LE.0) GO TO 900
-             DO I = 1, NDIM1
-                IVARB(I,1,1) = I_FTOC(JOBNUM,'source',I-1,
-     &               'STARREFFRAME')
-             END DO
-             GO TO 900
           END IF
 C
  900     CONTINUE

@@ -42,8 +42,8 @@ C
 C 3.2.1 CALLING SEQUENCE -
 C          INPUT VARIABLES:
 C            1. STAR(3)     - The J2000.0 Source unit vector.
-C            2. EPBASE(3,3) - The J2000.0 Geocentric baseline position,
-C                             velocity, acceleration vectors. (m, m/sec, m/sec/sec)
+C            2. EPBASE(3,2) - The J2000.0 Geocentric baseline position and
+C                             velocity vectors. (m, m/sec)
 C
 C 3.2.2 COMMON BLOCKS USED -
 C 
@@ -65,7 +65,7 @@ C           VARIABLES 'FROM':
 C              1. CONVDS - THE CONVERSION FACTOR FROM ARCSECONDS TO RADIANS
 C                 (RAD/ARCSECOND)
 C 
-      Real*8 STAR(3), EPBASE(3,3) 
+      Real*8 STAR(3), EPBASE(3,2) 
       Real*8 DOTP, REF_FREQ, B(3), NCP(3), vectr(3), Bpr(3), NCPpr(3),
      *       U_V(2), VECMG
       Integer*2 KERR, NDO(3)

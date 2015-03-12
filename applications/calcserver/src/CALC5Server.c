@@ -21,7 +21,6 @@ void calcmodl2_(int *mjd, double *time, int *srcid, int *stnaid, int *stnbid,
 	double *delay, double *rate, double *u, double *v, double *w, double atmos[4],
 	double datmos[4], double *accel, double *risetime, double *settime, 
 	double xelev[2], double relev[2], double xaz[2], double raz[2],
-        double xmsa[2], double rmsa[2], double baselineJ2000[9],
 	double partials[28], int *iret);
 
 char *rad2str(double angle, char *pFormat, char *pOutStr);
@@ -288,16 +287,11 @@ SVCXPRT *pTransport;
     short int kflags[64];
     double  delay, rate, atmos[4], datmos[4], radtime, u, v, w;
     double  accel, risetime, settime, xelev[2], relev[2], xaz[2], raz[2];
-    double  xmsa[2], rmsa[2], baselineJ2000[9];
     double  mjd_time, partials[28], outval;
     char    *destdotaddr, mjd_str[24], filename[256], hostname[24];
 
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 0\n");    
     tp = &timep;
     time (tp);
-
-#warning "remove the following line when CALC is fixed to support msa"
-    xmsa[0] = xmsa[1] = rmsa[0] = rmsa[1] = 0.0;
 
     /* check if we have crossed a day boundry in local time. If so, open a
      * new logfile */
@@ -333,7 +327,6 @@ SVCXPRT *pTransport;
          ifirst = 1;
        }
     }
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 1\n"); 
     /* handle null procedure */
     if (pRequest->rq_proc == NULLPROC)
 	{
@@ -342,7 +335,6 @@ SVCXPRT *pTransport;
 	return;
 	}
 
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 2\n"); 
     /* handle unimplemented procedure number */
     if (pRequest->rq_proc != GETCALC)
 	{
@@ -350,7 +342,6 @@ SVCXPRT *pTransport;
 	return;
 	}
 
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 3\n"); 
     /* get RPC input argument */
     bzero (&argument, sizeof (argument));    /* see "The Art of DA" p193 */
     if (!svc_getargs (pTransport, xdr_getCALC_arg, (char *)&argument))
@@ -359,8 +350,7 @@ SVCXPRT *pTransport;
 	return;
 	}
 
-#ifdef VERBOSE_DEBUG
-    printf ("Processing for station: %s\n", argument.station_b);
+#ifdef VERBOSE_DEBUG    
     printf ("request arg: date = %d\n", argument.date);
     printf ("request arg: time = %e\n", argument.time);
     printf ("request arg: src  = %s\n", argument.source);
@@ -374,12 +364,6 @@ SVCXPRT *pTransport;
     printf ("request arg: x    = %16.10e\n", argument.a_x);
     printf ("request arg: y    = %16.10e\n", argument.a_y);
     printf ("request arg: z    = %16.10e\n", argument.a_z);
-    printf ("request arg: dx   = %16.10e\n", argument.a_dx);
-    printf ("request arg: dy   = %16.10e\n", argument.a_dy);
-    printf ("request arg: dz   = %16.10e\n", argument.a_dz);
-    printf ("request arg: ddx  = %16.10e\n", argument.a_ddx);
-    printf ("request arg: ddy  = %16.10e\n", argument.a_ddy);
-    printf ("request arg: ddz  = %16.10e\n", argument.a_ddz);
     printf ("request arg: axis = %s\n", argument.axis_type_a);
     printf ("request arg: off  = %e\n", argument.axis_off_a);
     printf ("request arg: press= %e\n", argument.pressure_a);
@@ -387,12 +371,6 @@ SVCXPRT *pTransport;
     printf ("request arg: x    = %16.10e\n", argument.b_x);
     printf ("request arg: y    = %16.10e\n", argument.b_y);
     printf ("request arg: z    = %16.10e\n", argument.b_z);
-    printf ("request arg: dx   = %16.10e\n", argument.b_dx);
-    printf ("request arg: dy   = %16.10e\n", argument.b_dy);
-    printf ("request arg: dz   = %16.10e\n", argument.b_dz);
-    printf ("request arg: ddx  = %16.10e\n", argument.b_ddx);
-    printf ("request arg: ddy  = %16.10e\n", argument.b_ddy);
-    printf ("request arg: ddz  = %16.10e\n", argument.b_ddz);
     printf ("request arg: axis = %s\n", argument.axis_type_b);
     printf ("request arg: off  = %e\n", argument.axis_off_b);
     printf ("request arg: press= %e\n", argument.pressure_b);
@@ -422,10 +400,9 @@ SVCXPRT *pTransport;
 
     for (i = 0; i < 50; i++)
         p_ocean_row[i] = &oc_coeffs[0];
-    if ((strcmp(argument.station_a, "EC") != 0) && (strcmp(argument.axis_type_a, "SPAC") != 0))
+    if (strcmp(argument.station_a, "EC") != 0)
        loadOcean ((char *)argument.station_a, 1);
-    if (strcmp(argument.axis_type_b, "SPAC") != 0)
-        loadOcean ((char *)argument.station_b, 2);
+    loadOcean ((char *)argument.station_b, 2);
 
     for (i = 0; i < 64; i++)
         kflags[i] = p_request->kflags[i];
@@ -433,33 +410,26 @@ SVCXPRT *pTransport;
     calcinit_ (&jobnum, &imjd, kflags, &iret);
     if (ifirst == 1) fflush(flog);
 
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4\n");
     calcmodl2_ (&imjd, &radtime, &source_index, &station_index_a,
                    &station_index_b,
-        	   &delay, &rate, &u, &v, &w, atmos, datmos,
-        	   &accel,
-        	   &risetime, &settime, xelev, relev,
-                   xaz, raz, xmsa, rmsa,
-                   baselineJ2000, partials, &iret);
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4.1\n"); 
+		   &delay, &rate, &u, &v, &w, atmos, datmos,
+		   &accel,
+		   &risetime, &settime, xelev, relev, 
+                   xaz, raz, partials, &iret);
 
     delay *= 1.0e-6;
 
 #ifdef VERBOSE_DEBUG
     printf ("CALCServer: delay = %20.14e\n", delay);
     printf ("CALCServer: rate  = %e\n", rate);
-    printf ("CALCServer: dry, wet = %e %e\n", atmos[0], atmos[1]);
+    printf ("CALCServer: dry, wet = %e %e\n", 
+            atmos[0], atmos[1]);
 #endif
 
     time (tp);
 
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4.2\n");
     sock_in = svc_getcaller (pTransport);
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 4.3\n");
-    fprintf(stderr, "JMA DEBUG: sock_in = %p\n", sock_in);
-    fprintf(stderr, "JMA DEBUG: sock_in->sin_addr = 0x%8.8X\n", sock_in->sin_addr.s_addr);
     destdotaddr = inet_ntoa(sock_in->sin_addr);
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 5\n"); 
 
     if (strcmp(getenv("SERVERLOG"), "ON") == 0)
     {
@@ -471,7 +441,6 @@ SVCXPRT *pTransport;
              argument.source, mjd_str, delay, ctime (tp));
        fflush (flog);
     }
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 6\n"); 
     /* outval goes nowhere for now */
     outval = 0.0;
     if ((n_Horizons_rows > 0) &&
@@ -485,7 +454,6 @@ SVCXPRT *pTransport;
     result.getCALC_res_u.record.time  = argument.time;
     result.getCALC_res_u.record.delay[0] = delay;
     result.getCALC_res_u.record.delay[1] = rate;
-    result.getCALC_res_u.record.request_id = argument.struct_code;
     result.getCALC_res_u.record.request_id = argument.request_id;
     /* Changed the order of atmos, datmos - JMB Jan 28, 2004 */
     result.getCALC_res_u.record.dry_atmos[0] = atmos[0];
@@ -501,50 +469,19 @@ SVCXPRT *pTransport;
     result.getCALC_res_u.record.el[1] = xelev[1];
     result.getCALC_res_u.record.az[0] = xaz[0];
     result.getCALC_res_u.record.az[1] = xaz[1];
-    result.getCALC_res_u.record.msa[0]= xmsa[0];
-    result.getCALC_res_u.record.msa[1]= xmsa[1];
-    result.getCALC_res_u.record.el[2] = relev[0];
-    result.getCALC_res_u.record.el[3] = relev[1];
-    result.getCALC_res_u.record.az[2] = raz[0];
-    result.getCALC_res_u.record.az[3] = raz[1];
-    result.getCALC_res_u.record.msa[2] = rmsa[0];
-    result.getCALC_res_u.record.msa[3] = rmsa[1];
     result.getCALC_res_u.record.UV[0] = u;
     result.getCALC_res_u.record.UV[1] = v;
     result.getCALC_res_u.record.UV[2] = w;
     result.getCALC_res_u.record.riseset[0] = risetime;
     result.getCALC_res_u.record.riseset[1] = settime;
 
-    result.getCALC_res_u.record.baselineP2000[0] = baselineJ2000[0];
-    result.getCALC_res_u.record.baselineP2000[1] = baselineJ2000[1];
-    result.getCALC_res_u.record.baselineP2000[2] = baselineJ2000[2];
-    result.getCALC_res_u.record.baselineV2000[0] = baselineJ2000[3];
-    result.getCALC_res_u.record.baselineV2000[1] = baselineJ2000[4];
-    result.getCALC_res_u.record.baselineV2000[2] = baselineJ2000[5];
-    result.getCALC_res_u.record.baselineA2000[0] = baselineJ2000[6];
-    result.getCALC_res_u.record.baselineA2000[1] = baselineJ2000[7];
-    result.getCALC_res_u.record.baselineA2000[2] = baselineJ2000[8];
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 7\n"); 
-
     result.error = 0;
     ifirst = 0;
 
-    if(argument.struct_code != CALC_SERVER_STRUCT_CODE_0)
-        {
-        /* regular processing call --- do nothing special */
-        }
-    else
-        {
-        /* request for server_struct version */
-        result.getCALC_res_u.record.struct_code = CALC_SERVER_STRUCT_CODE_CURRENT;
-        }
-
     /* return result to client */
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 8\n"); 
 
     if (!svc_sendreply (pTransport, xdr_getCALC_res, (char *)&result))
 	svcerr_systemerr (pTransport);
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 9\n"); 
 
     /* free any memory allocated by xdr routines when argument was decoded */
     if (!svc_freeargs (pTransport, xdr_getCALC_arg, (char *)&argument))
@@ -552,7 +489,6 @@ SVCXPRT *pTransport;
 	syslog (LOG_ERR, "unable to free arguments %m\n");
 	exit(EXIT_FAILURE);
 	}
-    fprintf(stderr, "JMA DEBUG: inside calcprog_1 10\n"); 
 }
 
 /*++****************************************************************************
@@ -1089,209 +1025,18 @@ char *err;	       /* some sort of error message */
 
     if ((strcmp(in_tblname, "STATION")) == 0)
     {
-        if(strlen(in_keyword) < 5) {
-            if ((strcmp(in_keyword, "X")) == 0){
-                if(row_num == 0)
-                    return (p_request->a_x);
-                if(row_num == 1)
-                    return (p_request->b_x);
-            }
-            if ((strcmp(in_keyword, "Y")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_y);
-                if(row_num == 1)
-                    return (p_request->b_y);
-            }
-            if ((strcmp(in_keyword, "Z")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_z);
-                if(row_num == 1)
-                    return (p_request->b_z);
-            }
-            if ((strcmp(in_keyword, "DX")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_dx);
-                if(row_num == 1)
-                    return (p_request->b_dx);
-            }
-            if ((strcmp(in_keyword, "DY")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_dy);
-                if(row_num == 1)
-                    return (p_request->b_dy);
-            }
-            if ((strcmp(in_keyword, "DZ")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_dz);
-                if(row_num == 1)
-                    return (p_request->b_dz);
-            }
-            if ((strcmp(in_keyword, "DDX")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_ddx);
-                if(row_num == 1)
-                    return (p_request->b_ddx);
-            }
-            if ((strcmp(in_keyword, "DDY")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_ddy);
-                if(row_num == 1)
-                    return (p_request->b_ddy);
-            }
-            if ((strcmp(in_keyword, "DDZ")) == 0)
-            {
-                if(row_num == 0)
-                    return (p_request->a_ddz);
-                if(row_num == 1)
-                    return (p_request->b_ddz);
-            }
-        }
-        if(strncmp(in_keyword, "POINT", 5) == 0)
-        {
-            if(strncmp(in_keyword, "POINTPOS", 8) == 0)
-            {
-                if ((strcmp(in_keyword, "POINTPOSXX")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_x[0]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_x[0]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSXY")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_x[1]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_x[1]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSXZ")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_x[2]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_x[2]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSYX")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_y[0]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_y[0]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSYY")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_y[1]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_y[1]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSYZ")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_y[2]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_y[2]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSZX")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_z[0]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_z[0]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSZY")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_z[1]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_z[1]);
-                }
-                if ((strcmp(in_keyword, "POINTPOSZZ")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_pos_a_z[2]);
-                    if(row_num == 1)
-                        return (p_request->pointing_pos_b_z[2]);
-                }
-            }
-            if(strncmp(in_keyword, "POINTVEL", 8) == 0)
-            {
-                if ((strcmp(in_keyword, "POINTVELXX")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_x[0]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_x[0]);
-                }
-                if ((strcmp(in_keyword, "POINTVELXY")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_x[1]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_x[1]);
-                }
-                if ((strcmp(in_keyword, "POINTVELXZ")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_x[2]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_x[2]);
-                }
-                if ((strcmp(in_keyword, "POINTVELYX")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_y[0]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_y[0]);
-                }
-                if ((strcmp(in_keyword, "POINTVELYY")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_y[1]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_y[1]);
-                }
-                if ((strcmp(in_keyword, "POINTVELYZ")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_y[2]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_y[2]);
-                }
-                if ((strcmp(in_keyword, "POINTVELZX")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_z[0]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_z[0]);
-                }
-                if ((strcmp(in_keyword, "POINTVELZY")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_z[1]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_z[1]);
-                }
-                if ((strcmp(in_keyword, "POINTVELZZ")) == 0)
-                {
-                    if(row_num == 0)
-                        return (p_request->pointing_vel_a_z[2]);
-                    if(row_num == 1)
-                        return (p_request->pointing_vel_b_z[2]);
-                }
-            }
-            if ((strcmp(in_keyword, "POINTEPOCH")) == 0)
-                return (p_request->source_epoch);
-            if ((strcmp(in_keyword, "POINTPARALLAX")) == 0)
-                return (p_request->source_parallax);
-        }
+       if (((strcmp(in_keyword, "X")) == 0)&&row_num == 0)
+          return (p_request->a_x);
+       if (((strcmp(in_keyword, "X")) == 0)&&row_num == 1)
+          return (p_request->b_x);
+       if (((strcmp(in_keyword, "Y")) == 0)&&row_num == 0)
+          return (p_request->a_y);
+       if (((strcmp(in_keyword, "Y")) == 0)&&row_num == 1)
+          return (p_request->b_y);
+       if (((strcmp(in_keyword, "Z")) == 0)&&row_num == 0)
+          return (p_request->a_z);
+       if (((strcmp(in_keyword, "Z")) == 0)&&row_num == 1)
+          return (p_request->b_z);
     }
 
     if ((strcmp(in_tblname, "SOURCE")) == 0)
@@ -1351,22 +1096,6 @@ char *err;	       /* some sort of error message */
              return (p_request->dec);
           if ((strcmp(in_keyword, "PARALLAX")) == 0)
              return (p_request->parallax);
-          if ((strcmp(in_keyword, "SPOS_X")) == 0)
-             return (p_request->source_pos[0]);
-          if ((strcmp(in_keyword, "SPOS_Y")) == 0)
-             return (p_request->source_pos[1]);
-          if ((strcmp(in_keyword, "SPOS_Z")) == 0)
-             return (p_request->source_pos[2]);
-          if ((strcmp(in_keyword, "SVEL_X")) == 0)
-             return (p_request->source_vel[0]);
-          if ((strcmp(in_keyword, "SVEL_Y")) == 0)
-             return (p_request->source_vel[1]);
-          if ((strcmp(in_keyword, "SVEL_Z")) == 0)
-             return (p_request->source_vel[2]);
-          if ((strcmp(in_keyword, "SEPOCH")) == 0)
-             return (p_request->source_epoch);
-          if ((strcmp(in_keyword, "SPARALLAX")) == 0)
-             return (p_request->source_parallax);
       }
     }
 
@@ -1469,48 +1198,10 @@ char *p_err;	       /* some sort of error message */
     {
        if ((strcmp (in_keyword, "AXISOFF_X")) == 0)
        {
-          value = (int)p_request->axis_off_b;
+          value = (float)p_request->axis_off_b;
           return (value);
        }
-       if ((strcmp(in_keyword, "HASPOINTVEC")) == 0)
-        {
-            double sum =
-                  fabs(p_request->pointing_pos_a_z[0])
-                + fabs(p_request->pointing_pos_a_z[1])
-                + fabs(p_request->pointing_pos_a_z[2])
-                + fabs(p_request->pointing_pos_b_z[0])
-                + fabs(p_request->pointing_pos_b_z[1])
-                + fabs(p_request->pointing_pos_b_z[2]);
-            return ((sum > 0.0) ? 1:0);
-        }
     } 
-    if ((strcmp(in_tblname, "SOURCE")) == 0)
-    {
-        if ((strcmp(in_keyword, "HASSVEC")) == 0)
-        {
-            double sum =
-                  fabs(p_request->source_pos[0])
-                + fabs(p_request->source_pos[1])
-                + fabs(p_request->source_pos[2]);
-            return ((sum > 0.0) ? 1:0);
-        }
-        if ((strcmp(in_keyword, "STARREFFRAME")) == 0)
-        {
-            double sum =
-                  fabs(p_request->source_pos[0])
-                + fabs(p_request->source_pos[1])
-                + fabs(p_request->source_pos[2]);
-            if(sum == 0.0)
-                return (0); /* Solar system barycenter position and velocity,
-                               J2000
-                            */
-            else if(sum < 1.5)
-                return (0); /* Solar system barycenter position and velocity,
-                               J2000
-                            */
-            return (1);     /* Earch center position and velocity, J2000 */
-        }
-    }
     return (0);
 }
 

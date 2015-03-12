@@ -203,7 +203,7 @@ C                                        CATALOG.
 C             3. RADEC(2,MAX_ARC_SRC)  - THE RIGHT ASCENSIONS AND DECLINATIONS 
 C                                        OF THE STARS IN THE STAR CATALOG.
 C                                        (RAD, RAD)
-C             4. P_motion(4,Max_arc_src)-The RA and Dec proper motions and 
+C             4. P_motion(3,Max_arc_src)-The RA and Dec proper motions and 
 C                                        appropriate epoch for stars in the 
 C                                        star catalog. (arc-sec/yr, arc-sec/yr,
 C                                        year (i.e. 1995.5, etc.))
@@ -273,8 +273,8 @@ C                               If 'NONE' or blank, then no external inputs
 C
 C 3.2.3 PROGRAM SPECIFICATIONS -
 C
-      Real*8    Xdoy1, Xepoch, X_frac, R
-      Integer*4 I, J, N, NN, Imdoy(12), HASSVEC
+      Real*8    Xdoy1, Xepoch, X_frac
+      Integer*4 I, J, N, NN, Imdoy(12)
       INTEGER*2 KERR(5), LSTRM(40), LOFF(4), LON1(40), LON2(40), NDO(3),
      *          Intrvl(5,2), KERX, idum2
       CHARACTER*40 C_LSTRM(2), C_OFF(2), C_ON1(2), C_ON2(2) 
@@ -305,8 +305,6 @@ C                                        CATALOG.
 C             3. RADEC(2,MAX_ARC_SRC)  - THE RIGHT ASCENSIONS AND DECLINATIONS
 C                                        OF THE STARS IN THE STAR CATALOG
 C                                        (RAD, RAD).
-C             4. SRC_DIR_VEC(3,MAX_ARC_SRC)-Source directions as 3-D vectors.
-C             5. SRC_REF_FRAME(MAX_ARC_SRC)- Refrence frame of the sources
 C           'PUT' VARIABLES: 
 C             1. LSTRM(40)  -  THE STAR MODULE TEXT MESSAGE.
 C 
@@ -366,8 +364,6 @@ C                        computation here so that the RA/Dec offsets or
 C                        corrected RA/Dec's could be output for capture by
 C                        correlator users. Added Lcodes 'RADECADD' and 
 C                        'STARPRMO'.
-C                    James M Anderson  2012.06.10  Changes for spacecraft
-C                        and other near-field source targets.
 C
 C     STRI PROGRAM STRUCTURE
 C
@@ -382,104 +378,53 @@ C   GET the star catalog from the input database.
       CALL GETI('# STARS       ',NUMSTR,1,       1,1,NDO,KERR(1))
       CALL GETA('STRNAMES      ',LNSTAR,4,(NUMSTR),1,NDO,KERR(2))
 C
-      Pmotion = 0
-      Dpsec   = 0
-C     Zero out the source arrays
-      DO N=1,NUMSTR
-         RADEC(1,N) = 0.D0
-         RADEC(2,N) = 0.D0
-         SRC_DIR_VEC(1,N) = 0.D0
-         SRC_DIR_VEC(2,N) = 0.D0
-         SRC_DIR_VEC(3,N) = 0.D0
-         SRC_REF_FRAME(N) = 0
-      ENDDO
-
+       Pmotion = 0
+       Dpsec   = 0
 C  Get source positions either from the data base or from an external file
       IF (Input_stars) Then                         !Get Star Info
         Call STRIN(Kerr)
       ELSE                                          !Get Star Info
-         CALL GETI('STARREFFRAME  ',SRC_REF_FRAME,(NUMSTR),
-     &        1,1,NDO,KERR(1))
-         CALL GETI('HASSVEC       ',HASSVEC,1,       1,1,NDO,KERR(1))
-         IF(HASSVEC.NE.1) THEN                      !HASSVEC
-            CALL GET4('STAR2000      ',RADEC ,2,NUMSTR,1,NDO,KERR(3))
-C     Convert to Cartesian coordinates
-            DO N=1,NUMSTR
-               SRA = DSIN(RADEC(1,N))
-               CRA = DCOS(RADEC(1,N))
-               SD  = DSIN(RADEC(2,N))
-               CD  = DCOS(RADEC(2,N))
-               SRC_DIR_VEC(1,N) = CD * CRA
-               SRC_DIR_VEC(2,N) = CD * SRA
-               SRC_DIR_VEC(3,N) = SD
-            ENDDO
+        CALL GET4('STAR2000      ',RADEC ,2,NUMSTR,1,NDO,KERR(3))
 C
 C  Also get proper motions, if they are in the data base
-            IF(KSTRC.eq.1 .or. KSTRC.eq.2 .or. KSTRC.eq.3) Then !Get proper motions
-               CALL GET4('PRMOTION      ',P_motion ,3,NUMSTR,
-     &              1,NDO,KERR(4))
-               If (Kerr(4) .eq. 0) Then
+       IF(KSTRC.eq.1 .or. KSTRC.eq.2 .or. KSTRC.eq.3) Then  !Get proper motions
+        CALL GET4('PRMOTION      ',P_motion ,3,NUMSTR,1,NDO,KERR(4))
+        If (Kerr(4) .eq. 0) Then
 C   Lcode exists, but check that values are not all zero
-                  Do N=1,Numstr
-                     If((P_motion(3,N).ge.1900.D0) .AND. 
-     *                    (DABS(P_motion(1,N)) .gt. 1.D-12  .or. 
-     *                    DABS(P_motion(2,N)) .gt. 1.D-12) )  
-     &                    Pmotion = Pmotion + 1
-                  Enddo
-               Else
+         Do N=1,Numstr
+          If((P_motion(3,N).ge.1900.D0) .AND. 
+     *       (DABS(P_motion(1,N)) .gt. 1.D-12  .or. 
+     *        DABS(P_motion(2,N)) .gt. 1.D-12) )  Pmotion = Pmotion + 1
+          Enddo
+        Else
 C  No Lcode, therefore no proper motions, zero out the array. 
-                  Do N=1,Numstr
-                     P_motion(1,N) = 0.D0
-                     P_motion(2,N) = 0.D0
-                     P_motion(3,N) = 0.D0
-                     P_motion(4,N) = 0.D0
-                  Enddo
-                  Pmotion = 0
-               Endif
-            ENDIF                                 !Get proper motions
+         Do N=1,Numstr
+          P_motion(1,N) = 0.D0
+          P_motion(2,N) = 0.D0
+          P_motion(3,N) = 0.D0
+         Enddo
+          Pmotion = 0
+        Endif
+       ENDIF                                        !Get proper motions
 C
 C  Also get distances, if they are in the data base
-            IF(KPLXC.eq.1) Then                   !Get distances
-               CALL GET4('DISTPSEC      ',D_Psec,NUMSTR,1,1,NDO,KERR(5))
-               If (Kerr(5) .eq. 0) Then
+       IF(KPLXC.eq.1) Then                          !Get distances
+        CALL GET4('DISTPSEC      ',D_Psec,NUMSTR,1,1,NDO,KERR(5))
+        If (Kerr(5) .eq. 0) Then
 C   Check that values not all zero
-                  Do N=1,Numstr
-                     If( D_psec(N).ge.1.D0 ) Dpsec = Dpsec + 1
-                  Enddo
-               Else
+         Do N=1,Numstr
+          If( D_psec(N).ge.1.D0 ) Dpsec = Dpsec + 1
+         Enddo
+        Else
 C  No distances, zero out the array. 
-                  Do N=1,Numstr
-                     D_psec(N) = 0.D0
-                  Enddo
-                  Dpsec = 0
-               Endif
-            ENDIF                                 !Get distances
-         ELSE                                     !HASSVEC
-            CALL GET4('STAR2000VEC   ',SRC_DIR_VEC ,3,NUMSTR,
-     &           1,NDO,KERR(3))
-            PRINT*, 'WARNING: converting src direction to unit vector'
-C     No proper motions for vector stuff yet
-            DO N=1,NUMSTR
-               R = 0.D0
-               DO I=1,3
-                  R = R + SRC_DIR_VEC(I,N)*SRC_DIR_VEC(I,N)
-               ENDDO
-               R = 1.D0/DSQRT(R)
-               DO I=1,3
-                  SRC_DIR_VEC(I,N) = SRC_DIR_VEC(I,N) * R
-               ENDDO
-               P_motion(1,N) = 0.D0
-               P_motion(2,N) = 0.D0
-               P_motion(3,N) = 0.D0
-               P_motion(4,N) = 0.D0
-C  No distances for the vcector stuff yet, zero out the array. 
-               D_psec(N) = 0.D0
-            ENDDO
-            Pmotion = 0
-            Dpsec = 0
-         ENDIF                                    !HASSVEC
+         Do N=1,Numstr
+          D_psec(N) = 0.D0
+         Enddo
+          Dpsec = 0
+        Endif
+       ENDIF                                        !Get distances
 C
-      ENDIF                                       !Get Star Info
+      ENDIF                                         !Get Star Info
 C     print *,' STRI: Pmotion, Dpsec = ', Pmotion, Dpsec
 C
 C  Proper Motions: If proper motions applied, do the work here. RA and Dec
@@ -517,8 +462,8 @@ C  Convert start time to year and fraction, not worrying about leap years:
            xdoy1 = imdoy(Intrvl(2,1)) + Intrvl(3,1) + Intrvl(4,1)/24.d0
      *             + Intrvl(5,1)/1440.d0
            Xepoch = Intrvl(1,1) + xdoy1/365.D0
-              write (6,*) ' Xepoch  = ', Xepoch
-              write (6,*) ' P_epoch = ', P_motion(3,N)
+              write (6,*) " Xepoch  = ", Xepoch
+              write (6,*) " P_epoch = ", P_motion(3,N)
              Do N = 1, Numstr
               X_frac = Xepoch - P_motion(3,N)
                If (P_motion(3,N).eq.0.D0) X_frac = 0.D0
@@ -589,8 +534,6 @@ C                                        CATALOG.
 C             3. RADEC(2,MAX_ARC_SRC)  - THE RIGHT ASCENSIONS AND DECLINATIONS
 C                                        OF THE STARS IN THE STAR CATALOG.
 C                                        (RAD, RAD)
-C             4. SRC_DIR_VEC(3,MAX_ARC_SRC)-Source directions as 3-D vectors.
-C             5. SRC_REF_FRAME(MAX_ARC_SRC)- Refrence frame of the sources
 C           VARIABLES 'TO':
 C             1. CD   -  THE COSINE OF THE DECLINATION OF THE STAR BEING USED IN
 C                        THE CURRENT OBSERVATION. (UNITLESS) 
@@ -661,8 +604,6 @@ C                          Code added to compute and handle proper motions,
 C                          if that option is turned on.
 C                    David Gordon 98.11.25 Removed proper motion computations
 C                          and moved them to the initialization section. 
-C                    James M Anderson  2012.06.10  Changes for spacecraft
-C                        and other near-field source targets.
 C
 C     STRG PROGRAM STRUCTURE
 C
@@ -674,16 +615,33 @@ C      CALL GETA ('STAR ID       ', LSTRNM, 4, 1, 1, NDO, KERR )
       N = LSTRNM(1)
       IF ( KERR .EQ. 0 )  GO TO 320
       CALL CKILL (6HSTRG  , 1, KERR )
+C
+C     Construct the arrays which will hold the information for the
+C     source being used in the current observation in order to pass
+C     this information to the remainder of CALC.
+C
+C     Match the current star name against the names in the star catalog.
+C     If no match, send a message and quit.
+C  300 DO 310  NN = 1, NUMSTR
+C           N = NN
+C           IF  ( ( LNSTAR(1,N) .EQ. LSTRNM(1) )
+C     1     .AND. ( LNSTAR(2,N) .EQ. LSTRNM(2) )
+C     2     .AND. ( LNSTAR(3,N) .EQ. LSTRNM(3) )
+C     3     .AND. ( LNSTAR(4,N) .EQ. LSTRNM(4) ) )  GO TO 320
+C  310 CONTINUE
+C      GO TO 600
+C
 C     Construct the arrays to hold the sine and cosine of the star
 C     declination and right ascention.
   320 CONTINUE
+      RIGHT_ASC   = RADEC(1,N)
+      DECLINATION = RADEC(2,N)
 C
 C***********************************************************************
 C  Check for proper motion computations
       IF (KSTRC.eq.3) THEN
 C  Compute proper motion offsets in RA and Dec
 C   Proper motion epoch
-         PRINT*, 'PROPER MOTION IS BROKEN!!! See code in cstrm.f'
         JDepoch = P_motion(3,N) + 2400000.5
 C   Truncate to integer year
 c       Ieph = Xepoch
@@ -723,21 +681,15 @@ C
       ENDIF
 C***********************************************************************
 C
+      SD = DSIN ( DECLINATION)
+      CD = DCOS ( DECLINATION)
+      SRA = DSIN ( RIGHT_ASC )
+      CRA = DCOS ( RIGHT_ASC )
 C
 C     Compute the star position unit vector.
-      STAR(1) = SRC_DIR_VEC(1,N)
-      STAR(2) = SRC_DIR_VEC(2,N)
-      STAR(3) = SRC_DIR_VEC(3,N)
-      SD = SRC_DIR_VEC(3,N)
-      CD = DSQRT(SRC_DIR_VEC(1,N)*SRC_DIR_VEC(1,N)
-     &     +SRC_DIR_VEC(2,N)*SRC_DIR_VEC(2,N))
-      IF(CD.NE.0.D0) THEN
-         CRA = SRC_DIR_VEC(1,N)/CD
-         SRA = SRC_DIR_VEC(2,N)/CD
-      ELSE
-         CRA = 1.D0
-         SRA = 0.D0
-      ENDIF
+      STAR(1) = CD * CRA
+      STAR(2) = CD * SRA
+      STAR(3) = SD
 C
       IF (KSTRC.eq.1 .or. KSTRC.eq.2) THEN
         PR_RA  = PRcorr(1,N) 
@@ -803,8 +755,8 @@ C       declination and right ascension.
 C
 C 5.2.1 CALLING SEQUENCE -
 C           INPUT VARIABLES:
-C             1. EPBASE(3,3)  -  THE J2000.0 GEOCENTRIC BASELINE VECTOR
-C                                AND ITS CT TIME DERIVATIVES. (M, M/SEC, M/SEC/SEC)
+C             1. EPBASE(3,2)  -  THE J2000.0 GEOCENTRIC BASELINE VECTOR
+C                                AND ITS CT TIME DERIVATIVE. (M, M/SEC)
 C             2. STAR(3)      -  THE J2000.0 SOURCE UNIT VECTOR. (UNITLESS)
 C             3. EARTH(3,3)   =  The ssbc position, velocity, and acceleration
 C                                of the Earth. (m, m/s, m/s**2)
@@ -848,7 +800,7 @@ C
 C
 C 5.2.3 PROGRAM SPECIFICATIONS -
 C
-       Real*8 DDEC(3), DRA(3), DSTRP(2,2), EPBASE(3,3), STAR(3), CDX,
+       Real*8 DDEC(3), DRA(3), DSTRP(2,2), EPBASE(3,2), STAR(3), CDX,
      *        CRAX, SDX, SRAX, EARTH(3,3), SITEV(3,2), c1, c2, tt, 
      *        vg(3), bp(3), bv(3), PMCONT(2), DOTP
        Integer*4 I

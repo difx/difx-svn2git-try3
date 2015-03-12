@@ -217,7 +217,7 @@ C
 C******************************************************************************
       SUBROUTINE ETDG ( R2000, SITLAT, SITLON, SUN, TCTOCF, RTTOCF, 
      *                   USITEP, USITEV, XMOON, EARTH, GAST, STAR, fa, 
-     *                   fad, cent, GEOLAT, KAXIS, TIDEP, TIDEV )
+     *                   fad, cent, GEOLAT, TIDEP, TIDEV )
       IMPLICIT None 
 C
 C     ETDG is the Solid Earth Tide geometry section. It calculates the 
@@ -266,7 +266,6 @@ C                               arguments. (arcsec/century)
 C            15. cent         - The number of Julian centuries elapsed since the
 C                               epoch January 1.5, 2000. (centuries)
 C            16. GEOLAT(2)    - The geocentric latitude at each site. (rad)
-C            17. KAXIS(2)     - THE ANTENNA AXIS TYPES FOR EACH SITE. (UNITLESS)
 C
 C           OUTPUT VARIABLES:
 C             1. TIDEP(3,2)   - The corrections to the J2000.0 geocentric site
@@ -359,7 +358,6 @@ C
      *       TIDEP(3,2), TIDEV(3,2), USITEP(3,2), USITEV(3,2), 
      *       XMOON(3,2), SITLON(2), GAST(2), STAR(3), EARTH(3,3),
      *       fa(5), fad(5), cent, RTTOCF(3,3,2), GEOLAT(2)
-      Integer*2 KAXIS(2)
       Real*8 SunLat, SunLon, MoonLat, MoonLon, h2_R_s(3,2), 
      *       h2_I_s(3,2), h2_R_d(3,2), h2_I_d(3,2), h2_R_l(3,2), 
      *       h2_I_l(3,2), l2_R_s(3,2), l2_I_s(3,2), l2_R_d(3,2), 
@@ -582,7 +580,6 @@ C                        for correlator usage.
 C           David Gordon 99.10.01 Added removal of permanent tide. Adding 
 C                        'Use_Tide' parameter to allow using the Calc 8 
 C                        tide model at the correlators.
-C           James M Anderson 12.02.23 Update for spacecraft
 C                                 
 C****************************************************************************
 C     ETDG PROGRAM STRUCTURE
@@ -802,8 +799,8 @@ C
       DO k=1,2                                  !Loop over sites
 C
 C First check for geocenter station. There should be no tidal effects at the 
-C  geocenter.  Also for spacecraft there are no tidal effects to apply.
-      IF ((Nzero .eq. k) .OR. (KAXIS(K).EQ. 6)) THEN
+C  geocenter.
+      IF (Nzero .eq. k) THEN
 C       print *,'ETDG: Zero site found '
          Do kk=1,3
           TIDEP(kk,k) = 0.D0 
@@ -1863,7 +1860,7 @@ C  Compute the old Calc 8.2 Earth tide values
        IF (Calc_user .eq. 'A' .or. Use_tide .ne. 'RC') THEN
         CALL ETDC8 (R2000, SITLAT, SITLON, SUN, TCTOCF, USITEP,
      *              USITEV, XMOON, EARTH, GAST, STAR, fa, fad, cent,
-     *              KAXIS, TD82P, TD82V)
+     *              TD82P, TD82V)
 C
          If (Calc_user .eq. 'C') Then
            Do k=1,2
@@ -2167,7 +2164,7 @@ C
 C*****************************************************************************
       SUBROUTINE ETDC8 ( R2000, SITLAT,
      1           SITLON, SUN, TCTOCF, USITEP, USITEV, XMOON, EARTH,
-     2           GAST, STAR, fa, fad, cent, KAXIS, TD82P, TD82V )
+     2           GAST, STAR, fa, fad, cent, TD82P, TD82V )
       IMPLICIT None 
 C
 C     ETDC8 calculates the Earth tide effects using the older Calc 8.2 model.
@@ -2302,7 +2299,6 @@ C
      .       term9S, dterm9S, term789S(3), dterm789S(3)
       Real*8 geo_lat(2)
       Real*8 l3, h3
-      Integer*2 KAXIS(2)
       Save l3, h3, XLOVEH, XLOVEL
       Data h3 /.2900D0/
       Data l3 /.0152D0/
@@ -2419,7 +2415,6 @@ C                                 all but the second order, third order, and
 C                                 K1 computations.
 C                    David Gordon 98.01.25 A few corrections found by John
 C                                 Benson, NRAO/VLBA. 
-C                    James M Anderson  2012.03.13  Corrections for spacecraft
 C****************************************************************************
 C     ETDC8 PROGRAM STRUCTURE
 C
@@ -2492,7 +2487,7 @@ C
 C
 C First check for geocenter station. There should be no tidal effects at the
 C  geocenter.
-      IF ((Nzero .eq. k)  .OR. (KAXIS(K).EQ. 6)) THEN
+      IF (Nzero .eq. k) THEN
 C       print *,'ETDG: Zero site found '
          Do kk=1,3
           TD82P(kk,k) = 0.D0

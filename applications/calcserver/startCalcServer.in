@@ -1,8 +1,13 @@
 #!/bin/bash
-# a shell script to start CalcServer
+# a shell script to start the various DiFX CalcServers
 
-echo "terminate CALCServer that is currently running on" `hostname`
-killall CalcServer
+myhostname=`hostname`
+# DiFX_Delay_Server should come last in the following list, as
+# it will make RPC calls to the other servers
+serverlist="CalcServer CALC_9_1_RA_Server DiFX_Delay_Server"
+
+errors_found=0
+
 
 echo "reset environment variables for CALCServer"
 export CALC_USER=C
@@ -14,11 +19,30 @@ export HORIZONS_SRCNAME=TSTCURVE
 
 pushd /tmp
 
-echo "starting new CalcServer on" `hostname`
-@prefix@/bin/CalcServer > /dev/null &
-echo "checking that the CalcServer responds"
-sleep 1
-echo "  "
-@prefix@/bin/checkCalcServer `hostname` 
+for server in $serverlist
+do
+    echo "terminate ${server} that is currently running on ${myhostname}"
+    killall "${server}"
+
+    echo "starting new ${server} on ${myhostname}"
+    if (( $# == 2 )) ; then
+	@prefix@/bin/"${server}" >| "$1"."${server}" 2>&1 &
+    else
+	@prefix@/bin/"${server}" > /dev/null 2>&1 &
+    fi
+    echo "checking that the ${server} responds"
+    sleep 1
+    echo "  "
+    @prefix@/bin/check"${server}"  "${myhostname}"
+    if test $? -ne 0 ; then
+	echo >&2 "${server} is not working properly"
+	errors_found=$(($errors_found + 1))
+    fi
+done
+
+if test $errors_found -ne 0 ; then
+    echo >&2 "$errors_found servers failed to start properly"
+fi
+
 
 popd

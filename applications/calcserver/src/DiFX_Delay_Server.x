@@ -1,0 +1,504 @@
+/* DiFX_Delay_Server.x for rpcgen creation of interface to DiFX delay server */
+
+
+const NUM_DIFX_DELAY_SERVER_1_KFLAGS=64;
+const DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA=-999;
+struct DIFX_DELAY_SERVER_vec {
+    double x;
+    double y;
+    double z;
+};
+struct DIFX_DELAY_SERVER_1_station {
+    /* This structure defines data related to a station */
+    string station_name<>;  /* The name of the station */
+    string antenna_name<>;  /* The name of the antenna */
+    string site_name<>;     /* The name of the site */
+    unsigned short site_ID; /* The 2-character standardized site ID code. */
+                            /* Note: to convert to a character
+                               representation, do
+                               sprintf(s, "%c%c", (char)(site_ID&0xFF), (char)(site_ID>>8))
+                               To convert a two-character code to a site_ID,
+                               do size_ID = (unsigned short)(code[0]) | ((unsigned short)(code[1]) << 8) */
+    string site_type<>;     /* The station site type.
+                               Allowed values are: "fixed" and "earth_orit"
+                             */
+    string axis_type<>;     /* The station axis type
+                               'altz', 'equa', 'xyns', 'xyew' */
+    DIFX_DELAY_SERVER_vec station_pos;
+                            /* station ITRF geocentric position
+                               (right-handed coord)
+                               (meters) */
+    DIFX_DELAY_SERVER_vec station_vel;
+                            /* station ITRF geocentric velocity
+                               (right-handed coord)
+                               (m/s)  Note: not used for site_type=="fixed" */
+    DIFX_DELAY_SERVER_vec station_acc;
+                            /* station ITRF geocentric acceleration
+                               (right-handed coord) (m/s/s)  Note: not used for
+                               site_type=="fixed" */
+    DIFX_DELAY_SERVER_vec station_pointing_dir;
+                            /* A vector describing the pointing direction of
+                               the station at this date.time.  Support for
+                               pointing directions different from source
+                               directions is server software dependent (none
+                               provide this yet).  This may be a unit vector
+                               or a full vector.  The coordinate system is
+                               described by pointing_coord_frame.
+                            */
+    DIFX_DELAY_SERVER_vec station_reference_dir;
+                            /* vector of the station
+                               reference direction of the antenna in a
+                               right-handed coordinate frame.  This is
+                               only used for "earth_orbit" site_types.
+                               The reference direction of the antenna
+                               should be orthogonal to the pointing
+                               direction of the antenna.  "fixed" antennas
+                               have their reference direction determined by
+                               the axis_type and the pointing direction.
+
+                               TODO:  allow for rotating "fixed" antennas such
+                               as the ASKAP design.
+                            */
+    string pointing_coord_frame<>;
+                            /* The coordinate frame of the station pointing
+                               and reference directions:
+                                   "J2000": A J2000 frame 
+                                   "ITRF2008": directions in
+                                               the ITRF2008 frame.  Note that
+                                               this is not yet implemented.
+                            */
+    int pointing_corrections_applied;
+                            /* Flag indicating whether or not the station
+                               pointing and reference directions supplied
+                               above are the actual coordinates, or whether
+                               the antenna pointing has been subsequently
+                               corrected for aberration, refraction, and so
+                               on.
+                                   0: No corrections applied
+                                   1: Abberation corrections applied
+                                   2: Aberration and refraction applied
+                             */
+    double station_position_delay_offset;
+                            /* For "earth_orbit" site_type, this value provides
+                               the delay offset with respect to station 0 at
+                               which the station_pos, station_vel, and
+                               station_acc vectors are provided.  Typically,
+                               this value should be <~ 1 second.  It allows
+                               for more precise computations using the
+                               spacecraft position information to be calculated.
+                               Start with this value set to 0.0.  Then, after
+                               an initial delay calculation, compute the
+                               spacecraft position information using the
+                               time of the model calculation offset by the
+                               delay between source 0 (normally the center of
+                               the Earth) and the spacecraft for the 0th
+                               source (the pointing direction).  Then
+                               set this parameter to that delay, and
+                               re-calculate the measurement delays.
+                               Note: note yet implemented in any delay
+                               server.
+                             */
+    double axis_off;        /* station non-intersecting axis offset (meters) */
+    int primary_axis_wrap;  /* Axis wrap information for the 
+                               primary axis (az, ha, x).  This
+                               parameter allows cable wrap to be specified.
+                               Specify 0 for no data.
+                               az:  -1: clockwise wrap
+                                     0: neutral
+                                    +1: counterclockwise wrap
+                                    Note: CW and CCW are as seen from above the
+                                    station.
+                               ha:  -1: -24: 00 hours
+                                     0: -12:+12 hours
+                                    +1:  00:+24 hours
+                               x:   must be 0
+                             */
+    int secondary_axis_wrap;/* Axis wrap information for the 
+                               secondary axis (el, dec, y).  This
+                               parameter allows over the top to be specified.
+                               Specify 0 for no data
+                               el:  0:  0:90 degrees
+                                   +1: 90:180 degrees
+                               dec:-1: -180:-90 degrees
+                                    0:  -90:+90 degrees
+                                   +1:  +90:+180 degrees
+                               y:  must be 0
+                             */
+    string receiver_name<>; /* The station receivers used (one per station) */
+    double pressure;        /* station surface pressure (millibars) 
+                             * enter 0.0 for none availiable */
+    double antenna_pressure;/* station pressure at the effective aperture
+                                  location of the antenna (millibars) 
+                             * enter 0.0 for none availiable */
+    double temperature;     /* station atmospheric temperature at reference
+                               time in Kelvin.  Enter 0.0 for none available. */
+    double wind_speed;      /* The wind speed (m/s).  Provide -999.0 if no
+                               data are available. */
+    double wind_direction;  /* The wind direction in radians from North through
+                               East.  Specify -999.0 when no data are available
+                            */
+    double antenna_phys_temperature;
+                            /* station physical temperature of the antenna
+                               (possibly allowing for thermal propagation
+                               delays in the antenna) in Kelvin.
+                               Enter 0.0 for none available. */
+};    
+struct DIFX_DELAY_SERVER_1_source {
+    /* This structure defines data related to a source */
+    string source_name<>;   /* The source name (usually up to 16 char) */
+    string IAU_name<>;      /* The IAU name (usually up to 9 char)
+                               Example: "0102-0304"
+                               Note that the delay servers may still expect
+                               the old, non-IAU format such as "0102-030"
+                               with the name in B1950 coordinates
+                            */
+    string source_type<>;  /* The source type:
+                                   "star":  uses ra, dec, dra, ddec, depoch,
+                                          parallax, source_epoch, and assumes
+                                          the coordinate system is J2000
+                                   "ephemeris": uses source_pos, source_vel,
+                                              source_acc
+                            */
+    double ra;              /* J2000.0 coordinates (radians) */
+    double dec;             /* J2000.0 coordinates (radians) */
+    double dra;             /* J2000.0 arcsecs/year */
+    double ddec;            /* J2000.0 arcsecs/year */
+    double depoch;          /* reference date for which proper motion
+                             * corrections are zero, mjd.fract_day */
+    double parallax;        /* source distance in arcsecs of annual
+                             * parallax, = 206265.0 / distance (au) */
+    string coord_frame<>;   /* The coordinate frame of the ephemeris object:
+                                   "J2000_Earth": A J2000 frame with positions
+                                                  velocities and so on 
+                                                  relative to the center of
+                                                  the Earth
+                                   "ITRF2008": positions/velocities/accel in
+                                               the ITRF2008 frame.  Note that
+                                               this is not yet implemented.
+                            */
+    DIFX_DELAY_SERVER_vec source_pos;   /* source position vector (m)*/
+    DIFX_DELAY_SERVER_vec source_vel;   /* source velocity vector (m/s)*/
+    DIFX_DELAY_SERVER_vec source_acc;   /* source velocity vector (m/s)
+                                           Note: The source position,
+                                           velocity, and acceleration are
+                                           all at the retarded time at which
+                                           the center of the Earth sees the
+                                           source at the delay model
+                                           calculation time.
+                                        */
+    DIFX_DELAY_SERVER_vec source_pointing_dir;
+                                        /* source pointing direction unit
+                                           vector.  For spacecraft antennas,
+                                           this is the nominal pointing
+                                           direction of the antenna at the
+                                           retarded time that the center of
+                                           the Earth sees the spacecraft at
+                                           the delay model calculation time.
+                                           For celestial sources, have this
+                                           point at the center of the Earth.
+                                        */
+    DIFX_DELAY_SERVER_vec source_pointing_reference_dir;
+                                        /* source pointing direction unit
+                                           vector for the reference direction
+                                           of the source.  This is used to
+                                           handle calculations of the phase
+                                           of signals from rotating
+                                           spacecraft.  This reference
+                                           direction should be some fixed
+                                           direction relative to the antenna
+                                           that is orthogonal to the
+                                           source_pointing_dir direction.
+                                           For celestial sources, this should
+                                           point toward the J2000 North Pole.
+                                           This direction is the direction
+                                           at the retarded time that the
+                                           center of the Earth sees the
+                                           spacecraft at the delay model
+                                           calculation time.
+                                        */
+};
+struct DIFX_DELAY_SERVER_1_EOP {
+    double EOP_time;        /* EOP epoch date.time (MJD) */
+    double tai_utc;         /* TAI - UTC (secs) */
+    double ut1_utc;         /* UT1 - UTC (secs) */
+    double xpole;           /* earth pole offset, x (arcsec) */
+    double ypole;           /* earth pole offset, y (arcsecs) */
+};
+struct DIFX_DELAY_SERVER_1_RESULTS {
+    /* These data are provided for a single station/source combination */
+    double delay;           /* total group delay in seconds.
+                               Note that for the 0th station, the delay
+                               reported here, if not 0.0, is the
+                               total delay from the emission by the source
+                               itself.
+                             */
+    double dry_atmos;       /* dry atmosphere delay in seconds */
+    double wet_atmos;       /* wet atmosphere delay, rate (secs, sec/sec) */
+    double az;              /* azimuth in radians from North through East */
+    double el;              /* elevation angle in degrees */
+    double primary_axis_angle;/* stations azimuth angle in radians */
+    double secondary_axis_angle;/* station elevation angle in radians */
+    double mount_source_angle; /* mount-source angle (parallactic
+                               angle for altaz mounted telescopes)
+                               in radians.  This
+                               is the angular difference between the
+                               direction of the X axis of the
+                               telescope (for altaz mounts X is
+                               up, Y is horizontal, Z is toward
+                               the source, for equatorial mounts X
+                               is North, Y is West, and Z is
+                               toward the source) compared to the direction
+                               of celestial North at the location
+                               of the target source.  For altaz mounts,
+                               with the target source at the center of
+                               the pointing direction, the mount-source
+                               angle is the same as the parallactic angle,
+                               and is positive for positive hour
+                               angles.  For equatorial mounts, the
+                               mount-source angle for a target source
+                               at the center of the pointing direction
+                               is zero.  For other mount types, and for
+                               target sources away from the pointing
+                               direction, the values may be different.
+                               The mount-source angle is important for
+                               properly dealing with linear
+                               polarization and phase offsets for
+                               circular polarization.  Corrections for the
+                               motion of the source for spacecraft transmitters
+                               are taken into account.
+                            */
+    double station_antenna_theta;
+                            /* This value is the angle between the
+                               nominal pointing direction of the
+                               station antenna receiver and the
+                               direction of the source.  (How far
+                               off-axis is the source from the
+                               station antenna.)
+                             */
+    double station_antenna_phi;
+                            /* This value is rotation angle from the
+                               point of view of the station anntenna
+                               at which the source is seen.  The phi
+                               angle is the angle from the x direction
+                               through the y direction of the station
+                               antenna (with the z direction being the
+                               pointing direction of the station
+                               antenna receiver system and the x
+                               direction the reference direction of
+                               the station antenna, in a right-handed
+                               coordinate system).
+                             */
+    double source_antenna_theta;
+                            /* For spacecraft sources, this value is
+                               the angle between the nominal pointing
+                               direction of the spacecraft antenna and
+                               the direction of the station as seen by
+                               the source.  (How far off-axis is the
+                               station from the spacecraft antenna.)
+                               This is typically used in the
+                               calculation of a phase offset for
+                               direction, such as from a GNSS
+                               spacecraft transmitter.
+                             */
+    double source_antenna_phi;
+                            /* For spacecraft sources, this value is
+                               the azimuthal angle of the spacecraft
+                               antenna at which the station is seen.
+                               The phi angle is the angle from the x
+                               direction through the y direction of
+                               the spacecraft antenna (with the z
+                               direction being the pointing direction
+                               of the spacecraft antenna and the x
+                               direction the reference direction of
+                               the spacecraft antenna, in a
+                               right-handed coordinate system).  This
+                               is typically used in the calculation of
+                               a phase offset for direction, such as
+                               from a GNSS spacecraft transmitter.
+                             */
+    DIFX_DELAY_SERVER_vec UVW;/* u, v, w coordinates in J2000.0 frame (meters)
+                                written into the x,y,z members of the struct. */
+    DIFX_DELAY_SERVER_vec baselineP2000;
+                            /* the baseline in the J2000 frame (m).  This is
+                               the position of station 0 minus the position
+                               of station s, in the J2000 frame, after all
+                               position corrections. */
+    DIFX_DELAY_SERVER_vec baselineV2000;
+                            /* the baseline velocity in the J2000 frame
+                               (m/s).  This is the velocity of station 0
+                               minus the velocity of station s,
+                               in the J2000 frame, after all
+                               position corrections. */
+    DIFX_DELAY_SERVER_vec baselineA2000;
+                            /* the baseline acceleration in the J2000 frame
+                               (m/s/s).  This is the acceleration of station 0
+                               minus the acceleration of station s,
+                               in the J2000 frame, after all
+                               position corrections. */
+};    
+
+
+
+struct getDIFX_DELAY_SERVER_1_arg {
+    /*************************************************************************/
+    /*** Setup ***************************************************************/
+    long request_id;        /* RPC request id number, user's choice          */
+    unsigned long delay_server; /* Which delay server to actually call       */
+                            /* Allowed values are:                           */
+                            /*     0x20000340    CALCServer                  */
+                            /*     0x20000341    CALC_9_1_RA_Server          */
+    long server_struct_setup_code;
+                            /* Server struct code. (struct_code in           */
+                            /* the original servers.) This specifies         */
+                            /* which of the elements of this
+                               structure are actually sent by the RPC
+                               call.  Elements that are not sent are
+                               automatically set to 0.  See
+                               the individual server codes for allowed
+                               options.
+                            */
+    long date;              /* DIFX_DELAY_SERVER model date (MJD) */
+    long ref_frame;         /* DIFX_DELAY_SERVER reference frame: 0 = geocentric */
+    int verbosity;          /* How verbose should logging be? Higher means more messages */
+    short int kflags[NUM_DIFX_DELAY_SERVER_1_KFLAGS];
+                            /* DIFX_DELAY_SERVER model component control flags */
+
+    double time;            /* DIFX_DELAY_SERVER model time UTC (fraction of day) */
+    unsigned long unix_utc_seconds_0; /* DIFX_DELAY_SERVER UTC Unix timestamp 0 */
+    unsigned long unix_utc_seconds_1; /* DIFX_DELAY_SERVER UTC Unix timestamp 1 */
+    double utc_second_fraction; /* DIFX_DELAY_SERVER fractional second offset
+                                   from the DIFX_DELAY_SERVER UTC Unix
+                                   timestamp.                         */
+                            /* Note that the 64 bit Unix timestamp is made
+                               by (time_t)(((uint64_t)(unix_utc_seconds_1) << 32) | unix_utc_seconds_0)
+                               and utc_second_fraction is a fractional second
+                               with respect to this second.           */
+    double sky_frequency;   /* The sky frequency for this observation (Hz) */
+    /*************************************************************************/
+    /*** Stations*************************************************************/
+    int Use_Server_Station_Table; /* Flag to specify whether the delay server
+                                 should use station information from its own
+                                 station table (1) or to use the data from
+                                 this RPC message (0).  Alternatively, a flag
+                                 value of 2 means that the server should use
+                                 the position information in these RPC data,
+                                 but use other information (weather, loading,
+                                 and so on) from the server's own tables.
+                                 Stations will be looked
+                                 up based on the station_name, antenna_name,
+                                 site_name, and site_ID fields below.
+                               */
+    unsigned int Num_Stations; /* The number of stations in this call */
+    DIFX_DELAY_SERVER_1_station station<>; /* The station data */
+    /*************************************************************************/
+    /*** Sources *************************************************************/
+    int Use_Server_Source_Table; /* Flag to specify whether the delay server
+                                 should use source information from its own
+                                 source table (1) or to use the data from
+                                 this RPC message (0).  Sources will be looked
+                                 up based on the source_name and/or IAU_name
+                                 fields below.
+                               */
+    unsigned int Num_Sources; /* The number of sources to process.  */
+    DIFX_DELAY_SERVER_1_source source<>; /* The source data */
+    /*************************************************************************/
+    /*** Earth Orientation Parameters ****************************************/
+    int Use_Server_EOP_Table; /* Flag to specify whether the delay server
+                                 should use EOP information from its own
+                                 EOP table (1) or to use the data from
+                                 this RPC message (0).
+                               */
+    unsigned int Num_EOPs;    /* The number of EOP parameters provided.
+                                 Note that this should be at least 5,
+                                 and preferably 15 or more for many
+                                 delay servers.
+                                     */
+    DIFX_DELAY_SERVER_1_EOP EOP<>; /* The EOP data */
+};
+
+
+
+
+/* DIFX_DELAY_SERVER server reply */
+
+struct DIFX_DELAY_SERVER_1_res {
+    /*************************************************************************/
+    /*** Setup ***************************************************************/
+    int delay_server_error; /* error code from the DiFX_Delay_Server itself  */
+    int server_error;       /* error code from the called delay server program*/
+    int model_error;        /* error code from the underlying delay modeling
+                               software */
+    long request_id;        /* RPC request id number, returned to user       */
+    unsigned long delay_server; /* Which delay server was actually called    */
+                            /* Allowed values are:                           */
+                            /*     0x20000340    CALCServer                  */
+                            /*     0x20000341    CALC_9_1_RA_Server          */
+    long server_struct_setup_code;
+                            /* Server struct code. (struct_code in           */
+                            /* the original servers.) This specifies         */
+                            /* which of the elements of this
+                               structure are actually sent by the RPC
+                               call.  Elements that are not sent are
+                               automatically set to 0.  See
+                               the individual server codes for allowed
+                               options.
+                            */
+    long date;              /* DIFX_DELAY_SERVER model date (MJD) */
+    double time;            /* DIFX_DELAY_SERVER model time UTC (fraction of day) */
+    unsigned long unix_utc_seconds_0; /* DIFX_DELAY_SERVER UTC Unix timestamp 0 */
+    unsigned long unix_utc_seconds_1; /* DIFX_DELAY_SERVER UTC Unix timestamp 1 */
+    double utc_second_fraction; /* DIFX_DELAY_SERVER fractional second offset
+                                   from the DIFX_DELAY_SERVER UTC Unix
+                                   timestamp.                         */
+                            /* Note that the 64 bit Unix timestamp is made
+                               by (time_t)(((uint64_t)(unix_utc_seconds_1) << 32) | unix_utc_seconds_0)
+                               and utc_second_fraction is a fractional second
+                               with respect to this second.           */
+    /*************************************************************************/
+    /*** Stations*************************************************************/
+    unsigned int Num_Stations; /* The number of stations in this call */
+    /*************************************************************************/
+    /*** Sources *************************************************************/
+    unsigned int Num_Sources; /* The number of sources to process.  Note that
+                                 the 0th source is used as the pointing
+                                 direction of the stations, for those delay
+                                 model servers that support off-axis
+                                 calculations.  For array observations where
+                                 stations are pointed in different directions,
+                                 multiple calls to this delay server must be
+                                 made.
+                              */
+    /*************************************************************************/
+    /*** Results *************************************************************/
+    /* Note that the array below is actually two-dimensional, and for
+       indices station and source goes as
+       array[station*Num_Sources + source]
+    */
+    DIFX_DELAY_SERVER_1_RESULTS result<>;/* The delay results */
+};
+
+
+union getDIFX_DELAY_SERVER_1_res switch (int this_error) {
+case 0:
+    struct DIFX_DELAY_SERVER_1_res response;
+case 1:
+    char *errmsg;
+default:
+    void; /* error ocurred */
+};
+
+
+/* CALCServer                uses 0x20000340 */
+/* CALC_9_1_RA_SERVER_Server uses 0x20000341 */
+/* DIFX_DELAY_SERVER_Server  uses 0x20000342 */
+
+program DIFX_DELAY_SERVER_PROG {
+    version DIFX_DELAY_SERVER_VERS_1 {
+        getDIFX_DELAY_SERVER_1_res GETDIFX_DELAY_SERVER(getDIFX_DELAY_SERVER_1_arg) = 1;
+    } = 1;
+    /*
+    version DIFX_DELAY_SERVER_VERS_2 {
+        getDIFX_DELAY_SERVER_2_res GETDIFX_DELAY_SERVER(getDIFX_DELAY_SERVER_2_arg) = 1;
+    } = 2;
+    */
+} = 0x20000342;

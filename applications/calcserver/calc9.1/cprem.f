@@ -702,7 +702,7 @@ C    enough to include in this partial derivatives section.)
       CALL MMUL5 ( RPC, RN(1,1,1), RS(1,1,2), RDNP, RW(1,1,1),
      .           PR2000(1,1,2))
 C
-C   Compute the partial derivaiives of the J2000.0 baselene position and
+C   Compute the partial derivaiives of the J200.0 baselene position and
 C   velocity vectors with respect to the precession constant.
       DO 300  K = 1,2
            CALL VECRT ( PR2000(1,1,K), CFBASE, PBASE(1,K) )

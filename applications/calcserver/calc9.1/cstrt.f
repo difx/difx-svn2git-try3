@@ -112,7 +112,7 @@ C   Program specifications -
 C
       Real*8 JDY2K, JD1
       Integer*4 Iyear, Imonth, Iday 
-      Integer*4  IFLAG(64)
+      Integer*4  IFLAG(62)
       Integer*2  LCALC(40), LFCIO(40), LHIST(66), LNAME(5), LNAMO(5),
      *           IBUF(40), IOS, trimlen, host_len, hist_len
       Integer*4 Ipid, Getpid, jj 
@@ -236,7 +236,6 @@ C                              'INTRVAL4', the start/stop interval
 C                              (yr/month/day/hr/min) using a 4-digit year. If
 C                              not there will use 'INTERVAL' (2-digit year).
 C     99.10.01 D.Gordon        Changed to version 9.1.
-C     12.05.22 James M AndersonChanges for new TOPO flag
 C
 C   START Program Structure
 C
@@ -382,7 +381,7 @@ C 1.2.2 COMMON BLOCKS USED -
 C
       INCLUDE 'ccon.i'
 C   VARIABLES 'FROM' -
-C     1) IFLAG(64) - THE ARRAY OF CALC DEBUG AND CONTROL FLAGS.
+C     1) IFLAG(62) - THE ARRAY OF CALC DEBUG AND CONTROL FLAGS.
 C
       Real*8    XCALC
       Integer*2 NFLAG,NFLAGC,loadm(7),LFILE(3)
@@ -394,9 +393,9 @@ C     2) NFLAGC - THE NUMBER OF CALC CONTROL FLAGS.
 C
 C 1.2.3 PROGRAM SPECIFICATIONS
 C
-      INTEGER*4   IFLAG(64), I, J
-      INTEGER*2   LFLAGC(2,32), IFLAGC(32), idm7
-      CHARACTER*4 C_LFLAGC(32)
+      INTEGER*4   IFLAG(62), I, J
+      INTEGER*2   LFLAGC(2,31), IFLAGC(31), idm7
+      CHARACTER*4 C_LFLAGC(31)
       EQUIVALENCE (IFLAG(1),KATMC), (C_LFLAGC,LFLAGC)
 C
       DATA C_LFLAGC /
@@ -405,7 +404,7 @@ C
      .  'WOBC','UTCC','ATIC','CTIC','PEPC','DIUC',
      .  'M19C','ROSC','STEC','SUNC','SARC','THEC',
      .  'MATC','VECC','OCEC','ASTC','STAC','PLXC',
-     .  'PANC','TOPC'/
+     .  'PANC'/
 C
 C 1.2.4 DATA BASE ACCESS
 C     ACCESS CODES -
@@ -416,8 +415,8 @@ C                             CALC CONTROL FLAG VALUES.
 C       3) 'CALC VER      ' - THE DATA BASE ACCESS CODE FOR THE CURRENT
 C                             CALC VERSION NUMBER.
 C     'PUT' VARIABLES - 
-C       1) LFLAGC(2,32) - THE ARRAY OF CALC CONTROL FLAG NAMES. 
-C       2) IFLAGC(32)   - THE ARRAY OF CALC CONTROL FLAG VALUES.
+C       1) LFLAGC(2,31) - THE ARRAY OF CALC CONTROL FLAG NAMES. 
+C       2) IFLAGC(31)   - THE ARRAY OF CALC CONTROL FLAG VALUES.
 C       3) XCALC        - THE CALC VERSION NUMBER (REAL NUMBER).
 C 
 C 1.2.6 SUBROUTINE INTERFACE
@@ -437,7 +436,6 @@ C                             implimented.
 C                    David Gordon 94.04.15 Converted to Implicit None
 C                    David Gordon 98.07.23 Removed ISECU, IDISC, and IOPEN
 C                                   from Common /STACM/.
-C                    James M Anderson 12.05.22  Changes for new TOPO flag
 C
 C   STAI Program Structure
 C
@@ -464,12 +462,12 @@ C   Check for debug output.
       WRITE(6,220) NFLAG,NFLAGC
 220   FORMAT(1X,'NFLAG = ',I5,5X,'NFLAGC = ',I5)
       WRITE(6,230) IFLAG
-230   FORMAT(1X,'IFLAG = ',32I2,/,9X,32I2)
+230   FORMAT(1X,'IFLAG = ',31I2,/,9X,31I2)
       WRITE(6,240) IFLAGC
-240   FORMAT(1X,'IFLAGC =' ,10I5,/, 9X,10I5,/, 9X,10I5,/, 9X,2I5)
+240   FORMAT(1X,'IFLAGC =' ,10I5,/, 9X,10I5,/, 9X,10I5)
       WRITE(6,250) LFLAGC
 250   FORMAT(1X,'LFLAGC = ',10(2A2,1X),/,10X,10(2A2,1X),
-     *        /,10X,10(2A2,1X),/,10X,2(2A2,1X))
+     *        /,10X,10(2A2,1X))
 C
 1000  CONTINUE
       RETURN
