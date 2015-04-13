@@ -170,7 +170,7 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 	dest->mjdStart     = src->mjdStart;
 	dest->mjdEnd       = src->mjdEnd;
 	dest->startSeconds = src->startSeconds;
-        dest->durSeconds   = src->durSeconds;
+	dest->durSeconds   = src->durSeconds;
 	dest->maxNSBetweenUVShifts = src->maxNSBetweenUVShifts;
 	dest->maxNSBetweenACAvg = src->maxNSBetweenACAvg;
 	snprintf(dest->identifier, DIFXIO_NAME_LENGTH, "%s", src->identifier);
@@ -492,14 +492,14 @@ int writeDifxScan(FILE *out, const DifxScan *ds, int scanId, const DifxConfig *d
 
 	ds += scanId;
 
-        writeDifxLine1(out, "SCAN %d IDENTIFIER", scanId, ds->identifier);
-        writeDifxLineInt1(out, "SCAN %d START (S)", scanId, ds->startSeconds);
+	writeDifxLine1(out, "SCAN %d IDENTIFIER", scanId, ds->identifier);
+	writeDifxLineInt1(out, "SCAN %d START (S)", scanId, ds->startSeconds);
 	writeDifxLineInt1(out, "SCAN %d DUR (S)", scanId, ds->durSeconds);
-        writeDifxLine1(out, "SCAN %d OBS MODE NAME", scanId, ds->obsModeName);
+	writeDifxLine1(out, "SCAN %d OBS MODE NAME", scanId, ds->obsModeName);
 	writeDifxLineInt1(out, "SCAN %d UVSHIFT INTERVAL (NS)", scanId, ds->maxNSBetweenUVShifts);
 	writeDifxLineInt1(out, "SCAN %d AC AVG INTERVAL (NS)", scanId, ds->maxNSBetweenACAvg);
 	writeDifxLineInt1(out, "SCAN %d POINTING SRC", scanId, ds->pointingCentreSrc);
-        writeDifxLineInt1(out, "SCAN %d NUM PHS CTRS", scanId, ds->nPhaseCentres);
+	writeDifxLineInt1(out, "SCAN %d NUM PHS CTRS", scanId, ds->nPhaseCentres);
 	for(i = 0; i < ds->nPhaseCentres; i++)
 	{
 		writeDifxLineInt2(out, "SCAN %d PHS CTR %d", scanId, i, ds->phsCentreSrcs[i]);

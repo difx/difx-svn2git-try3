@@ -2317,6 +2317,15 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		{
                     char testc;
                     const char* str;
+                    row = DifxParametersfind(cp, row, "FRAME");
+                    if(row > 0)
+                    {
+                        snprintf(D->spacecraft[s].frame, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+                    }
+                    else
+                    {
+                        D->spacecraft[s].frame[0] = 0;
+                    }
                     N = DifxParametersbatchfind1(cp, rows[N_SPACECRAFT_ROWS-1], spacecraftKeys, s, N_SPACECRAFT_ROWS, rows);
                     if(N < N_SPACECRAFT_ROWS)
                     {
@@ -2446,8 +2455,8 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
                     row = DifxParametersfind1(cp, row, "SPACECRAFT %d ROWS", s);
                     if(row < 0)
                     {
-			fprintf(stderr, "SPACECRAFT %d ROWS\n", s);
-			return 0;
+                        fprintf(stderr, "SPACECRAFT %d ROWS\n", s);
+                        return 0;
                     }
                     D->spacecraft[s].nPoint = atoi(DifxParametersvalue(cp, rows[1]));
                     D->spacecraft[s].pos = (sixVector *)calloc(D->spacecraft[s].nPoint, sizeof(sixVector));
@@ -4354,4 +4363,15 @@ const DifxSource *DifxInputGetSource(const DifxInput *D, const char *sourceName)
 	{
 		return 0;
 	}
+}
+
+
+char* difx_strlcpy(char *dest, const char *src, size_t n)
+{
+	char* r = strncpy(dest, src, n);
+	if(n>0)
+	{
+		dest[n-1] = 0;
+	}
+	return r;
 }

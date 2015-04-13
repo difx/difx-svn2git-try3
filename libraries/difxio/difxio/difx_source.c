@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2011, 2014 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2007-2011, 2014, 2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -34,6 +34,25 @@
 #include "difxio/parsedifx.h"
 #include "difxio/difx_write.h"
 
+/* These names must match what delay server expects */
+const char sourceCoordinateFrameTypeNames[][MAX_SOURCE_COORDINATE_FRAME_STRING_LENGTH] =
+{
+    "UNKNOWN",
+    "",
+    "J2000",
+    "J2000_CMB",
+    "J2000_CMB_1",
+    "J2000_MWB",
+    "J2000_MWB_1",
+    "J2000_SSB",
+    "J2000_Earth",
+    "ITRF2008",
+	"OTHER"		/* don't expect the right parallactic angle or delay model! */
+};
+
+
+
+
 DifxSource *newDifxSourceArray(int nSource)
 {
 	DifxSource *ds;
@@ -43,7 +62,7 @@ DifxSource *newDifxSourceArray(int nSource)
 	for(s = 0; s < nSource; s++)
 	{
 		ds[s].spacecraftId = -1;
-                ds[s].sc_epoch = 0.0;
+        ds[s].sc_epoch = 0.0;
 		ds[s].numFitsSourceIds = 0;
 		ds[s].fitsSourceIds = 0;
 		ds[s].pmRA = 0.0;

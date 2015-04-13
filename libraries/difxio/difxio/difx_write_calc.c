@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012, 2014 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2014, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -30,6 +30,34 @@
 #include <stdlib.h>
 #include <string.h>
 #include "difxio/difx_write.h"
+
+const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
+{
+	"CALCServer",
+	"CALC_9_1_RA_Server",
+	"unknown"
+};
+const unsigned long delayServerTypeIds[] =
+{
+	0x20000340,   /* CALCServer                  */
+	0x20000341,   /* CALC_9_1_RA_Server          */
+	0
+};
+
+enum DelayServerType stringToDelayServerType(const char *str)
+{
+	enum DelayServerType ds;
+
+	for(ds = 0; ds < NumDelayServerTypes; ++ds)
+	{
+		if(strcasecmp(str, delayServerTypeNames[ds]) == 0)
+		{
+			break;
+		}
+	}
+
+	return ds;
+}
 
 int writeDifxCalc(const DifxInput *D)
 {
@@ -110,6 +138,15 @@ int writeDifxCalc(const DifxInput *D)
 	writeDifxLineInt(out, "SPECTRAL AVG", D->specAvg);
 	writeDifxLine(out, "TAPER FUNCTION", D->job->taperFunction);
 	writeDifxLineInt(out, "DELAY POLY ORDER", D->job->polyOrder);
+	writeDifxLineInt(out, "DELAY POLY INTERVAL", D->job->polyInterval);
+	if(D->job->delayServerHost != 0)
+	{
+		writeDifxLine(out, "DELAY SERVER HOST", D->job->delayServerHost);		
+	}
+	writeDifxLine(out, "DELAY SERVER TYPE", delayServerTypeNames[D->job->delayServerType]);
+	writeDifxLineULong(out, "DELAY VERSION", D->job->delayVersion);
+	writeDifxLineULong(out, "DELAY PROGRAM", D->job->delayProgram);
+	writeDifxLineULong(out, "DELAY HANDLER", D->job->delayHandler);
 	writeDifxLineInt(out, "DELAY POLY INTERVAL", D->job->polyInterval);
 	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1, 1);
         writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 1);

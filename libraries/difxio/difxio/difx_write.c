@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -223,6 +223,16 @@ int writeDifxLineInt2(FILE *out, const char *key, int i1, int i2, int value)
 	snprintf(k, MAX_DIFX_KEY_LEN+1, key, i1, i2);
 	
 	return writeDifxLine(out, k, v);
+}
+
+int writeDifxLineULong(FILE *out, const char *key, unsigned long value)
+{
+	const int numLength = 32;
+	char v[numLength];
+
+	snprintf(v, numLength, "0xlX%", value);
+
+	return writeDifxLine(out, key, v);
 }
 
 int writeDifxLineDouble(FILE *out, const char *key, const char *format, 

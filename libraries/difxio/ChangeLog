@@ -1,3 +1,17 @@
+2015-04-13  James Anderson  <anderson@gfz-potsdam>
+
+	* difxio/difx_write.h:
+	* difxio/difx_input.c:
+	* difxio/difx_source.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_write.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_job.c:
+	* difxio/difx_input.h: changes for new DiFX_Delay_Server RPC calls
+	in calcif2 and new numerical derivatives for UVW, LMN, XYZ delay 
+	deltas
+
 3.4.1
 * Changes for space VLBI correlation
 

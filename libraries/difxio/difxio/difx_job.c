@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2011 by Walter Brisken                             *
+ *   Copyright (C) 2007-2011, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -41,6 +41,16 @@ const char aberCorrStrings[][MAX_ABER_CORR_STRING_LENGTH] =
 	"NO ATMOS"
 };
 
+const char performDirectionDerivativeTypeNames[][MAX_PERFORM_DIRECTION_DERIVATIVE_STRING_LENGTH] = 
+{
+	"NONE",
+	"DEFAULT",
+	"FIRST",
+	"FIRST2",
+	"SECOND",
+	"SECOND2"
+};
+
 DifxJob *newDifxJobArray(int nJob)
 {
 	DifxJob *dj;
@@ -49,11 +59,14 @@ DifxJob *newDifxJobArray(int nJob)
 	dj = (DifxJob *)calloc(nJob, sizeof(DifxJob));
 	for(j = 0; j < nJob; j++)
 	{
-		snprintf(dj[j].obsCode,       DIFXIO_OBSCODE_LENGTH,  "%s", "DIFX");
-		snprintf(dj[j].taperFunction, DIFXIO_TAPER_LENGTH,    "%s", "UNIFORM");
-		snprintf(dj[j].calcServer,    DIFXIO_HOSTNAME_LENGTH, "%s", "UNKNOWN");
-		dj[j].calcProgram = -1;
-		dj[j].calcVersion = -1;
+		snprintf(dj[j].obsCode,        DIFXIO_OBSCODE_LENGTH,  "%s", "DIFX");
+		snprintf(dj[j].taperFunction,  DIFXIO_TAPER_LENGTH,    "%s", "UNIFORM");
+		snprintf(dj[j].delayServerHost,DIFXIO_HOSTNAME_LENGTH, "%s", "UNKNOWN");
+		dj[j].delayServerType = CALCServer;
+		dj[j].delayVersion = 0;
+		dj[j].delayProgram = 0;
+		dj[j].delayHandler = 0;
+		dj[j].delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
 	}
 
 	return dj;

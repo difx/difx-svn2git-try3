@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008, 2015 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -62,6 +62,8 @@ int writeDifxLineInt(FILE *out, const char *key, int value);
 int writeDifxLineInt1(FILE *out, const char *key, int i1, int value);
 
 int writeDifxLineInt2(FILE *out, const char *key, int i1, int i2, int value);
+
+int writeDifxLineULong(FILE *out, const char *key, unsigned long value);
 
 
 int writeDifxLineDouble(FILE *out, const char *key, const char *format, 
