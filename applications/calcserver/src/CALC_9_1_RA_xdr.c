@@ -345,6 +345,8 @@ xdr_CALC_9_1_RARecord_5_0_0(xdrs, struct_code, objp)
             objp->struct_code = struct_code;
             objp->request_id = struct_code;
         }
+        if (!xdr_u_long (xdrs, &objp->server_version))
+            return FALSE;
 	if (!xdr_long(xdrs, &objp->date))
 		return (FALSE);
 	if (!xdr_double(xdrs, &objp->time))
@@ -395,6 +397,8 @@ xdr_CALC_9_1_RARecord_5_1_0(xdrs, struct_code, objp)
         if(xdrs->x_op == XDR_DECODE) {
             objp->struct_code = struct_code;
         }
+        if (!xdr_u_long (xdrs, &objp->server_version))
+            return FALSE;
 	if (!xdr_long(xdrs, &objp->request_id))
 		return (FALSE);
 	if (!xdr_long(xdrs, &objp->date))

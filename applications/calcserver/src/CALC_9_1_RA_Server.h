@@ -199,6 +199,9 @@ struct CALC_9_1_RARecord {
 							   options.
 							*/
 	long request_id;		/* RPC request id number, returned by Server */
+	unsigned long server_version;
+                         	/* The exact version number of the delay server
+                               software that was used. */
 	long date;				/* CALC_9_1_RA model date (MJD) */
 	double time;			/* CALC_9_1_RA model time UTC (fraction of day) */
 	double delay[2];		/* total group delay, rate (secs, sec/sec) */

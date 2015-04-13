@@ -32,7 +32,6 @@ const char Version[] = "DiFX_Delay_Server Version 0.0.0";
 static struct timeval TIMEOUT = {25, 0};
 #define SECONDS_PER_DAY INT64_C(86400)
 #define SECONDS_PER_DAY_DBL (86400.0)
-#define MJD_AT_UNIX_TIME_ORIGIN 40587
 
 
 
@@ -85,12 +84,12 @@ static void check_date_for_logfile(void)
 
 
 /******************************************************************************/
-getCALC_res *
+struct getCALC_res *
 getcalc_1(argp, clnt)
 	struct getCALC_arg *argp;
 	CLIENT *clnt;
 {
-	static getCALC_res clnt_res;
+	static struct getCALC_res clnt_res;
     enum clnt_stat clnt_stat;
 
 	memset((char *)&clnt_res, 0, sizeof (clnt_res));
@@ -110,15 +109,15 @@ getcalc_1(argp, clnt)
 
 
 /******************************************************************************/
-static int difx_delay_server_prog_1_CALCPROG(getDIFX_DELAY_SERVER_1_arg *arg_0, DIFX_DELAY_SERVER_1_res *res_0)
+static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *arg_0, struct DIFX_DELAY_SERVER_1_res *res_0)
 {
     static int initialized = 0;
     static char localhost[] = "localhost";
     static CLIENT *cl = NULL;
     /* Copy incoming arguments to the format needed for CALC_9_1_RA */
-    getCALC_arg localargument;
-    getCALC_arg *arg_1 = &localargument;
-    getCALC_res *res_1 = NULL;
+    struct getCALC_arg localargument;
+    struct getCALC_arg *arg_1 = &localargument;
+    struct getCALC_res *res_1 = NULL;
     unsigned int station;
     unsigned int source;
     unsigned int k;
@@ -289,42 +288,24 @@ static int difx_delay_server_prog_1_CALCPROG(getDIFX_DELAY_SERVER_1_arg *arg_0, 
             res_0->delay_server = CALCPROG;
             res_0->date = res_1->getCALC_res_u.record.date;
             res_0->time = res_1->getCALC_res_u.record.time;
-            {
-                /* convert MJD time to Unix time */
-                /* keep operations separate in order to preserve precision */
-                double d;
-                int_fast64_t unix_sec;
-                int_fast64_t i;
-                uint_fast64_t u;
-                unix_sec = ((int_fast64_t)res_0->date-MJD_AT_UNIX_TIME_ORIGIN)*SECONDS_PER_DAY_DBL;
-                d = res_0->time*SECONDS_PER_DAY_DBL;
-                i = d;
-                unix_sec += i;
-                d -= i;
-                if(d < 0.0)
-                {
-                    d += 1.0;
-                    --unix_sec;
-                }
-                u = unix_sec;
-                res_0->unix_utc_seconds_0 = u & 0xFFFFFFFF;
-                res_0->unix_utc_seconds_0 = (u >> 32);
-                res_0->utc_second_fraction = d;
-            }
             /* station data */
             res_0->result.result_val[station*arg_0->Num_Sources+source].delay = res_1->getCALC_res_u.record.delay[0];
             res_0->result.result_val[station*arg_0->Num_Sources+source].dry_atmos = res_1->getCALC_res_u.record.dry_atmos[1];
             res_0->result.result_val[station*arg_0->Num_Sources+source].wet_atmos = res_1->getCALC_res_u.record.wet_atmos[1];
-            res_0->result.result_val[station*arg_0->Num_Sources+source].az = res_1->getCALC_res_u.record.az[1];
-            res_0->result.result_val[station*arg_0->Num_Sources+source].el = res_1->getCALC_res_u.record.el[1];
+            res_0->result.result_val[station*arg_0->Num_Sources+source].az_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[station*arg_0->Num_Sources+source].el_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[station*arg_0->Num_Sources+source].az_geom = res_1->getCALC_res_u.record.az[1];
+            res_0->result.result_val[station*arg_0->Num_Sources+source].el_geom = res_1->getCALC_res_u.record.el[1];
             res_0->result.result_val[station*arg_0->Num_Sources+source].primary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[station*arg_0->Num_Sources+source].secondary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[station*arg_0->Num_Sources+source].mount_source_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             /* station 0 data */
             res_0->result.result_val[source].dry_atmos = res_1->getCALC_res_u.record.dry_atmos[0];
             res_0->result.result_val[source].wet_atmos = res_1->getCALC_res_u.record.wet_atmos[0];
-            res_0->result.result_val[source].az = res_1->getCALC_res_u.record.az[0];
-            res_0->result.result_val[source].el = res_1->getCALC_res_u.record.el[0];
+            res_0->result.result_val[source].az_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[source].el_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[source].az_geom = res_1->getCALC_res_u.record.az[0];
+            res_0->result.result_val[source].el_geom = res_1->getCALC_res_u.record.el[0];
             res_0->result.result_val[source].primary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[source].secondary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[source].mount_source_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
@@ -347,12 +328,12 @@ static int difx_delay_server_prog_1_CALCPROG(getDIFX_DELAY_SERVER_1_arg *arg_0, 
 
 
 /******************************************************************************/
-getCALC_9_1_RA_res *
+struct getCALC_9_1_RA_res *
 getcalc_9_1_ra_1(argp, clnt)
 	struct getCALC_9_1_RA_arg *argp;
 	CLIENT *clnt;
 {
-	static getCALC_9_1_RA_res clnt_res;
+	static struct getCALC_9_1_RA_res clnt_res;
     enum clnt_stat clnt_stat;
 
 	memset((char *)&clnt_res, 0, sizeof (clnt_res));
@@ -372,15 +353,15 @@ getcalc_9_1_ra_1(argp, clnt)
 
 
 /******************************************************************************/
-static int difx_delay_server_prog_1_CALC_9_1_RAPROG(getDIFX_DELAY_SERVER_1_arg *arg_0, DIFX_DELAY_SERVER_1_res *res_0)
+static int difx_delay_server_prog_1_CALC_9_1_RAPROG(struct getDIFX_DELAY_SERVER_1_arg *arg_0, struct DIFX_DELAY_SERVER_1_res *res_0)
 {
     static int initialized = 0;
     static char localhost[] = "localhost";
     static CLIENT *cl = NULL;
     /* Copy incoming arguments to the format needed for CALC_9_1_RA */
-    getCALC_9_1_RA_arg localargument;
-    getCALC_9_1_RA_arg *arg_1 = &localargument;
-    getCALC_9_1_RA_res *res_1 = NULL;
+    struct getCALC_9_1_RA_arg localargument;
+    struct getCALC_9_1_RA_arg *arg_1 = &localargument;
+    struct getCALC_9_1_RA_res *res_1 = NULL;
     unsigned int station;
     unsigned int source;
     unsigned int k;
@@ -561,6 +542,28 @@ static int difx_delay_server_prog_1_CALC_9_1_RAPROG(getDIFX_DELAY_SERVER_1_arg *
             arg_1->source_pos[0] = arg_0->source.source_val[source].source_pos.x;
             arg_1->source_pos[1] = arg_0->source.source_val[source].source_pos.y;
             arg_1->source_pos[2] = arg_0->source.source_val[source].source_pos.z;
+            if((arg_0->source.source_val[source].coord_frame[0] == 0)
+              || (strcmp(arg_0->source.source_val[source].coord_frame,"J2000") == 0)
+              || (strcmp(arg_0->source.source_val[source].coord_frame,"J2000_CMB") == 0)
+              || (strcmp(arg_0->source.source_val[source].coord_frame,"J2000_CMB_1") == 0)
+              || (strcmp(arg_0->source.source_val[source].coord_frame,"J2000_MWB") == 0)
+              || (strcmp(arg_0->source.source_val[source].coord_frame,"J2000_MWB_1") == 0)
+              || (strcmp(arg_0->source.source_val[source].coord_frame,"J2000_SSB") == 0)
+               )
+            {
+                /* For these coordinate frames, the CALC_9_1_RA delay server
+                   requires the Cartesian coordinates to only be a unit vector
+                */
+                double r = sqrt(arg_1->source_pos[0]*arg_1->source_pos[0]
+                               + arg_1->source_pos[1]*arg_1->source_pos[1]
+                               + arg_1->source_pos[2]*arg_1->source_pos[2]);
+                if(r > 0.0)
+                {
+                    arg_1->source_pos[0] /= r;
+                    arg_1->source_pos[1] /= r;
+                    arg_1->source_pos[2] /= r;
+                }
+            }
             arg_1->source_vel[0] = arg_0->source.source_val[source].source_vel.x;
             arg_1->source_vel[1] = arg_0->source.source_val[source].source_vel.y;
             arg_1->source_vel[2] = arg_0->source.source_val[source].source_vel.z;
@@ -588,44 +591,28 @@ static int difx_delay_server_prog_1_CALC_9_1_RAPROG(getDIFX_DELAY_SERVER_1_arg *
             }
             res_0->request_id = res_1->getCALC_9_1_RA_res_u.record.request_id;
             res_0->delay_server = CALC_9_1_RAPROG;
+            res_0->server_struct_setup_code = res_1->getCALC_9_1_RA_res_u.record.struct_code;
+            res_0->server_version = res_1->getCALC_9_1_RA_res_u.record.server_version;
             res_0->date = res_1->getCALC_9_1_RA_res_u.record.date;
             res_0->time = res_1->getCALC_9_1_RA_res_u.record.time;
-            {
-                /* convert MJD time to Unix time */
-                /* keep operations separate in order to preserve precision */
-                double d;
-                int_fast64_t unix_sec;
-                int_fast64_t i;
-                uint_fast64_t u;
-                unix_sec = ((int_fast64_t)res_0->date-MJD_AT_UNIX_TIME_ORIGIN)*SECONDS_PER_DAY;
-                d = res_0->time*SECONDS_PER_DAY_DBL;
-                i = d;
-                unix_sec += i;
-                d -= i;
-                if(d < 0.0)
-                {
-                    d += 1.0;
-                    --unix_sec;
-                }
-                u = unix_sec;
-                res_0->unix_utc_seconds_0 = u & 0xFFFFFFFF;
-                res_0->unix_utc_seconds_0 = (u >> 32);
-                res_0->utc_second_fraction = d;
-            }
             /* station data */
             res_0->result.result_val[station*arg_0->Num_Sources+source].delay = res_1->getCALC_9_1_RA_res_u.record.delay[0];
             res_0->result.result_val[station*arg_0->Num_Sources+source].dry_atmos = res_1->getCALC_9_1_RA_res_u.record.dry_atmos[1];
             res_0->result.result_val[station*arg_0->Num_Sources+source].wet_atmos = res_1->getCALC_9_1_RA_res_u.record.wet_atmos[1];
-            res_0->result.result_val[station*arg_0->Num_Sources+source].az = res_1->getCALC_9_1_RA_res_u.record.az[1];
-            res_0->result.result_val[station*arg_0->Num_Sources+source].el = res_1->getCALC_9_1_RA_res_u.record.el[1];
+            res_0->result.result_val[station*arg_0->Num_Sources+source].az_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[station*arg_0->Num_Sources+source].el_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[station*arg_0->Num_Sources+source].az_geom = res_1->getCALC_9_1_RA_res_u.record.az[1];
+            res_0->result.result_val[station*arg_0->Num_Sources+source].el_geom = res_1->getCALC_9_1_RA_res_u.record.el[1];
             res_0->result.result_val[station*arg_0->Num_Sources+source].primary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[station*arg_0->Num_Sources+source].secondary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[station*arg_0->Num_Sources+source].mount_source_angle = res_1->getCALC_9_1_RA_res_u.record.msa[1];
             /* station 0 data */
             res_0->result.result_val[source].dry_atmos = res_1->getCALC_9_1_RA_res_u.record.dry_atmos[0];
             res_0->result.result_val[source].wet_atmos = res_1->getCALC_9_1_RA_res_u.record.wet_atmos[0];
-            res_0->result.result_val[source].az = res_1->getCALC_9_1_RA_res_u.record.az[0];
-            res_0->result.result_val[source].el = res_1->getCALC_9_1_RA_res_u.record.el[0];
+            res_0->result.result_val[source].az_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[source].el_corr = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+            res_0->result.result_val[source].az_geom = res_1->getCALC_9_1_RA_res_u.record.az[0];
+            res_0->result.result_val[source].el_geom = res_1->getCALC_9_1_RA_res_u.record.el[0];
             res_0->result.result_val[source].primary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[source].secondary_axis_angle = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
             res_0->result.result_val[source].mount_source_angle = res_1->getCALC_9_1_RA_res_u.record.msa[0];
@@ -671,8 +658,8 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
  * turn was based on Ron Heald's Tcal RPC server function.
  */
 {
-    static getDIFX_DELAY_SERVER_1_arg argument;/* RPC caller passes this */
-    static getDIFX_DELAY_SERVER_1_res result;  /* we return this to RPC caller */
+    static struct getDIFX_DELAY_SERVER_1_arg argument;/* RPC caller passes this */
+    static struct getDIFX_DELAY_SERVER_1_res result;  /* we return this to RPC caller */
     int my_error_code = 0;
     int handler_error_code = 0;
 
@@ -751,8 +738,6 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
                 fprintf(flog, "request arg: kflag[%02u]=%hd\n", k, argument.kflags[k]);
             }
         }
-        fprintf(flog, "request arg: unix_utc_seconds_0 = 0x%lX unix_utc_seconds_1 = 0x%lX\n", argument.unix_utc_seconds_0, argument.unix_utc_seconds_1);
-        fprintf(flog, "request arg: utc_second_fraction = %E\n", argument.utc_second_fraction);
         fprintf(flog, "request arg: sky_frequency = %E\n", argument.sky_frequency);
         fprintf(flog, "Station information\n");
         fprintf(flog, "request arg: Use_Server_Station_Table=%d Num_Stations=%d\n", argument.Use_Server_Station_Table, argument.Num_Stations);
@@ -777,6 +762,7 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
             fprintf(flog, "request arg: station=%02u station_pointing_dir= [%14.9f, %14.9f, %14.9f]\n", s, v.x, v.y, v.z);
             v = argument.station.station_val[s].station_reference_dir;
             fprintf(flog, "request arg: station=%02u station_reference_dir= [%14.9f, %14.9f, %14.9f]\n", s, v.x, v.y, v.z);
+            fprintf(flog, "request arg: station=%02u station_coord_frame='%s'\n", s, argument.station.station_val[s].station_coord_frame);
             fprintf(flog, "request arg: station=%02u pointing_coord_frame='%s'\n", s, argument.station.station_val[s].pointing_coord_frame);
             fprintf(flog, "request arg: station=%02u pointing_corrections_applied=%d\n", s, argument.station.station_val[s].pointing_corrections_applied);
             fprintf(flog, "request arg: station=%02u station_position_delay_offset=%E\n", s, argument.station.station_val[s].station_position_delay_offset);
@@ -875,8 +861,8 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
         fprintf(flog, "Results\n");
         fprintf(flog, "request res: delay_server_error=%d server_error=%d model_error=%d\n", result.getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, result.getDIFX_DELAY_SERVER_1_res_u.response.server_error, result.getDIFX_DELAY_SERVER_1_res_u.response.model_error);
         fprintf(flog, "request res: request_id=%ld delay_server=0x%lX server_struct_setup_code=0x%lX\n", result.getDIFX_DELAY_SERVER_1_res_u.response.request_id, result.getDIFX_DELAY_SERVER_1_res_u.response.delay_server, result.getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
+        fprintf(flog, "request res: server_version=0x%lX\n", result.getDIFX_DELAY_SERVER_1_res_u.response.server_version);
         fprintf(flog, "request res: date=%ld time=%.15f\n", result.getDIFX_DELAY_SERVER_1_res_u.response.date, result.getDIFX_DELAY_SERVER_1_res_u.response.time);
-        fprintf(flog, "request res: unix_utc_seconds_0=0x%lX unix_utc_seconds_1=0x%lX utc_second_fraction=%.15f\n", result.getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_0, result.getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_1, result.getDIFX_DELAY_SERVER_1_res_u.response.utc_second_fraction);
         for(st=0; st < result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations; ++st)
         {
             for(so=0; so < result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources; ++so)
@@ -884,8 +870,11 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
                 fprintf(flog, "request res: station=%02u source=%02u delay=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].delay);
                 fprintf(flog, "request res: station=%02u source=%02u dry_atmos=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].dry_atmos);
                 fprintf(flog, "request res: station=%02u source=%02u wet_atmos=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].wet_atmos);
-                fprintf(flog, "request res: station=%02u source=%02u az=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az);
-                fprintf(flog, "request res: station=%02u source=%02u el=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el);
+                fprintf(flog, "request res: station=%02u source=%02u iono_atmos=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].iono_atmos);
+                fprintf(flog, "request res: station=%02u source=%02u az_corr=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_corr);
+                fprintf(flog, "request res: station=%02u source=%02u el_corr=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_corr);
+                fprintf(flog, "request res: station=%02u source=%02u az_geom=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_geom);
+                fprintf(flog, "request res: station=%02u source=%02u el_geom=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_geom);
                 fprintf(flog, "request res: station=%02u source=%02u primary_axis_angle=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].primary_axis_angle);
                 fprintf(flog, "request res: station=%02u source=%02u secondary_axis_angle=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].secondary_axis_angle);
                 fprintf(flog, "request res: station=%02u source=%02u mount_source_angle=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].mount_source_angle);

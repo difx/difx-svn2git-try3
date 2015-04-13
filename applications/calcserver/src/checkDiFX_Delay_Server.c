@@ -14,8 +14,18 @@
 static struct timeval TIMEOUT = {25, 0};
 #define SECONDS_PER_DAY INT64_C(86400)
 #define SECONDS_PER_DAY_DBL (86400.0)
-#define MJD_AT_UNIX_TIME_ORIGIN 40587
 
+
+
+char* difx_strlcpy(char *dest, const char *src, size_t n)
+{
+	char* r = strncpy(dest, src, n);
+	if(n>0)
+	{
+		dest[n-1] = 0;
+	}
+	return r;
+}
 
 
 getDIFX_DELAY_SERVER_1_res *
@@ -27,7 +37,7 @@ CLIENT *clnt;
     enum clnt_stat clnt_stat;
 
 	memset((char *)&clnt_res, 0, sizeof (clnt_res));
-	clnt_stat = clnt_call(clnt, GETCALC_9_1_RA,
+	clnt_stat = clnt_call(clnt, GETDIFX_DELAY_SERVER,
                           (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_arg, (caddr_t) argp,
                           (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_res, (caddr_t) &clnt_res,
                           TIMEOUT);
@@ -60,11 +70,8 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     getDIFX_DELAY_SERVER_1_res *p_result;
 
     double delta_dly;
-    char   stnnamea[8], srcname[12], axistypea[12];
-    char   stnnameb[8], axistypeb[12];
-    char   sitetypea[12], sitetypeb[12];
-    char sourcetype[12];
-    char blank[1];
+    char   stnnamea[8];
+    char   stnnameb[8];
     unsigned short station_ID;
     int    i, v, mode_failures;
     size_t station_size, source_size, EOP_size;
@@ -72,7 +79,6 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
 
     printf("Checking CALCServer\n");
     mode_failures = 0;
-    blank[0] = 0;
     p_request = &request_args;
     memset(p_request, 0, sizeof(getDIFX_DELAY_SERVER_1_arg));
     station_size = sizeof(DIFX_DELAY_SERVER_1_station)*2;
@@ -108,35 +114,13 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
 
     p_request->date = 50774;
     p_request->time = 22.0/24.0 + 2.0/(24.0*60.0);
-    {
-        /* convert MJD time to Unix time */
-        /* keep operations separate in order to preserve precision */
-        double d;
-        int_fast64_t unix_sec;
-        int_fast64_t i;
-        uint_fast64_t u;
-        unix_sec = ((int_fast64_t)p_request->date-MJD_AT_UNIX_TIME_ORIGIN)*SECONDS_PER_DAY_DBL;
-        d = p_request->time*SECONDS_PER_DAY_DBL;
-        i = d;
-        unix_sec += i;
-        d -= i;
-        if(d < 0.0)
-        {
-            d += 1.0;
-            --unix_sec;
-        }
-        u = unix_sec;
-        p_request->unix_utc_seconds_0 = u & 0xFFFFFFFF;
-        p_request->unix_utc_seconds_1 = (u >> 32);
-        p_request->utc_second_fraction = d;
-    }
     p_request->verbosity = 5;
     p_request->delay_server = CALCPROG;
     p_request->server_struct_setup_code = 0;
     p_request->request_id = 150;
     p_request->ref_frame = 0;
 
-    for (i = 0; i < 64; i++)
+    for (i = 0; i < NUM_DIFX_DELAY_SERVER_1_KFLAGS; i++)
         p_request->kflags[i] = -1;
     p_request->sky_frequency = 10.E9;
     p_request->Use_Server_Station_Table = 0;
@@ -145,9 +129,9 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
 
     strcpy (stnnamea, "EC");
     station_ID = (unsigned short)('E') | ((unsigned short)('C') << 8);
-    p_request->station.station_val[0].station_name = stnnamea;
-    p_request->station.station_val[0].antenna_name = stnnamea;
-    p_request->station.station_val[0].site_name = stnnamea;
+    difx_strlcpy(p_request->station.station_val[0].station_name, stnnamea, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[0].antenna_name, stnnamea, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[0].site_name, stnnamea, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[0].site_ID = station_ID;
     p_request->station.station_val[0].station_pos.x =  0.000;
     p_request->station.station_val[0].station_pos.y =  0.000;
@@ -159,13 +143,12 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[0].station_acc.y =  0.0;
     p_request->station.station_val[0].station_acc.z =  0.0;
 
-    strcpy (axistypea, "altz");
-    p_request->station.station_val[0].axis_type = axistypea;
-    strcpy(sitetypea, "fixed");
-    p_request->station.station_val[0].site_type = sitetypea;
+    difx_strlcpy(p_request->station.station_val[0].axis_type, "altz", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[0].site_type, "fixed", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[0].axis_off = 0.00;
-    p_request->station.station_val[0].pointing_coord_frame = blank;
-    p_request->station.station_val[0].receiver_name = blank;
+    difx_strlcpy(p_request->station.station_val[0].station_coord_frame, "ITRF2008", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    p_request->station.station_val[0].pointing_coord_frame[0] = 0;
+    p_request->station.station_val[0].receiver_name[0] = 0;
     p_request->station.station_val[0].pressure = 0.0;
     p_request->station.station_val[0].antenna_pressure = 0.0;
     p_request->station.station_val[0].temperature = 0.0;
@@ -186,9 +169,9 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
 
     strcpy (stnnameb, "KP");
     station_ID = (unsigned short)('K') | ((unsigned short)('P') << 8);
-    p_request->station.station_val[1].station_name = stnnameb;
-    p_request->station.station_val[1].antenna_name = stnnameb;
-    p_request->station.station_val[1].site_name = stnnameb;
+    difx_strlcpy(p_request->station.station_val[1].station_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[1].antenna_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[1].site_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[1].site_ID = station_ID;
     p_request->station.station_val[1].station_pos.x =  0.000;
     
@@ -203,13 +186,12 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[1].station_acc.y =  0.0;
     p_request->station.station_val[1].station_acc.z =  0.0;
 
-    strcpy (axistypeb, "altz");
-    p_request->station.station_val[1].axis_type = axistypeb;
-    strcpy(sitetypeb, "fixed");
-    p_request->station.station_val[1].site_type = sitetypeb;
+    difx_strlcpy(p_request->station.station_val[1].axis_type, "altz", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[1].site_type, "fixed", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[1].axis_off = 2.1377;
-    p_request->station.station_val[1].pointing_coord_frame = blank;
-    p_request->station.station_val[1].receiver_name = blank;
+    difx_strlcpy(p_request->station.station_val[1].station_coord_frame, "ITRF2008", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    p_request->station.station_val[1].pointing_coord_frame[0] = 0;
+    p_request->station.station_val[1].receiver_name[0] = 0;
     p_request->station.station_val[1].pressure = 0.0;
     p_request->station.station_val[1].antenna_pressure = 0.0;
     p_request->station.station_val[1].temperature = 0.0;
@@ -218,13 +200,10 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[1].antenna_phys_temperature = 0.0;
 
 
-    strcpy (srcname, "B1937+21");
-    strcpy(sourcetype, "star");
-
-    p_request->source.source_val[0].source_name = srcname;
-    p_request->source.source_val[0].IAU_name = srcname;
-    p_request->source.source_val[0].source_type = sourcetype;
-    p_request->source.source_val[0].coord_frame = blank;
+    difx_strlcpy(p_request->source.source_val[0].source_name, "B1937+21", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->source.source_val[0].IAU_name, "B1937+21", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->source.source_val[0].source_type, "star", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    p_request->source.source_val[0].coord_frame[0] = 0;
     p_request->source.source_val[0].ra  =  (TWOPI/24.0)*(19.0 + 39.0/60.0 + 38.560210/3600.0);
     p_request->source.source_val[0].dec =  (TWOPI/360.)*(21.0 + 34.0/60.0 + 59.141000/3600.0);
 
@@ -277,6 +256,9 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     if(!p_result)
     {
         fprintf(stderr, "NULL pointer returned from RPC call\n");
+        free(station_mem);
+        free(source_mem);
+        free(EOP_mem);
         return 100;
     }
 
@@ -291,9 +273,6 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
         printf ("result: server_struct_setup_code = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
         printf ("result: date  = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
         printf ("result: time  = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
-        printf ("result: unix_utc_seconds_0 = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_0);
-        printf ("result: unix_utc_seconds_1 = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_1);
-        printf ("result: utc_second_fraction  = %15.12f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.utc_second_fraction);
         printf ("result: Num_Stations = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
         printf ("result: Num_Sources  = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
         printf ("result: result_len   = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
@@ -303,8 +282,11 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
             printf ("result: station %d delay  = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
             printf ("result: station %d dry_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
             printf ("result: station %d wet_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
-            printf ("result: station %d elev  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el*57.296);
-            printf ("result: station %d azim  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az*57.296);
+            printf ("result: station %d iono_atmos    = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].iono_atmos);
+            printf ("result: station %d elev_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
+            printf ("result: station %d azim_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
+            printf ("result: station %d elev_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
+            printf ("result: station %d azim_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
             printf ("result: station %d paa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
             printf ("result: station %d saa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
             printf ("result: station %d msa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
@@ -352,6 +334,10 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
         fprintf(stderr, "Failed to free results buffer\n");
         exit(EXIT_FAILURE);
     }
+
+    free(station_mem);
+    free(source_mem);
+    free(EOP_mem);
     
     return mode_failures;
 };
@@ -363,11 +349,8 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     getDIFX_DELAY_SERVER_1_res *p_result;
 
     double delta_dly;
-    char   stnnamea[8], srcname[12], axistypea[12];
-    char   stnnameb[8], axistypeb[12];
-    char   sitetypea[12], sitetypeb[12];
-    char sourcetype[12];
-    char blank[1];
+    char   stnnamea[8];
+    char   stnnameb[8];
     unsigned short station_ID;
     int    i, v, mode_failures;
     long calcserver_version;
@@ -376,7 +359,6 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
 
     printf("Checking CALC_9_1_RA_Server\n");
     mode_failures = 0;
-    blank[0] = 0;
     p_request = &request_args;
     memset(p_request, 0, sizeof(getDIFX_DELAY_SERVER_1_arg));
     station_size = sizeof(DIFX_DELAY_SERVER_1_station)*2;
@@ -412,35 +394,13 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
 
     p_request->date = 50774;
     p_request->time = 22.0/24.0 + 2.0/(24.0*60.0);
-    {
-        /* convert MJD time to Unix time */
-        /* keep operations separate in order to preserve precision */
-        double d;
-        int_fast64_t unix_sec;
-        int_fast64_t i;
-        uint_fast64_t u;
-        unix_sec = ((int_fast64_t)p_request->date-MJD_AT_UNIX_TIME_ORIGIN)*SECONDS_PER_DAY;
-        d = p_request->time*SECONDS_PER_DAY_DBL;
-        i = d;
-        unix_sec += i;
-        d -= i;
-        if(d < 0.0)
-        {
-            d += 1.0;
-            --unix_sec;
-        }
-        u = unix_sec;
-        p_request->unix_utc_seconds_0 = u & 0xFFFFFFFF;
-        p_request->unix_utc_seconds_1 = (u >> 32);
-        p_request->utc_second_fraction = d;
-    }
     p_request->verbosity = 5;
     p_request->delay_server = CALC_9_1_RAPROG;
     p_request->server_struct_setup_code = CALC_9_1_RA_SERVER_STRUCT_CODE_5_0_0;
     p_request->request_id = CALC_9_1_RA_SERVER_STRUCT_CODE_5_0_0;
     p_request->ref_frame = 0;
 
-    for (i = 0; i < 64; i++)
+    for (i = 0; i < NUM_DIFX_DELAY_SERVER_1_KFLAGS; i++)
         p_request->kflags[i] = -1;
     p_request->sky_frequency = 10.E9;
     p_request->Use_Server_Station_Table = 0;
@@ -449,9 +409,9 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
 
     strcpy (stnnamea, "EC");
     station_ID = (unsigned short)('E') | ((unsigned short)('C') << 8);
-    p_request->station.station_val[0].station_name = stnnamea;
-    p_request->station.station_val[0].antenna_name = stnnamea;
-    p_request->station.station_val[0].site_name = stnnamea;
+    difx_strlcpy(p_request->station.station_val[0].station_name, stnnamea, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[0].antenna_name, stnnamea, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[0].site_name, stnnamea, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[0].site_ID = station_ID;
     p_request->station.station_val[0].station_pos.x =  0.000;
     p_request->station.station_val[0].station_pos.y =  0.000;
@@ -463,13 +423,12 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[0].station_acc.y =  0.0;
     p_request->station.station_val[0].station_acc.z =  0.0;
 
-    strcpy (axistypea, "altz");
-    p_request->station.station_val[0].axis_type = axistypea;
-    strcpy(sitetypea, "fixed");
-    p_request->station.station_val[0].site_type = sitetypea;
+    difx_strlcpy(p_request->station.station_val[0].axis_type, "altz", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[0].site_type, "fixed", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[0].axis_off = 0.00;
-    p_request->station.station_val[0].pointing_coord_frame = blank;
-    p_request->station.station_val[0].receiver_name = blank;
+    difx_strlcpy(p_request->station.station_val[0].station_coord_frame, "ITRF2008", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    p_request->station.station_val[0].pointing_coord_frame[0] = 0;
+    p_request->station.station_val[0].receiver_name[0] = 0;
     p_request->station.station_val[0].pressure = 0.0;
     p_request->station.station_val[0].antenna_pressure = 0.0;
     p_request->station.station_val[0].temperature = 0.0;
@@ -490,9 +449,9 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
 
     strcpy (stnnameb, "KP");
     station_ID = (unsigned short)('K') | ((unsigned short)('P') << 8);
-    p_request->station.station_val[1].station_name = stnnameb;
-    p_request->station.station_val[1].antenna_name = stnnameb;
-    p_request->station.station_val[1].site_name = stnnameb;
+    difx_strlcpy(p_request->station.station_val[1].station_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[1].antenna_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[1].site_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[1].site_ID = station_ID;
     p_request->station.station_val[1].station_pos.x =  0.000;
     
@@ -507,13 +466,12 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[1].station_acc.y =  0.0;
     p_request->station.station_val[1].station_acc.z =  0.0;
 
-    strcpy (axistypeb, "altz");
-    p_request->station.station_val[1].axis_type = axistypeb;
-    strcpy(sitetypeb, "fixed");
-    p_request->station.station_val[1].site_type = sitetypeb;
+    difx_strlcpy(p_request->station.station_val[1].axis_type, "altz", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->station.station_val[1].site_type, "fixed", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[1].axis_off = 2.1377;
-    p_request->station.station_val[1].pointing_coord_frame = blank;
-    p_request->station.station_val[1].receiver_name = blank;
+    difx_strlcpy(p_request->station.station_val[1].station_coord_frame, "ITRF2008", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    p_request->station.station_val[1].pointing_coord_frame[0] = 0;
+    p_request->station.station_val[1].receiver_name[0] = 0;
     p_request->station.station_val[1].pressure = 0.0;
     p_request->station.station_val[1].antenna_pressure = 0.0;
     p_request->station.station_val[1].temperature = 0.0;
@@ -522,13 +480,10 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[1].antenna_phys_temperature = 0.0;
 
 
-    strcpy (srcname, "B1937+21");
-    strcpy(sourcetype, "star");
-
-    p_request->source.source_val[0].source_name = srcname;
-    p_request->source.source_val[0].IAU_name = srcname;
-    p_request->source.source_val[0].source_type = sourcetype;
-    p_request->source.source_val[0].coord_frame = blank;
+    difx_strlcpy(p_request->source.source_val[0].source_name, "B1937+21", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->source.source_val[0].IAU_name, "B1937+21", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    difx_strlcpy(p_request->source.source_val[0].source_type, "star", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+    p_request->source.source_val[0].coord_frame[0] = 0;
     p_request->source.source_val[0].ra  =  (TWOPI/24.0)*(19.0 + 39.0/60.0 + 38.560210/3600.0);
     p_request->source.source_val[0].dec =  (TWOPI/360.)*(21.0 + 34.0/60.0 + 59.141000/3600.0);
 
@@ -585,8 +540,12 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     if(!p_result)
     {
         fprintf(stderr, "NULL pointer returned from RPC call\n");
+        free(station_mem);
+        free(source_mem);
+        free(EOP_mem);
         return 100;
     }
+    printf ("CALC_9_1_RA_SERVER implementation version = 0x%lX\n", p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_version);
     calcserver_version = p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code;
     
     if(clnt_freeres(cl, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_res, (caddr_t) p_result) != 1)
@@ -595,7 +554,7 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
         exit(EXIT_FAILURE);
     }
     
-    printf ("CALC_9_1_RA_SERVER version = 0x%lX\n", 
+    printf ("CALC_9_1_RA_SERVER interface version = 0x%lX\n", 
             calcserver_version);
     if(calcserver_version < CALC_9_1_RA_SERVER_STRUCT_CODE_CURRENT) {
         printf("Warning -- %s CALC_9_1_RA_SERVER version 0x%lX is less than the expected version 0x%lX.\nSome functionality may be missing.  Please consider upgrading to a newer\nversion of CALC_9_1_RA_SERVER.\n", host, calcserver_version, (long)(CALC_9_1_RA_SERVER_STRUCT_CODE_CURRENT));
@@ -629,6 +588,9 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
         if(!p_result)
         {
             fprintf(stderr, "NULL pointer returned from RPC call\n");
+            free(station_mem);
+            free(source_mem);
+            free(EOP_mem);
             return 100;
         }
 
@@ -643,9 +605,6 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
             printf ("result: server_struct_setup_code = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
             printf ("result: date  = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
             printf ("result: time  = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
-            printf ("result: unix_utc_seconds_0 = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_0);
-            printf ("result: unix_utc_seconds_1 = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_1);
-            printf ("result: utc_second_fraction  = %15.12f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.utc_second_fraction);
             printf ("result: Num_Stations = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
             printf ("result: Num_Sources  = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
             printf ("result: result_len   = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
@@ -655,8 +614,11 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
                 printf ("result: station %d delay  = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
                 printf ("result: station %d dry_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
                 printf ("result: station %d wet_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
-                printf ("result: station %d elev  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el*57.296);
-                printf ("result: station %d azim  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az*57.296);
+                printf ("result: station %d iono_atmos    = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].iono_atmos);
+                printf ("result: station %d elev_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
+                printf ("result: station %d azim_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
+                printf ("result: station %d elev_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
+                printf ("result: station %d azim_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
                 printf ("result: station %d paa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
                 printf ("result: station %d saa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
                 printf ("result: station %d msa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
@@ -710,9 +672,9 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     {
         strcpy (stnnameb, "RA");
         station_ID = (unsigned short)('R') | ((unsigned short)('A') << 8);
-        p_request->station.station_val[1].station_name = stnnameb;
-        p_request->station.station_val[1].antenna_name = stnnameb;
-        p_request->station.station_val[1].site_name = stnnameb;
+        difx_strlcpy(p_request->station.station_val[1].station_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+        difx_strlcpy(p_request->station.station_val[1].antenna_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+        difx_strlcpy(p_request->station.station_val[1].site_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
         p_request->station.station_val[1].site_ID = station_ID;
         p_request->station.station_val[1].station_pos.x =  0.000;
     
@@ -727,13 +689,12 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
         p_request->station.station_val[1].station_acc.y =   9.138000E-03;
         p_request->station.station_val[1].station_acc.z =  -3.365000E-02;
 
-        strcpy (axistypeb, "space");
-        p_request->station.station_val[1].axis_type = axistypeb;
-        strcpy(sitetypeb, "earth_orbit");
-        p_request->station.station_val[1].site_type = sitetypeb;
+        difx_strlcpy(p_request->station.station_val[1].axis_type, "space", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+        difx_strlcpy(p_request->station.station_val[1].site_type, "earth_orbit", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
         p_request->station.station_val[1].axis_off = 2.1377;
-        p_request->station.station_val[1].pointing_coord_frame = blank;
-        p_request->station.station_val[1].receiver_name = blank;
+    difx_strlcpy(p_request->station.station_val[1].station_coord_frame, "J2000_Earth", DIFX_DELAY_SERVER_STATION_STRING_SIZE);
+        p_request->station.station_val[1].pointing_coord_frame[0] = 0;
+        p_request->station.station_val[1].receiver_name[0] = 0;
         p_request->station.station_val[1].pressure = 0.0;
         p_request->station.station_val[1].antenna_pressure = 0.0;
         p_request->station.station_val[1].temperature = 0.0;
@@ -750,6 +711,9 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
         if(!p_result)
         {
             fprintf(stderr, "NULL pointer returned from RPC call\n");
+            free(station_mem);
+            free(source_mem);
+            free(EOP_mem);
             return 100;
         }
 
@@ -775,9 +739,6 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
             printf ("result: server_struct_setup_code = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
             printf ("result: date  = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
             printf ("result: time  = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
-            printf ("result: unix_utc_seconds_0 = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_0);
-            printf ("result: unix_utc_seconds_1 = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.unix_utc_seconds_1);
-            printf ("result: utc_second_fraction  = %15.12f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.utc_second_fraction);
             printf ("result: Num_Stations = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
             printf ("result: Num_Sources  = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
             printf ("result: result_len   = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
@@ -787,8 +748,11 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
                 printf ("result: station %d delay  = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
                 printf ("result: station %d dry_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
                 printf ("result: station %d wet_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
-                printf ("result: station %d elev  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el*57.296);
-                printf ("result: station %d azim  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az*57.296);
+                printf ("result: station %d iono_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].iono_atmos);
+                printf ("result: station %d elev_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
+                printf ("result: station %d azim_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
+                printf ("result: station %d elev_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
+                printf ("result: station %d azim_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
                 printf ("result: station %d paa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
                 printf ("result: station %d saa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
                 printf ("result: station %d msa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
@@ -837,6 +801,10 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
             exit(EXIT_FAILURE);
         }
     }
+
+    free(station_mem);
+    free(source_mem);
+    free(EOP_mem);
     
     return mode_failures;
 };

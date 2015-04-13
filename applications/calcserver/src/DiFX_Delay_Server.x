@@ -1,6 +1,7 @@
 /* DiFX_Delay_Server.x for rpcgen creation of interface to DiFX delay server */
 
 
+const DIFX_DELAY_SERVER_STATION_STRING_SIZE=32;
 const NUM_DIFX_DELAY_SERVER_1_KFLAGS=64;
 const DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA=-999;
 struct DIFX_DELAY_SERVER_vec {
@@ -10,30 +11,38 @@ struct DIFX_DELAY_SERVER_vec {
 };
 struct DIFX_DELAY_SERVER_1_station {
     /* This structure defines data related to a station */
-    string station_name<>;  /* The name of the station */
-    string antenna_name<>;  /* The name of the antenna */
-    string site_name<>;     /* The name of the site */
+    char station_name[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The name of the station */
+    char antenna_name[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The name of the antenna */
+    char site_name[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The name of the site */
     unsigned short site_ID; /* The 2-character standardized site ID code. */
                             /* Note: to convert to a character
                                representation, do
                                sprintf(s, "%c%c", (char)(site_ID&0xFF), (char)(site_ID>>8))
                                To convert a two-character code to a site_ID,
                                do size_ID = (unsigned short)(code[0]) | ((unsigned short)(code[1]) << 8) */
-    string site_type<>;     /* The station site type.
+    char site_type[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The station site type.
                                Allowed values are: "fixed" and "earth_orit"
                              */
-    string axis_type<>;     /* The station axis type
+    char axis_type[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The station axis type
                                'altz', 'equa', 'xyns', 'xyew' */
     DIFX_DELAY_SERVER_vec station_pos;
-                            /* station ITRF geocentric position
+                            /* station position in the specified frame 
                                (right-handed coord)
-                               (meters) */
+                               (meters)
+                               Note that most delay servers only accept
+                               "ITRF2008" frames for fixed stations
+                            */
     DIFX_DELAY_SERVER_vec station_vel;
-                            /* station ITRF geocentric velocity
+                            /* station velocity
                                (right-handed coord)
                                (m/s)  Note: not used for site_type=="fixed" */
     DIFX_DELAY_SERVER_vec station_acc;
-                            /* station ITRF geocentric acceleration
+                            /* station acceleration
                                (right-handed coord) (m/s/s)  Note: not used for
                                site_type=="fixed" */
     DIFX_DELAY_SERVER_vec station_pointing_dir;
@@ -59,13 +68,145 @@ struct DIFX_DELAY_SERVER_1_station {
                                TODO:  allow for rotating "fixed" antennas such
                                as the ASKAP design.
                             */
-    string pointing_coord_frame<>;
-                            /* The coordinate frame of the station pointing
-                               and reference directions:
-                                   "J2000": A J2000 frame 
-                                   "ITRF2008": directions in
-                                               the ITRF2008 frame.  Note that
-                                               this is not yet implemented.
+    char station_coord_frame[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+    char pointing_coord_frame[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The coordinate frames of the ephemeris object
+                               and of the pointing direction of the station:
+                                   "":            Alias for "J2000".
+                                   "J2000":       The standard J2000 coordinate
+                                                  system that assumes the
+                                                  Solar barycenter is fixed in
+                                                  space
+                                   "J2000_CMB":   A J2000-like frame at
+                                                  rest with respect to the
+                                                  cosmic microwave background
+                                                  frame as seen by the Solar
+                                                  barycenter at epoch J2000.
+                                                  The CMB frame is presumed to
+                                                  undergo no acceleration.
+                                                  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the velocity
+                                                  and acceleration of the
+                                                  Milky Way barycenter with
+                                                  respect to the CMB, and the
+                                                  orbit and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_CMB_1": A J2000-like frame at
+                                                  rest with respect to the
+                                                  SSB at the J2000 epoch.
+                                                  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the
+                                                  acceleration of the
+                                                  Milky Way barycenter with
+                                                  respect to the CMB, and the
+                                                  orbital acceleration
+                                                  and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_MWB":   A J2000-like frame at
+                                                  rest with respect to the
+                                                  Milky Way barycenter at
+                                                  epoch J2000.  The MWB is
+                                                  presumed to undergo no
+                                                  acceleration.  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the
+                                                  orbit and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_MWB_1": A J2000-like frame at
+                                                  rest with respect to the
+                                                  SSB at the J2000 epoch.
+                                                  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the
+                                                  orbital acceleration
+                                                  and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_SSB":   Alias for "J2000".
+                                                  A J2000-like frame at
+                                                  rest with respect to the
+                                                  Solar barycenter at
+                                                  epoch J2000.  The SSB is
+                                                  presumed to undergo no
+                                                  acceleration.  The position
+                                                  information provided is
+                                                  with respect to the SSB at
+                                                  the depoch epoch, which has
+                                                  the same position as at
+                                                  J2000.  Corrections will
+                                                  be applied for the usual
+                                                  velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+                                   "J2000_Earth": A J2000-like frame at
+                                                  rest with respect to the
+                                                  Solar barycenter at
+                                                  epoch J2000.  The SSB is
+                                                  presumed to undergo no
+                                                  acceleration.  The position
+                                                  information provided is
+                                                  with respect to the Earth
+                                                  center at the depoch epoch.
+                                                  Corrections will
+                                                  be applied for the usual
+                                                  velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "ITRF2008":    A frame at rest with
+                                                  respect to the Earth.
+                                                  Position information is in
+                                                  the ITRF2008 frame.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
                             */
     int pointing_corrections_applied;
                             /* Flag indicating whether or not the station
@@ -124,7 +265,8 @@ struct DIFX_DELAY_SERVER_1_station {
                                    +1:  +90:+180 degrees
                                y:  must be 0
                              */
-    string receiver_name<>; /* The station receivers used (one per station) */
+    char receiver_name[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The station receivers used (one per station) */
     double pressure;        /* station surface pressure (millibars) 
                              * enter 0.0 for none availiable */
     double antenna_pressure;/* station pressure at the effective aperture
@@ -145,36 +287,178 @@ struct DIFX_DELAY_SERVER_1_station {
 };    
 struct DIFX_DELAY_SERVER_1_source {
     /* This structure defines data related to a source */
-    string source_name<>;   /* The source name (usually up to 16 char) */
-    string IAU_name<>;      /* The IAU name (usually up to 9 char)
+    char source_name[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The source name (usually up to 16 char) */
+    char IAU_name[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The IAU name (usually up to 9 char)
                                Example: "0102-0304"
                                Note that the delay servers may still expect
                                the old, non-IAU format such as "0102-030"
                                with the name in B1950 coordinates
                             */
-    string source_type<>;  /* The source type:
-                                   "star":  uses ra, dec, dra, ddec, depoch,
-                                          parallax, source_epoch, and assumes
-                                          the coordinate system is J2000
+    char source_type[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                           /* The source type:
+                                   "star":  the standard designator.  Whether
+                                          the delay server uses ra, dec, dra,
+                                          ddec, depoch, parallax, source_epoch,
+                                          and assumes the coordinate system is
+                                          J2000, or whether the delay server
+                                          uses source_pos, source_vel,
+                                          source_acc, and coord_frame depends
+                                          on which delay server is actually
+                                          used.
                                    "ephemeris": uses source_pos, source_vel,
-                                              source_acc
+                                          source_acc, and coord_frame
                             */
-    double ra;              /* J2000.0 coordinates (radians) */
-    double dec;             /* J2000.0 coordinates (radians) */
+    double ra;              /* J2000.0 coordinates (radians) (retarded) */
+    double dec;             /* J2000.0 coordinates (radians) (retarded) */
     double dra;             /* J2000.0 arcsecs/year */
     double ddec;            /* J2000.0 arcsecs/year */
     double depoch;          /* reference date for which proper motion
-                             * corrections are zero, mjd.fract_day */
+                               corrections are zero, as mjd.fract_day.
+                               If depoch == 0.0, then the epoch is the
+                               current instant at which the delay
+                               computation is to be performed.
+                             */
     double parallax;        /* source distance in arcsecs of annual
                              * parallax, = 206265.0 / distance (au) */
-    string coord_frame<>;   /* The coordinate frame of the ephemeris object:
-                                   "J2000_Earth": A J2000 frame with positions
-                                                  velocities and so on 
-                                                  relative to the center of
-                                                  the Earth
-                                   "ITRF2008": positions/velocities/accel in
-                                               the ITRF2008 frame.  Note that
-                                               this is not yet implemented.
+    char coord_frame[DIFX_DELAY_SERVER_STATION_STRING_SIZE];
+                            /* The coordinate frame of the ephemeris object:
+                                   "":            Alias for "J2000".
+                                   "J2000"      : The standard J2000 coordinate
+                                                  system that assumes the
+                                                  Solar barycenter is fixed in
+                                                  space
+                                   "J2000_CMB":   A J2000-like frame at
+                                                  rest with respect to the
+                                                  cosmic microwave background
+                                                  frame as seen by the Solar
+                                                  barycenter at epoch J2000.
+                                                  The CMB frame is presumed to
+                                                  undergo no acceleration.
+                                                  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the velocity
+                                                  and acceleration of the
+                                                  Milky Way barycenter with
+                                                  respect to the CMB, and the
+                                                  orbit and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_CMB_1": A J2000-like frame at
+                                                  rest with respect to the
+                                                  SSB at the J2000 epoch.
+                                                  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the
+                                                  acceleration of the
+                                                  Milky Way barycenter with
+                                                  respect to the CMB, and the
+                                                  orbital acceleration
+                                                  and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_MWB":   A J2000-like frame at
+                                                  rest with respect to the
+                                                  Milky Way barycenter at
+                                                  epoch J2000.  The MWB is
+                                                  presumed to undergo no
+                                                  acceleration.  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the
+                                                  orbit and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_MWB_1": A J2000-like frame at
+                                                  rest with respect to the
+                                                  SSB at the J2000 epoch.
+                                                  The position
+                                                  information provided is
+                                                  with respect to the Solar
+                                                  barycenter at the depoch
+                                                  epoch.  Corrections will
+                                                  be applied for the
+                                                  orbital acceleration
+                                                  and extraordinary
+                                                  acceleration of the Solar
+                                                  barycenter with respect to
+                                                  the Milky Way barycenter, and
+                                                  the usual velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "J2000_SSB":   Alias for "J2000".
+                                                  A J2000-like frame at
+                                                  rest with respect to the
+                                                  Solar barycenter at
+                                                  epoch J2000.  The SSB is
+                                                  presumed to undergo no
+                                                  acceleration.  The position
+                                                  information provided is
+                                                  with respect to the SSB at
+                                                  the depoch epoch, which has
+                                                  the same position as at
+                                                  J2000.  Corrections will
+                                                  be applied for the usual
+                                                  velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+                                   "J2000_Earth": A J2000-like frame at
+                                                  rest with respect to the
+                                                  Solar barycenter at
+                                                  epoch J2000.  The SSB is
+                                                  presumed to undergo no
+                                                  acceleration.  The position
+                                                  information provided is
+                                                  with respect to the Earth
+                                                  center at the depoch epoch.
+                                                  Corrections will
+                                                  be applied for the usual
+                                                  velocity of the
+                                                  Earth with respect to the
+                                                  Solar barycenter.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
+                                   "ITRF2008":    A frame at rest with
+                                                  respect to the Earth.
+                                                  Position information is in
+                                                  the ITRF2008 frame.
+
+                                                  ***Note that this is not yet
+                                                  implemented.
                             */
     DIFX_DELAY_SERVER_vec source_pos;   /* source position vector (m)*/
     DIFX_DELAY_SERVER_vec source_vel;   /* source velocity vector (m/s)*/
@@ -183,8 +467,10 @@ struct DIFX_DELAY_SERVER_1_source {
                                            velocity, and acceleration are
                                            all at the retarded time at which
                                            the center of the Earth sees the
-                                           source at the delay model
-                                           calculation time.
+                                           source at the depoch epoch, which,
+                                           if depoch == 0.0, is the instant
+                                           at which station 0 sees the signal
+                                           in this calculation.
                                         */
     DIFX_DELAY_SERVER_vec source_pointing_dir;
                                         /* source pointing direction unit
@@ -233,9 +519,23 @@ struct DIFX_DELAY_SERVER_1_RESULTS {
                                itself.
                              */
     double dry_atmos;       /* dry atmosphere delay in seconds */
-    double wet_atmos;       /* wet atmosphere delay, rate (secs, sec/sec) */
-    double az;              /* azimuth in radians from North through East */
-    double el;              /* elevation angle in degrees */
+    double wet_atmos;       /* wet atmosphere delay in seconds */
+    double iono_atmos;      /* ionospheric delay, in seconds, at the
+                               input sky_frequency */
+    double az_corr;         /* azimuth in radians from North through East
+                               corrected for refraction
+                             */
+    double el_corr;         /* elevation angle in degrees
+                               corrected for refraction
+                             */
+    double az_geom;         /* azimuth in radians from North through East
+                               for the geometric direction of the source
+                               (uncorrected for refraction)
+                             */
+    double el_geom;         /* elevation angle in degrees
+                               for the geometric direction of the source
+                               (uncorrected for refraction)
+                             */
     double primary_axis_angle;/* stations azimuth angle in radians */
     double secondary_axis_angle;/* station elevation angle in radians */
     double mount_source_angle; /* mount-source angle (parallactic
@@ -364,15 +664,6 @@ struct getDIFX_DELAY_SERVER_1_arg {
                             /* DIFX_DELAY_SERVER model component control flags */
 
     double time;            /* DIFX_DELAY_SERVER model time UTC (fraction of day) */
-    unsigned long unix_utc_seconds_0; /* DIFX_DELAY_SERVER UTC Unix timestamp 0 */
-    unsigned long unix_utc_seconds_1; /* DIFX_DELAY_SERVER UTC Unix timestamp 1 */
-    double utc_second_fraction; /* DIFX_DELAY_SERVER fractional second offset
-                                   from the DIFX_DELAY_SERVER UTC Unix
-                                   timestamp.                         */
-                            /* Note that the 64 bit Unix timestamp is made
-                               by (time_t)(((uint64_t)(unix_utc_seconds_1) << 32) | unix_utc_seconds_0)
-                               and utc_second_fraction is a fractional second
-                               with respect to this second.           */
     double sky_frequency;   /* The sky frequency for this observation (Hz) */
     /*************************************************************************/
     /*** Stations*************************************************************/
@@ -419,7 +710,7 @@ struct getDIFX_DELAY_SERVER_1_arg {
 
 
 
-/* DIFX_DELAY_SERVER server reply */
+/* DIFX_DELAY_SERVER server response */
 
 struct DIFX_DELAY_SERVER_1_res {
     /*************************************************************************/
@@ -443,6 +734,10 @@ struct DIFX_DELAY_SERVER_1_res {
                                the individual server codes for allowed
                                options.
                             */
+    unsigned long server_version;
+                            /* The exact version number of the delay server
+                               software that was used.
+                             */
     long date;              /* DIFX_DELAY_SERVER model date (MJD) */
     double time;            /* DIFX_DELAY_SERVER model time UTC (fraction of day) */
     unsigned long unix_utc_seconds_0; /* DIFX_DELAY_SERVER UTC Unix timestamp 0 */

@@ -8,7 +8,7 @@
 bool_t
 xdr_DIFX_DELAY_SERVER_vec (XDR *xdrs, DIFX_DELAY_SERVER_vec *objp)
 {
-	/* register int32_t *buf; */
+	register int32_t *buf;
 
 	 if (!xdr_double (xdrs, &objp->x))
 		 return FALSE;
@@ -22,19 +22,25 @@ xdr_DIFX_DELAY_SERVER_vec (XDR *xdrs, DIFX_DELAY_SERVER_vec *objp)
 bool_t
 xdr_DIFX_DELAY_SERVER_1_station (XDR *xdrs, DIFX_DELAY_SERVER_1_station *objp)
 {
-	/* register int32_t *buf; */
+	register int32_t *buf;
 
-	 if (!xdr_string (xdrs, &objp->station_name, ~0))
+	int i;
+	 if (!xdr_vector (xdrs, (char *)objp->station_name, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->antenna_name, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->antenna_name, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->site_name, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->site_name, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_u_short (xdrs, &objp->site_ID))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->site_type, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->site_type, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->axis_type, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->axis_type, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_DIFX_DELAY_SERVER_vec (xdrs, &objp->station_pos))
 		 return FALSE;
@@ -46,7 +52,11 @@ xdr_DIFX_DELAY_SERVER_1_station (XDR *xdrs, DIFX_DELAY_SERVER_1_station *objp)
 		 return FALSE;
 	 if (!xdr_DIFX_DELAY_SERVER_vec (xdrs, &objp->station_reference_dir))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->pointing_coord_frame, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->station_coord_frame, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
+		 return FALSE;
+	 if (!xdr_vector (xdrs, (char *)objp->pointing_coord_frame, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_int (xdrs, &objp->pointing_corrections_applied))
 		 return FALSE;
@@ -58,7 +68,8 @@ xdr_DIFX_DELAY_SERVER_1_station (XDR *xdrs, DIFX_DELAY_SERVER_1_station *objp)
 		 return FALSE;
 	 if (!xdr_int (xdrs, &objp->secondary_axis_wrap))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->receiver_name, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->receiver_name, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->pressure))
 		 return FALSE;
@@ -78,13 +89,17 @@ xdr_DIFX_DELAY_SERVER_1_station (XDR *xdrs, DIFX_DELAY_SERVER_1_station *objp)
 bool_t
 xdr_DIFX_DELAY_SERVER_1_source (XDR *xdrs, DIFX_DELAY_SERVER_1_source *objp)
 {
-	/* register int32_t *buf; */
+	register int32_t *buf;
 
-	 if (!xdr_string (xdrs, &objp->source_name, ~0))
+	int i;
+	 if (!xdr_vector (xdrs, (char *)objp->source_name, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->IAU_name, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->IAU_name, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->source_type, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->source_type, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->ra))
 		 return FALSE;
@@ -98,7 +113,8 @@ xdr_DIFX_DELAY_SERVER_1_source (XDR *xdrs, DIFX_DELAY_SERVER_1_source *objp)
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->parallax))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->coord_frame, ~0))
+	 if (!xdr_vector (xdrs, (char *)objp->coord_frame, DIFX_DELAY_SERVER_STATION_STRING_SIZE,
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_DIFX_DELAY_SERVER_vec (xdrs, &objp->source_pos))
 		 return FALSE;
@@ -116,7 +132,7 @@ xdr_DIFX_DELAY_SERVER_1_source (XDR *xdrs, DIFX_DELAY_SERVER_1_source *objp)
 bool_t
 xdr_DIFX_DELAY_SERVER_1_EOP (XDR *xdrs, DIFX_DELAY_SERVER_1_EOP *objp)
 {
-	/* register int32_t *buf; */
+	register int32_t *buf;
 
 	 if (!xdr_double (xdrs, &objp->EOP_time))
 		 return FALSE;
@@ -134,7 +150,7 @@ xdr_DIFX_DELAY_SERVER_1_EOP (XDR *xdrs, DIFX_DELAY_SERVER_1_EOP *objp)
 bool_t
 xdr_DIFX_DELAY_SERVER_1_RESULTS (XDR *xdrs, DIFX_DELAY_SERVER_1_RESULTS *objp)
 {
-	/* register int32_t *buf; */
+	register int32_t *buf;
 
 	 if (!xdr_double (xdrs, &objp->delay))
 		 return FALSE;
@@ -142,9 +158,15 @@ xdr_DIFX_DELAY_SERVER_1_RESULTS (XDR *xdrs, DIFX_DELAY_SERVER_1_RESULTS *objp)
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->wet_atmos))
 		 return FALSE;
-	 if (!xdr_double (xdrs, &objp->az))
+	 if (!xdr_double (xdrs, &objp->iono_atmos))
 		 return FALSE;
-	 if (!xdr_double (xdrs, &objp->el))
+	 if (!xdr_double (xdrs, &objp->az_corr))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->el_corr))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->az_geom))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->el_geom))
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->primary_axis_angle))
 		 return FALSE;
@@ -215,12 +237,6 @@ xdr_getDIFX_DELAY_SERVER_1_arg (XDR *xdrs, getDIFX_DELAY_SERVER_1_arg *objp)
 		}
 		 if (!xdr_double (xdrs, &objp->time))
 			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_0))
-			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_1))
-			 return FALSE;
-		 if (!xdr_double (xdrs, &objp->utc_second_fraction))
-			 return FALSE;
 		 if (!xdr_double (xdrs, &objp->sky_frequency))
 			 return FALSE;
 		 if (!xdr_int (xdrs, &objp->Use_Server_Station_Table))
@@ -282,12 +298,6 @@ xdr_getDIFX_DELAY_SERVER_1_arg (XDR *xdrs, getDIFX_DELAY_SERVER_1_arg *objp)
 		}
 		 if (!xdr_double (xdrs, &objp->time))
 			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_0))
-			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_1))
-			 return FALSE;
-		 if (!xdr_double (xdrs, &objp->utc_second_fraction))
-			 return FALSE;
 		 if (!xdr_double (xdrs, &objp->sky_frequency))
 			 return FALSE;
 		 if (!xdr_int (xdrs, &objp->Use_Server_Station_Table))
@@ -331,12 +341,6 @@ xdr_getDIFX_DELAY_SERVER_1_arg (XDR *xdrs, getDIFX_DELAY_SERVER_1_arg *objp)
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->time))
 		 return FALSE;
-	 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_0))
-		 return FALSE;
-	 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_1))
-		 return FALSE;
-	 if (!xdr_double (xdrs, &objp->utc_second_fraction))
-		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->sky_frequency))
 		 return FALSE;
 	 if (!xdr_int (xdrs, &objp->Use_Server_Station_Table))
@@ -370,7 +374,7 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 
 
 	if (xdrs->x_op == XDR_ENCODE) {
-		buf = XDR_INLINE (xdrs, 7 * BYTES_PER_XDR_UNIT);
+		buf = XDR_INLINE (xdrs, 8 * BYTES_PER_XDR_UNIT);
 		if (buf == NULL) {
 			 if (!xdr_int (xdrs, &objp->delay_server_error))
 				 return FALSE;
@@ -384,6 +388,8 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 				 return FALSE;
 			 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
 				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->server_version))
+				 return FALSE;
 			 if (!xdr_long (xdrs, &objp->date))
 				 return FALSE;
 
@@ -394,6 +400,7 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 		IXDR_PUT_LONG(buf, objp->request_id);
 		IXDR_PUT_U_LONG(buf, objp->delay_server);
 		IXDR_PUT_LONG(buf, objp->server_struct_setup_code);
+		IXDR_PUT_U_LONG(buf, objp->server_version);
 		IXDR_PUT_LONG(buf, objp->date);
 		}
 		 if (!xdr_double (xdrs, &objp->time))
@@ -413,7 +420,7 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 			 return FALSE;
 		return TRUE;
 	} else if (xdrs->x_op == XDR_DECODE) {
-		buf = XDR_INLINE (xdrs, 7 * BYTES_PER_XDR_UNIT);
+		buf = XDR_INLINE (xdrs, 8 * BYTES_PER_XDR_UNIT);
 		if (buf == NULL) {
 			 if (!xdr_int (xdrs, &objp->delay_server_error))
 				 return FALSE;
@@ -427,6 +434,8 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 				 return FALSE;
 			 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
 				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->server_version))
+				 return FALSE;
 			 if (!xdr_long (xdrs, &objp->date))
 				 return FALSE;
 
@@ -437,6 +446,7 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 		objp->request_id = IXDR_GET_LONG(buf);
 		objp->delay_server = IXDR_GET_U_LONG(buf);
 		objp->server_struct_setup_code = IXDR_GET_LONG(buf);
+		objp->server_version = IXDR_GET_U_LONG(buf);
 		objp->date = IXDR_GET_LONG(buf);
 		}
 		 if (!xdr_double (xdrs, &objp->time))
@@ -469,6 +479,8 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 		 return FALSE;
 	 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
 		 return FALSE;
+	 if (!xdr_u_long (xdrs, &objp->server_version))
+		 return FALSE;
 	 if (!xdr_long (xdrs, &objp->date))
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->time))
@@ -492,7 +504,7 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 bool_t
 xdr_getDIFX_DELAY_SERVER_1_res (XDR *xdrs, getDIFX_DELAY_SERVER_1_res *objp)
 {
-	/* register int32_t *buf; */
+	register int32_t *buf;
 
 	 if (!xdr_int (xdrs, &objp->this_error))
 		 return FALSE;

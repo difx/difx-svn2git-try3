@@ -14,6 +14,8 @@
 #define INCocean
 #include "ocean.h"
 
+#define CALC_9_1_RA_SERVER_VERSION 0x01000000
+
 
 /* externals */
 int  calcinit_ (int *jobn, int *mjd, short int kflags[64], int *iret);
@@ -485,8 +487,8 @@ SVCXPRT *pTransport;
     result.getCALC_9_1_RA_res_u.record.time  = argument.time;
     result.getCALC_9_1_RA_res_u.record.delay[0] = delay;
     result.getCALC_9_1_RA_res_u.record.delay[1] = rate;
-    result.getCALC_9_1_RA_res_u.record.request_id = argument.struct_code;
     result.getCALC_9_1_RA_res_u.record.request_id = argument.request_id;
+    result.getCALC_9_1_RA_res_u.record.server_version = CALC_9_1_RA_SERVER_VERSION;
     /* Changed the order of atmos, datmos - JMB Jan 28, 2004 */
     result.getCALC_9_1_RA_res_u.record.dry_atmos[0] = atmos[0];
     result.getCALC_9_1_RA_res_u.record.dry_atmos[1] = atmos[0];
@@ -532,6 +534,7 @@ SVCXPRT *pTransport;
     if(argument.struct_code != CALC_9_1_RA_SERVER_STRUCT_CODE_0)
         {
         /* regular processing call --- do nothing special */
+            result.getCALC_9_1_RA_res_u.record.struct_code = argument.struct_code;
         }
     else
         {
