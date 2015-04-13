@@ -1,3 +1,14 @@
+2015-04-13  James Anderson  <anderson@gfz-potsdam>
+
+	* src/MATHCNST.H:
+	* src/difxcalc.h:
+	* src/calcif2.c:
+	* src/difxcalc.c: updates to handle new DiFX_Delay_Server RPC calls
+
+	* src/checkdifxcalcrotation.c:
+	* src/difxcalcrotation.c: create to handle rotation stuff for
+	calcif2 for new DiFX_Delay_Server RPC calls
+
 calcif2
 ~~~~~~~
 Version ?.?.?

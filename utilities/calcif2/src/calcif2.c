@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2014 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -40,31 +40,54 @@
 #include <unistd.h>
 #include "config.h"
 #include "difxcalc.h"
-#include "CALCServer.h"
+#include "DiFX_Delay_Server.h"
 
 #define MAX_FILES	2048
 
 const char program[] = "calcif2";
 const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
 const char version[] = VERSION;
-const char verdate[] = "20140320";
+const char verdate[] = "20150401";
 
 typedef struct
 {
 	int verbose;
 	int force;
 	int doall;
-	double delta;	/* derivative step size, radians. <0 for noaber */
-	char calcServer[DIFXIO_NAME_LENGTH];
-	int calcProgram;
-	int calcVersion;
-	int useSekido;
+    enum AberCorr aberCorr; /* level of correction for aberration */
+	enum PerformDirectionDerivativeType perform_uvw_deriv;
+	enum PerformDirectionDerivativeType perform_lmn_deriv;
+	enum PerformDirectionDerivativeType perform_xyz_deriv;
+	double lmn_delta; /* (rad) step size for calculating d\tau/dl, d\tau/dm,
+						 and d\tau/dn for the LMN polynomial model
+						 and (u,v) from the delay derivatives for the UVW
+						 polynomial model
+					  */
+	double xyz_delta; /* step size for calculating d\tau/dx, d\tau/dy, and
+						 d\tau/dz for the Cartesian (x,y,z) coordinate
+						 system of the source.  If positive, this variable
+						 has units of meters (\Delta x = xyz_delta).
+						 If negative, then the variable is a fractional value
+						 to indicate the step size as a function of the
+						 current radius of the source.  (So with
+						 r = (x^2 + y^2 + z^2)^{1/2},
+						 \Delta x = xyz_delta \times r.)
+					  */
+	char delayServerHost[DIFXIO_HOSTNAME_LENGTH];
+	enum DelayServerType delayServerType;
+	unsigned long delayVersion;
+	unsigned long delayHandler;
 	int nFile;
 	int polyOrder;
 	int polyInterval;	/* (sec) */
 	int polyOversamp;
 	int interpol;
 	int allowNegDelay;
+	int useExtraExternalDelay; /* Flag
+								  0: Do not use some extra delay software
+								  1: Use the calc_Sekido software
+							   */
+	int warnSpacecraftPointingSource;
 	char *files[MAX_FILES];
 	int overrideVersion;
 	enum AberCorr aberCorr;
@@ -72,6 +95,7 @@ typedef struct
 
 static void usage()
 {
+	int DelayServerType ds;
 	fprintf(stderr, "%s ver. %s  %s  %s\n\n", program, version, author, verdate);
 	fprintf(stderr, "A program to calculate a model for DiFX using a calc server.\n\n");
 	fprintf(stderr, "Usage : %s [options] { <calc file> | -a }\n\n", program);
@@ -86,11 +110,19 @@ static void usage()
 	fprintf(stderr, "  --quiet\n");
 	fprintf(stderr, "  -q                      Be less verbose in operation\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --delta <delta>\n");
+	fprintf(stderr, "  --delta_lmn <delta>\n");
+	fprintf(stderr, "  -d <delta>              set delta (in radians) for UWV and LMN calculation\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --delta_xyz <delta>      set delta (in radians) for XYZ calculation\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "  --force\n");
 	fprintf(stderr, "  -f                      Force recalc\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --noaber\n");
 	fprintf(stderr, "  -n                      Don't do aberration, etc, corrections\n");
+	fprintf(stderr, "                          (also turns off numerical (u,v) calculations)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --noatmos\n");
 	fprintf(stderr, "  -A                      Don't include atmosphere in UVW calculations\n");
@@ -100,6 +132,10 @@ static void usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --allow-neg-delay\n");
 	fprintf(stderr, "  -z                      Don't zero negative delays\n");
+	fprintf(stderr, "  --not-allow-neg-delay   Zero negative delays\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --allow-sc-pointing     Allow spacecraft pointing sources\n");
+	fprintf(stderr, "  --not-allow-sc-pointing Do not allow spacecraft pointing sources\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --order <n>\n");
 	fprintf(stderr, "  -o      <n>             Use <n>th order polynomial [5]\n");
@@ -117,11 +153,46 @@ static void usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --override-version      Ignore difx versions\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta         Use delta_lmn (in radians) for UWV calculation\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta2        Use delta_lmn (in radians) for UWV calculation (alt)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_lmn_1   Use delta_lmn (in radians) for LMN calculation\n"      "                          to 1st order\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_lmn_12  Use delta_lmn (in radians) for LMN calculation\n"      "                          to 1st order (alt)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_lmn_2   Use delta_lmn (in radians) for XYZ calculation\n"      "                          to 2nd order\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_lmn_22  Use delta_lmn (in radians) for XYZ calculation\n"      "                          to 2nd order (alt)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_xyz_1   Use delta_xyz (in radians) for LMN calculation\n"      "                          to 1st order\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_xyz_12  Use delta_xyz (in radians) for LMN calculation\n"      "                          to 1st order (alt)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_xyz_2   Use delta_xyz (in radians) for XYZ calculation\n"      "                          to 2nd order\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --perform_delta_xyz_22  Use delta_xyz (in radians) for XYZ calculation\n"      "                          to 2nd order (alt)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --not-perform_delta     Do not use delta_lmn (in radians) for UWV calculation\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --not-perform_delta_lmn Do not use delta_lmn (in radians) for LMN calculation\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --not-perform_delta_xyz Do not use delta_xyz (in radians) for LMN calculation\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "  --server <servername>\n");
-	fprintf(stderr, "  -s       <servername>   Use <servername> as calcserver\n\n");
-	fprintf(stderr, "      By default 'localhost' will be the calcserver.  An environment\n");
-	fprintf(stderr, "      variable CALC_SERVER can be used to override that.  The command line\n");
+	fprintf(stderr, "  -s       <servername>   Use <servername> as hostname for the delay server\n\n");
+	fprintf(stderr, "      By default 'localhost' will be the delay server host.  An environment\n");
+	fprintf(stderr, "      variable DIFX_DELAY_SERVER can be used to override that.  The command line\n");
 	fprintf(stderr, "      overrides all.\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --server-type <type>    Use <type> as the type of delay server to use\n\n");
+	fprintf(stderr, "      Allowed values are\n");
+	for(ds = 0; ds < NumDelayServerTypes; ++ds)
+	{
+		fprintf(stderr, "          %s\n", delayServerTypeNames[ds]);
+	}
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --server-version <ver>  Use <ver> as the version of the delay server handler\n");
 	fprintf(stderr, "\n");
 }
 
@@ -151,11 +222,17 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 	int die = 0;
 
 	opts = (CommandLineOptions *)calloc(1, sizeof(CommandLineOptions));
-	opts->delta = 0.0001;
+	opts->perform_uvw_deriv = PerformDirectionDerivativeDefault;
+	opts->perform_lmn_deriv = PerformDirectionDerivativeDefault;
+	opts->perform_xyz_deriv = PerformDirectionDerivativeDefault;
+	opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+	opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
+	opts->delayServerType = NumDelayServerTypes; /* default to value in the .calc file */
 	opts->polyOrder = 0;    /* default to value in the .calc file */
 	opts->polyOversamp = 1;
 	opts->polyInterval = 0; /* default to value in the .calc file */
 	opts->interpol = 0;	/* usual solve */
+	ops->warnSpacecraftPointingSource = 1;
 	opts->aberCorr = AberCorrExact;
 
 	for(i = 1; i < argc; ++i)
@@ -168,12 +245,12 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 				++opts->verbose;
 			}
 			else if(strcmp(argv[i], "-q") == 0 ||
-			   strcmp(argv[i], "--quiet") == 0)
+					strcmp(argv[i], "--quiet") == 0)
 			{
 				--opts->verbose;
 			}
 			else if(strcmp(argv[i], "-f") == 0 ||
-				strcmp(argv[i], "--force") == 0)
+					strcmp(argv[i], "--force") == 0)
 			{
 				++opts->force;
 			}
@@ -187,24 +264,36 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			{
 				opts->allowNegDelay = 1;
 			}
+			else if(strcmp(argv[i], "--not-allow-neg-delay") == 0)
+			{
+				opts->allowNegDelay = 0;
+			}
+			else if(strcmp(argv[i], "--allow-sc-pointing") == 0)
+			{
+				opts->warnSpacecraftPointingSource = 0;
+			}
+			else if(strcmp(argv[i], "--not-allow-sc-pointing") == 0)
+			{
+				opts->warnSpacecraftPointingSource = 1;
+			}
 			else if(strcmp(argv[i], "-n") == 0 ||
-				strcmp(argv[i], "--noaber") == 0)
+					strcmp(argv[i], "--noaber") == 0)
 			{
 				opts->aberCorr = AberCorrUncorrected;
-				opts->delta = -1.0;
+				opts->perform_uvw_deriv = PerformDirectionDerivativeNone;
 			}
 			else if(strcmp(argv[i], "-A") == 0 ||
-				strcmp(argv[i], "--noatmos") == 0)
+					strcmp(argv[i], "--noatmos") == 0)
 			{
 				opts->aberCorr = AberCorrNoAtmos;
 			}
 			else if(strcmp(argv[i], "-F") == 0 ||
-				strcmp(argv[i], "--fit") == 0)
+					strcmp(argv[i], "--fit") == 0)
 			{
 				opts->interpol = 1;
 			}
 			else if(strcmp(argv[i], "-h") == 0 ||
-				strcmp(argv[i], "--help") == 0)
+					strcmp(argv[i], "--help") == 0)
 			{
 				usage();
 				deleteCommandLineOptions(opts);
@@ -215,9 +304,101 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			{
 				opts->overrideVersion = 1;
 			}
+			else if(strcmp(argv[i], "--not-perform_delta") == 0)
+			{
+				opts->perform_uvw_deriv = PerformDirectionDerivativeNone;
+			}
+			else if(strcmp(argv[i], "--perform_delta") == 0)
+			{
+				opts->perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative;
+				if(opts->delta_lmn == 0.0)
+				{
+					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+				}
+			}
+			else if(strcmp(argv[i], "--perform_delta2") == 0)
+			{
+				opts->perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative2;
+				if(opts->delta_lmn == 0.0)
+				{
+					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+				}
+			}
+			else if(strcmp(argv[i], "--not-perform_delta_lmn") == 0)
+			{
+				opts->perform_lmn_deriv = PerformDirectionDerivativeNone;
+			}
+			else if(strcmp(argv[i], "--perform_delta_lmn_1") == 0)
+			{
+				opts->perform_lmn_deriv = PerformDirectionDerivativeFirstDerivative;
+				if(opts->delta_lmn == 0.0)
+				{
+					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+				}
+			}
+			else if(strcmp(argv[i], "--perform_delta_lmn_12") == 0)
+			{
+				opts->perform_lmn_deriv = PerformDirectionDerivativeFirstDerivative2;
+				if(opts->delta_lmn == 0.0)
+				{
+					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+				}
+			}
+			else if(strcmp(argv[i], "--perform_delta_lmn_2") == 0)
+			{
+				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondderivative;
+				if(opts->delta_lmn == 0.0)
+				{
+					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+				}
+			}
+			else if(strcmp(argv[i], "--perform_delta_lmn_22") == 0)
+			{
+				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondderivative2;
+				if(opts->delta_lmn == 0.0)
+				{
+					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+				}
+			}
+			else if(strcmp(argv[i], "--not-perform_delta_xyz") == 0)
+			{
+				opts->perform_xyz_deriv = PerformDirectionDerivativeNone;
+			}
+			else if(strcmp(argv[i], "--perform_delta_xyz_1") == 0)
+			{
+				opts->perform_xyz_deriv = PerformDirectionDerivativeFirstDerivative;
+				if(opts->delta_xyz == 0.0)
+				{
+					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
+				}
+			}
+			else if(strcmp(argv[i], "--perform_delta_xyz_12") == 0)
+			{
+				opts->perform_xyz_deriv = PerformDirectionDerivativeFirstDerivative2;
+				if(opts->delta_xyz == 0.0)
+				{
+					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
+				}
+			}
+			else if(strcmp(argv[i], "--perform_delta_xyz_2") == 0)
+			{
+				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondderivative;
+				if(opts->delta_xyz == 0.0)
+				{
+					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
+				}
+			}
+			else if(strcmp(argv[i], "--perform_delta_xyz_22") == 0)
+			{
+				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondderivative2;
+				if(opts->delta_xyz == 0.0)
+				{
+					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
+				}
+			}
 			else if(strcmp(argv[i], "--sekido") == 0)
 			{
-				opts->useSekido = 1;
+				opts->useExtraExternalDelay = 1;
 			}
 			else if(i+1 < argc)
 			{
@@ -225,31 +406,68 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 				   strcmp(argv[i], "-s") == 0)
 				{
 					++i;
-					v = snprintf(opts->calcServer, DIFXIO_NAME_LENGTH, "%s", argv[i]);
+					v = snprintf(opts->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", argv[i]);
 					if(v >= DIFXIO_NAME_LENGTH)
 					{
-						fprintf(stderr, "Error: calcif2: calcServer name, %s, is too long (more than %d chars)\n",
-							argv[i], DIFXIO_NAME_LENGTH-1);
+						fprintf(stderr, "Error: calcif2: delayServerHost name, %s, is too long (more than %d chars)\n",
+								argv[i], DIFXIO_HOSTNAME_LENGTH-1);
 						++die;
 					}
 				}
+				else if(strcmp(argv[i], "--server-type") == 0)
+				{
+					++i;
+					opts->delayServerType = stringToDelayServerType(argv[i]);
+					if(opts->delayServerType == NumDelayServerTypes)
+					{
+						fprintf(stderr, "Error: calcif2: delayServerType type, %s, is not recognized\n", argv[i]);
+						++die;
+					}
+				}
+				else if(strcmp(argv[i], "--server-version") == 0)
+				{
+					++i;
+					opts->delayVersion = strtoul(argv[i], NULL, 0);
+				}
 				else if(strcmp(argv[i], "--order") == 0 ||
-					strcmp(argv[i], "-o") == 0)
+						strcmp(argv[i], "-o") == 0)
 				{
 					++i;
 					opts->polyOrder = atoi(argv[i]);
 				}
 				else if(strcmp(argv[i], "--oversamp") == 0 ||
-					strcmp(argv[i], "-O") == 0)
+						strcmp(argv[i], "-O") == 0)
 				{
 					++i;
 					opts->polyOversamp = atoi(argv[i]);
 				}
 				else if(strcmp(argv[i], "--interval") == 0 ||
-					strcmp(argv[i], "-i") == 0)
+						strcmp(argv[i], "-i") == 0)
 				{
 					++i;
 					opts->polyInterval = atoi(argv[i]);
+				}
+				else if(strcmp(argv[i], "--delta") == 0 ||
+						strcmp(argv[i], "--delta_lmn") == 0
+						strcmp(argv[i], "-d") == 0 ||
+						)
+				{
+					++i;
+					opts->delta_lmn = atof(argv[i]);
+					if(opts->delta_lmn == 0.0)
+					{
+						perform_uvw_deriv = PerformDirectionDerivativeNone;
+						perform_lmn_deriv = PerformDirectionDerivativeNone;
+					}
+				}
+				else if(strcmp(argv[i], "--delta_xyz") == 0)
+				{
+					++i;
+					opts->delta_xyz = atof(argv[i]);
+					if(opts->delta_xyz == 0.0)
+					{
+						perform_xyz_deriv = PerformDirectionDerivativeNone;
+					}
 				}
 				else if(argv[i][0] == '-')
 				{
@@ -331,22 +549,42 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 		globfree(&globbuf);
 	}
 
-	if(opts->calcServer[0] == 0)
+	if(opts->delayServerHost[0] == 0)
 	{
-		cs = getenv("CALC_SERVER");
+		cs = getenv("DIFX_DELAY_SERVER");
 		if(cs)
 		{
-			v = snprintf(opts->calcServer, DIFXIO_NAME_LENGTH, "%s", cs ? cs : "localhost");
-			if(v >= DIFXIO_NAME_LENGTH)
+			v = snprintf(opts->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", cs ? cs : "localhost");
+			if(v >= DIFXIO_HOSTNAME_LENGTH)
 			{
-                            fprintf(stderr, "Error: calcif2: env var CALC_SERVER is set to a name that is too long, %s (should be < %d chars)\n", cs ? cs : "localhost", DIFXIO_NAME_LENGTH);
+				fprintf(stderr, "Error: calcif2: env var DIFX_DELAY_SERVER is set to a name that is too long, %s (should be < %d chars)\n", cs ? cs : "localhost", DIFXIO_HOSTNAME_LENGTH);
 				++die;
 			}
 		}
 	}
 
-	opts->calcVersion = CALCVERS;
-	opts->calcProgram = CALCPROG;
+	if((opts->delta_lmn == 0.0) && ((perform_uvw_deriv)))
+	{
+		fprintf(stderr, "Error: calcif2: delta_lmn is zero, but perform_uvw_deriv is not None\n");
+		++die;
+	}
+	if((opts->delta_lmn == 0.0) && ((perform_lmn_deriv)))
+	{
+		fprintf(stderr, "Error: calcif2: delta_lmn is zero, but perform_lmn_deriv is not None\n");
+		++die;
+	}
+	if((opts->delta_xyz == 0.0) && ((perform_xyz_deriv)))
+	{
+		fprintf(stderr, "Error: calcif2: delta_xyz is zero, but perform_xyz_deriv is not None\n");
+		++die;
+	}
+	
+
+	if(opts->delayVersion == 0)
+	{
+		opts->delayVersion = DIFX_DELAY_SERVER_VERS_1;
+	}
+	opts->delayHandler = DIFX_DELAY_SERVER_PROG;
 
 	if(die)
 	{
@@ -449,7 +687,7 @@ static void tweakDelays(DifxInput *D, const char *tweakFile, int verbose)
 					for(j = 0; j < D->scan[s].nPoly; ++j)
 					{
 						model = im[a][i] + j;
-						if(fabs(model->mjd + model->sec/86400.0 - mjd) < 0.5/86400.0)	/* a match! */
+						if(fabs(model->mjd + model->sec/SEC_DAY_DBLE - mjd) < 0.5/SEC_DAY_DBLE)	/* a match! */
 						{
 							++nModified;
 							if(verbose > 1)
@@ -532,7 +770,7 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 		return -1;
 	}
 
-	if(opts->useSekido)
+	if(opts->useExtraExternalDelay == 1)
 	{
 		const char calcProgram[] = "calc_sekido";
 		const int MaxCommandLength = 1024;
@@ -644,13 +882,47 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 		return 0;
 	}
 
-        (void) CheckInputForSpacecraft(D, p);
-        if((p->order)) {
-            D->job->polyOrder = p->order;
-        }
-        if((p->increment)) {
-            D->job->polyInterval = p->increment;
-        }
+	(void) CheckInputForSpacecraft(D, p);
+	if((p->order)) {
+		D->job->polyOrder = p->order;
+	}
+	if((p->increment)) {
+		D->job->polyInterval = p->increment;
+	}
+	if(p->perform_uvw_deriv != PerformDirectionDerivativeDefault)
+	{
+		D->job->perform_uvw_deriv = p->perform_uvw_deriv;
+		D->job->delay_lmn = p->delay_lmn;
+	}
+	if(p->perform_lmn_deriv != PerformDirectionDerivativeDefault)
+	{
+		D->job->perform_lmn_deriv = p->perform_lmn_deriv;
+		D->job->delay_lmn = p->delay_lmn;
+	}
+	if(p->delay_lmn != DIFXIO_DEFAULT_DELTA_LMN)
+	{
+		D->job->delay_lmn = p->delay_lmn;
+	}
+	if(p->perform_xyz_deriv != PerformDirectionDerivativeDefault)
+	{
+		D->job->perform_xyz_deriv = p->perform_xyz_deriv;
+		D->job->delay_xyz = p->delay_xyz;
+	}
+	if(p->delay_xyz != DIFXIO_DEFAULT_DELTA_XYZ)
+	{
+		D->job->delay_xyz = p->delay_xyz;
+	}
+#error "check how delay_uvw gets set in difxio"
+	if(p->delay_lmn != 0.0)
+	{
+		D->job->delay_lmn = p->delay_lmn;
+		D->job->perform_lmn_deriv = p->perform_lmn_deriv;
+	}
+	if(p->delay_xyz != 0.0)
+	{
+		D->job->delay_xyz = p->delay_xyz;
+		D->job->perform_xyz_deriv = p->perform_xyz_deriv;
+	}
 	
 	if(difxVersion && D->job->difxVersion[0])
 	{
@@ -675,10 +947,25 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 		printf("Warning: calcif2: working on unversioned job\n");
 	}
 
-	/* we know opts->calcServer is no more than DIFXIO_NAME_LENGTH-1 chars long */
-	strcpy(D->job->calcServer, opts->calcServer);
-	D->job->calcProgram = opts->calcProgram;
-	D->job->calcVersion = opts->calcVersion;
+	/* we know opts->delayServerHost is no more than DIFXIO_HOSTNAME_LENGTH-1 chars long */
+	if((opts->delayServerHost[]))
+	{
+		strcpy(D->job->delayServerHost, opts->delayServerHost);
+	}
+	if(opts->delayServerType != NumDelayServerTypes)
+	{
+		D->job->delayServerType = opts->delayServerType;
+	}
+	D->job->delayProgram = delayServerTypeIds[D->job->delayServerType];
+	if((opts->delayVersion))
+	{
+		D->job->delayVersion = opts->delayVersion;
+	}
+	if((opts->delayHandler))
+	{
+		D->job->delayHandler = opts->delayHandler;
+	}
+	
 
 	if(opts->verbose > 1)
 	{
@@ -722,6 +1009,9 @@ void deleteCalcParams(CalcParams *p)
 	{
 		clnt_destroy(p->clnt);
 	}
+	free(p->request.station.station_val);
+	free(p->request.source.source_val);
+	free(p->request.EOP.EOP_val);
 	free(p);
 }
 
@@ -734,21 +1024,31 @@ CalcParams *newCalcParams(const CommandLineOptions *opts)
 	p->increment = opts->polyInterval;
 	p->order = opts->polyOrder;
 	p->oversamp = opts->polyOversamp;
-	p->delta = opts->delta;
+	p->perform_uvw_deriv = opts->perform_uvw_deriv;
+	p->perform_lmn_deriv = opts->perform_lmn_deriv;
+	p->perform_xyz_deriv = opts->perform_xyz_deriv;
+	p->delta_lmn = opts->delta_lmn;
+	p->delta_xyz = opts->delta_xyz;
 	p->interpol = opts->interpol;
 	p->aberCorr = opts->aberCorr;
 
-	/* We know that opts->calcServer is no more than DIFXIO_NAME_LENGTH-1 chars long */
-	strcpy(p->calcServer, opts->calcServer);
-	p->calcProgram = opts->calcProgram;
-	p->calcVersion = opts->calcVersion;
+	/* We know that opts->delayServerHost is no more than DIFXIO_HOSTNAME_LENGTH-1 chars long */
+	strcpy(p->delayServerHost, opts->delayServerHost);
+	p->delayServerType = opts->delayServerType;
+	p->delayVersion = opts->delayVersion;
+	p->delayHandler = opts->delayHandler;
 	p->allowNegDelay = opts->allowNegDelay;
+	p->warnSpacecraftPointingSource = opts->warnSpacecraftPointingSource;
+	p->useExtraExternalDelay = opts->useExtraExternalDelay;
+	p->delayProgramDetailedVersion = 0;
+	p->Num_Allocated_Stations = 0;
+	p->Num_Allocated_Sources = 0;
 
-	p->clnt = clnt_create(p->calcServer, p->calcProgram, p->calcVersion, "tcp");
+	p->clnt = clnt_create(p->delayServerHost, p->delayHandler, p->delayVersion, "tcp");
 	if(!p->clnt)
 	{
 		clnt_pcreateerror(p->calcServer);
-		fprintf(stderr, "Error: calcif2: RPC clnt_create fails for host : %-s\n", p->calcServer);
+		fprintf(stderr, "Error: calcif2: RPC clnt_create fails for host : %-s program id 0x%lX version %ul\n", p->delayServerHost, p->delayHandler, p->delayVersion);
 		deleteCalcParams(p);
 
 		return 0;
@@ -811,7 +1111,7 @@ int run(const CommandLineOptions *opts)
 
 int main(int argc, char **argv)
 {
-        int status;
+	int status;
 	CommandLineOptions *opts;
 
 	opts = newCommandLineOptions(argc, argv);
