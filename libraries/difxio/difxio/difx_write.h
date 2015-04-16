@@ -55,6 +55,7 @@ int writeDifxLine3(FILE *out, const char *key, int i1, int i2, int i3,
 
 
 int writeDifxLineBoolean(FILE *out, const char *key, int value);
+int writeDifxLineBoolean1(FILE *out, const char *key, int i1, int value);
 
 
 int writeDifxLineInt(FILE *out, const char *key, int value);

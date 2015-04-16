@@ -41,6 +41,21 @@ const char aberCorrStrings[][MAX_ABER_CORR_STRING_LENGTH] =
 	"NO ATMOS"
 };
 
+
+enum AberCorr stringToAberCorr(const char* str)
+{
+	enum AberCorr ac;
+	for(ac = 0; ac < NumAberCorrOptions; ++ac)
+	{
+		if(strcmp(aberCorrStrings[ac], str) == 0)
+		{
+			return ac;
+		}
+	}
+	return AberCorrUncorrected;
+}
+
+
 const char performDirectionDerivativeTypeNames[][MAX_PERFORM_DIRECTION_DERIVATIVE_STRING_LENGTH] = 
 {
 	"NONE",
@@ -50,6 +65,63 @@ const char performDirectionDerivativeTypeNames[][MAX_PERFORM_DIRECTION_DERIVATIV
 	"SECOND",
 	"SECOND2"
 };
+enum PerformDirectionDerivativeType stringToPerformDirectionDerivativeType(const char *str)
+{
+	if(strcasecmp(str, "NONE") == 0)
+	{
+		return PerformDirectionDerivativeNone;
+	}
+	if(strcasecmp(str, "DEFAULT") == 0)
+	{
+		return PerformDirectionDerivativeDefault;
+	}
+	if(strcasecmp(str, "FIRST") == 0)
+	{
+		return PerformDirectionDerivativeFirstDerivative;
+	}
+	if(strcasecmp(str, "FIRST2") == 0)
+	{
+		return PerformDirectionDerivativeFirstDerivative2;
+	}
+	if(strcasecmp(str, "SECOND") == 0)
+	{
+		return PerformDirectionDerivativeSecondDerivative;
+	}
+	if(strcasecmp(str, "SECOND2") == 0)
+	{
+		return PerformDirectionDerivativeSecondDerivative2;
+	}
+	return PerformDirectionDerivativeNone;
+}
+
+const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
+{
+	"CALCServer",
+	"CALC_9_1_RA_Server",
+	"unknown"
+};
+const unsigned long delayServerTypeIds[] =
+{
+	0x20000340,   /* CALCServer                  */
+	0x20000341,   /* CALC_9_1_RA_Server          */
+	0
+};
+
+enum DelayServerType stringToDelayServerType(const char *str)
+{
+	enum DelayServerType ds;
+
+	for(ds = 0; ds < NumDelayServerTypes; ++ds)
+	{
+		if(strcasecmp(str, delayServerTypeNames[ds]) == 0)
+		{
+			break;
+		}
+	}
+
+	return ds;
+}
+
 
 DifxJob *newDifxJobArray(int nJob)
 {
@@ -62,14 +134,45 @@ DifxJob *newDifxJobArray(int nJob)
 		snprintf(dj[j].obsCode,        DIFXIO_OBSCODE_LENGTH,  "%s", "DIFX");
 		snprintf(dj[j].taperFunction,  DIFXIO_TAPER_LENGTH,    "%s", "UNIFORM");
 		snprintf(dj[j].delayServerHost,DIFXIO_HOSTNAME_LENGTH, "%s", "UNKNOWN");
-		dj[j].delayServerType = CALCServer;
-		dj[j].delayVersion = 0;
-		dj[j].delayProgram = 0;
-		dj[j].delayHandler = 0;
+		dj[j].polyOrder = DIFXIO_DEFAULT_POLY_ORDER;
+		dj[j].polyInterval = DIFXIO_DEFAULT_POLY_INTERVAL;
 		dj[j].delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
+		dj[j].delayServerType = DIFX_DEFAULT_DELAY_SERVER_TYPE;
+		dj[j].delayVersion = DEFIX_DEFAULT_DELAY_SERVER_VERSION;
+		dj[j].delayProgram = delayServerTypeIds[DIFX_DEFAULT_DELAY_SERVER_TYPE];
+		dj[j].delayHandler = DEFIX_DEFAULT_DELAY_SERVER_HANDLER;
+		dj[j].perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative;
+		dj[j].perform_uvw_deriv = PerformDirectionDerivativeNone;
+		dj[j].perform_uvw_deriv = PerformDirectionDerivativeNone;
+		dj[j].delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
+		dj[j].delta_lmn = DIFXIO_DEFAULT_DELTA_XYZ;
 	}
 
 	return dj;
+}
+
+static void deleteDifxJobInternals(DifxJob *dj)
+{
+	deleteDifxAntennaFlagArray(dj->flag);
+	dj->flag = 0;
+	deleteRemap(dj->jobIdRemap);
+	dj->jobIdRemap = 0;
+	deleteRemap(dj->freqIdRemap);
+	dj->freqIdRemap = 0;
+	deleteRemap(dj->antennaIdRemap);
+	dj->antennaIdRemap = 0;
+	deleteRemap(dj->datastreamIdRemap);
+	dj->datastreamIdRemap = 0;
+	deleteRemap(dj->baselineIdRemap);
+	dj->baselineIdRemap = 0;
+	deleteRemap(dj->pulsarIdRemap);
+	dj->pulsarIdRemap = 0;
+	deleteRemap(dj->configIdRemap);
+	dj->configIdRemap = 0;
+	deleteRemap(dj->sourceIdRemap);
+	dj->sourceIdRemap = 0;
+	deleteRemap(dj->spacecraftIdRemap);
+	dj->spacecraftIdRemap = 0;
 }
 
 void deleteDifxJobArray(DifxJob *djarray, int nJob)
@@ -84,57 +187,7 @@ void deleteDifxJobArray(DifxJob *djarray, int nJob)
 	for(j = 0; j < nJob; j++)
 	{
 		dj = djarray + j;
-
-		if(dj->flag)
-		{
-			deleteDifxAntennaFlagArray(dj->flag);
-			dj->flag = 0;
-		}
-		if(dj->jobIdRemap)
-		{
-			deleteRemap(dj->jobIdRemap);
-			dj->jobIdRemap = 0;
-		}
-		if(dj->freqIdRemap)
-		{
-			deleteRemap(dj->freqIdRemap);
-			dj->freqIdRemap = 0;
-		}
-		if(dj->antennaIdRemap)
-		{
-			deleteRemap(dj->antennaIdRemap);
-			dj->antennaIdRemap = 0;
-		}
-		if(dj->datastreamIdRemap)
-		{
-			deleteRemap(dj->datastreamIdRemap);
-			dj->datastreamIdRemap = 0;
-		}
-		if(dj->baselineIdRemap)
-		{
-			deleteRemap(dj->baselineIdRemap);
-			dj->baselineIdRemap = 0;
-		}
-		if(dj->pulsarIdRemap)
-		{
-			deleteRemap(dj->pulsarIdRemap);
-			dj->pulsarIdRemap = 0;
-		}
-		if(dj->configIdRemap)
-		{
-			deleteRemap(dj->configIdRemap);
-			dj->configIdRemap = 0;
-		}
-		if(dj->sourceIdRemap)
-		{
-			deleteRemap(dj->sourceIdRemap);
-			dj->sourceIdRemap = 0;
-		}
-		if(dj->spacecraftIdRemap)
-		{
-			deleteRemap(dj->spacecraftIdRemap);
-			dj->spacecraftIdRemap = 0;
-		}
+		deleteDifxJobInternals(dj);
 	}
 	free(djarray);
 }
@@ -157,6 +210,18 @@ void fprintDifxJob(FILE *fp, const DifxJob *dj)
 	fprintf(fp, "    im (model) file = %s\n", dj->imFile);
 	fprintf(fp, "    flag file = %s\n", dj->flagFile);
 	fprintf(fp, "    output file = %s\n", dj->outputFile);
+	fprintf(fp, "    delay srever host = %s\n", dj->delayServerHost);
+	fprintf(fp, "    delay server type = %s\n", delayServerTypeNames[dj->delayServerType]);
+	fprintf(fp, "    delay version = 0x%lX\n", dj->delayVersion);
+	fprintf(fp, "    delay program = 0x%lX\n", dj->delayProgram);
+	fprintf(fp, "    delay handler = 0x%lX\n", dj->delayHandler);
+	fprintf(fp, "    delay detailed version = 0x%lX\n", dj->delayProgramDetailedVersion);
+	fprintf(fp, "    perform uvw = %s\n", performDirectionDerivativeTypeNames[dj->perform_uvw_deriv]);
+	fprintf(fp, "    perform lmn = %s\n", performDirectionDerivativeTypeNames[dj->perform_lmn_deriv]);
+	fprintf(fp, "    perform xyz = %s\n", performDirectionDerivativeTypeNames[dj->perform_xyz_deriv]);
+	fprintf(fp, "    delta lmn = %E\n", dj->delta_lmn);
+	fprintf(fp, "    delta xyz = %E\n", dj->delta_xyz);
+	fprintf(fp, "    aber corr = %s\n", aberCorrStrings[dj->aberCorr]);
 	fprintRemap(fp, "  jobId", dj->jobIdRemap);
 	fprintRemap(fp, "  freqId", dj->freqIdRemap);
 	fprintRemap(fp, "  antennaId", dj->antennaIdRemap);
@@ -176,8 +241,10 @@ void printDifxJob(const DifxJob *dj)
 void copyDifxJob(DifxJob *dest, const DifxJob *src, int *antennaIdRemap)
 {
 	int f;
-	
-	memcpy(dest, src, sizeof(DifxJob));
+
+	deleteDifxJobInternals(dest);
+	*dest = *src;
+	/* memcpy(dest, src, sizeof(DifxJob)); */
 
 	if(src->nFlag > 0)
 	{

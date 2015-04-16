@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2008-2015 by Walter Brisken                             *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2008-2015 by Walter Brisken							   *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -94,11 +94,11 @@ void deleteDifxPolyModelArray(DifxPolyModel ***dpm, int nAntenna, int nSrcs)
 
 void fprintDifxPolyModel(FILE *fp, const DifxPolyModel *dpm)
 {
-	fprintf(fp, "    DifxPolyModel : %p\n", dpm);
+	fprintf(fp, "	 DifxPolyModel : %p\n", dpm);
 	if(dpm)
 	{
-		fprintf(fp, "        mjd, sec = %d, %d\n", dpm->mjd, dpm->sec);
-		fprintf(fp, "        delay = %22.15e %22.15e %22.15e\n", dpm->delay[0], dpm->delay[1], dpm->delay[2]);
+		fprintf(fp, "		 mjd, sec = %d, %d\n", dpm->mjd, dpm->sec);
+		fprintf(fp, "		 delay = %24.16e %24.16e %24.16e\n", dpm->delay[0], dpm->delay[1], dpm->delay[2]);
 	}
 }
 
@@ -109,62 +109,62 @@ void printDifxPolyModel(const DifxPolyModel *dpm)
 
 
 
-DifxPolyModelLMExtension ***newDifxPolyModelLMExtensionArray(int nAntenna, int nSrcs, int nPoly)
+DifxPolyModelLMNExtension ***newDifxPolyModelLMNExtensionArray(int nAntenna, int nSrcs, int nPoly)
 {
-	DifxPolyModelLMExtension ***lme;
+	DifxPolyModelLMNExtension ***lmne;
 	int a;
 
-	lme = (DifxPolyModelLMExtension ***)calloc(nAntenna, sizeof(DifxPolyModelLMExtension **));
+	lmne = (DifxPolyModelLMNExtension ***)calloc(nAntenna, sizeof(DifxPolyModelLMNExtension **));
 	for(a = 0; a < nAntenna; ++a)
 	{
 		int s;
 
-		lme[a] = (DifxPolyModelLMExtension **)calloc(nSrcs, sizeof(DifxPolyModelLMExtension *));
+		lmne[a] = (DifxPolyModelLMNExtension **)calloc(nSrcs, sizeof(DifxPolyModelLMNExtension *));
 		for(s = 0; s < nSrcs; ++s)
 		{
-			lme[a][s] = (DifxPolyModelLMExtension *)calloc(nPoly, sizeof(DifxPolyModelLMExtension));
+			lmne[a][s] = (DifxPolyModelLMNExtension *)calloc(nPoly, sizeof(DifxPolyModelLMNExtension));
 		}
 	}
 
-	return lme;
+	return lmne;
 }
 
-DifxPolyModelLMExtension *dupDifxPolyModelLMExtensionColumn(const DifxPolyModelLMExtension *src, int nPoly)
+DifxPolyModelLMNExtension *dupDifxPolyModelLMNExtensionColumn(const DifxPolyModelLMNExtension *src, int nPoly)
 {
-	DifxPolyModelLMExtension *dest;
+	DifxPolyModelLMNExtension *dest;
 
 	if(src == 0)
 	{
 		return 0;
 	}
 
-	dest = (DifxPolyModelLMExtension *)calloc(nPoly, sizeof(DifxPolyModelLMExtension));
+	dest = (DifxPolyModelLMNExtension *)calloc(nPoly, sizeof(DifxPolyModelLMNExtension));
 
-	memcpy(dest, src, nPoly*sizeof(DifxPolyModelLMExtension));
+	memcpy(dest, src, nPoly*sizeof(DifxPolyModelLMNExtension));
 
 	return dest;
 }
 
-void deleteDifxPolyModelLMExtensionArray(DifxPolyModelLMExtension ***lme, int nAntenna, int nSrcs)
+void deleteDifxPolyModelLMNExtensionArray(DifxPolyModelLMNExtension ***lmne, int nAntenna, int nSrcs)
 {
-	if(lme)
+	if(lmne)
 	{
 		int a;
 
 		for(a = 0; a < nAntenna; ++a)
 		{
-			if(lme[a])
+			if(lmne[a])
 			{
 				int s;
 
 				for(s = 0; s < nSrcs; ++s)
 				{
-					free(lme[a][s]);
+					free(lmne[a][s]);
 				}
-				free(lme[a]);
+				free(lmne[a]);
 			}
 		}
-		free(lme);
+		free(lmne);
 	}
 }
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2010-2011 by Walter Brisken                             *
+ *   Copyright (C) 2010-2011, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -96,7 +96,7 @@ int populateDifxCalculator(DifxCalculator *C, const DifxInput *D)
 
 	C->nConfig = D->nConfig;
 	C->config = newDifxCalculatorConfigArray(C->nConfig);
-	C->tObs = 86400.0*(D->mjdStop - D->mjdStart);
+	C->tObs = SEC_DAY_DBL*(D->mjdStop - D->mjdStart);
 	C->visibilityLength = D->visBufferLength;
 
 	C->nCore = 0;

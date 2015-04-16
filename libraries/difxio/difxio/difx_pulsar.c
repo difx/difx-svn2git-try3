@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008, 2015 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -53,21 +53,12 @@ DifxPulsar *growDifxPulsarArray(DifxPulsar *dp, int origSize)
 
 void deleteDifxPulsarInternals(DifxPulsar *dp)
 {
-	if(dp->polyco)
-	{
-		deleteDifxPolycoArray(dp->polyco, dp->nPolyco);
-		dp->polyco = 0;
-	}
-	if(dp->binEnd)
-	{
-		free(dp->binEnd);
-		dp->binEnd = 0;
-	}
-	if(dp->binWeight)
-	{
-		free(dp->binWeight);
-		dp->binWeight = 0;
-	}
+	deleteDifxPolycoArray(dp->polyco, dp->nPolyco);
+	dp->polyco = 0;
+	free(dp->binEnd);
+	dp->binEnd = 0;
+	free(dp->binWeight);
+	dp->binWeight = 0;
 }
 
 void deleteDifxPulsarArray(DifxPulsar *dp, int nPulsar)
@@ -140,15 +131,14 @@ int isSameDifxPulsar(const DifxPulsar *dp1, const DifxPulsar *dp2)
 
 void copyDifxPulsar(DifxPulsar *dest, const DifxPulsar *src)
 {
-	snprintf(dest->fileName, DIFXIO_FILENAME_LENGTH, "%s", src->fileName);
-	dest->nPolyco = src->nPolyco;
+	deleteDifxPulsarInternals(dest);
+	*dest = *src;
+	
 	dest->polyco = dupDifxPolycoArray(src->polyco, src->nPolyco);
-	dest->nBin = src->nBin;
 	dest->binEnd = (double *)malloc(dest->nBin*sizeof(double));
 	memcpy(dest->binEnd, src->binEnd, dest->nBin*sizeof(double));
 	dest->binWeight = (double *)malloc(dest->nBin*sizeof(double));
 	memcpy(dest->binWeight, src->binWeight, dest->nBin*sizeof(double));
-	dest->scrunch = src->scrunch;
 }
 
 DifxPulsar *dupDifxPulsarArray(const DifxPulsar *src, int nPulsar)

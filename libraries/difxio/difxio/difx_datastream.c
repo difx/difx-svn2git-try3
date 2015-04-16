@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2014 by Walter Brisken                             *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <math.h>
 #include "difxio/difx_write.h"
 
@@ -101,11 +102,8 @@ void DifxDatastreamAllocFiles(DifxDatastream *ds, int nFile)
 	{
 		for(i = 0; i < ds->nFile; ++i)
 		{
-			if(ds->file[i])
-			{
-				free(ds->file[i]);
-				ds->file[i] = 0;
-			}
+			free(ds->file[i]);
+			ds->file[i] = 0;
 		}
 		free(ds->file);
 		ds->file = 0;
@@ -120,36 +118,18 @@ void DifxDatastreamAllocFiles(DifxDatastream *ds, int nFile)
 
 void DifxDatastreamAllocFreqs(DifxDatastream *dd, int nRecFreq)
 {
-	if(dd->recFreqId)
-	{
-		free(dd->recFreqId);
-		dd->recFreqId = 0;
-	}
-	if(dd->nRecPol)
-	{
-		free(dd->nRecPol);
-		dd->nRecPol = 0;
-	}
-	if(dd->clockOffset)
-	{
-		free(dd->clockOffset);
-		dd->clockOffset = 0;
-	}
-	if(dd->clockOffsetDelta)
-	{
-		free(dd->clockOffsetDelta);
-		dd->clockOffsetDelta = 0;
-	}
-	if(dd->phaseOffset)
-	{
-		free(dd->phaseOffset);
-		dd->phaseOffset = 0;
-	}
-	if(dd->freqOffset)
-	{
-		free(dd->freqOffset);
-		dd->freqOffset = 0;
-	}
+	free(dd->recFreqId);
+	dd->recFreqId = 0;
+	free(dd->nRecPol);
+	dd->nRecPol = 0;
+	free(dd->clockOffset);
+	dd->clockOffset = 0;
+	free(dd->clockOffsetDelta);
+	dd->clockOffsetDelta = 0;
+	free(dd->phaseOffset);
+	dd->phaseOffset = 0;
+	free(dd->freqOffset);
+	dd->freqOffset = 0;
 
 	dd->nRecFreq = nRecFreq;
 	if(nRecFreq > 0)
@@ -165,16 +145,10 @@ void DifxDatastreamAllocFreqs(DifxDatastream *dd, int nRecFreq)
 
 void DifxDatastreamAllocBands(DifxDatastream *dd, int nRecBand)
 {
-	if(dd->recBandFreqId)
-	{
-		free(dd->recBandFreqId);
-		dd->recBandFreqId = 0;
-	}
-	if(dd->recBandPolName)
-	{
-		free(dd->recBandPolName);
-		dd->recBandPolName = 0;
-	}
+	free(dd->recBandFreqId);
+	dd->recBandFreqId = 0;
+	free(dd->recBandPolName);
+	dd->recBandPolName = 0;
 
 	dd->nRecBand = nRecBand;
 	if(nRecBand > 0)
@@ -186,16 +160,11 @@ void DifxDatastreamAllocBands(DifxDatastream *dd, int nRecBand)
 
 void DifxDatastreamAllocZoomFreqs(DifxDatastream *dd, int nZoomFreq)
 {
-	if(dd->zoomFreqId)
-	{
-		free(dd->zoomFreqId);
-		dd->zoomFreqId = 0;
-	}
-	if(dd->nZoomPol)
-	{
-		free(dd->nZoomPol);
-		dd->nZoomPol = 0;
-	}
+	free(dd->zoomFreqId);
+	dd->zoomFreqId = 0;
+	free(dd->nZoomPol);
+	dd->nZoomPol = 0;
+
 	dd->nZoomFreq = nZoomFreq;
 	if(nZoomFreq > 0)
 	{
@@ -206,16 +175,11 @@ void DifxDatastreamAllocZoomFreqs(DifxDatastream *dd, int nZoomFreq)
 
 void DifxDatastreamAllocZoomBands(DifxDatastream *dd, int nZoomBand)
 {
-	if(dd->zoomBandFreqId)
-	{
-		free(dd->zoomBandFreqId);
-		dd->zoomBandFreqId = 0;
-	}
-	if(dd->zoomBandPolName)
-	{
-		free(dd->zoomBandPolName);
-		dd->zoomBandPolName = 0;
-	}
+	free(dd->zoomBandFreqId);
+	dd->zoomBandFreqId = 0;
+	free(dd->zoomBandPolName);
+	dd->zoomBandPolName = 0;
+
 	dd->nZoomBand = nZoomBand;
 	if(nZoomBand > 0)
 	{
@@ -226,16 +190,11 @@ void DifxDatastreamAllocZoomBands(DifxDatastream *dd, int nZoomBand)
 
 void DifxDatastreamAllocPhasecalTones(DifxDatastream *dd, int nTones)
 {
-	if(dd->recToneFreq)
-	{
-		free(dd->recToneFreq);
-		dd->recToneFreq = 0;
-	}
-	if(dd->recToneOut)
-	{
-		free(dd->recToneOut);
-		dd->recToneOut = 0;
-	}
+	free(dd->recToneFreq);
+	dd->recToneFreq = 0;
+	free(dd->recToneOut);
+	dd->recToneOut = 0;
+
 	dd->nRecTone = nTones;
 	if(nTones > 0)
 	{
@@ -578,6 +537,7 @@ void copyDifxDatastream(DifxDatastream *dest, const DifxDatastream *src, const i
 	DifxDatastreamAllocZoomFreqs(dest, src->nZoomFreq);
 	DifxDatastreamAllocZoomBands(dest, src->nZoomBand);
 	DifxDatastreamAllocPhasecalTones(dest, src->nRecTone);
+	DifxDatastreamAllocFiles(dest, src->nFile);
 	for(f = 0; f < dest->nRecFreq; ++f)
 	{
 		dest->nRecPol[f] = src->nRecPol[f];
@@ -621,13 +581,9 @@ void copyDifxDatastream(DifxDatastream *dest, const DifxDatastream *src, const i
 		dest->recToneFreq[c] = src->recToneFreq[c];
 		dest->recToneOut[c]  = src->recToneOut[c];
 	}
-	if(src->nFile > 0)
+	for(f = 0; f < src->nFile; ++f)
 	{
-		DifxDatastreamAllocFiles(dest, src->nFile);
-		for(f = 0; f < src->nFile; ++f)
-		{
-			dest->file[f] = strndup(src->file[f], DIFXIO_FILENAME_LENGTH);
-		}
+		dest->file[f] = strndup(src->file[f], DIFXIO_FILENAME_LENGTH);
 	}
 	snprintf(dest->networkPort, DIFXIO_ETH_DEV_SIZE, "%s", src->networkPort);
 	dest->windowSize  = src->windowSize;
@@ -636,38 +592,39 @@ void copyDifxDatastream(DifxDatastream *dest, const DifxDatastream *src, const i
 /* don't re-allocate internal structures */
 void moveDifxDatastream(DifxDatastream *dest, DifxDatastream *src)
 {
-	dest->antennaId = src->antennaId;
-	dest->tSys = src->tSys;
-	snprintf(dest->dataFormat, DIFXIO_FORMAT_LENGTH, "%s", src->dataFormat);
-	dest->dataSampling = src->dataSampling;
-	snprintf(dest->networkPort, DIFXIO_ETH_DEV_SIZE, "%s", src->networkPort);
-	dest->windowSize = src->windowSize;
-	dest->quantBits = src->quantBits;
-	dest->dataFrameSize = src->dataFrameSize;
-	dest->tcalFrequency = src->tcalFrequency;
-	dest->phaseCalIntervalMHz = src->phaseCalIntervalMHz;
-	dest->nRecTone = src->nRecTone;
-	dest->recToneFreq = src->recToneFreq;
-	dest->recToneOut = src->recToneOut;
-	dest->dataSource = src->dataSource;
-	dest->nRecFreq = src->nRecFreq;
-	dest->nRecBand = src->nRecBand;
-	dest->recFreqId = src->recFreqId;
-	dest->nRecPol = src->nRecPol;
-	dest->clockOffset = src->clockOffset;
-	dest->clockOffsetDelta = src->clockOffsetDelta;
-	dest->phaseOffset = src->phaseOffset;
-	dest->freqOffset = src->freqOffset;
-	dest->recBandFreqId = src->recBandFreqId;
-	dest->recBandPolName = src->recBandPolName;
-	dest->nZoomFreq = src->nZoomFreq;
-	dest->nZoomBand = src->nZoomBand;
-	dest->zoomFreqId = src->zoomFreqId;
-	dest->nZoomPol = src->nZoomPol;
-	dest->zoomBandFreqId = src->zoomBandFreqId;
-	dest->zoomBandPolName = src->zoomBandPolName;
-	dest->nFile = src->nFile;
-	dest->file = src->file;
+	*dest = *src;
+	/* dest->antennaId = src->antennaId; */
+	/* dest->tSys = src->tSys; */
+	/* snprintf(dest->dataFormat, DIFXIO_FORMAT_LENGTH, "%s", src->dataFormat); */
+	/* dest->dataSampling = src->dataSampling; */
+	/* snprintf(dest->networkPort, DIFXIO_ETH_DEV_SIZE, "%s", src->networkPort); */
+	/* dest->windowSize = src->windowSize; */
+	/* dest->quantBits = src->quantBits; */
+	/* dest->dataFrameSize = src->dataFrameSize; */
+	/* dest->tcalFrequency = src->tcalFrequency; */
+	/* dest->phaseCalIntervalMHz = src->phaseCalIntervalMHz; */
+	/* dest->nRecTone = src->nRecTone; */
+	/* dest->recToneFreq = src->recToneFreq; */
+	/* dest->recToneOut = src->recToneOut; */
+	/* dest->dataSource = src->dataSource; */
+	/* dest->nRecFreq = src->nRecFreq; */
+	/* dest->nRecBand = src->nRecBand; */
+	/* dest->recFreqId = src->recFreqId; */
+	/* dest->nRecPol = src->nRecPol; */
+	/* dest->clockOffset = src->clockOffset; */
+	/* dest->clockOffsetDelta = src->clockOffsetDelta; */
+	/* dest->phaseOffset = src->phaseOffset; */
+	/* dest->freqOffset = src->freqOffset; */
+	/* dest->recBandFreqId = src->recBandFreqId; */
+	/* dest->recBandPolName = src->recBandPolName; */
+	/* dest->nZoomFreq = src->nZoomFreq; */
+	/* dest->nZoomBand = src->nZoomBand; */
+	/* dest->zoomFreqId = src->zoomFreqId; */
+	/* dest->nZoomPol = src->nZoomPol; */
+	/* dest->zoomBandFreqId = src->zoomBandFreqId; */
+	/* dest->zoomBandPolName = src->zoomBandPolName; */
+	/* dest->nFile = src->nFile; */
+	/* dest->file = src->file; */
 
 	/* unlink src data structures */
 	src->recFreqId = 0;

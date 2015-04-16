@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008, 2015 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -93,12 +93,13 @@ int isSameDifxPhasedArray(const DifxPhasedArray *dpa1, const DifxPhasedArray *dp
 
 void copyDifxPhasedArray(DifxPhasedArray *dest, const DifxPhasedArray *src)
 {
-	snprintf(dest->fileName, DIFXIO_NAME_LENGTH, "%s", src->fileName);
-	snprintf(dest->outputType, DIFXIO_NAME_LENGTH, "%s", src->outputType);
-	snprintf(dest->outputFormat, DIFXIO_NAME_LENGTH, "%s", src->outputFormat);
-	dest->accTime = src->accTime;
-	dest->complexOutput = src->complexOutput;
-	dest->quantBits = src->quantBits;
+	*dest = *src;
+	/* snprintf(dest->fileName, DIFXIO_NAME_LENGTH, "%s", src->fileName); */
+	/* snprintf(dest->outputType, DIFXIO_NAME_LENGTH, "%s", src->outputType); */
+	/* snprintf(dest->outputFormat, DIFXIO_NAME_LENGTH, "%s", src->outputFormat); */
+	/* dest->accTime = src->accTime; */
+	/* dest->complexOutput = src->complexOutput; */
+	/* dest->quantBits = src->quantBits; */
 }
 
 DifxPhasedArray *dupDifxPhasedarrayArray(const DifxPhasedArray *src, int nPhasedArray)

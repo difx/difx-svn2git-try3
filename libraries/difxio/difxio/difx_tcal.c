@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2011-2013 by Walter Brisken                             *
+ *   Copyright (C) 2011-2013, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -34,6 +34,7 @@
 #include <math.h>
 #include <time.h>
 #include <ctype.h>
+#include "difx_input.h"
 #include "difx_tcal.h"
 
 /* Note! Keep this in sync with enum DifxTcalType in difx_tcal.h */
@@ -598,7 +599,7 @@ static double tcalDate2mjd(double tcalDate)
 
 	unixTime = mktime(&tm);
 
-	return 40587.0 + unixTime/86400.0;
+	return 40587.0 + unixTime/SEC_DAY_DBL;
 }
 
 static int loadDifxTcalVLBA(DifxTcal *dt, const char *antenna, const char *receiver)

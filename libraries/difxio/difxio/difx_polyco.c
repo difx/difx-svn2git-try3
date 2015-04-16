@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -44,11 +44,8 @@ DifxPolyco *newDifxPolycoArray(int nPolyco)
 
 void deleteDifxPolycoInternals(DifxPolyco *dp)
 {
-	if(dp->coef)
-	{
-		free(dp->coef);
-		dp->coef = 0;
-	}
+	free(dp->coef);
+	dp->coef = 0;
 }
 
 void deleteDifxPolycoArray(DifxPolyco *dp, int nPolyco)
@@ -118,30 +115,24 @@ int DifxPolycoArrayGetMaxPolyOrder(const DifxPolyco *dp, int nPolyco)
 
 void copyDifxPolyco(DifxPolyco *dest, const DifxPolyco *src)
 {
-	snprintf(dest->fileName, DIFXIO_FILENAME_LENGTH, "%s", src->fileName);
-	if(dest->coef)
-	{
-		free(dest->coef);
-		dest->coef = 0;
-		dest->nCoef = 0;
-	}
+	deleteDifxPolycoInternals(dest);
+	*dest = *src;
 	if(src->coef)
 	{
 		int c;
 
-		dest->nCoef = src->nCoef;
 		dest->coef = (double *)malloc(dest->nCoef*sizeof(double));
 		for(c = 0; c < dest->nCoef; ++c)
 		{
 			dest->coef[c] = src->coef[c];
 		}
 	}
-	dest->dm = src->dm;
-	dest->refFreq = src->refFreq;
-	dest->mjd = src->mjd;
-	dest->nBlk = src->nBlk;
-	dest->p0 = src->p0;
-	dest->f0 = src->f0;
+	/* dest->dm = src->dm; */
+	/* dest->refFreq = src->refFreq; */
+	/* dest->mjd = src->mjd; */
+	/* dest->nBlk = src->nBlk; */
+	/* dest->p0 = src->p0; */
+	/* dest->f0 = src->f0; */
 }
 
 DifxPolyco *dupDifxPolycoArray(const DifxPolyco *src, int nPolyco)

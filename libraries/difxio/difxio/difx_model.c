@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,6 +32,9 @@
 #include <string.h>
 #include "difxio/difx_input.h"
 
+#error "This file is no longer used."
+
+typedef struct {double u,v,w,t;} DifxModel;
 
 DifxModel **newDifxModelArray(int nAntenna, int nPoint)
 {

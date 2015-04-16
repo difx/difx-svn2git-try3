@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012 by Adam Deller & Walter Brisken               *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2009-2012, 2015 by Adam Deller & Walter Brisken			   *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -35,42 +35,52 @@
 
 DifxRule *newDifxRuleArray(int nRule)
 {
-        DifxRule *dr;
+	DifxRule *dr;
 	int r;
 
-        dr = (DifxRule *)calloc(nRule, sizeof(DifxRule));
-        for(r = 0; r < nRule; ++r)
-        {
+	dr = (DifxRule *)calloc(nRule, sizeof(DifxRule));
+	for(r = 0; r < nRule; ++r)
+	{
 		dr[r].qual = -1;
 		dr[r].mjdStart = -1.0;
 		dr[r].mjdStop = -1.0;
-        }
+	}
 
-        return dr;
+	return dr;
 }
 
 void copyDifxRule(DifxRule *dest, DifxRule *src)
 {
-	snprintf(dest->configName, DIFXIO_NAME_LENGTH,    "%s", src->configName);
+	snprintf(dest->configName, DIFXIO_NAME_LENGTH,	  "%s", src->configName);
 	DifxStringArrayclear(&dest->sourceName);
 	DifxStringArrayappend(&dest->sourceName, &src->sourceName);
 	DifxStringArrayclear(&dest->scanId);
 	DifxStringArrayappend(&dest->scanId, &src->scanId);
-	snprintf(dest->calCode,    DIFXIO_CALCODE_LENGTH, "%s", src->calCode);
-	dest->qual     = src->qual;
+	snprintf(dest->calCode,	   DIFXIO_CALCODE_LENGTH, "%s", src->calCode);
+	dest->qual	   = src->qual;
 	dest->mjdStart = src->mjdStart;
 	dest->mjdStop  = src->mjdStop;
 }
 
-void deleteDifxRuleArray(DifxRule *dr)
+void deleteDifxRuleInternals(DifxRule *dr)
 {
+	DifxStringArrayclear(&(dr->sourceName));
+	DifxStringArrayclear(&(dr->scanId));
+}
+void deleteDifxRuleArray(DifxRule *dr, int nRule)
+{
+	int r;
+	for(r = 0; r < nRule; ++r)
+	{
+		deleteDifxRuleInternals(dr+r);
+	}
 	free(dr);
 }
 
 void fprintDifxRule(FILE *fp, const DifxRule *dr)
 {
 	fprintf(fp, "  Difx Rule for config %s : %p\n", dr->configName, dr);
-	fprintf(fp, "    source  = ");
+	fprintf(fp, "	 source	 = ");
 	if(dr->sourceName.n > 0)
 	{
 		int i;
@@ -85,7 +95,7 @@ void fprintDifxRule(FILE *fp, const DifxRule *dr)
 		}
 	}
 	fprintf(fp, "\n");
-	fprintf(fp, "    scanId  = ");
+	fprintf(fp, "	 scanId	 = ");
 	if(dr->scanId.n > 0)
 	{
 		int i;
@@ -100,15 +110,15 @@ void fprintDifxRule(FILE *fp, const DifxRule *dr)
 		}
 	}
 	fprintf(fp, "\n");
-	fprintf(fp, "    calCode = %s\n", dr->calCode);
-	fprintf(fp, "    qual    = %d\n", dr->qual);
-	fprintf(fp, "    mjdStart= %f\n", dr->mjdStart);
-	fprintf(fp, "    mjdStop = %f\n", dr->mjdStop);
+	fprintf(fp, "	 calCode = %s\n", dr->calCode);
+	fprintf(fp, "	 qual	 = %d\n", dr->qual);
+	fprintf(fp, "	 mjdStart= %f\n", dr->mjdStart);
+	fprintf(fp, "	 mjdStop = %f\n", dr->mjdStop);
 }
 
 void printDifxRule(const DifxRule *dr)
 {
-        fprintDifxRule(stdout, dr);
+	fprintDifxRule(stdout, dr);
 }
 
 int writeDifxRuleArray(FILE *out, const DifxInput *D)
@@ -146,13 +156,13 @@ int writeDifxRuleArray(FILE *out, const DifxInput *D)
 		if(dr->mjdStart > 0.0)
 		{
 			writeDifxLineDouble1(out, "RULE %d MJD START", 
-					     i, "%15.8f", dr->mjdStart);
+								 i, "%15.8f", dr->mjdStart);
 			n = n+1;
 		}
 		if(dr->mjdStop > 0.0)
 		{
 			writeDifxLineDouble1(out, "RULE %d MJD STOP",
-					     i, "%15.8f", dr->mjdStop);
+								 i, "%15.8f", dr->mjdStop);
 			n = n+1;
 		}
 		writeDifxLine1(out, "RULE %d CONFIG NAME", i, dr->configName);
@@ -182,6 +192,7 @@ int simplifyDifxRules(DifxInput *D)
 {
 	int r;
 	int numdeleted = 0;
+	int nRuleOrig = D->nRule;
 
 	for(r = 0; r < D->nRule; ++r)
 	{
@@ -218,7 +229,7 @@ int simplifyDifxRules(DifxInput *D)
 			D->nRule = 1;
 			--numdeleted;
 			
-			deleteDifxRuleArray(D->rule);
+			deleteDifxRuleArray(D->rule, nRuleOrig);
 			D->rule = newDifxRuleArray(D->nRule);
 
 			strcpy(D->rule[0].configName, D->config[0].name);
@@ -232,6 +243,13 @@ int simplifyDifxRules(DifxInput *D)
 		}
 		else
 		{
+			if(D->nRule < nRuleOrig)
+			{
+				for(r=D->nRule; r < nRuleOrig; ++r)
+				{
+					deleteDifxRuleInternals(D->rule+r);
+				}
+			}
 			D->rule = realloc(D->rule, D->nRule*sizeof(DifxRule));
 		}
 	}

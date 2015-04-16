@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2007-2015 by Walter Brisken & Adam Deller               *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2007-2015 by Walter Brisken & Adam Deller			   *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -30,21 +30,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <float.h>
 #include "difxio/difx_input.h"
 #include "difxio/parsedifx.h"
 
 const int MaxFlags = 32000;
 
 const char toneSelectionNames[][MAX_TONE_SELECTION_STRING_LENGTH] =
-{
-	"vex",
-	"none",
-	"ends",
-	"all",
-	"smart",
-	"most",
-	"unknown"
-};
+	{
+		"vex",
+		"none",
+		"ends",
+		"all",
+		"smart",
+		"most",
+		"unknown"
+	};
 
 enum ToneSelection stringToToneSelection(const char *str)
 {
@@ -115,7 +116,7 @@ void deleteDifxInput(DifxInput *D)
 		}
 		if(D->rule)
 		{
-			deleteDifxRuleArray(D->rule);
+			deleteDifxRuleArray(D->rule, D->nRule);
 		}
 		if(D->nThread)
 		{
@@ -168,7 +169,7 @@ void fprintDifxInput(FILE *fp, const DifxInput *D)
 	}
 
 	fprintf(fp, "  mjdStart = %14.8f\n", D->mjdStart);
-	fprintf(fp, "  mjdStop  = %14.8f\n", D->mjdStop);
+	fprintf(fp, "  mjdStop	= %14.8f\n", D->mjdStop);
 	fprintf(fp, "  vis buffer length = %d\n", D->visBufferLength);
 	fprintf(fp, "  input Channels = %d\n", D->nInChan);
 	fprintf(fp, "  start Channel = %d\n", D->startChan);
@@ -228,10 +229,10 @@ void fprintDifxInput(FILE *fp, const DifxInput *D)
 
 	fprintf(fp, "  nBaselineEntries = %d\n", D->nBaseline);
 	for(i = 0; i < D->nBaseline; ++i)
-	if(D->nBaseline > 1)
-	{
-		fprintDifxBaseline(fp, D->baseline + i);
-	}
+		if(D->nBaseline > 1)
+		{
+			fprintDifxBaseline(fp, D->baseline + i);
+		}
 
 	fprintf(fp, "  nSpacecraft = %d\n", D->nSpacecraft);
 	for(i = 0; i < D->nSpacecraft; ++i)
@@ -264,11 +265,11 @@ void fprintDifxInputSummary(FILE *fp, const DifxInput *D)
 	}
 
 	fprintf(fp, "  mjdStart = %14.8f\n", D->mjdStart);
-	fprintf(fp, "  mjdStop  = %14.8f\n", D->mjdStop);
-	//fprintf(fp, "  Input Channels = %d\n", D->nInChan);
+	fprintf(fp, "  mjdStop	= %14.8f\n", D->mjdStop);
+	//fprintf(fp, "	 Input Channels = %d\n", D->nInChan);
 	fprintf(fp, "  Start Channel = %d\n", D->startChan);
 	fprintf(fp, "  Spectral Avg = %d\n", D->specAvg);
-	//fprintf(fp, "  Output Channels = %d\n", D->nOutChan);
+	//fprintf(fp, "	 Output Channels = %d\n", D->nOutChan);
 
 	fprintf(fp, "  nJob = %d\n", D->nJob);
 	for(i = 0; i < D->nJob; ++i)
@@ -302,9 +303,9 @@ void fprintDifxInputSummary(FILE *fp, const DifxInput *D)
 
 	fprintf(fp, "  nEOP = %d\n", D->nEOP);
 	if(D->eop) for(i = 0; i < D->nEOP; ++i)
-	{
-		fprintDifxEOPSummary(fp, D->eop + i);
-	}
+			   {
+				   fprintDifxEOPSummary(fp, D->eop + i);
+			   }
 
 	if(D->nSpacecraft > 0)
 	{
@@ -399,29 +400,29 @@ int polMaskValue(char polName)
 {
 	switch(polName)
 	{
-		case 'R':
-		case 'r':
-			return DIFXIO_POL_R;
-		case 'L':
-		case 'l':
-			return DIFXIO_POL_L;
-		case 'X':
-		case 'x':
-			return DIFXIO_POL_X;
-		case 'Y':
-		case 'y':
-			return DIFXIO_POL_Y;
-		default:
-			return DIFXIO_POL_ERROR;
+	case 'R':
+	case 'r':
+		return DIFXIO_POL_R;
+	case 'L':
+	case 'l':
+		return DIFXIO_POL_L;
+	case 'X':
+	case 'x':
+		return DIFXIO_POL_X;
+	case 'Y':
+	case 'y':
+		return DIFXIO_POL_Y;
+	default:
+		return DIFXIO_POL_ERROR;
 	}
 }
 
 /* This function populates four array fields (and their
  * scalar-valued companions) in a DifxConfig object:
- *   freqId2IF[]
- *   freqIdUsed[]
- *   IF[]
- *   pol[]
+ *	 freqId2IF[]
+ *	 freqIdUsed[]
+ *	 IF[]
+ *	 pol[]
  */
 static int generateAipsIFs(DifxInput *D, int configId)
 {
@@ -625,8 +626,8 @@ static int generateAipsIFs(DifxInput *D, int configId)
 		for(i = 0; i < dc->nIF; ++i)
 		{
 			if(D->freq[fqId].bw == dc->IF[i].bw && (
-				(D->freq[fqId].sideband == 'U' && D->freq[fqId].freq == dc->IF[i].freq) ||
-				(D->freq[fqId].sideband == 'L' && D->freq[fqId].freq == dc->IF[i].freq + dc->IF[i].bw) ))
+													(D->freq[fqId].sideband == 'U' && D->freq[fqId].freq == dc->IF[i].freq) ||
+													(D->freq[fqId].sideband == 'L' && D->freq[fqId].freq == dc->IF[i].freq + dc->IF[i].bw) ))
 			{
 				break;
 			}
@@ -647,11 +648,11 @@ static int generateAipsIFs(DifxInput *D, int configId)
 			{
 				dc->IF[i].freq = D->freq[fqId].freq;
 			}
-			dc->IF[i].sideband  = 'U';
-			dc->IF[i].bw        = D->freq[fqId].bw;
-			dc->IF[i].nPol      = dc->nPol;
-			dc->IF[i].pol[0]    = dc->pol[0];
-			dc->IF[i].pol[1]    = dc->pol[1];
+			dc->IF[i].sideband	= 'U';
+			dc->IF[i].bw		= D->freq[fqId].bw;
+			dc->IF[i].nPol		= dc->nPol;
+			dc->IF[i].pol[0]	= dc->pol[0];
+			dc->IF[i].pol[1]	= dc->pol[1];
 			strncpy(dc->IF[i].rxName, D->freq[fqId].rxName, DIFXIO_RX_NAME_LENGTH);
 			dc->IF[i].rxName[DIFXIO_RX_NAME_LENGTH-1] = 0;
 
@@ -668,17 +669,17 @@ static int generateAipsIFs(DifxInput *D, int configId)
 static DifxInput *parseDifxInputCommonTable(DifxInput *D, const DifxParameters *ip)
 {
 	const char commonKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"CALC FILENAME",
-		"CORE CONF FILENAME",
-		"EXECUTE TIME (SEC)",
-		"START MJD",
-		"START SECONDS",
-		"ACTIVE DATASTREAMS",
-		"ACTIVE BASELINES",
-		"VIS BUFFER LENGTH",
-		"OUTPUT FILENAME"
-	};
+		{
+			"CALC FILENAME",
+			"CORE CONF FILENAME",
+			"EXECUTE TIME (SEC)",
+			"START MJD",
+			"START SECONDS",
+			"ACTIVE DATASTREAMS",
+			"ACTIVE BASELINES",
+			"VIS BUFFER LENGTH",
+			"OUTPUT FILENAME"
+		};
 	const int N_COMMON_ROWS = sizeof(commonKeys)/sizeof(commonKeys[0]);
 	int N;
 	int rows[N_COMMON_ROWS];
@@ -701,14 +702,14 @@ static DifxInput *parseDifxInputCommonTable(DifxInput *D, const DifxParameters *
 	
 	D->job->duration = atoi(DifxParametersvalue(ip, rows[2]));
 	D->job->mjdStart = atoi(DifxParametersvalue(ip, rows[3])) +
-		      atof(DifxParametersvalue(ip, rows[4]))/86400.0;
+					   atof(DifxParametersvalue(ip, rows[4]))/SEC_DAY_DBL;
 	if(atof(DifxParametersvalue(ip, rows[4])) != atoi(DifxParametersvalue(ip, rows[4])))
 	{
 		D->fracSecondStartTime = 1;
 	}
 	D->job->activeDatastreams = atoi(DifxParametersvalue(ip, rows[5]));
-	D->job->activeBaselines   = atoi(DifxParametersvalue(ip, rows[6]));
-	D->visBufferLength        = atoi(DifxParametersvalue(ip, rows[7]));
+	D->job->activeBaselines	  = atoi(DifxParametersvalue(ip, rows[6]));
+	D->visBufferLength		  = atoi(DifxParametersvalue(ip, rows[7]));
 	v = snprintf(D->job->calcFile, DIFXIO_FILENAME_LENGTH, "%s", DifxParametersvalue(ip, rows[0]));
 	if(v >= DIFXIO_FILENAME_LENGTH)
 	{
@@ -892,21 +893,20 @@ int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParameters *ip)
 {
 	const char configKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"CONFIG NAME",
-		"INT TIME (SEC)",
-		"SUBINT NANOSECONDS",
-		"GUARD NANOSECONDS",
-		"FRINGE ROTN ORDER",
-		"ARRAY STRIDE LENGTH",
-		"XMAC STRIDE LENGTH",
-		"NUM BUFFERED FFTS",
-		"WRITE AUTOCORRS",
-		"WRITE MSA CALIB",
-                "MC TABLE INTERVAL",
-		"PULSAR BINNING",
-		"PHASED ARRAY"
-	};
+		{
+			"CONFIG NAME",
+			"INT TIME (SEC)",
+			"SUBINT NANOSECONDS",
+			"GUARD NANOSECONDS",
+			"FRINGE ROTN ORDER",
+			"ARRAY STRIDE LENGTH",
+			"XMAC STRIDE LENGTH",
+			"NUM BUFFERED FFTS",
+			"WRITE AUTOCORRS",
+			"MC TABLE INTERVAL",
+			"PULSAR BINNING",
+			"PHASED ARRAY"
+		};
 	const int N_CONFIG_ROWS = sizeof(configKeys)/sizeof(configKeys[0]);
 	int c, r;
 	int rows[N_CONFIG_ROWS];
@@ -923,8 +923,8 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 
 		return 0;
 	}
-	D->nConfig  = atoi(DifxParametersvalue(ip, r));
-	D->config   = newDifxConfigArray(D->nConfig);
+	D->nConfig	= atoi(DifxParametersvalue(ip, r));
+	D->config	= newDifxConfigArray(D->nConfig);
 	rows[N_CONFIG_ROWS-1] = 0;	/* initialize start */
 	for(c = 0; c < D->nConfig; ++c)
 	{
@@ -937,28 +937,33 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 		if(N < N_CONFIG_ROWS)
 		{
 			fprintf(stderr, "parseDifxInputConfigurations: N < N_CONFIG_ROWS %d "
-				"< %d\n", N, N_CONFIG_ROWS);
+					"< %d\n", N, N_CONFIG_ROWS);
 
 			return 0;
 		}
 		snprintf(dc->name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(ip, rows[0]));
-		dc->tInt           = atof(DifxParametersvalue(ip, rows[1]));
-		dc->subintNS       = atoi(DifxParametersvalue(ip, rows[2]));
-		dc->guardNS        = atoi(DifxParametersvalue(ip, rows[3]));
+		dc->tInt		   = atof(DifxParametersvalue(ip, rows[1]));
+		dc->subintNS	   = atoi(DifxParametersvalue(ip, rows[2]));
+		dc->guardNS		   = atoi(DifxParametersvalue(ip, rows[3]));
 		dc->fringeRotOrder = atoi(DifxParametersvalue(ip, rows[4]));
 		dc->strideLength   = atoi(DifxParametersvalue(ip, rows[5]));
-		dc->xmacLength     = atoi(DifxParametersvalue(ip, rows[6]));
+		dc->xmacLength	   = atoi(DifxParametersvalue(ip, rows[6]));
 		dc->numBufferedFFTs= atoi(DifxParametersvalue(ip, rows[7]));
-		dc->doAutoCorr     = abs(strcmp("FALSE", DifxParametersvalue(ip, rows[8])));
-		dc->doMSAcalibration = abs(strcmp("FALSE", DifxParametersvalue(ip, rows[9])));
-		dc->MC_table_output_interval = atof(DifxParametersvalue(ip, rows[10]));
-		dc->nDatastream  = D->job->activeDatastreams;
-		dc->nBaseline    = D->job->activeBaselines;
+		dc->doAutoCorr	   = abs(strcmp("FALSE", DifxParametersvalue(ip, rows[8])));
+		dc->MC_table_output_interval = atof(DifxParametersvalue(ip, rows[9]));
+		dc->nDatastream	 = D->job->activeDatastreams;
+		dc->nBaseline	 = D->job->activeBaselines;
 
-		/* pulsar stuff */
-		if(strcmp(DifxParametersvalue(ip, rows[11]), "TRUE") == 0)
+		/* MSA stuff --- This is not required to be present */
+		r =  DifxParametersfind(ip, 0, "WRITE MSA CALIB");
+		if(r >= 0)
 		{
-			r = DifxParametersfind(ip, rows[11], "PULSAR CONFIG FILE");
+			dc->doMSAcalibration = abs(strcmp("FALSE", DifxParametersvalue(ip, r)));
+		}
+		/* pulsar stuff */
+		if(strcmp(DifxParametersvalue(ip, rows[10]), "TRUE") == 0)
+		{
+			r = DifxParametersfind(ip, rows[10], "PULSAR CONFIG FILE");
 			if(r <= 0)
 			{
 				fprintf(stderr, "input file row %d : PULSAR CONFIG FILE expected\n", rows[11] + 2);
@@ -972,9 +977,9 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 			}
 		}
 		/* phased array stuff */
-		if(strcmp(DifxParametersvalue(ip, rows[12]), "TRUE") == 0)
+		if(strcmp(DifxParametersvalue(ip, rows[11]), "TRUE") == 0)
 		{
-			r = DifxParametersfind(ip, rows[12], "PHASED ARRAY CONFIG FILE");
+			r = DifxParametersfind(ip, rows[11], "PHASED ARRAY CONFIG FILE");
 			if(r <= 0)
 			{
 				fprintf(stderr, "input file row %d : PHASED ARRAY CONFIG FILE expected\n", rows[12] + 2);
@@ -989,6 +994,8 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 		}
 		N = strlen(dc->name);
 		dc->doPolar = -1;	/* to be calculated later */
+
+		
 
 		/* initialize datastream index array */
 		dc->datastreamId = (int *)malloc(sizeof(int)*(dc->nDatastream + 1));
@@ -1025,7 +1032,7 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 		for(b = 0; b < dc->nBaseline; ++b)
 		{
 			r = DifxParametersfind1(ip, r+1, 
-				"BASELINE %d INDEX", b);
+									"BASELINE %d INDEX", b);
 			if(r < 0)
 			{
 				fprintf(stderr, "BASELINE %d INDEX not found\n", b);
@@ -1056,7 +1063,7 @@ static DifxInput *parseDifxInputRuleTable(DifxInput *D, const DifxParameters *ip
 		return 0;
 	}
 	D->nRule = atoi(DifxParametersvalue(ip, r));
-	D->rule  = newDifxRuleArray(D->nRule);
+	D->rule	 = newDifxRuleArray(D->nRule);
 	for(rule = 0; rule < D->nRule; ++rule)
 	{
 		r = DifxParametersfind1(ip, r+1, "RULE %d SOURCE", rule);
@@ -1107,15 +1114,15 @@ static DifxInput *parseDifxInputRuleTable(DifxInput *D, const DifxParameters *ip
 static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip)
 {
 	const char freqKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"FREQ (MHZ) %d",
-		"BW (MHZ) %d",
-		"SIDEBAND %d",
-		"NUM CHANNELS %d",
-		"CHANS TO AVG %d",
-		"OVERSAMPLE FAC. %d",
-		"DECIMATION FAC. %d"
-	};
+		{
+			"FREQ (MHZ) %d",
+			"BW (MHZ) %d",
+			"SIDEBAND %d",
+			"NUM CHANNELS %d",
+			"CHANS TO AVG %d",
+			"OVERSAMPLE FAC. %d",
+			"DECIMATION FAC. %d"
+		};
 	const int N_FREQ_ROWS = sizeof(freqKeys)/sizeof(freqKeys[0]);
 	int b, r;
 	int rows[N_FREQ_ROWS];
@@ -1132,8 +1139,8 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 
 		return 0;
 	}
-	D->nFreq    = atoi(DifxParametersvalue(ip, r));
-	D->freq     = newDifxFreqArray(D->nFreq);
+	D->nFreq	= atoi(DifxParametersvalue(ip, r));
+	D->freq		= newDifxFreqArray(D->nFreq);
 	rows[N_FREQ_ROWS-1] = 0;	/* initialize start */
 	for(b = 0; b < D->nFreq; ++b)
 	{
@@ -1146,11 +1153,11 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 
 			return 0;
 		}
-		D->freq[b].freq     = atof(DifxParametersvalue(ip, rows[0]));
-		D->freq[b].bw       = atof(DifxParametersvalue(ip, rows[1]));
+		D->freq[b].freq		= atof(DifxParametersvalue(ip, rows[0]));
+		D->freq[b].bw		= atof(DifxParametersvalue(ip, rows[1]));
 		D->freq[b].sideband = DifxParametersvalue(ip, rows[2])[0];
-		D->freq[b].nChan    = atoi(DifxParametersvalue(ip, rows[3]));
-		D->freq[b].specAvg  = atoi(DifxParametersvalue(ip, rows[4]));
+		D->freq[b].nChan	= atoi(DifxParametersvalue(ip, rows[3]));
+		D->freq[b].specAvg	= atoi(DifxParametersvalue(ip, rows[4]));
 		D->freq[b].overSamp = atoi(DifxParametersvalue(ip, rows[5]));
 		D->freq[b].decimation = atoi(DifxParametersvalue(ip, rows[6]));
 
@@ -1197,11 +1204,11 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 static DifxInput *parseDifxInputTelescopeTable(DifxInput *D, const DifxParameters *ip)
 {
 	const char antKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"TELESCOPE NAME %d",
-		"CLOCK REF MJD %d",
-		"CLOCK POLY ORDER %d"
-	};
+		{
+			"TELESCOPE NAME %d",
+			"CLOCK REF MJD %d",
+			"CLOCK POLY ORDER %d"
+		};
 	const int N_ANT_ROWS = sizeof(antKeys)/sizeof(antKeys[0]);
 	int a, r;
 	int rows[N_ANT_ROWS];
@@ -1219,7 +1226,7 @@ static DifxInput *parseDifxInputTelescopeTable(DifxInput *D, const DifxParameter
 		return 0;
 	}
 	D->nAntenna = atoi(DifxParametersvalue(ip, r));
-	D->antenna  = newDifxAntennaArray(D->nAntenna);
+	D->antenna	= newDifxAntennaArray(D->nAntenna);
 
 	rows[N_ANT_ROWS-1] = 0;		/* initialize start */
 	for(a = 0; a < D->nAntenna; ++a)
@@ -1331,7 +1338,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 		if(D->datastream[e].dataSampling >= NumSamplingTypes)
 		{
 			fprintf(stderr, "Error: DATA SAMPLING was %s and is not supported\n", 
-				DifxParametersvalue(ip, r) );
+					DifxParametersvalue(ip, r) );
 			
 			return 0;
 		}
@@ -1347,7 +1354,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 		if(D->datastream[e].dataSource >= NumDataSources)
 		{
 			fprintf(stderr, "Error: DATA SOURCE was %s and is not supported\n",
-				DifxParametersvalue(ip, r) );
+					DifxParametersvalue(ip, r) );
 			
 			return 0;
 		}
@@ -1387,7 +1394,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 			D->datastream[e].recFreqId[i] = atoi(DifxParametersvalue(ip, r));
 			r = DifxParametersfind1(ip, r+1, "CLK OFFSET %d (us)", i);
 
-			/* look for value of form   ClockOffset[:ClockOffsetDelta[:PhaseOffset]] */
+			/* look for value of form	ClockOffset[:ClockOffsetDelta[:PhaseOffset]] */
 
 			clockOffStr = strdup(DifxParametersvalue(ip, r));
 			if(!clockOffStr)
@@ -1402,7 +1409,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 			{
 				fprintf(stderr, "Failed to parse CLK OFFSET %d: %s\n", i, DifxParametersvalue(ip, r));
 
-				return  0;
+				return	0;
 			}
 			D->datastream[e].clockOffset[i] = atof(tok);
 			tok = strsep(&str, ":");
@@ -1618,7 +1625,7 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 }
 
 static DifxInput *parseDifxInputDataTable(DifxInput *D, 
-	const DifxParameters *ip)
+										  const DifxParameters *ip)
 {
 	int j, r;
 
@@ -1665,15 +1672,15 @@ static DifxInput *parseDifxInputDataTable(DifxInput *D,
 				ds->file[i] = strdup( DifxParametersvalue(ip, r) );
 			}
 		}
- 	}
+	}
 
 	return D;
 }
 
 static DifxInput *parseDifxInputNetworkTable(DifxInput *D,
-        const DifxParameters *ip)
+											 const DifxParameters *ip)
 {
-        int i, r;
+	int i, r;
 
 	if(!D || !ip)
 	{
@@ -1681,26 +1688,26 @@ static DifxInput *parseDifxInputNetworkTable(DifxInput *D,
 	}
 
 	r = 1;
-        for(i = 0; i < D->nDatastream; ++i)
-        {
-        	DifxDatastream *ds;
-                
+	for(i = 0; i < D->nDatastream; ++i)
+	{
+		DifxDatastream *ds;
+				
 		ds = D->datastream + i;
 
-                r = DifxParametersfind1(ip, r, "PORT NUM %d", i);
-                if(r > 0)
-                {
-                        snprintf(ds->networkPort, DIFXIO_ETH_DEV_SIZE, "%s", DifxParametersvalue(ip, r));
-                }
+		r = DifxParametersfind1(ip, r, "PORT NUM %d", i);
+		if(r > 0)
+		{
+			snprintf(ds->networkPort, DIFXIO_ETH_DEV_SIZE, "%s", DifxParametersvalue(ip, r));
+		}
 
-                r = DifxParametersfind1(ip, r, "TCP WINDOW (KB) %d", i);
-                if(r > 0)
-                {
-                        ds->windowSize = atoi(DifxParametersvalue(ip, r));
-                }
-        }
+		r = DifxParametersfind1(ip, r, "TCP WINDOW (KB) %d", i);
+		if(r > 0)
+		{
+			ds->windowSize = atoi(DifxParametersvalue(ip, r));
+		}
+	}
 
-        return D;
+	return D;
 }
 
 static DifxInput *deriveDifxInputValues(DifxInput *D)
@@ -1818,82 +1825,57 @@ static DifxInput *populateInput(DifxInput *D, const DifxParameters *ip)
 static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 {
 	const char initKeys[][MAX_DIFX_KEY_LEN] = 
-	{
-		"JOB ID",
-		"OBSCODE",
-		"NUM TELESCOPES",
-		"NUM SOURCES",
-		"NUM SCANS",
-		"NUM EOPS"
-	};
+		{
+			"JOB ID",
+			"OBSCODE",
+			"NUM TELESCOPES",
+			"NUM SOURCES",
+			"NUM SCANS",
+			"NUM EOPS"
+		};
 	const int N_INIT_ROWS = sizeof(initKeys)/sizeof(initKeys[0]);
 	
 	const char antKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"TELESCOPE %d NAME",
-		"TELESCOPE %d CALCNAME",
-		"TELESCOPE %d MOUNT",
-		"TELESCOPE %d SITETYPE",
-		"TELESCOPE %d OFFSET (m)",
-		"TELESCOPE %d X (m)",
-		"TELESCOPE %d Y (m)",
-		"TELESCOPE %d Z (m)"
-	};
+		{
+			"TELESCOPE %d NAME",
+			"TELESCOPE %d MOUNT",
+			"TELESCOPE %d SITETYPE",
+			"TELESCOPE %d OFFSET (m)",
+			"TELESCOPE %d X (m)",
+			"TELESCOPE %d Y (m)",
+			"TELESCOPE %d Z (m)"
+		};
 	const int N_ANT_ROWS = sizeof(antKeys)/sizeof(antKeys[0]);
 
-        const char srcKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"SOURCE %d NAME",
-		"SOURCE %d RA",
-		"SOURCE %d DEC",
-                "SOURCE %d CALCODE",
-                "SOURCE %d QUAL",
-	};
+	const char srcKeys[][MAX_DIFX_KEY_LEN] =
+		{
+			"SOURCE %d NAME",
+			"SOURCE %d RA",
+			"SOURCE %d DEC",
+			"SOURCE %d CALCODE",
+			"SOURCE %d QUAL",
+		};
 	const int N_SRC_ROWS = sizeof(srcKeys)/sizeof(srcKeys[0]);
 
 	const char eopKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"EOP %d TIME (mjd)",
-		"EOP %d TAI_UTC (sec)",
-		"EOP %d UT1_UTC (sec)",
-		"EOP %d XPOLE (arcsec)",
-		"EOP %d YPOLE (arcsec)"
-	};
+		{
+			"EOP %d TIME (mjd)",
+			"EOP %d TAI_UTC (sec)",
+			"EOP %d UT1_UTC (sec)",
+			"EOP %d XPOLE (arcsec)",
+			"EOP %d YPOLE (arcsec)"
+		};
 	const int N_EOP_ROWS = sizeof(eopKeys)/sizeof(eopKeys[0]);
 	
 	const char spacecraftKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"SPACECRAFT %d NAME",
-		"SPACECRAFT %d ISANT",
-		"SPACECRAFT %d GS_EXISTS"
-	};
+		{
+			"SPACECRAFT %d NAME"
+		};
 	const int N_SPACECRAFT_ROWS = 
 		sizeof(spacecraftKeys)/sizeof(spacecraftKeys[0]);
 	
-	const char spacecraftGSKeys[][MAX_DIFX_KEY_LEN] =
-	{
-		"SPACECRAFT %d GS_NAME",
-		"SPACECRAFT %d GS_CALCNAME",
-		"SPACECRAFT %d SC_TIMETYPE",
-		"SPACECRAFT %d GS_MJD_SYNC",
-		"SPACECRAFT %d GS_DAYFRAC_SYNC",
-		"SPACECRAFT %d GS_CLOCK_FUDGE (s)",
-		"SPACECRAFT %d SC_REC_DELAY (s)",
-		"SPACECRAFT %d GS_MOUNT",
-		"SPACECRAFT %d GS_OFFSET (m)",
-		"SPACECRAFT %d GS_OFFSET1 (m)",
-		"SPACECRAFT %d GS_OFFSET2 (m)",
-		"SPACECRAFT %d GS_X (m)",
-		"SPACECRAFT %d GS_Y (m)",
-		"SPACECRAFT %d GS_Z (m)",
-                "SPACECRAFT %d GS_CLOCK REFMJD",
-                "SPACECRAFT %d GS_CLOCK ORDER"
-	};
-	const int N_SPACECRAFT_GS_ROWS = 
-		sizeof(spacecraftGSKeys)/sizeof(spacecraftGSKeys[0]);
-	
 	int rows[20];
-	int i, row, row_t, N, r, v;
+	int i, row, N, r, v;
 	int nTel;
 	int nScan = 0;
 	int nFound = 0;
@@ -1911,12 +1893,12 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		return 0;
 	}
 
-	D->job->jobId    = atoi(DifxParametersvalue(cp, rows[0]));
+	D->job->jobId	 = atoi(DifxParametersvalue(cp, rows[0]));
 	snprintf(D->job->obsCode, DIFXIO_OBSCODE_LENGTH, "%s", DifxParametersvalue(cp, rows[1]));
-	nTel             = atoi(DifxParametersvalue(cp, rows[2]));
-	D->nSource       = atoi(DifxParametersvalue(cp, rows[3]));
-	D->nScan         = atoi(DifxParametersvalue(cp, rows[4]));
-	D->nEOP          = atoi(DifxParametersvalue(cp, rows[5]));
+	nTel			 = atoi(DifxParametersvalue(cp, rows[2]));
+	D->nSource		 = atoi(DifxParametersvalue(cp, rows[3]));
+	D->nScan		 = atoi(DifxParametersvalue(cp, rows[4]));
+	D->nEOP			 = atoi(DifxParametersvalue(cp, rows[5]));
 
 	if(D->nAntenna == 0)
 	{
@@ -1939,78 +1921,168 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		D->eop = newDifxEOPArray(D->nEOP);
 	}
 
-	row = DifxParametersfind(cp, 0, "DIFX VERSION");
+	row = DifxParametersfind_limited(cp, 0, 100, "DIFX VERSION");
 	if(row > 0)
 	{
 		snprintf(D->job->difxVersion, DIFXIO_VERSION_LENGTH, "%s", DifxParametersvalue(cp, row));
 	}
 
-	row = DifxParametersfind(cp, 0, "DIFX LABEL");
+	row = DifxParametersfind_limited(cp, 0, 100, "DIFX LABEL");
 	if(row > 0)
 	{
 		snprintf(D->job->difxLabel, DIFXIO_VERSION_LENGTH, "%s", DifxParametersvalue(cp, row));
 	}
 
-	row = DifxParametersfind(cp, 0, "SESSION");
-	if(row >= 0)
+	row = DifxParametersfind_limited(cp, 0, 100, "SESSION");
+	if(row > 0)
 	{
 		snprintf(D->job->obsSession, DIFXIO_SESSION_LENGTH, "%s", DifxParametersvalue(cp, row));
 	}
-	row = DifxParametersfind(cp, 0, "TAPER FUNCTION");
-	if(row >= 0)
+	row = DifxParametersfind_limited(cp, 0, 100, "TAPER FUNCTION");
+	if(row > 0)
 	{
 		snprintf(D->job->taperFunction, DIFXIO_TAPER_LENGTH, "%s", DifxParametersvalue(cp, row));
 	}
-	row = DifxParametersfind(cp, 0, "DELAY POLY ORDER");
-	if(row >= 0)
+	row = DifxParametersfind_limited(cp, 0, 100, "DELAY POLY ORDER");
+	if(row > 0)
 	{
-            D->job->polyOrder = atoi(DifxParametersvalue(cp, row));
+		D->job->polyOrder = atoi(DifxParametersvalue(cp, row));
 	}
-        else
-        {
-            D->job->polyOrder = DIFXIO_DEFAULT_POLY_ORDER;
-	}
-	row = DifxParametersfind(cp, 0, "DELAY POLY INTERVAL");
-	if(row >= 0)
+	row = DifxParametersfind_limited(cp, 0, 100, "DELAY POLY INTERVAL");
+	if(row > 0)
 	{
-            D->job->polyInterval = atoi(DifxParametersvalue(cp, row));
+		D->job->polyInterval = atoi(DifxParametersvalue(cp, row));
 	}
-        else
+	row = DifxParametersfind_limited(cp, 0, 100, "DELAY MODEL PREC");
+	if(row > 0)
 	{
-            D->job->polyInterval = DIFXIO_DEFAULT_POLY_INTERVAL;
+		D->job->delayModelPrecision = atof(DifxParametersvalue(cp, row));
+	}
+	row = DifxParametersfind_limited(cp, 0, 100, "DELAY SERVER HOST");
+	if(row > 0)
+	{
+		snprintf(D->job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+	}
+	row = DifxParametersfind_limited(cp, 0, 100, "DELAY SERVER TYPE");
+	if(row > 0)
+	{
+		D->job->delayServerType = stringToDelayServerType(DifxParametersvalue(cp, row));
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind_limited(cp, row, 10, "DELAY VERSION");
+	if(row > 0)
+	{
+		D->job->delayVersion = strtoul(DifxParametersvalue(cp, row), NULL, 0);
+	}
+	else
+	{
+		D->job->delayVersion = DEFIX_DEFAULT_DELAY_SERVER_VERSION;
+		row=0;
+	}
+	row = DifxParametersfind_limited(cp, row, 10, "DELAY PROGRAM");
+	if(row > 0)
+	{
+		D->job->delayProgram = strtoul(DifxParametersvalue(cp, row), NULL, 0);
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind_limited(cp, row, 10, "DELAY HANDLER");
+	if(row > 0)
+	{
+		D->job->delayHandler = strtoul(DifxParametersvalue(cp, row), NULL, 0);
+	}
+	row = DifxParametersfind_limited(cp, 0, 100, "JOB PERFORM UVW");
+	if(row > 0)
+	{
+		D->job->perform_uvw_deriv = stringToPerformDirectionDerivativeType(DifxParametersvalue(cp, row));
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind_limited(cp, row, 10, "JOB PERFORM LMN");
+	if(row > 0)
+	{
+		D->job->perform_lmn_deriv = stringToPerformDirectionDerivativeType(DifxParametersvalue(cp, row));
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind_limited(cp, row, 10, "JOB PERFORM XYZ");
+	if(row > 0)
+	{
+		D->job->perform_xyz_deriv = stringToPerformDirectionDerivativeType(DifxParametersvalue(cp, row));
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind_limited(cp, row, 10, "JOB DELTA LMN");
+	if(row > 0)
+	{
+		D->job->delta_lmn = atof(DifxParametersvalue(cp, row));
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind_limited(cp, row, 10, "JOB DELTA XYZ");
+	if(row > 0)
+	{
+		D->job->delta_lmn = atof(DifxParametersvalue(cp, row));
+	}
+	row = DifxParametersfind_limited(cp, 0, 100, "JOB ABER CORR");
+	if(row > 0)
+	{
+		D->job->aberCorr = stringToAberCorr(DifxParametersvalue(cp, row));
+	}
+	row = DifxParametersfind_limited(cp, 0, 100, "JOB CALC_OWN_RETARDED_POSITION");
+	if(row > 0)
+	{
+		char t = DifxParametersvalue(cp, row)[0];
+		if((t == '1') || (t == 'T') || (t == 't'))
+		{
+			D->job->calculate_own_retarded_position = 1;
+		}
 	}
 	row = DifxParametersfind(cp, 0, "VEX FILE");
-	if(row >= 0)
+	if(row > 0)
 	{
 		snprintf(D->job->vexFile, DIFXIO_FILENAME_LENGTH, "%s", DifxParametersvalue(cp, row));
 	}
 	row = DifxParametersfind(cp, 0, "DUTY CYCLE");
-	if(row >= 0)
+	if(row > 0)
 	{
 		D->job->dutyCycle = atof(DifxParametersvalue(cp, row));
 	}
 	row = DifxParametersfind(cp, 0, "JOB START TIME");
-	if(row >= 0)
+	if(row > 0)
 	{
 		D->job->jobStart = atof(DifxParametersvalue(cp, row));
 	}
 	row = DifxParametersfind(cp, 0, "JOB STOP TIME");
-	if(row >= 0)
+	if(row > 0)
 	{
 		D->job->jobStop = atof(DifxParametersvalue(cp, row));
 	}
 	row = DifxParametersfind(cp, 0, "SUBJOB ID");
-	if(row >= 0)
+	if(row > 0)
 	{
 		D->job->subjobId = atoi(DifxParametersvalue(cp, row));
 	}
 	row = DifxParametersfind(cp, 0, "SUBARRAY ID");
-	if(row >= 0)
+	if(row > 0)
 	{
 		D->job->subarrayId = atoi(DifxParametersvalue(cp, row));
 	}
 	row = DifxParametersfind(cp, 0, "SPECTRAL AVG");
-	if(row >= 0)
+	if(row > 0)
 	{
 		D->specAvg = atoi(DifxParametersvalue(cp, row));
 	}
@@ -2046,41 +2118,54 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 			continue;
 		}
 		++nFound;
-                snprintf(D->antenna[a].calcname, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, rows[1]));
-		D->antenna[a].mount = stringToMountType(DifxParametersvalue(cp, rows[2]));
+		row = DifxParametersfind1_limited(cp, rows[0], 5, "TELESCOPE %d CALCNAME", i);
+		if(row >= 0)
+		{
+			snprintf(D->antenna[a].calcname, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+		}
+		else
+		{
+			snprintf(D->antenna[a].calcname, DIFXIO_NAME_LENGTH, "%s", D->antenna[a].name);
+		}
+		D->antenna[a].mount = stringToMountType(DifxParametersvalue(cp, rows[1]));
 		if(D->antenna[a].mount >= AntennaMountOther)
 		{
 			fprintf(stderr, "Warning: populateCalc: unknown antenna mount type encountered for telescope table entry %d: %s.  Changing to AZEL\n", i, DifxParametersvalue(cp, rows[2]));
-                        D->antenna[a].mount = AntennaMountAltAz;
+			D->antenna[a].mount = AntennaMountAltAz;
 		}
-                D->antenna[a].sitetype = stringToSiteType(DifxParametersvalue(cp, rows[3]));
+		D->antenna[a].sitetype = stringToSiteType(DifxParametersvalue(cp, rows[2]));
 		if(D->antenna[a].sitetype >= AntennaSiteOther)
 		{
-			fprintf(stderr, "Warning: populateCalc: unknown antenna site type encountered for telescope table entry %d: %s.  Changing to fixed\n", i, DifxParametersvalue(cp, rows[3]));
-                        D->antenna[a].sitetype = AntennaSiteFixed;
+			fprintf(stderr, "Warning: populateCalc: unknown antenna site type encountered for telescope table entry %d: %s.	 Changing to fixed\n", i, DifxParametersvalue(cp, rows[3]));
+			D->antenna[a].sitetype = AntennaSiteFixed;
 		}
-		D->antenna[a].offset[0]= atof(DifxParametersvalue(cp, rows[4]));
+		D->antenna[a].offset[0]= atof(DifxParametersvalue(cp, rows[3]));
 
 #warning "FIXME: In the future add other two axes of axis offset"
 		D->antenna[a].offset[1]= 0.0;
 		D->antenna[a].offset[2]= 0.0;
 
-		D->antenna[a].X        = atof(DifxParametersvalue(cp, rows[5]));
-		D->antenna[a].Y        = atof(DifxParametersvalue(cp, rows[6]));
-		D->antenna[a].Z        = atof(DifxParametersvalue(cp, rows[7]));
-		row = DifxParametersfind1(cp, 0, "TELESCOPE %d SHELF", a);
+		D->antenna[a].X		   = atof(DifxParametersvalue(cp, rows[4]));
+		D->antenna[a].Y		   = atof(DifxParametersvalue(cp, rows[5]));
+		D->antenna[a].Z		   = atof(DifxParametersvalue(cp, rows[6]));
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "TELESCOPE %d SHELF", i);
 		if(row > 0)
 		{
 			snprintf(D->antenna[a].shelf, DIFXIO_SHELF_LENGTH, "%s", DifxParametersvalue(cp, row));
 		}
-		row = DifxParametersfind1(cp, 0, "TELESCOPE %d S/CRAFT ID", a);
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "TELESCOPE %d S/CRAFT ID", i);
 		if(row > 0)
 		{
-                        D->antenna[a].spacecraftId = atoi(DifxParametersvalue(cp, row));
-                }
-                else {
-                    D->antenna[a].spacecraftId = -1;
-                }
+			D->antenna[a].spacecraftId = atoi(DifxParametersvalue(cp, row));
+		}
+		else {
+			D->antenna[a].spacecraftId = -1;
+		}
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "TELESCOPE %d S/CRAFT NAME", i);
+		if(row > 0)
+		{
+			snprintf(D->antenna[a].sc_name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+		}
 	}
 	
 	if(nFound < D->nAntenna)
@@ -2090,51 +2175,79 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		return 0;
 	}
 
-        rows[N_SRC_ROWS-1] = 0;         /* initialize start */
+	rows[N_SRC_ROWS-1] = 0;			/* initialize start */
 	for(i = 0; i < D->nSource; ++i)
-        {
-                N = DifxParametersbatchfind1(cp, rows[N_SRC_ROWS-1], srcKeys, i, N_SRC_ROWS, rows);
-                if(N < N_SRC_ROWS)
-                {
+	{
+		N = DifxParametersbatchfind1(cp, rows[N_SRC_ROWS-1], srcKeys, i, N_SRC_ROWS, rows);
+		if(N < N_SRC_ROWS)
+		{
 			fprintf(stderr, "Error reading source table %d\n", i);
 
-                        return 0;
-                }
+			return 0;
+		}
 		snprintf(D->source[i].name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, rows[0]));
 		D->source[i].ra = atof(DifxParametersvalue(cp, rows[1]));
 		D->source[i].dec = atof(DifxParametersvalue(cp, rows[2]));
 		snprintf(D->source[i].calCode, DIFXIO_CALCODE_LENGTH, "%s", DifxParametersvalue(cp, rows[3]));
 		D->source[i].qual = atoi(DifxParametersvalue(cp, rows[4]));
 		//The fitsSourceId is left unset for now - the only way to set this is by calling updateDifxInput
-		row = DifxParametersfind1(cp, 0, "SOURCE %d PM RA (ARCSEC/YR)", i);
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "SOURCE %d FRAME", i);
 		if(row > 0)
 		{
-			D->source[i].pmRA = atoi(DifxParametersvalue(cp, row));
-			row = DifxParametersfind1(cp, row, "SOURCE %d PM DEC (ARCSEC/YR)", i);
-			D->source[i].pmDec = atoi(DifxParametersvalue(cp, row));
-			row = DifxParametersfind1(cp, row, "SOURCE %d PARALLAX (ARCSEC)", i);
-                        D->source[i].pmDec = atoi(DifxParametersvalue(cp, row));
-			row = DifxParametersfind1(cp, row, "SOURCE %d PM EPOCH (MJD)", i);
-                        D->source[i].pmEpoch = atoi(DifxParametersvalue(cp, row));
+			D->source[i].coord_frame = stringToSourceCoordinateFrameType(DifxParametersvalue(cp, row));
 		}
-		row = DifxParametersfind1(cp, 0, "SOURCE %d S/CRAFT ID", i);
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "SOURCE %d PERFORM UVW", i);
 		if(row > 0)
 		{
-                        D->source[i].spacecraftId = atoi(DifxParametersvalue(cp, row));
-                }
-                else {
-                    D->source[i].spacecraftId = -1;
-                }
-		row = DifxParametersfind1(cp, 0, "SOURCE %d SC_EPOCH", i);
-		if(row > 0)
-		{
-                    D->source[i].sc_epoch = atof(DifxParametersvalue(cp, row));
-                }
-                else {
-                    D->source[i].sc_epoch = 0.0;
-                }
+			D->source[i].perform_uvw_deriv = stringToPerformDirectionDerivativeType(DifxParametersvalue(cp, row));
+			row = DifxParametersfind1_limited(cp, row, 10, "SOURCE %d PERFORM LMN", i);
+			D->source[i].perform_lmn_deriv = stringToPerformDirectionDerivativeType(DifxParametersvalue(cp, row));
+			row = DifxParametersfind1_limited(cp, row, 10, "SOURCE %d PERFORM XYZ", i);
+			D->source[i].perform_xyz_deriv = stringToPerformDirectionDerivativeType(DifxParametersvalue(cp, row));
+			row = DifxParametersfind1_limited(cp, row, 10, "SOURCE %d DELTA LMN", i);
+			D->source[i].delta_lmn = atof(DifxParametersvalue(cp, row));
+			row = DifxParametersfind1_limited(cp, row, 10, "SOURCE %d DELTA XYZ", i);
+			D->source[i].delta_xyz = atof(DifxParametersvalue(cp, row));
+		}
 		
-        }
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "SOURCE %d PM RA (ARCSEC/YR)", i);
+		if(row > 0)
+		{
+			D->source[i].pmRA = atof(DifxParametersvalue(cp, row));
+			row = DifxParametersfind1(cp, row, "SOURCE %d PM DEC (ARCSEC/YR)", i);
+			D->source[i].pmDec = atof(DifxParametersvalue(cp, row));
+			row = DifxParametersfind1(cp, row, "SOURCE %d PARALLAX (ARCSEC)", i);
+			D->source[i].parallax = atof(DifxParametersvalue(cp, row));
+			row = DifxParametersfind1(cp, row, "SOURCE %d PM EPOCH (MJD)", i);
+			D->source[i].pmEpoch = atof(DifxParametersvalue(cp, row));
+		}
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "SOURCE %d S/CRAFT ID", i);
+		if(row > 0)
+		{
+			D->source[i].spacecraftId = atoi(DifxParametersvalue(cp, row));
+		}
+		else {
+			D->source[i].spacecraftId = -1;
+		}
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "SOURCE %d S/CRAFT NAME", i);
+		if(row > 0)
+		{
+			snprintf(D->source[i].sc_name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+		}
+		row = DifxParametersfind1_limited(cp, rows[0], 100, "SOURCE %d S/CRAFT EPOCH", i);
+		if(row < 0)
+		{
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SOURCE %d SC_EPOCH", i);
+		}
+		if(row > 0)
+		{
+			D->source[i].sc_epoch = atof(DifxParametersvalue(cp, row));
+		}
+		else {
+			D->source[i].sc_epoch = 0.0;
+		}
+		
+	}
 
 	rows[N_EOP_ROWS-1] = 0;		/* initialize start */
 	if(D->eop)
@@ -2148,11 +2261,11 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 
 				return 0;
 			}
-			D->eop[i].mjd     = atof(DifxParametersvalue(cp, rows[0])) + .5;
-			D->eop[i].tai_utc = atof(DifxParametersvalue(cp, rows[1])) + .5;
+			D->eop[i].mjd	  = atoi(DifxParametersvalue(cp, rows[0]));
+			D->eop[i].tai_utc = atoi(DifxParametersvalue(cp, rows[1]));
 			D->eop[i].ut1_utc = atof(DifxParametersvalue(cp, rows[2]));
-			D->eop[i].xPole   = atof(DifxParametersvalue(cp, rows[3]));
-			D->eop[i].yPole   = atof(DifxParametersvalue(cp, rows[4]));
+			D->eop[i].xPole	  = atof(DifxParametersvalue(cp, rows[3]));
+			D->eop[i].yPole	  = atof(DifxParametersvalue(cp, rows[4]));
 		}
 	}
 
@@ -2163,34 +2276,34 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		int j;
 
 		row = DifxParametersfind1(cp, 0, "SCAN %d IDENTIFIER", i);
-                if(row < 0)
+		if(row < 0)
 		{
 			fprintf(stderr, "SCAN %d START (S) not found\n", i);
-                
+				
 			return 0;
-                }
-                snprintf(D->scan[i].identifier, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+		}
+		snprintf(D->scan[i].identifier, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
 		row = DifxParametersfind1(cp, 0, "SCAN %d START (S)", i);
-                if(row < 0)
+		if(row < 0)
 		{
 			fprintf(stderr, "SCAN %d START (S) not found\n", i);
-                
+				
 			return 0;
-                }
+		}
 		startSeconds = atoi(DifxParametersvalue(cp, row));
 		row = DifxParametersfind1(cp, row, "SCAN %d DUR (S)", i);
-                if(row < 0)
+		if(row < 0)
 		{
 			fprintf(stderr, "SCAN %d DUR (S) not found\n", i);
 
 			return 0;
-                }
+		}
 		durSeconds = atoi(DifxParametersvalue(cp, row));
 		D->scan[i].nAntenna = nTel;
 		D->scan[i].startSeconds = startSeconds;
-		D->scan[i].durSeconds   = durSeconds;
-		D->scan[i].mjdStart = D->job->mjdStart + startSeconds/86400.0;
-		D->scan[i].mjdEnd   = D->job->mjdStart + (startSeconds+durSeconds)/86400.0;
+		D->scan[i].durSeconds	= durSeconds;
+		D->scan[i].mjdStart = D->job->mjdStart + startSeconds/SEC_DAY_DBL;
+		D->scan[i].mjdEnd	= D->job->mjdStart + (startSeconds+durSeconds)/SEC_DAY_DBL;
 		row = DifxParametersfind1(cp, row, "SCAN %d OBS MODE NAME", i);
 		if(row < 0)
 		{
@@ -2198,7 +2311,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 
 			return 0;
 		}
-                snprintf(D->scan[i].obsModeName, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+		snprintf(D->scan[i].obsModeName, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
 		row = DifxParametersfind1(cp, row, "SCAN %d UVSHIFT INTERVAL (NS)", i);
 		if(row < 0)
 		{
@@ -2221,15 +2334,15 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 			fprintf(stderr, "SCAN %d POINTING SRC not found\n", i);
 
 			return 0;
-                }
+		}
 		D->scan[i].pointingCentreSrc = atoi(DifxParametersvalue(cp, row));
 		row = DifxParametersfind1(cp, row, "SCAN %d NUM PHS CTRS", i);
-                if(row < 0)
+		if(row < 0)
 		{
 			fprintf(stderr, "SCAN %d NUM PHS CTRS not found\n", i);
 
 			return 0;
-                }
+		}
 		D->scan[i].nPhaseCentres = atoi(DifxParametersvalue(cp, row));
 		if(D->scan[i].nPhaseCentres > MAX_PHS_CENTRES)
 		{
@@ -2243,12 +2356,12 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 			if(row < 0)
 			{
 				fprintf(stderr, "SCAN %d PHS CTR %d not found\n", i, j);
-                    	
+						
 				return 0;
 			}
 			D->scan[i].phsCentreSrcs[j] = atoi(DifxParametersvalue(cp, row));
 			D->scan[i].orgjobPhsCentreSrcs[j] = D->scan[i].phsCentreSrcs[j];
-                }
+		}
 		D->scan[i].configId = -1;
 		for(r = 0; r < D->nRule; r++)
 		{
@@ -2293,7 +2406,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 				if(applies > 0)
 				{
 					fprintf(stderr, "Couldn't find the config (%s) that is supposed to match rule %d\n", 
-						D->rule[r].configName, r);
+							D->rule[r].configName, r);
 				}
 			}
 		}
@@ -2315,220 +2428,229 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 
 		for(s = 0; s < D->nSpacecraft; ++s)
 		{
-                    char testc;
-                    const char* str;
-                    row = DifxParametersfind(cp, row, "FRAME");
-                    if(row > 0)
-                    {
-                        snprintf(D->spacecraft[s].frame, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
-                    }
-                    else
-                    {
-                        D->spacecraft[s].frame[0] = 0;
-                    }
-                    N = DifxParametersbatchfind1(cp, rows[N_SPACECRAFT_ROWS-1], spacecraftKeys, s, N_SPACECRAFT_ROWS, rows);
-                    if(N < N_SPACECRAFT_ROWS)
-                    {
-                        fprintf(stderr, "Spacecraft %d table screwed up\n", s);
+			char testc;
+			const char* str;
+			N = DifxParametersbatchfind1(cp, rows[N_SPACECRAFT_ROWS-1], spacecraftKeys, s, N_SPACECRAFT_ROWS, rows);
+			if(N < N_SPACECRAFT_ROWS)
+			{
+				fprintf(stderr, "Spacecraft %d table screwed up\n", s);
 				
-                        return 0;
-                    }
-                    snprintf(D->spacecraft[s].name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, rows[0]));
-                    D->spacecraft[s].is_antenna = 0;
-                    testc = DifxParametersvalue(cp, rows[1])[0];
-                    if((testc == '1') || (testc == 'T') || (testc == 't'))
-                    {
-                        D->spacecraft[s].is_antenna = 1;
-                    }
-                    testc = DifxParametersvalue(cp, rows[2])[0];
-                    if((testc == '1') || (testc == 'T') || (testc == 't'))
-                    {
-                        D->spacecraft[s].GS_exists = 1;
-                        rows[N_SPACECRAFT_GS_ROWS-1] = 0;
-                        N = DifxParametersbatchfind1(cp, rows[N_SPACECRAFT_GS_ROWS-1], 
-                                                     spacecraftGSKeys, s, N_SPACECRAFT_GS_ROWS, rows);
-                        if(N < N_SPACECRAFT_GS_ROWS)
-                        {
-                            fprintf(stderr, "Spacecraft %d table screwed up for ground station info\n", s);
-                            
-                            return 0;
-                        }
-                        snprintf(D->spacecraft[s].GS_Name, DIFXIO_NAME_LENGTH, "%s", 
-                                 DifxParametersvalue(cp, rows[0]));
-                        snprintf(D->spacecraft[s].GS_calcName, DIFXIO_NAME_LENGTH, "%s", 
-                                 DifxParametersvalue(cp, rows[1]));
-                        D->spacecraft[s].spacecraft_time_type = stringToSpacecraftTimeType(DifxParametersvalue(cp, rows[2]));
-                        if(D->spacecraft[s].spacecraft_time_type >= AntennaMountOther)
-                        {
-                            fprintf(stderr, "Warning: populateCalc: unknown spacecraft time type type encountered\n"
-                                    "for spacecraft table entry %d: %s.  Changing to 'Local'\n",
-                                    i, DifxParametersvalue(cp, rows[2]));
-                            D->spacecraft[s].spacecraft_time_type = SpacecraftTimeLocal;
-                        }
-                        D->spacecraft[s].GS_mjd_sync = atoi(DifxParametersvalue(cp, rows[3]));
-                        D->spacecraft[s].GS_dayfraction_sync = atof(DifxParametersvalue(cp, rows[4]));
-                        D->spacecraft[s].GS_clock_break_fudge_sec = atof(DifxParametersvalue(cp, rows[5]));
-                        D->spacecraft[s].SC_recording_delay = atof(DifxParametersvalue(cp, rows[6]));
-                        D->spacecraft[s].GS_mount = stringToMountType(DifxParametersvalue(cp, rows[7]));
-                        if(D->spacecraft[s].GS_mount >= AntennaMountOther)
-                        {
-                            fprintf(stderr, "Warning: populateCalc: unknown spacecraft ground station mount type encountered\n"
-                                    "for telescope table entry %d: %s.  Changing to AZEL\n",
-                                    i, DifxParametersvalue(cp, rows[7]));
-                            D->spacecraft[s].GS_mount = AntennaMountAltAz;
-                        }
-                        D->spacecraft[s].GS_offset[0] = atof(DifxParametersvalue(cp, rows[8]));
-                        D->spacecraft[s].GS_offset[1] = atof(DifxParametersvalue(cp, rows[9]));
-                        D->spacecraft[s].GS_offset[2] = atof(DifxParametersvalue(cp, rows[10]));
+				return 0;
+			}
+			snprintf(D->spacecraft[s].name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, rows[0]));
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d ISANT", s);
+			D->spacecraft[s].is_antenna = 0;
+			if(row > 0)
+			{
+				testc = DifxParametersvalue(cp, row)[0];
+				if((testc == '1') || (testc == 'T') || (testc == 't'))
+				{
+					D->spacecraft[s].is_antenna = 1;
+				}
+			}
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d SC_TIMETYPE", s);
+			D->spacecraft[s].spacecraft_time_type = stringToSpacecraftTimeType(DifxParametersvalue(cp, row));
+			if(D->spacecraft[s].spacecraft_time_type >= SpacecraftTimeOther)
+			{
+				fprintf(stderr, "Warning: populateCalc: unknown spacecraft time type type encountered\n"
+				        "for spacecraft table entry %d: %s.	 Changing to 'Local'\n",
+				        i, DifxParametersvalue(cp, row));
+				D->spacecraft[s].spacecraft_time_type = SpacecraftTimeLocal;
+			}
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d POSITION_FRAME", s);
+			if(row > 0)
+			{
+				D->spacecraft[s].position_coord_frame = stringToSourceCoordinateFrameType(DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d POINTING_FRAME", s);
+			if(row > 0)
+			{
+				D->spacecraft[s].pointing_coord_frame = stringToSourceCoordinateFrameType(DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d SC_REC_DELAY (s)", s);
+			if(row > 0)
+			{
+				D->spacecraft[s].SC_recording_delay = atof(DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d SC_COMM_REC_DELAY (s)", s);
+			if(row > 0)
+			{
+				D->spacecraft[s].SC_Comm_Rec_to_Elec = atof(DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d SC_REC_COMM_DELAY (s)", s);
+			if(row > 0)
+			{
+				D->spacecraft[s].SC_Elec_to_Comm = atof(DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_EXISTS", s);
+			D->spacecraft[s].GS_exists = 1;
+			if(row > 0)
+			{
+				testc = DifxParametersvalue(cp, row)[0];
+				if((testc == '1') || (testc == 'T') || (testc == 't'))
+				{
+					D->spacecraft[s].GS_exists = 1;
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_NAME", s);
+					snprintf(D->spacecraft[s].GS_Name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_CALCNAME", s);
+					snprintf(D->spacecraft[s].GS_calcName, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_MJD_SYNC", s);
+					D->spacecraft[s].GS_mjd_sync = atoi(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_DAYFRAC_SYNC", s);
+					D->spacecraft[s].GS_dayfraction_sync = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_CLOCK_FUDGE (s)", s);
+					D->spacecraft[s].GS_clock_break_fudge_sec = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_MOUNT", s);
+					D->spacecraft[s].GS_mount = stringToMountType(DifxParametersvalue(cp, row));
+					if(D->spacecraft[s].GS_mount >= AntennaMountOther)
+					{
+						fprintf(stderr, "Warning: populateCalc: unknown spacecraft ground station mount type encountered\n"
+						        "for telescope table entry %d: %s.	Changing to AZEL\n",
+						        i, DifxParametersvalue(cp, row));
+						D->spacecraft[s].GS_mount = AntennaMountAltAz;
+					}
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_OFFSET (m)", s);
+					D->spacecraft[s].GS_offset[0] = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_OFFSET1 (m)", s);
+					D->spacecraft[s].GS_offset[1] = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_OFFSET2 (m)", s);
+					D->spacecraft[s].GS_offset[2] = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_X (m)", s);
+					D->spacecraft[s].GS_X = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_Y (m)", s);
+					D->spacecraft[s].GS_Y = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_Z (m)", s);
+					D->spacecraft[s].GS_Z = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_CLOCK REFMJD", s);
+					D->spacecraft[s].GS_clockrefmjd = atof(DifxParametersvalue(cp, row));
+					row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d GS_CLOCK ORDER", s);
+					D->spacecraft[s].GS_clockorder = atoi(DifxParametersvalue(cp, row));
+					for(i=0;i<D->spacecraft[s].GS_clockorder+1;i++)
+					{
+						row = DifxParametersfind2_limited(cp, row+1, 10, "SPACECRAFT %d GS_CLOCK COEFF %d", s, i);
+						if(row < 0)
+						{
+							fprintf(stderr, "Spacecraft %d GS_clockorder table, row %d screwed up\n", s, i);
+							
+							return 0;
+						}
+						D->spacecraft[s].GS_clockcoeff[i] = atof(DifxParametersvalue(cp, row));
+					}
+				}
+			}
+			/* position offset information */
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d SC_POSOFFSET REFMJD", s);
+			if(row > 0) {
+				D->spacecraft[s].SC_pos_offset_refmjd = atoi(DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1_limited(cp, row, 10, "SPACECRAFT %d SC_POSOFFSET REFFRAC", s);
+			if(row > 0) {
+				D->spacecraft[s].SC_pos_offset_reffracDay = atof(DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1_limited(cp, row, 10, "SPACECRAFT %d SC_POSOFFSET ORDER", s);
+			if(row > 0) {
+				D->spacecraft[s].SC_pos_offsetorder = atoi(DifxParametersvalue(cp, row));
+				for(i = 0; i <= D->spacecraft[s].SC_pos_offsetorder; ++i)
+				{
+					int n;
+					row = DifxParametersfind2_limited(cp, row+1, 10, "SPACECRAFT %d SC_POSOFFSET %d", s, i);
+					if(row < 0)
+					{
+						fprintf(stderr, "Spacecraft %d table, SC_pos_offset %d screwed up\n", s, i);
 
-                        D->spacecraft[s].GS_X = atof(DifxParametersvalue(cp, rows[11]));
-                        D->spacecraft[s].GS_Y = atof(DifxParametersvalue(cp, rows[12]));
-                        D->spacecraft[s].GS_Z = atof(DifxParametersvalue(cp, rows[13]));
-                        D->spacecraft[s].GS_clockrefmjd = atof(DifxParametersvalue(cp, rows[14]));
-                        D->spacecraft[s].GS_clockorder = atoi(DifxParametersvalue(cp, rows[15]));
-                        row = rows[N_SPACECRAFT_GS_ROWS-1];
-                        for(i=0;i<D->spacecraft[s].GS_clockorder+1;i++)
-                        {
-                            row = DifxParametersfind2(cp, row+1, "SPACECRAFT %d GS_CLOCK COEFF %d", s, i);
-                            if(row < 0)
-                            {
-				fprintf(stderr, "Spacecraft %d GS_clockorder table, row %d screwed up\n", s, i);
-                                
+						return 0;
+					}
+					str = DifxParametersvalue(cp, row);
+					n = sscanf(str, "%lf%lf%lf",
+							  &(D->spacecraft[s].SC_pos_offset[i].X),
+							  &(D->spacecraft[s].SC_pos_offset[i].Y),
+							  &(D->spacecraft[s].SC_pos_offset[i].Z)
+							   );
+					if(n != 3)
+					{
+						fprintf(stderr, "Spacecraft %d table, SC_pos_offset %d format screwed up\n", s, i);
+				
+						return 0;
+					}
+				}
+			}
+				
+				
+			/* start reading ephemeris information */
+			row = DifxParametersfind1_limited(cp, row, 10, "SPACECRAFT %d ROWS", s);
+			if(row < 0)
+			{
+				fprintf(stderr, "SPACECRAFT %d ROWS not found --- no position information for the spacecraft\n", s);
 				return 0;
-                            }
-                            D->spacecraft[s].GS_clockcoeff[i] = atof(DifxParametersvalue(cp, row));
-                        }
-                    }
-                    /* position offset information */
-                    row = rows[N_SPACECRAFT_GS_ROWS-1];
-                    row_t = DifxParametersfind1(cp, row, "SPACECRAFT %d SC_POSOFFSET REFMJD", s);
-                    if(row_t >= 0) {
-                        row = row_t;
-                        D->spacecraft[s].SC_pos_offset_refmjd = atoi(DifxParametersvalue(cp, row));
-                    }
-                    else {
-                        D->spacecraft[s].SC_pos_offset_refmjd = 0;
-                    }
-                    row_t = DifxParametersfind1(cp, row, "SPACECRAFT %d SC_POSOFFSET REFFRAC", s);
-                    if(row_t >= 0) {
-                        row = row_t;
-                        D->spacecraft[s].SC_pos_offset_reffracDay = atof(DifxParametersvalue(cp, row));
-                    }
-                    else {
-                        D->spacecraft[s].SC_pos_offset_reffracDay = 0.0;
-                    }
-                    row_t = DifxParametersfind1(cp, row, "SPACECRAFT %d SC_POSOFFSET ORDER", s);
-                    if(row_t >= 0) {
-                        row = row_t;
-                        D->spacecraft[s].SC_pos_offsetorder = atoi(DifxParametersvalue(cp, row));
-                        row += 1;
-                        for(i = 0; i <= D->spacecraft[s].SC_pos_offsetorder; ++i)
-                        {
-                            int n;
-                            row = DifxParametersfind2(cp, row, "SPACECRAFT %d SC_POSOFFSET %d", s, i);
-                            if(row < 0)
-                            {
-				fprintf(stderr, "Spacecraft %d table, SC_pos_offset %d screwed up\n", s, i);
+			}
+			D->spacecraft[s].nPoint = atoi(DifxParametersvalue(cp, row));
+			D->spacecraft[s].pos = (sixVector *)calloc(D->spacecraft[s].nPoint, sizeof(sixVector));
+			D->spacecraft[s].TFrameOffset = (spacecraftTimeFrameOffset *)calloc(D->spacecraft[s].nPoint, sizeof(spacecraftTimeFrameOffset));
+			D->spacecraft[s].SCAxisVectors = (spacecraftAxisVectors *)calloc(D->spacecraft[s].nPoint, sizeof(spacecraftAxisVectors));
+			for(i = 0; i < D->spacecraft[s].nPoint; ++i)
+			{
+				/* double time; */
+				const char *str;
+				int n;
+				
+				row = DifxParametersfind2_limited(cp, row+1, 10, "SPACECRAFT %d ROW %d", s, i);
+				if(row < 0)
+				{
+					fprintf(stderr, "Spacecraft %d table, row %d screwed up\n", s, i);
 
-				return 0;
-                            }
-                            str = DifxParametersvalue(cp, row);
-                            n = sscanf(str, "%lf%lf%lf",
-                                      &(D->spacecraft[s].SC_pos_offset[i].X),
-                                      &(D->spacecraft[s].SC_pos_offset[i].Y),
-                                      &(D->spacecraft[s].SC_pos_offset[i].Z)
-                                       );
-                            if(n != 3)
-                            {
-				fprintf(stderr, "Spacecraft %d table, SC_pos_offset %d format screwed up\n", s, i);
+					return 0;
+				}
+				str = DifxParametersvalue(cp, row);
+				n = sscanf(str, "%d%lf%Lf%Lf%Lf%Lf%Lf%Lf%lf%lf%lf%lf%lf%lf%lf%lf%lf%lf%lf",
+						  &(D->spacecraft[s].pos[i].mjd),
+						  &(D->spacecraft[s].pos[i].fracDay),
+						  &(D->spacecraft[s].pos[i].X),
+						  &(D->spacecraft[s].pos[i].Y),
+						  &(D->spacecraft[s].pos[i].Z),
+						  &(D->spacecraft[s].pos[i].dX),
+						  &(D->spacecraft[s].pos[i].dY),
+						  &(D->spacecraft[s].pos[i].dZ),
+						  &(D->spacecraft[s].TFrameOffset[i].Delta_t),
+						  &(D->spacecraft[s].TFrameOffset[i].dtdtau),
+						  &(D->spacecraft[s].SCAxisVectors[i].X[0]),
+						  &(D->spacecraft[s].SCAxisVectors[i].X[1]),
+						  &(D->spacecraft[s].SCAxisVectors[i].X[2]),
+						  &(D->spacecraft[s].SCAxisVectors[i].Y[0]),
+						  &(D->spacecraft[s].SCAxisVectors[i].Y[1]),
+						  &(D->spacecraft[s].SCAxisVectors[i].Y[2]),
+						  &(D->spacecraft[s].SCAxisVectors[i].Z[0]),
+						  &(D->spacecraft[s].SCAxisVectors[i].Z[1]),
+						  &(D->spacecraft[s].SCAxisVectors[i].Z[2])
+						   );
+				if(n != 19)
+				{
+					/* try the old format */
+					n = sscanf(str, "%lf%Lf%Lf%Lf%Lf%Lf%Lf",
+							  &(D->spacecraft[s].pos[i].fracDay),
+							  &(D->spacecraft[s].pos[i].X),
+							  &(D->spacecraft[s].pos[i].Y),
+							  &(D->spacecraft[s].pos[i].Z),
+							  &(D->spacecraft[s].pos[i].dX),
+							  &(D->spacecraft[s].pos[i].dY),
+							  &(D->spacecraft[s].pos[i].dZ)
+							   );
+					if(n != 7) {
+						fprintf(stderr, "Spacecraft %d table, row %d format screwed up\n", s, i);
 				
-				return 0;
-                            }
-                        }
-                    }
-                    else {
-                        D->spacecraft[s].SC_pos_offsetorder = -1;
-                    }
-                
-                
-                    /* start reading ephemeris information */
-                    row = DifxParametersfind1(cp, row, "SPACECRAFT %d ROWS", s);
-                    if(row < 0)
-                    {
-                        fprintf(stderr, "SPACECRAFT %d ROWS\n", s);
-                        return 0;
-                    }
-                    D->spacecraft[s].nPoint = atoi(DifxParametersvalue(cp, rows[1]));
-                    D->spacecraft[s].pos = (sixVector *)calloc(D->spacecraft[s].nPoint, sizeof(sixVector));
-                    D->spacecraft[s].TFrameOffset = (spacecraftTimeFrameOffset *)calloc(D->spacecraft[s].nPoint, sizeof(spacecraftTimeFrameOffset));
-                    D->spacecraft[s].SCAxisVectors = (spacecraftAxisVectors *)calloc(D->spacecraft[s].nPoint, sizeof(spacecraftAxisVectors));
-                    for(i = 0; i < D->spacecraft[s].nPoint; ++i)
-                    {
-                        double time;
-                        const char *str;
-                        int n;
-				
-                        row = DifxParametersfind2(cp, row+1, "SPACECRAFT %d ROW %d", s, i);
-                        if(row < 0)
-                        {
-                            fprintf(stderr, "Spacecraft %d table, row %d screwed up\n", s, i);
-
-                            return 0;
-                        }
-			str = DifxParametersvalue(cp, row);
-			n = sscanf(str, "%d%lf%Lf%Lf%Lf%Lf%Lf%Lf%lf%lf%lf%lf%lf%lf%lf%lf%lf%lf%lf",
-                                  &(D->spacecraft[s].pos[i].mjd),
-                                  &(D->spacecraft[s].pos[i].fracDay),
-                                  &(D->spacecraft[s].pos[i].X),
-                                  &(D->spacecraft[s].pos[i].Y),
-                                  &(D->spacecraft[s].pos[i].Z),
-                                  &(D->spacecraft[s].pos[i].dX),
-                                  &(D->spacecraft[s].pos[i].dY),
-                                  &(D->spacecraft[s].pos[i].dZ),
-                                  &(D->spacecraft[s].TFrameOffset[i].Delta_t),
-                                  &(D->spacecraft[s].TFrameOffset[i].dtdtau),
-                                  &(D->spacecraft[s].SCAxisVectors[i].X[0]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].X[1]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].X[2]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].Y[0]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].Y[1]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].Y[2]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].Z[0]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].Z[1]),
-                                  &(D->spacecraft[s].SCAxisVectors[i].Z[2])
-                                   );
-			if(n != 19)
-                        {
-                            /* try the old format */
-                            n = sscanf(str, "%lf%Lf%Lf%Lf%Lf%Lf%Lf",
-                                      &(D->spacecraft[s].pos[i].fracDay),
-                                      &(D->spacecraft[s].pos[i].X),
-                                      &(D->spacecraft[s].pos[i].Y),
-                                      &(D->spacecraft[s].pos[i].Z),
-                                      &(D->spacecraft[s].pos[i].dX),
-                                      &(D->spacecraft[s].pos[i].dY),
-                                      &(D->spacecraft[s].pos[i].dZ)
-                                       );
-                            if(n != 7) {
-				fprintf(stderr, "Spacecraft %d table, row %d format screwed up\n", s, i);
-				
-				return 0;
-                            }
-                            D->spacecraft[s].pos[i].mjd = (int)(D->spacecraft[s].pos[i].fracDay);
-                            D->spacecraft[s].pos[i].fracDay -= D->spacecraft[s].pos[i].mjd;
-                            D->spacecraft[s].TFrameOffset[i].Delta_t = 0.0;
-                            D->spacecraft[s].TFrameOffset[i].dtdtau = 0.0;
-                            memset(&(D->spacecraft[s].SCAxisVectors[i]),0,sizeof(spacecraftAxisVectors));
-                        }
-                        /* 2012 Mar 09  James M Anderson
-                           The conversion to exact seconds below is commented
-                           out, as there is no guarantee that the input
-                           spacecraft data is provided at exact second
-                           boundaries.  Let the data timestamps stand as they
-                           are. */
-			/* Force to be exactly on second boundary */
-			/* D->spacecraft[s].pos[i].fracDay = ((int)(time*86400.0 + 0.5))/86400.0; */
-                    }
+						return 0;
+					}
+					D->spacecraft[s].pos[i].mjd = (int)(D->spacecraft[s].pos[i].fracDay);
+					D->spacecraft[s].pos[i].fracDay -= D->spacecraft[s].pos[i].mjd;
+				}
+				/* 2012 Mar 09	James M Anderson
+				   The conversion to exact seconds below is commented
+				   out, as there is no guarantee that the input
+				   spacecraft data are provided at exact second
+				   boundaries.	Let the data timestamps stand as they
+				   are. */
+				/* Force to be exactly on second boundary */
+				/* D->spacecraft[s].pos[i].fracDay = ((int)(time*SEC_DAY_DBL + 0.5))/SEC_DAY_DBL; */
+			}
 		}
 	}
 
@@ -2566,34 +2688,55 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	return D;
 }
 
-static DifxInput *parseCalcServerInfo(DifxInput *D, DifxParameters *p)
+static DifxInput *parseCalcServerInfo(DifxInput *D, DifxParameters *cp)
 {
-	int r;
+	int row;
 
-	if(!D || !p)
+	if(!D || !cp)
 	{
 		return 0;
 	}
 
-	r = DifxParametersfind(p, 0, "CALC SERVER");
-	if(r >= 0)
-	{
-		snprintf(D->job->calcServer, DIFXIO_HOSTNAME_LENGTH, "%s",
-			DifxParametersvalue(p, r));
-	}
 
-	r = DifxParametersfind(p, 0, "CALC PROGRAM");
-	if(r >= 0)
+	row = DifxParametersfind(cp, 0, "DELAY SERVER HOST");
+	if(row >= 0)
 	{
-		D->job->calcProgram = atoi(DifxParametersvalue(p, r));
+		snprintf(D->job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", DifxParametersvalue(cp, row));
 	}
-
-	r = DifxParametersfind(p, 0, "CALC VERSION");
-	if(r >= 0)
+	row = DifxParametersfind(cp, 0, "DELAY SERVER TYPE");
+	if(row >= 0)
 	{
-		D->job->calcVersion = atoi(DifxParametersvalue(p, r));
+		D->job->delayServerType = stringToDelayServerType(DifxParametersvalue(cp, row));
 	}
-
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind(cp, row, "DELAY VERSION");
+	if(row >= 0)
+	{
+		D->job->delayVersion = strtoul(DifxParametersvalue(cp, row), NULL, 0);
+	}
+	else
+	{
+		D->job->delayVersion = DEFIX_DEFAULT_DELAY_SERVER_VERSION;
+		row=0;
+	}
+	row = DifxParametersfind(cp, row, "DELAY PROGRAM");
+	if(row >= 0)
+	{
+		D->job->delayProgram = strtoul(DifxParametersvalue(cp, row), NULL, 0);
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind(cp, row, "DELAY HANDLER");
+	if(row >= 0)
+	{
+		D->job->delayHandler = strtoul(DifxParametersvalue(cp, row), NULL, 0);
+	}
+	
 	return D;
 }
 
@@ -2667,7 +2810,6 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 {
 	int r, s, nScan, nTel;
 	int order, interval;
-	enum AberCorr ac;
 	int *antennaMap;
 
 	if(!D)
@@ -2711,16 +2853,22 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 	interval = atoi(DifxParametersvalue(mp, r));
 	D->job->polyInterval = interval;
 	
-	r = DifxParametersfind(mp, 0, "ABERRATION CORR");
+	r = DifxParametersfind_limited(mp, 0, 100, "ABERRATION CORR");
 	if(r < 0)
 	{
 		fprintf(stderr, "Warning: populateIM: Assuming aberration not corrected\n");
 	}
-	for(ac = 0; ac < NumAberCorrOptions; ++ac)
+	else
 	{
-		if(strcmp(aberCorrStrings[ac], DifxParametersvalue(mp, r)) == 0)
+		D->job->aberCorr = stringToAberCorr(DifxParametersvalue(mp, r));
+	}
+	r = DifxParametersfind_limited(mp, 0, 100, "CALC_OWN_RETARDED_POSITION");
+	if(r >= 0)
+	{
+		char t = DifxParametersvalue(mp, r)[0];
+		if((t == '1') || (t == 'T') || (t == 't'))
 		{
-			D->job->aberCorr = ac;
+			D->job->calculate_own_retarded_position = 1;
 		}
 	}
 
@@ -2746,7 +2894,6 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 	for(s = 0; s < nScan; ++s)
 	{
 		DifxScan *scan;
-		double delta;	/* either (m) or (rad) depending on application */
 		int p;
 		int r2;
 
@@ -2764,31 +2911,30 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 		scan->nPoly = atoi(DifxParametersvalue(mp, r));
 		scan->im = newDifxPolyModelArray(scan->nAntenna, scan->nPhaseCentres + 1, scan->nPoly);
 
-		r2 = DifxParametersfind1(mp, r, "SCAN %d DELTA LM (rad)", s);
+		r2 = DifxParametersfind1_limited(mp, r, 10, "SCAN %d LMN EXT EXISTS", s);
 		if(r2 > 0)
 		{
-			/* allocate the LM extension to delay model */
-			scan->imLM = newDifxPolyModelLMExtensionArray(scan->nAntenna, scan->nPhaseCentres + 1, scan->nPoly);
-			if(!scan->imLM)
+			char t;
+			t = DifxParametersvalue(mp, r2)[0];
+			if((t == '1') || (t == 'T') || (t == 't'))
 			{
-				fprintf(stderr, "Error: populateIM: Could not allocate LM Extension\n");
-				free(antennaMap);
-
-				return 0;
-			}
-			delta = atof(DifxParametersvalue(mp, r2));
-			if(DifxParametersfind1(mp, r, "SCAN %d DELTA XYZ (m)", s) > 0)
-			{
-				fprintf(stderr, "Error: Both DELTA XYZ and DELTA LM are given for scan %d\n", s);
-				free(antennaMap);
-
-				return 0;
+				/* allocate the LMN extension to delay model */
+				scan->imLMN = newDifxPolyModelLMNExtensionArray(scan->nAntenna, scan->nPhaseCentres + 1, scan->nPoly);
+				if(!scan->imLMN)
+				{
+					fprintf(stderr, "Error: populateIM: Could not allocate LMN Extension\n");
+					free(antennaMap);
+					
+					return 0;
+				}
 			}
 		}
-		else
+		r2 = DifxParametersfind1_limited(mp, r, 10, "SCAN %d XYZ EXT EXISTS", s);
+		if(r2 > 0)
 		{
-			r2 = DifxParametersfind1(mp, r, "SCAN %d DELTA XYZ (m)", s);
-			if(r2 > 0)
+			char t;
+			t = DifxParametersvalue(mp, r2)[0];
+			if((t == '1') || (t == 'T') || (t == 't'))
 			{
 				/* allocate the XYZ extension to delay model */
 				scan->imXYZ = newDifxPolyModelXYZExtensionArray(scan->nAntenna, scan->nPhaseCentres + 1, scan->nPoly);
@@ -2796,10 +2942,9 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 				{
 					fprintf(stderr, "Error: populateIM: Could not allocate XYZ Extension\n");
 					free(antennaMap);
-
+					
 					return 0;
 				}
-				delta = atof(DifxParametersvalue(mp, r2));
 			}
 		}
 
@@ -2834,17 +2979,21 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 				for(t = 0; t < nTel; ++t)
 				{
 					int a;
-                                        int ret_r;
 
 					a = antennaMap[t];
-                                	if(a < 0)
-                                	{
-                                        	continue;
-                                	}
+					if(a < 0)
+					{
+						continue;
+					}
 					scan->im[a][src][p].mjd = mjd;
 					scan->im[a][src][p].sec = sec;
 					scan->im[a][src][p].order = order;
 					scan->im[a][src][p].validDuration = interval;
+					r = DifxParametersfind2_limited(mp, r, 10, "SRC %d ANT %d DELTA UVW", src, a);
+					if(r > 0)
+					{
+						scan->im[a][src][p].delta = atof(DifxParametersvalue(mp, r));
+					}
 					r = parsePoly1(mp, r, "SRC %d ANT %d DELAY (us)", src, t, scan->im[a][src][p].delay, order+1);
 					if(r < 0)
 					{
@@ -2852,77 +3001,200 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 						
 						return 0;
 					}
-					/* don't require the following 6 parameters, so don't adjust r when reading them */
-					parsePoly1_limited(mp, r, 10, "SRC %d ANT %d DRY (us)", src, t, scan->im[a][src][p].dry, order+1);
-					parsePoly1_limited(mp, r, 10, "SRC %d ANT %d WET (us)", src, t, scan->im[a][src][p].wet, order+1);
-					parsePoly1_limited(mp, r, 10, "SRC %d ANT %d AZ", src, t, scan->im[a][src][p].az, order+1);
-					parsePoly1_limited(mp, r, 10, "SRC %d ANT %d EL CORR", src, t, scan->im[a][src][p].elcorr, order+1);
-					parsePoly1_limited(mp, r, 10, "SRC %d ANT %d EL GEOM", src, t, scan->im[a][src][p].elgeom, order+1);
-					parsePoly1_limited(mp, r, 10, "SRC %d ANT %d PAR ANGLE", src, t, scan->im[a][src][p].parangle, order+1);
-                                        /* don't require the following 3 parameters, but adjust r if there was an error reading them when present */
-					ret_r = parsePoly1(mp, r, "SRC %d ANT %d SC_GS_DELAY (us)", src, t, scan->im[a][src][p].sc_gs_delay, order+1);
-                                        if(ret_r > 0) {r = ret_r;}
-					ret_r = parsePoly1(mp, r, "SRC %d ANT %d GS_CLOCK_DELAY (us)", src, t, scan->im[a][src][p].gs_clock_delay, order+1);
-                                        if(ret_r > 0) {r = ret_r;}
-					r = parsePoly1(mp, r, "SRC %d ANT %d MSA (rad)", src, t, scan->im[a][src][p].msa, order+1);
-                                        if(ret_r > 0) {r = ret_r;}
+					/* don't require the following 10 parameters, so don't adjust r when reading them */
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d DRY (us)", src, t, scan->im[a][src][p].dry, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d WET (us)", src, t, scan->im[a][src][p].wet, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d IONO (us at 1 GHz)", src, t, scan->im[a][src][p].iono, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d AZ", src, t, scan->im[a][src][p].az, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d EL CORR", src, t, scan->im[a][src][p].elcorr, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d EL GEOM", src, t, scan->im[a][src][p].elgeom, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d PAR ANGLE", src, t, scan->im[a][src][p].parangle, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d SC_GS_DELAY (us)", src, t, scan->im[a][src][p].sc_gs_delay, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d GS_CLOCK_DELAY (us)", src, t, scan->im[a][src][p].gs_clock_delay, order+1);
+					parsePoly1_limited(mp, r, 15, "SRC %d ANT %d MSA (rad)", src, t, scan->im[a][src][p].msa, order+1);
 					/* the next three again are required */
-					r = parsePoly1(mp, r, "SRC %d ANT %d U (m)", src, t, scan->im[a][src][p].u, order+1);
+					r = parsePoly1_limited(mp, r, 15, "SRC %d ANT %d U (m)", src, t, scan->im[a][src][p].u, order+1);
 					if(r < 0)
 					{
 						fprintf(stderr, "Error: populateIM: Could not find SRC %d ANT %d U (m)\n", src, t);
 						
 						return 0;
 					}
-					r = parsePoly1(mp, r, "SRC %d ANT %d V (m)", src, t, scan->im[a][src][p].v, order+1);
+					r = parsePoly1_limited(mp, r, 10, "SRC %d ANT %d V (m)", src, t, scan->im[a][src][p].v, order+1);
 					if(r < 0)
 					{
 						fprintf(stderr, "Error: populateIM: Could not find SRC %d ANT %d V (m)\n", src, t);
 						
 						return 0;
 					}
-					r = parsePoly1(mp, r, "SRC %d ANT %d W (m)", src, t, scan->im[a][src][p].w, order+1);
+					r = parsePoly1_limited(mp, r, 10, "SRC %d ANT %d W (m)", src, t, scan->im[a][src][p].w, order+1);
 					if(r < 0)
 					{
 						fprintf(stderr, "Error: populateIM: Could not find SRC %d ANT %d W (m)\n", src, t);
 						
 						return 0;
 					}
-					if(scan->imLM)
+					if((scan->imLMN))
 					{
-						r2 = r;	/* save for error message if needed */
-						r = parsePoly1(mp, r, "SRC %d ANT %d dDELAYdL", src, t, scan->imLM[a][src][p].dDelay_dl, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d dDELAYdM", src, t, scan->imLM[a][src][p].dDelay_dm, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdLdL", src, t, scan->imLM[a][src][p].d2Delay_dldl, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdLdM", src, t, scan->imLM[a][src][p].d2Delay_dldm, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdMdM", src, t, scan->imLM[a][src][p].d2Delay_dmdm, order+1);
-						if(r < 0)
+						if((scan->imLMN[a][src]))
 						{
-							fprintf(stderr, "Error: populateIM: At least one of the LM extension values is missing around line %d\n", r2);
-
-							return 0;
+							r2 = DifxParametersfind2_limited(mp, r, 15, "SRC %d ANT %d DELTA LMN", src, a);
+							if(r2 > 0)
+							{
+								scan->imLMN[a][src][p].delta = atof(DifxParametersvalue(mp, r));
+							}
+							r2 = parsePoly1_limited(mp, r, 15, "SRC %d ANT %d dDELAYdL", src, t, scan->imLMN[a][src][p].dDelay_dl, order+1);
+							if(r2 > 0)
+							{
+								r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d dDELAYdM", src, t, scan->imLMN[a][src][p].dDelay_dm, order+1);
+								if(r2 < 0)
+								{
+									fprintf(stderr, "Error: populateIM: missing dDELAYdM around line %d for SRC %d ANT %d\n", r, src, t);
+									return 0;
+								}
+								r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d dDELAYdN", src, t, scan->imLMN[a][src][p].dDelay_dn, order+1);
+								if(r2 < 0)
+								{
+									fprintf(stderr, "Error: populateIM: missing dDELAYdN around line %d for SRC %d ANT %d\n", r, src, t);
+									return 0;
+								}
+								r = r2;
+								r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdLdL", src, t, scan->imLMN[a][src][p].d2Delay_dldl, order+1);
+								if(r2 > 0)
+								{
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdLdM", src, t, scan->imLMN[a][src][p].d2Delay_dldm, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdLDM around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdLdN", src, t, scan->imLMN[a][src][p].d2Delay_dldn, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdLDN around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdMdM", src, t, scan->imLMN[a][src][p].d2Delay_dmdm, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdMDM around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdMdN", src, t, scan->imLMN[a][src][p].d2Delay_dmdn, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdMDN around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdNdN", src, t, scan->imLMN[a][src][p].d2Delay_dndn, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdNDN around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r = r2;
+								}
+								else
+								{
+									int o;
+									for(o=0; o < order+1; ++o)
+									{
+										scan->imLMN[a][src][p].d2Delay_dldl[o] = NAN;
+										scan->imLMN[a][src][p].d2Delay_dldm[o] = NAN;
+										scan->imLMN[a][src][p].d2Delay_dldn[o] = NAN;
+										scan->imLMN[a][src][p].d2Delay_dmdm[o] = NAN;
+										scan->imLMN[a][src][p].d2Delay_dmdn[o] = NAN;
+										scan->imLMN[a][src][p].d2Delay_dndn[o] = NAN;
+									}
+								}
+							}
+							else
+							{
+								free(scan->imLMN[a][src]);
+								scan->imLMN[a][src] = NULL;
+							}
 						}
-						scan->imLM[a][src][p].delta = delta;
 					}
-					else if(scan->imXYZ)
+					if((scan->imXYZ))
 					{
-						r2 = r;	/* save for error message if needed */
-						r = parsePoly1(mp, r, "SRC %d ANT %d dDELAYdX", src, t, scan->imXYZ[a][src][p].dDelay_dX, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d dDELAYdY", src, t, scan->imXYZ[a][src][p].dDelay_dY, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d dDELAYdZ", src, t, scan->imXYZ[a][src][p].dDelay_dZ, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdXdX", src, t, scan->imXYZ[a][src][p].d2Delay_dXdX, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdXdY", src, t, scan->imXYZ[a][src][p].d2Delay_dXdY, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdXdZ", src, t, scan->imXYZ[a][src][p].d2Delay_dXdZ, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdYdY", src, t, scan->imXYZ[a][src][p].d2Delay_dYdY, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdYdZ", src, t, scan->imXYZ[a][src][p].d2Delay_dYdZ, order+1);
-						if(r > 0) r = parsePoly1(mp, r, "SRC %d ANT %d d2DELAYdZdZ", src, t, scan->imXYZ[a][src][p].d2Delay_dZdZ, order+1);
-						if(r < 0)
+						if((scan->imXYZ[a][src]))
 						{
-							fprintf(stderr, "Error: populateIM: At least one of the XYZ extension values is missing around line %d\n", r2);
-
-							return 0;
+							r2 = DifxParametersfind2_limited(mp, r, 15, "SRC %d ANT %d DELTA XYZ", src, a);
+							if(r2 > 0)
+							{
+								scan->imXYZ[a][src][p].delta = atof(DifxParametersvalue(mp, r));
+							}
+							r2 = parsePoly1_limited(mp, r, 15, "SRC %d ANT %d dDELAYdX", src, t, scan->imXYZ[a][src][p].dDelay_dX, order+1);
+							if(r2 > 0)
+							{
+								r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d dDELAYdY", src, t, scan->imXYZ[a][src][p].dDelay_dY, order+1);
+								if(r2 < 0)
+								{
+									fprintf(stderr, "Error: populateIM: missing dDELAYdY around line %d for SRC %d ANT %d\n", r, src, t);
+									return 0;
+								}
+								r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d dDELAYdZ", src, t, scan->imXYZ[a][src][p].dDelay_dZ, order+1);
+								if(r2 < 0)
+								{
+									fprintf(stderr, "Error: populateIM: missing dDELAYdZ around line %d for SRC %d ANT %d\n", r, src, t);
+									return 0;
+								}
+								r = r2;
+								r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdLXdX", src, t, scan->imXYZ[a][src][p].d2Delay_dXdX, order+1);
+								if(r2 > 0)
+								{
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdXdY", src, t, scan->imXYZ[a][src][p].d2Delay_dXdY, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdXDY around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdXdZ", src, t, scan->imXYZ[a][src][p].d2Delay_dXdZ, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdXDZ around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdYdY", src, t, scan->imXYZ[a][src][p].d2Delay_dYdY, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdYDY around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdYdZ", src, t, scan->imXYZ[a][src][p].d2Delay_dYdZ, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdYDZ around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r2 = parsePoly1_limited(mp, r2, 15, "SRC %d ANT %d d2DELAYdZdZ", src, t, scan->imXYZ[a][src][p].d2Delay_dZdZ, order+1);
+									if(r2 < 0)
+									{
+										fprintf(stderr, "Error: populateIM: missing dDELAYdZDZ around line %d for SRC %d ANT %d\n", r, src, t);
+										return 0;
+									}
+									r = r2;
+								}
+								else
+								{
+									int o;
+									for(o=0; o < order+1; ++o)
+									{
+										scan->imXYZ[a][src][p].d2Delay_dXdX[o] = NAN;
+										scan->imXYZ[a][src][p].d2Delay_dXdY[o] = NAN;
+										scan->imXYZ[a][src][p].d2Delay_dXdZ[o] = NAN;
+										scan->imXYZ[a][src][p].d2Delay_dYdY[o] = NAN;
+										scan->imXYZ[a][src][p].d2Delay_dYdZ[o] = NAN;
+										scan->imXYZ[a][src][p].d2Delay_dZdZ[o] = NAN;
+									}
+								}
+							}
+							else
+							{
+								free(scan->imXYZ[a][src]);
+								scan->imXYZ[a][src] = NULL;
+							}
 						}
-						scan->imXYZ[a][src][p].delta = delta;
 					}
 				}
 			}
@@ -2984,39 +3256,39 @@ static int populateFlags(DifxInput *D)
 			int antennaId;
 
 			ptr = fgets(line, MaxLineLength, in);
-                        if(ptr == 0)
-                        {
-                                fprintf(stderr, "Warning: premature end of file %s\n", J->flagFile);
-                                J->nFlag = i;
-                                break;
-                        }
-                        line[MaxLineLength] = 0;
+			if(ptr == 0)
+			{
+				fprintf(stderr, "Warning: premature end of file %s\n", J->flagFile);
+				J->nFlag = i;
+				break;
+			}
+			line[MaxLineLength] = 0;
 
-                        /* Allow read of plain numbers */
-                        p = sscanf(line, "%lf%lf%d", &mjd1, &mjd2, &antennaId);
-                        if(p != 3)
-                        {
-                                /* or formatted in one particular way */
-                                p = sscanf(line, "  mjd(%lf,%lf)%d", &mjd1, &mjd2, &antennaId);
-                        }
-                        if(p == 3)
-                        {
-                                if(antennaId < 0 || antennaId >= D->nAntenna)
-                                {
-                                        fprintf(stderr, "populateFlags : file=%s line=%d: antennaId=%d\n", J->flagFile, i+2, antennaId);
-                                        nUndecoded++;
-                                }
-                                else
-                                {
-                                        J->flag[nFlag].mjd1  = mjd1;
-                                        J->flag[nFlag].mjd2  = mjd2;
-                                        J->flag[nFlag].antennaId = antennaId;
-                                        nFlag++;
-                                }
-                        }
-                        else
-                        {
-                                nUndecoded++;
+			/* Allow read of plain numbers */
+			p = sscanf(line, "%lf%lf%d", &mjd1, &mjd2, &antennaId);
+			if(p != 3)
+			{
+				/* or formatted in one particular way */
+				p = sscanf(line, "	mjd(%lf,%lf)%d", &mjd1, &mjd2, &antennaId);
+			}
+			if(p == 3)
+			{
+				if(antennaId < 0 || antennaId >= D->nAntenna)
+				{
+					fprintf(stderr, "populateFlags : file=%s line=%d: antennaId=%d\n", J->flagFile, i+2, antennaId);
+					nUndecoded++;
+				}
+				else
+				{
+					J->flag[nFlag].mjd1	 = mjd1;
+					J->flag[nFlag].mjd2	 = mjd2;
+					J->flag[nFlag].antennaId = antennaId;
+					nFlag++;
+				}
+			}
+			else
+			{
+				nUndecoded++;
 			}
 		}
 	}
@@ -3038,20 +3310,20 @@ static int populateFlags(DifxInput *D)
 
 int isAntennaFlagged(const DifxJob *J, double mjd, int antennaId)
 {
-        int flagId;
+	int flagId;
 
-        for(flagId = 0; flagId < J->nFlag; ++flagId)
-        {
-                if(J->flag[flagId].antennaId == antennaId)
-                {
-                        if(mjd > J->flag[flagId].mjd1 && mjd < J->flag[flagId].mjd2)
-                        {
-                                return 1;
-                        }
-                }
-        }
+	for(flagId = 0; flagId < J->nFlag; ++flagId)
+	{
+		if(J->flag[flagId].antennaId == antennaId)
+		{
+			if(mjd > J->flag[flagId].mjd1 && mjd < J->flag[flagId].mjd2)
+			{
+				return 1;
+			}
+		}
+	}
 
-        return 0;
+	return 0;
 }
 
 DifxInput *allocateSourceTable(DifxInput *D, int length)
@@ -3103,13 +3375,8 @@ static DifxInput *deriveFitsSourceIds(DifxInput *D)
 			{
 				j = fs[a];
 				l = fc[a];
-				if(D->source[i].ra         == D->source[j].ra  &&
-				   D->source[i].dec        == D->source[j].dec &&
-				   D->source[i].sc_epoch   == D->source[j].sc_epoch &&
-				   D->source[i].qual       == D->source[j].qual &&
-				   D->config[configId].fitsFreqId == D->config[l].fitsFreqId &&
-				   strcmp(D->source[i].calCode, D->source[j].calCode) == 0 &&
-				   strcmp(D->source[i].name, D->source[j].name) == 0)
+				if(isSameDifxSourceBasic(D->source+i,D->source+j) &&
+				   D->config[configId].fitsFreqId == D->config[l].fitsFreqId)
 				{
 					match = a;
 					break;
@@ -3133,10 +3400,21 @@ static DifxInput *deriveFitsSourceIds(DifxInput *D)
 
 			for(sc = 0; sc < D->nSpacecraft; ++sc)
 			{
-				if(strcmp(D->spacecraft[sc].name, D->source[i].name) == 0)
+				if(strcmp(D->spacecraft[sc].name, D->source[i].sc_name) == 0)
 				{
 					D->source[i].spacecraftId = sc;
 					break;
+				}
+			}
+			if(sc == D->nSpacecraft)
+			{
+				for(sc = 0; sc < D->nSpacecraft; ++sc)
+				{
+					if(strcmp(D->spacecraft[sc].name, D->source[i].name) == 0)
+					{
+						D->source[i].spacecraftId = sc;
+						break;
+					}
 				}
 			}
 		}
@@ -3150,7 +3428,7 @@ static DifxInput *deriveFitsSourceIds(DifxInput *D)
 	
 static void setOrbitingAntennas(DifxInput *D)
 {
-        int a;
+	int a;
 	if(!D)
 	{
 		return;
@@ -3164,29 +3442,40 @@ static void setOrbitingAntennas(DifxInput *D)
 
 			for(sc = 0; sc < D->nSpacecraft; ++sc)
 			{
-				if(strcmp(D->spacecraft[sc].name, D->antenna[a].name) == 0)
+				if(strcmp(D->spacecraft[sc].name, D->antenna[a].sc_name) == 0)
 				{
 					D->antenna[a].spacecraftId = sc;
 					break;
 				}
 			}
+			if(sc == D->nSpacecraft)
+			{
+				for(sc = 0; sc < D->nSpacecraft; ++sc)
+				{
+					if(strcmp(D->spacecraft[sc].name, D->antenna[a].name) == 0)
+					{
+						D->antenna[a].spacecraftId = sc;
+					break;
+					}
+				}
+			}
 		}
 	}
-        for(a = 0; a < D->nAntenna; ++a)
-        {
-            if((D->antenna[a].sitetype == AntennaSiteEarth_Orbiting)
-              && (D->antenna[a].spacecraftId == -1))
-            {
-                fprintf(stderr, "Error: antenna %s has sitetype==\"earth_orbit\", but does not have a spacecraft ID\n", D->antenna[a].name);
-                exit(EXIT_FAILURE);
-            }
-            else if((D->antenna[a].sitetype != AntennaSiteEarth_Orbiting)
-              && (D->antenna[a].spacecraftId >= 0))
-            {
-                fprintf(stderr, "Error: antenna %s is given a spacecraft ID, but has sitetype=\"%s\", not sitetype==\"earth_orbit\"\n", D->antenna[a].name, D->antenna[a].sitetype);
-                exit(EXIT_FAILURE);
-            }
-        }
+	for(a = 0; a < D->nAntenna; ++a)
+	{
+		if((D->antenna[a].sitetype == AntennaSiteEarth_Orbiting)
+		  && (D->antenna[a].spacecraftId == -1))
+		{
+			fprintf(stderr, "Error: antenna %s has sitetype=='%s', but does not have a spacecraft ID\n", D->antenna[a].name, antennaSiteTypeNames[D->antenna[a].sitetype]);
+			exit(EXIT_FAILURE);
+		}
+		else if((D->antenna[a].sitetype != AntennaSiteEarth_Orbiting)
+			   && (D->antenna[a].spacecraftId >= 0))
+		{
+			fprintf(stderr, "Error: antenna %s is given a spacecraft ID, but has sitetype=\"%s\", not sitetype=='%s'\n", D->antenna[a].name, antennaSiteTypeNames[D->antenna[a].sitetype], antennaSiteTypeNames[AntennaSiteEarth_Orbiting]);
+			exit(EXIT_FAILURE);
+		}
+	}
 
 	return;
 }
@@ -3266,7 +3555,7 @@ static void setGlobalValues(DifxInput *D)
 		{
 			D->mjdStart = D->job[jobId].mjdStart;
 		}
-		mjdStop = D->job[jobId].mjdStart + D->job[jobId].duration/86400.0;
+		mjdStop = D->job[jobId].mjdStart + D->job[jobId].duration/SEC_DAY_DBL;
 		if(mjdStop > D->mjdStop)
 		{
 			D->mjdStop = mjdStop;
@@ -3283,7 +3572,7 @@ static void setGlobalValues(DifxInput *D)
 		dc = D->config + configId;
 
 		nIF = dc->nIF;
-		qb  = dc->quantBits;
+		qb	= dc->quantBits;
 		if(D->nIF < nIF)
 		{
 			D->nIF = nIF;
@@ -3308,7 +3597,7 @@ static void setGlobalValues(DifxInput *D)
 			char pol[2];
 
 			nPol   = dc->IF[i].nPol;
-			bw     = dc->IF[i].bw;
+			bw	   = dc->IF[i].bw;
 			pol[0] = dc->IF[i].pol[0];
 			pol[1] = dc->IF[i].pol[1];
 			if(doPolar)
@@ -3338,18 +3627,18 @@ static void setGlobalValues(DifxInput *D)
 				{
 					switch(pol[p])
 					{
-						case 'R':
-							hasR = 1;
-							break;
-						case 'L':
-							hasL = 1;
-							break;
-						case 'X':
-							hasX = 1;
-							break;
-						case 'Y':
-							hasY = 1;
-							break;
+					case 'R':
+						hasR = 1;
+						break;
+					case 'L':
+						hasL = 1;
+						break;
+					case 'X':
+						hasX = 1;
+						break;
+					case 'Y':
+						hasY = 1;
+						break;
 					}
 				}
 			}
@@ -3719,7 +4008,7 @@ int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd, int antennaId)
 		int d, configId;
 		int antId = -1;
 
-		if(mjd > D->scan[scanId].mjdEnd  ||
+		if(mjd > D->scan[scanId].mjdEnd	 ||
 		   mjd < D->scan[scanId].mjdStart)
 		{
 			continue;
@@ -3892,7 +4181,7 @@ int DifxInputSortAntennas(DifxInput *D, int verbose)
 		return 0;
 	}
 
-	/* OK -- antennas have been reordered.  Fix the tables. */
+	/* OK -- antennas have been reordered.	Fix the tables. */
 
 	/* 1. Datastream table */
 	for(dsId = 0; dsId < D->nDatastream; ++dsId)
@@ -3947,15 +4236,15 @@ int DifxInputSortAntennas(DifxInput *D, int verbose)
 					{
 						fprintf(stderr, "Developer error: DifxInputSortAntennas: old2new[%d] = %d; nAnt = %d\n", antennaId, antennaId2, D->scan[scanId].nAntenna);
 
-	                                        continue;
+						continue;
 					}
-                                
-                                	p2[antennaId2] = D->scan[scanId].im[antennaId];
+								
+					p2[antennaId2] = D->scan[scanId].im[antennaId];
 				}
-                        }
+			}
 
-                        free(D->scan[scanId].im);
-                        D->scan[scanId].im = p2;
+			free(D->scan[scanId].im);
+			D->scan[scanId].im = p2;
 		}
 	
 		D->scan[scanId].nAntenna = D->nAntenna;
@@ -4046,31 +4335,31 @@ int DifxInputSimFXCORR(DifxInput *D)
 	tInt = D->config[0].tInt;
 
 	mjd = D->mjdStart;
-	sec = sec_old = (D->mjdStart - mjd)*86400.0;
+	sec = sec_old = (D->mjdStart - mjd)*SEC_DAY_DBL;
 
 	n = sec / tInt;
 	sec = n*tInt;
 
 	deltasec = sec - sec_old;
 
-	mjdStart = mjd + sec/86400.0;
+	mjdStart = mjd + sec/SEC_DAY_DBL;
 	if(mjdStart < D->mjdStart)
 	{
 		++n;
-		mjdStart += tInt/86400.0;
+		mjdStart += tInt/SEC_DAY_DBL;
 		deltasec += tInt;
 	}
 
 	/* Work around problem that occurs if frac sec >= 0.5 */
-	while(86400.0*mjdStart - (long long)(86400.0*mjdStart) > 0.49999)
+	while(SEC_DAY_DBL*mjdStart - (long long)(SEC_DAY_DBL*mjdStart) > 0.49999)
 	{
 		++n;
-		mjdStart += tInt/86400.0;
+		mjdStart += tInt/SEC_DAY_DBL;
 		deltasec += tInt;
 	}
 
 	/* recompute to avoid bad rounding issues */
-	mjdStart = mjd + n*tInt/86400.0;
+	mjdStart = mjd + n*tInt/SEC_DAY_DBL;
 
 	D->mjdStart = mjdStart;
 	D->job[0].jobStart = D->mjdStart;
@@ -4312,7 +4601,7 @@ int DifxInputGetMaxPhaseCentres(const DifxInput *D)
 }
 
 /* Warning: this function returns the pointing center for the first scan containing 
- * the given sourceId.  Nothing stops multiple distinct pointing centers from
+ * the given sourceId.	Nothing stops multiple distinct pointing centers from
  * containing the same source!
  */
 int DifxInputGetPointingCentreSource(const DifxInput *D, int sourceId)

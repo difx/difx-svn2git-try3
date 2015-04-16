@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008 by Walter Brisken                                  *
+ *   Copyright (C) 2008, 2015 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -49,10 +49,7 @@ DifxAntennaFlag *newDifxAntennaFlagArray(int nFlag)
 
 void deleteDifxAntennaFlagArray(DifxAntennaFlag *df)
 {
-	if(df)
-	{
-		free(df);
-	}
+	free(df);
 }
 
 void fprintDifxAntennaFlagArray(FILE *fp, const DifxAntennaFlag *df, int nf)
@@ -76,7 +73,8 @@ void printDifxAntennaFlagArray(const DifxAntennaFlag *df, int nf)
 void copyDifxAntennaFlag(DifxAntennaFlag *dest, const DifxAntennaFlag *src,
 	const int *antennaIdRemap)
 {
-	memcpy(dest, src, sizeof(DifxAntennaFlag));
+	*dest = *src;
+	/* memcpy(dest, src, sizeof(DifxAntennaFlag)); */
 	if(antennaIdRemap)
 	{
 		dest->antennaId = antennaIdRemap[dest->antennaId];

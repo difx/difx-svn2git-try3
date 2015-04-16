@@ -1,3 +1,33 @@
+2015-04-16  James Anderson  <anderson@gfz-potsdam>
+
+	* difxio/difx_baseline.c:
+	* difxio/difx_flag.c:
+	* difxio/difx_freq.c:
+	* difxio/difx_write_pulsar.c:
+	* difxio/difx_datastream.c:
+	* difxio/difx_write_input.c:
+	* difxio/difx_write.h:
+	* difxio/difx_config.c:
+	* difxio/difx_job.c:
+	* difxio/parsedifx.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_eop.c:
+	* difxio/difx_antenna.c:
+	* difxio/parsedifx.h:
+	* difxio/difx_rule.c:
+	* difxio/difx_poly_model.c:
+	* difxio/difx_model.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_source.c:
+	* difxio/difx_tcal.c:
+	* difxio/difx_write.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_write_im.c:
+	* difxio/difx_input.c:
+	* difxio/difx_input.h: changes
+	to incoroporate updated spacecraft handling and new delay server
+	handling
+
 2015-04-13  James Anderson  <anderson@gfz-potsdam>
 
 	* difxio/difx_write.h:

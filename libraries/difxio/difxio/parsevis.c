@@ -96,16 +96,10 @@ void deleteDifxVisRecord(DifxVisRecord *vis)
 		{
 			fclose(vis->infile);
 		}
-		if(vis->visdata)
-		{
-			free(vis->visdata);
-			vis->visdata = 0;
-		}
-		if(vis->params)
-		{
-			deleteDifxParameters(vis->params);
-			vis->params = 0;
-		}
+		free(vis->visdata);
+		vis->visdata = 0;
+		deleteDifxParameters(vis->params);
+		vis->params = 0;
 		free(vis);
 	}
 }

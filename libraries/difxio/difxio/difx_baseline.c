@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *   Copyright (C) 2008-2010, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -132,19 +132,13 @@ void deleteDifxBaselineInternals(DifxBaseline *db)
 {
 	int f;
 
-	if(db->nPolProd)
-	{
-		free(db->nPolProd);
-		db->nPolProd = 0;
-	}
+	free(db->nPolProd);
+	db->nPolProd = 0;
 	if(db->bandA)
 	{
 		for(f = 0; f < db->nFreq; f++)
 		{
-			if(db->bandA[f])
-			{
-				free(db->bandA[f]);
-			}
+			free(db->bandA[f]);
 		}
 		free(db->bandA);
 		db->bandA = 0;
@@ -153,10 +147,7 @@ void deleteDifxBaselineInternals(DifxBaseline *db)
 	{
 		for(f = 0; f < db->nFreq; f++)
 		{
-			if(db->bandB[f])
-			{
-				free(db->bandB[f]);
-			}
+			free(db->bandB[f]);
 		}
 		free(db->bandB);
 		db->bandB = 0;
@@ -247,6 +238,8 @@ void copyDifxBaseline(DifxBaseline *dest, const DifxBaseline *src,
 {
 	int f, p;
 
+	deleteDifxBaselineInternals(dest);
+	*dest = *src;
 	if(datastreamIdRemap)
 	{
 		dest->dsA   = datastreamIdRemap[src->dsA];

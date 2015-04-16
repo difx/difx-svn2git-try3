@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2008-2015 by Walter Brisken & Adam Deller               *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2008-2015 by Walter Brisken & Adam Deller			   *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -59,10 +59,10 @@ void deleteDifxScanInternals(DifxScan *ds)
 		deleteDifxPolyModelArray(ds->im, ds->nAntenna, ds->nPhaseCentres+1);
 		ds->im = 0;
 	}
-	if(ds->imLM)
+	if(ds->imLMN)
 	{
-		deleteDifxPolyModelLMExtensionArray(ds->imLM, ds->nAntenna, ds->nPhaseCentres+1);
-		ds->imLM = 0;
+		deleteDifxPolyModelLMNExtensionArray(ds->imLMN, ds->nAntenna, ds->nPhaseCentres+1);
+		ds->imLMN = 0;
 	}
 	if(ds->imXYZ)
 	{
@@ -90,23 +90,23 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 	int i, j, nModel;
 
 	fprintf(fp, "  DifxScan [%s] : %p\n", ds->identifier, ds);
-	fprintf(fp, "    Start = MJD %12.6f\n", ds->mjdStart);
-	fprintf(fp, "    End   = MJD %12.6f\n", ds->mjdEnd);
-	fprintf(fp, "    Observing mode = %s\n", ds->obsModeName);
-	fprintf(fp, "    Max NS between UV shifts = %d\n", ds->maxNSBetweenUVShifts);
-	fprintf(fp, "    Max NS between AC averages = %d\n", ds->maxNSBetweenACAvg);
-	fprintf(fp, "    Pointing centre source index = %d\n", ds->pointingCentreSrc);
-        fprintf(fp, "    Number of phase centres = %d\n", ds->nPhaseCentres);
+	fprintf(fp, "	 Start = MJD %12.6f\n", ds->mjdStart);
+	fprintf(fp, "	 End   = MJD %12.6f\n", ds->mjdEnd);
+	fprintf(fp, "	 Observing mode = %s\n", ds->obsModeName);
+	fprintf(fp, "	 Max NS between UV shifts = %d\n", ds->maxNSBetweenUVShifts);
+	fprintf(fp, "	 Max NS between AC averages = %d\n", ds->maxNSBetweenACAvg);
+	fprintf(fp, "	 Pointing centre source index = %d\n", ds->pointingCentreSrc);
+	fprintf(fp, "	 Number of phase centres = %d\n", ds->nPhaseCentres);
 	for(i = 0; i < ds->nPhaseCentres; i++) 
 	{
-	        fprintf(fp, "    Phase centre %d source index = %d\n", 
-			i, ds->phsCentreSrcs[i]);
-		fprintf(fp, "    Original job phase centre %d source index = %d\n",
-			i, ds->orgjobPhsCentreSrcs[i]);
+		fprintf(fp, "	 Phase centre %d source index = %d\n", 
+				i, ds->phsCentreSrcs[i]);
+		fprintf(fp, "	 Original job phase centre %d source index = %d\n",
+				i, ds->orgjobPhsCentreSrcs[i]);
 	}
-	fprintf(fp, "    nAntenna %d\n", ds->nAntenna);
+	fprintf(fp, "	 nAntenna %d\n", ds->nAntenna);
 
-	fprintf(fp, "    ConfigId = %d\n", ds->configId);
+	fprintf(fp, "	 ConfigId = %d\n", ds->configId);
 
 	if(ds->nPhaseCentres < 1 || ds->pointingCentreSrc == ds->phsCentreSrcs[0])
 	{
@@ -132,13 +132,13 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 				}
 				else
 				{
-					fprintf(fp, "    No polymodel[%d]\n", i);
+					fprintf(fp, "	 No polymodel[%d]\n", i);
 				}
 			}
 		}
 		else
 		{
-			fprintf(fp, "    No polynomial model available\n");
+			fprintf(fp, "	 No polynomial model available\n");
 		}
 	}
 }
@@ -151,9 +151,9 @@ void printDifxScan(const DifxScan *ds)
 void fprintDifxScanSummary(FILE *fp, const DifxScan *ds)
 {
 	fprintf(fp, "  Start=%12.6f end=%12.6f identifier=%s\n", 
-		ds->mjdStart, ds->mjdEnd, ds->identifier);
-	fprintf(fp, "    PointingSourceIndex = %d\n", ds->pointingCentreSrc);
-	fprintf(fp, "    ConfigId = %d\n", ds->configId);
+			ds->mjdStart, ds->mjdEnd, ds->identifier);
+	fprintf(fp, "	 PointingSourceIndex = %d\n", ds->pointingCentreSrc);
+	fprintf(fp, "	 ConfigId = %d\n", ds->configId);
 }
 
 void printDifxScanSummary(const DifxScan *ds)
@@ -162,20 +162,25 @@ void printDifxScanSummary(const DifxScan *ds)
 }
 
 void copyDifxScan(DifxScan *dest, const DifxScan *src,
-	const int *sourceIdRemap, const int *jobIdRemap, 
-	const int *configIdRemap, const int *antennaIdRemap)
+				  const int *sourceIdRemap, const int *jobIdRemap, 
+				  const int *configIdRemap, const int *antennaIdRemap)
 {
 	int i, j, srcAntenna, destAntenna;
 
-	dest->mjdStart     = src->mjdStart;
-	dest->mjdEnd       = src->mjdEnd;
-	dest->startSeconds = src->startSeconds;
-	dest->durSeconds   = src->durSeconds;
-	dest->maxNSBetweenUVShifts = src->maxNSBetweenUVShifts;
-	dest->maxNSBetweenACAvg = src->maxNSBetweenACAvg;
-	snprintf(dest->identifier, DIFXIO_NAME_LENGTH, "%s", src->identifier);
-	snprintf(dest->obsModeName, DIFXIO_NAME_LENGTH, "%s", src->obsModeName);
-	dest->nPhaseCentres = src->nPhaseCentres;
+	deleteDifxPolyModelArray(dest->im, dest->nAntenna, dest->nPhaseCentres+1);
+	deleteDifxPolyModelLMNExtensionArray(dest->imLMN, dest->nAntenna, dest->nPhaseCentres+1);
+	deleteDifxPolyModelXYZExtensionArray(dest->imXYZ, dest->nAntenna, dest->nPhaseCentres+1);
+	*dest = *src;
+
+	/* dest->mjdStart	   = src->mjdStart; */
+	/* dest->mjdEnd	   = src->mjdEnd; */
+	/* dest->startSeconds = src->startSeconds; */
+	/* dest->durSeconds   = src->durSeconds; */
+	/* dest->maxNSBetweenUVShifts = src->maxNSBetweenUVShifts; */
+	/* dest->maxNSBetweenACAvg = src->maxNSBetweenACAvg; */
+	/* snprintf(dest->identifier, DIFXIO_NAME_LENGTH, "%s", src->identifier); */
+	/* snprintf(dest->obsModeName, DIFXIO_NAME_LENGTH, "%s", src->obsModeName); */
+	/* dest->nPhaseCentres = src->nPhaseCentres; */
 	if(sourceIdRemap)
 	{
 //		printf("About to do the source re-mapping\n");
@@ -214,12 +219,12 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 	{
 		dest->configId = src->configId;
 	}
-	dest->startSeconds = src->startSeconds;
-	dest->durSeconds   = src->durSeconds;
-	dest->nPoly        = src->nPoly;
+	/* dest->startSeconds = src->startSeconds; */
+	/* dest->durSeconds   = src->durSeconds; */
+	/* dest->nPoly		   = src->nPoly; */
 
 	/* figure out how many antennas needed in this scan */
-	dest->nAntenna = src->nAntenna;
+	/* dest->nAntenna = src->nAntenna; */
 	if(antennaIdRemap)
 	{
 		for(i = 0; i < src->nAntenna; i++)
@@ -254,7 +259,7 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 			{
 				fprintf(stderr, "Error allocating space for IM table! Aborting");
 
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 			for(j = 0; j < src->nPhaseCentres+1; j++)
 			{
@@ -263,7 +268,7 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 				{
 					fprintf(stderr, "Error allocating space for IM table! Aborting");
 
-					exit(1);
+					exit(EXIT_FAILURE);
 				}
 			}
 		}
@@ -273,12 +278,12 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 		dest->im = 0;
 	}
 
-	if(src->imLM)
+	if(src->imLMN)
 	{
-		dest->imLM = (DifxPolyModelLMExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelLMExtension **));
+		dest->imLMN = (DifxPolyModelLMNExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelLMNExtension **));
 		for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
 		{
-			if(src->imLM[srcAntenna] == 0)
+			if(src->imLMN[srcAntenna] == 0)
 			{
 				continue; 
 			}
@@ -290,28 +295,28 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 			{
 				destAntenna = srcAntenna;
 			}
-			dest->imLM[destAntenna] = (DifxPolyModelLMExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelLMExtension *));
-			if(dest->imLM[destAntenna] == 0)
+			dest->imLMN[destAntenna] = (DifxPolyModelLMNExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelLMNExtension *));
+			if(dest->imLMN[destAntenna] == 0)
 			{
 				fprintf(stderr, "Error allocating space for LM Extension table! Aborting");
 
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 			for(j = 0; j < src->nPhaseCentres+1; j++)
 			{
-				dest->imLM[destAntenna][j] = dupDifxPolyModelLMExtensionColumn(src->imLM[srcAntenna][j], dest->nPoly);
-				if(dest->imLM[destAntenna][j] == 0)
+				dest->imLMN[destAntenna][j] = dupDifxPolyModelLMNExtensionColumn(src->imLMN[srcAntenna][j], dest->nPoly);
+				if(dest->imLMN[destAntenna][j] == 0)
 				{
 					fprintf(stderr, "Error allocating space for LM Extension table! Aborting");
 
-					exit(1);
+					exit(EXIT_FAILURE);
 				}
 			}
 		}
 	}
 	else
 	{
-		dest->imLM = 0;
+		dest->imLMN = 0;
 	}
 
 	if(src->imXYZ)
@@ -336,7 +341,7 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 			{
 				fprintf(stderr, "Error allocating space for XYZ Extension table! Aborting");
 
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 			for(j = 0; j < src->nPhaseCentres+1; j++)
 			{
@@ -345,7 +350,7 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 				{
 					fprintf(stderr, "Error allocating space for XYZ Extension table! Aborting");
 
-					exit(1);
+					exit(EXIT_FAILURE);
 				}
 			}
 		}
@@ -360,9 +365,9 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
  * more than two DifxInputs in any order.
  */
 DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
-	const DifxScan *ds2, int nds2, const int *sourceIdRemap, 
-	const int *jobIdRemap, const int *configIdRemap, 
-	const int *antennaIdRemap, int *nds)
+							  const DifxScan *ds2, int nds2, const int *sourceIdRemap, 
+							  const int *jobIdRemap, const int *configIdRemap, 
+							  const int *antennaIdRemap, int *nds)
 {
 	DifxScan *ds;
 	int i=0, i1=0, i2=0, src;
@@ -418,7 +423,7 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 			if(ds2[i2].configId >= 0)
 			{
 				copyDifxScan(ds + i, ds2 + i2, sourceIdRemap,
-					jobIdRemap, configIdRemap, antennaIdRemap);
+							 jobIdRemap, configIdRemap, antennaIdRemap);
 				i++;
 			}
 			i2++;
@@ -428,7 +433,7 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 	*nds = i;
 
 /*
-	printf("After merging two inputs, which had nScan %d and %d, the result has nScan %d\n", nds1, nds2, *nds);
+  printf("After merging two inputs, which had nScan %d and %d, the result has nScan %d\n", nds1, nds2, *nds);
 */
 
 	return ds;
@@ -465,17 +470,17 @@ int getDifxScanIMIndex(const DifxScan *ds, double mjd, double iat, double *dt)
 	{
 		return -1;
 	}
-
+#warning "Optimize this in the future to use a starting index guess"
 	for(i = 0; i < ds->nPoly; i++)
 	{
 		dp = im[0] + i;
-		m1 = (dp->mjd - mjd) + dp->sec/86400.0;
-		m2 = m1 + dp->validDuration/86400.0;
+		m1 = (dp->mjd - mjd) + dp->sec/SEC_DAY_DBL;
+		m2 = m1 + dp->validDuration/SEC_DAY_DBL;
 		if(m1 <= iat && iat <= m2)
 		{
 			if(dt)
 			{
-				*dt = (iat - m1)*86400.0;
+				*dt = (iat - m1)*SEC_DAY_DBL;
 			}
 			return i;
 		}
@@ -492,10 +497,10 @@ int writeDifxScan(FILE *out, const DifxScan *ds, int scanId, const DifxConfig *d
 
 	ds += scanId;
 
-	writeDifxLine1(out, "SCAN %d IDENTIFIER", scanId, ds->identifier);
+	writeDifxLine1(out,    "SCAN %d IDENTIFIER", scanId, ds->identifier);
 	writeDifxLineInt1(out, "SCAN %d START (S)", scanId, ds->startSeconds);
 	writeDifxLineInt1(out, "SCAN %d DUR (S)", scanId, ds->durSeconds);
-	writeDifxLine1(out, "SCAN %d OBS MODE NAME", scanId, ds->obsModeName);
+	writeDifxLine1(out,    "SCAN %d OBS MODE NAME", scanId, ds->obsModeName);
 	writeDifxLineInt1(out, "SCAN %d UVSHIFT INTERVAL (NS)", scanId, ds->maxNSBetweenUVShifts);
 	writeDifxLineInt1(out, "SCAN %d AC AVG INTERVAL (NS)", scanId, ds->maxNSBetweenACAvg);
 	writeDifxLineInt1(out, "SCAN %d POINTING SRC", scanId, ds->pointingCentreSrc);

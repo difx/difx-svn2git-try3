@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012, 2014, 2015 by Walter Brisken                             *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2008-2012, 2014, 2015 by Walter Brisken							   *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -30,34 +30,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "difxio/difx_write.h"
-
-const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
-{
-	"CALCServer",
-	"CALC_9_1_RA_Server",
-	"unknown"
-};
-const unsigned long delayServerTypeIds[] =
-{
-	0x20000340,   /* CALCServer                  */
-	0x20000341,   /* CALC_9_1_RA_Server          */
-	0
-};
-
-enum DelayServerType stringToDelayServerType(const char *str)
-{
-	enum DelayServerType ds;
-
-	for(ds = 0; ds < NumDelayServerTypes; ++ds)
-	{
-		if(strcasecmp(str, delayServerTypeNames[ds]) == 0)
-		{
-			break;
-		}
-	}
-
-	return ds;
-}
 
 int writeDifxCalc(const DifxInput *D)
 {
@@ -135,26 +107,34 @@ int writeDifxCalc(const DifxInput *D)
 		writeDifxLineDouble(out, "START MJD", "%13.7f", roundSeconds(D->mjdStart));
 		writeDifxDateLines(out, roundSeconds(D->mjdStart));
 	}
-	writeDifxLineInt(out, "SPECTRAL AVG", D->specAvg);
-	writeDifxLine(out, "TAPER FUNCTION", D->job->taperFunction);
-	writeDifxLineInt(out, "DELAY POLY ORDER", D->job->polyOrder);
-	writeDifxLineInt(out, "DELAY POLY INTERVAL", D->job->polyInterval);
+	writeDifxLineInt(out,    "SPECTRAL AVG", D->specAvg);
+	writeDifxLine(out,       "TAPER FUNCTION", D->job->taperFunction);
+	writeDifxLineInt(out,    "DELAY POLY ORDER", D->job->polyOrder);
+	writeDifxLineInt(out,    "DELAY POLY INTERVAL", D->job->polyInterval);
+	writeDifxLineDouble(out, "DELAY MODEL PREC", "%10.2e",  D->job->delayModelPrecision);
 	if(D->job->delayServerHost != 0)
 	{
-		writeDifxLine(out, "DELAY SERVER HOST", D->job->delayServerHost);		
+		writeDifxLine(out,   "DELAY SERVER HOST", D->job->delayServerHost);		
 	}
-	writeDifxLine(out, "DELAY SERVER TYPE", delayServerTypeNames[D->job->delayServerType]);
-	writeDifxLineULong(out, "DELAY VERSION", D->job->delayVersion);
-	writeDifxLineULong(out, "DELAY PROGRAM", D->job->delayProgram);
-	writeDifxLineULong(out, "DELAY HANDLER", D->job->delayHandler);
-	writeDifxLineInt(out, "DELAY POLY INTERVAL", D->job->polyInterval);
+	writeDifxLine(out,       "DELAY SERVER TYPE", delayServerTypeNames[D->job->delayServerType]);
+	writeDifxLineULong(out,  "DELAY VERSION", D->job->delayVersion);
+	writeDifxLineULong(out,  "DELAY PROGRAM", D->job->delayProgram);
+	writeDifxLineULong(out,  "DELAY HANDLER", D->job->delayHandler);
+	writeDifxLine(out,       "JOB PERFORM UVW", performDirectionDerivativeTypeNames[D->job->perform_uvw_deriv]);
+	writeDifxLine(out,       "JOB PERFORM LMN", performDirectionDerivativeTypeNames[D->job->perform_lmn_deriv]);
+	writeDifxLine(out,       "JOB PERFORM XYZ", performDirectionDerivativeTypeNames[D->job->perform_xyz_deriv]);
+	writeDifxLineDouble(out, "JOB DELTA LMN", "%24.16e",  D->job->delta_lmn);
+	writeDifxLineDouble(out, "JOB DELTA XYZ", "%24.16e",  D->job->delta_xyz);
+	writeDifxLine(out,       "JOB ABER CORR",  aberCorrStrings[D->job->aberCorr]);
+	writeDifxLineBoolean(out,"JOB CALC_OWN_RETARDED_POSITION", D->job->calculate_own_retarded_position);
+	writeDifxLineInt(out,    "DELAY POLY INTERVAL", D->job->polyInterval);
 	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1, 1);
-        writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 1);
+	writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 1);
 	writeDifxScanArray(out, D->nScan, D->scan, D->config);
 	writeDifxEOPArray(out, D->nEOP, D->eop);
 	writeDifxSpacecraftArray(out, D->nSpacecraft, D->spacecraft);
-	writeDifxLine(out, "IM FILENAME", D->job->imFile);
-	writeDifxLine(out, "FLAG FILENAME", D->job->flagFile);
+	writeDifxLine(out,       "IM FILENAME", D->job->imFile);
+	writeDifxLine(out,       "FLAG FILENAME", D->job->flagFile);
 
 	fclose(out);
 

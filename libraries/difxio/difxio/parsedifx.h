@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2012, 2014 by Walter Brisken                             *
+ *   Copyright (C) 2007-2012, 2014, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -36,7 +36,7 @@
  */
 #define	MAX_DIFX_INPUT_LINE_LENGTH	8192
 
-#define MAX_DIFX_KEY_LEN		40
+#define MAX_DIFX_KEY_LEN		64
 
 #ifdef __cplusplus
 extern "C" {

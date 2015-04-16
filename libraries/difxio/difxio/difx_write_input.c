@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2008-2014 by Walter Brisken & Adam Deller               *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2008-2015 by Walter Brisken & Adam Deller			   *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -40,44 +40,44 @@ static int writeCommonSettings(FILE *out, const DifxInput *D)
 	fprintf(out, "# COMMON SETTINGS ##!\n");
 	writeDifxLine(out, "CALC FILENAME", D->job->calcFile);
 	writeDifxLine(out, "CORE CONF FILENAME", D->job->threadsFile);
-	dsecs = (D->mjdStop - D->mjdStart)*86400.0;
+	dsecs = (D->mjdStop - D->mjdStart)*SEC_DAY_DBL;
 	if (dsecs<1)  // Very short job
 	{
-	       writeDifxLineDouble(out, "EXECUTE TIME (SEC)", "%.3f", dsecs);
+		writeDifxLineDouble(out, "EXECUTE TIME (SEC)", "%.3f", dsecs);
 
 	} 
 	else 
 	{
-	       if (D->fracSecondStartTime > 0)
-	       {
-		   secs = (D->mjdStop - D->mjdStart)*86400.0 + 0.5;
-	       }
-	       else
-	       {
-		    secs = (roundSeconds(D->mjdStop) - roundSeconds(D->mjdStart))*86400.0 + 0.0001;
-	       }
-	       writeDifxLineInt(out, "EXECUTE TIME (SEC)", secs);
+		if (D->fracSecondStartTime > 0)
+		{
+			secs = (D->mjdStop - D->mjdStart)*SEC_DAY_DBL + 0.5;
+		}
+		else
+		{
+			secs = (roundSeconds(D->mjdStop) - roundSeconds(D->mjdStart))*SEC_DAY_DBL + 0.0001;
+		}
+		writeDifxLineInt(out, "EXECUTE TIME (SEC)", secs);
 	}
 
 	writeDifxLineInt(out, "START MJD", (int)(D->mjdStart));
 	if(D->fracSecondStartTime > 0)
 	{
-		dsecs = (D->mjdStart - (int)(D->mjdStart))*86400.0;
+		dsecs = (D->mjdStart - (int)(D->mjdStart))*SEC_DAY_DBL;
 		writeDifxLineDouble(out, "START SECONDS", "%8.6f", dsecs);
 	}
 	else
 	{
 		//round to nearest second - consistent with what is done in write_calc
-		secs = (D->mjdStart - (int)(D->mjdStart))*86400.0 + 0.5;
+		secs = (D->mjdStart - (int)(D->mjdStart))*SEC_DAY_DBL + 0.5;
 		writeDifxLineInt(out, "START SECONDS", secs);
 	}
 	writeDifxLineInt(out, "ACTIVE DATASTREAMS", D->nDatastream);
 	writeDifxLineInt(out, "ACTIVE BASELINES", D->nBaseline);
 	writeDifxLineInt(out, "VIS BUFFER LENGTH", D->visBufferLength);
 	if (D->outputFormat==OutputFormatDIFX)
-	  writeDifxLine(out, "OUTPUT FORMAT", "SWIN");
+		writeDifxLine(out, "OUTPUT FORMAT", "SWIN");
 	else
-	  writeDifxLine(out, "OUTPUT FORMAT", "ASCII");
+		writeDifxLine(out, "OUTPUT FORMAT", "ASCII");
 	writeDifxLine(out, "OUTPUT FILENAME", D->job->outputFile);
 	fprintf(out, "\n");
 
@@ -148,43 +148,43 @@ static int writeBaselineTable(FILE *out, const DifxInput *D)
 
 static int writeNetworkTable(FILE *out, const DifxInput *D)
 {
-        const DifxDatastream *ds;
-        int i;
+	const DifxDatastream *ds;
+	int i;
 
-        /* first determine if we need such a table */
-        for(i = 0; i < D->nDatastream; i++)
-        {
-                ds = D->datastream + i;
+	/* first determine if we need such a table */
+	for(i = 0; i < D->nDatastream; i++)
+	{
+		ds = D->datastream + i;
 		if(ds->dataSource == DataSourceNetwork)
 		{
 			break;
 		}
-        }
-        if(i == D->nDatastream)
-        {
-                /* no network table needed */
-                return 0;
-        }
+	}
+	if(i == D->nDatastream)
+	{
+		/* no network table needed */
+		return 0;
+	}
 
-        fprintf(out, "# NETWORK TABLE ####!\n");
+	fprintf(out, "# NETWORK TABLE ####!\n");
 
-        for(i = 0; i < D->nDatastream; i++)
-        {
-                ds = D->datastream + i;
+	for(i = 0; i < D->nDatastream; i++)
+	{
+		ds = D->datastream + i;
 		if(ds->networkPort[0])
 		{
-                	writeDifxLine1(out, "PORT NUM %d", i, ds->networkPort);
+			writeDifxLine1(out, "PORT NUM %d", i, ds->networkPort);
 		}
 		else
 		{
 			writeDifxLineInt1(out, "PORT NUM %d", i, 0);
 		}
-                writeDifxLineInt1(out, "TCP WINDOW (KB) %d", i, ds->windowSize);
-        }
+		writeDifxLineInt1(out, "TCP WINDOW (KB) %d", i, ds->windowSize);
+	}
 
-        fprintf(out, "\n");
+	fprintf(out, "\n");
 
-        return 0;
+	return 0;
 }
 
 static int writeDataTable(FILE *out, const DifxInput *D)
@@ -248,7 +248,7 @@ int writeDifxInput(const DifxInput *D)
 	if(D->nJob != 1)
 	{
 		fprintf(stderr, "writeDifxInput: nJob = %d (not 1)\n", 
-			D->nJob);
+				D->nJob);
 		return -1;
 	}
 

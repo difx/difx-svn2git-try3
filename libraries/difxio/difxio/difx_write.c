@@ -34,9 +34,9 @@ double truncSeconds(double mjd)
 	int intmjd, intsec;
 
 	intmjd = mjd;
-	intsec = (mjd - intmjd)*86400.0;
+	intsec = (mjd - intmjd)*SEC_DAY_DBL;
 
-	return intmjd + intsec/86400.0;
+	return intmjd + intsec/SEC_DAY_DBL;
 }
 
 double roundSeconds(double mjd)
@@ -44,9 +44,9 @@ double roundSeconds(double mjd)
 	int intmjd, intsec;
 
 	intmjd = mjd;
-	intsec = ((mjd - intmjd)*86400.0 + 0.5);
+	intsec = ((mjd - intmjd)*SEC_DAY_DBL + 0.5);
 
-	return intmjd + intsec/86400.0;
+	return intmjd + intsec/SEC_DAY_DBL;
 }
 
 #warning "FIXME: make use of libc functions here"
@@ -189,6 +189,22 @@ int writeDifxLineBoolean(FILE *out, const char *key, int value)
 	}
 }
 
+int writeDifxLineBoolean1(FILE *out, const char *key, int i1, int value)
+{
+	char k[MAX_DIFX_KEY_LEN+1];
+
+	snprintf(k, MAX_DIFX_KEY_LEN+1, key, i1);
+	
+	if(value)
+	{
+		return writeDifxLine(out, k, "TRUE");
+	}
+	else
+	{
+		return writeDifxLine(out, k, "FALSE");
+	}
+}
+
 int writeDifxLineInt(FILE *out, const char *key, int value)
 {
 	const int numLength = 32;
@@ -230,7 +246,7 @@ int writeDifxLineULong(FILE *out, const char *key, unsigned long value)
 	const int numLength = 32;
 	char v[numLength];
 
-	snprintf(v, numLength, "0xlX%", value);
+	snprintf(v, numLength, "0x%lX", value);
 
 	return writeDifxLine(out, key, v);
 }
@@ -243,11 +259,11 @@ int writeDifxLineDouble(FILE *out, const char *key, const char *format,
 
 	if(!format)
 	{
-		format = "%f";
+		format = "%e";
 	}
 	if(!format[0])
 	{
-		format = "%f";
+		format = "%e";
 	}
 
 	snprintf(v, numLength, format, value);
@@ -287,11 +303,11 @@ int writeDifxLineDouble2(FILE *out, const char *key, int i1, int i2,
 
 	if(!format)
 	{
-		format = "%f";
+		format = "%e";
 	}
 	if(!format[0])
 	{
-		format = "%f";
+		format = "%e";
 	}
 
 	snprintf(v, numLength, format, value);
@@ -309,7 +325,7 @@ int writeDifxLineArray(FILE *out, const char *key, const double *array, int n)
 
 	for(i = 0; i < n; ++i)
 	{
-		fprintf(out, "%22.15e%c", array[i], (i < n-1) ? '\t' : '\n');
+		fprintf(out, "%24.16e%c", array[i], (i < n-1) ? '\t' : '\n');
 	}
 
 	return 0;
