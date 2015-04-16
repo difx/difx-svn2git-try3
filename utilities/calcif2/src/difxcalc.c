@@ -294,7 +294,7 @@ static int convert_RA_Dec_PM_to_vector(const double RA, const double Dec, const 
     }
     else
     {
-        r = ASTR_UNIT_IAU_2012 / tan(parallax /(3600.0*180.0) * DIFX_PI);
+        r = ASTR_UNIT_IAU_2012 / (parallax /(3600.0*180.0) * DIFX_PI);
     }
     if((muRA == 0.0) && (muDec == 0.0) && (radial_vel == 0.0))
     {
@@ -346,7 +346,7 @@ static int convert_vector_to_RA_Dec_PM(const double* const restrict pos, const d
     }
     else
     {
-        *parallax = atan(r/ASTR_UNIT_IAU_2012) * (180.0*3600.0) / DIFX_PI;
+        *parallax = (ASTR_UNIT_IAU_2012/r) * (180.0*3600.0) / DIFX_PI;
     }
     /* convert proper motions from rad/s to arcsec/yr */
     *muRA  = pmRA  * (JUL_YEAR*SEC_DAY_DBL) * (180.0*3600.0) / DIFX_PI;
@@ -863,7 +863,7 @@ static int calcSpacecraftSourcePosition(const DifxInput* const D, DifxSpacecraft
     {
         int mjd = request->date;
         double frac = request->time;
-        if((D->calculate_own_retarded_position))
+        if((D->job->calculate_own_retarded_position))
         {
             int offset;
             frac -= delay_to_station_0 / SEC_DAY_DBL;
@@ -877,7 +877,7 @@ static int calcSpacecraftSourcePosition(const DifxInput* const D, DifxSpacecraft
     {
         int mjd = source->sc_epoch;
         double frac = source->sc_epoch-mjd;
-        if((D->calculate_own_retarded_position))
+        if((D->job->calculate_own_retarded_position))
         {
             int offset;
             frac -= delay_to_station_0 / SEC_DAY_DBL;
@@ -1027,7 +1027,7 @@ static int calcSpacecraftAntennaPosition(const DifxInput* const D, struct getDIF
     }
     mjd = request->date;
     frac = request->time;
-    if((D->calculate_own_retarded_position))
+    if((D->job->calculate_own_retarded_position))
     {
         int offset;
         frac -= baseline_delay / SEC_DAY_DBL;
@@ -1201,15 +1201,15 @@ static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct get
             printf("CALCIF2_REQUEST: request arg: source=%02u parallax=     %20.3f\n", s, request->source.source_val[s].parallax);
             printf("CALCIF2_REQUEST: request arg: source=%02u coord_frame= '%s'\n", s, request->source.source_val[s].coord_frame);
             v = request->source.source_val[s].source_pos;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_pos= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_pos= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = request->source.source_val[s].source_vel;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_vel= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_vel= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = request->source.source_val[s].source_acc;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_acc= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_acc= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = request->source.source_val[s].source_pointing_dir;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_dir= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_dir= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = request->source.source_val[s].source_pointing_reference_dir;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_reference_dir= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_reference_dir= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
         }
         printf("CALCIF2_REQUEST: EOP information\n");
         printf("CALCIF2_REQUEST: request arg: Use_Server_EOP_Table=%d Num_EOPs=%d\n", request->Use_Server_EOP_Table, request->Num_EOPs);
@@ -1297,15 +1297,15 @@ static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct get
         printf("CALCIF2_RESULTS:request res: delay_server_error=%d server_error=%d model_error=%d\n", results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
         printf("CALCIF2_RESULTS:request res: request_id=%ld delay_server=0x%lX server_struct_setup_code=0x%lX\n", results->getDIFX_DELAY_SERVER_1_res_u.response.request_id, results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server, results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
         printf("CALCIF2_RESULTS:request res: server_version=0x%lX\n", results->getDIFX_DELAY_SERVER_1_res_u.response.server_version);
-        printf("CALCIF2_RESULTS:request res: date=%ld time=%.15f\n", results->getDIFX_DELAY_SERVER_1_res_u.response.date, results->getDIFX_DELAY_SERVER_1_res_u.response.time);
+        printf("CALCIF2_RESULTS:request res: date=%ld time=%.16f\n", results->getDIFX_DELAY_SERVER_1_res_u.response.date, results->getDIFX_DELAY_SERVER_1_res_u.response.time);
         for(st=0; st < results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations; ++st)
         {
             for(so=0; so < results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources; ++so)
             {
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u delay=%24.15E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].delay);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u dry_atmos=%24.15E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].dry_atmos);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u wet_atmos=%24.15E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].wet_atmos);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u iono_atmos=%24.15E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].iono_atmos);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u delay=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].delay);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u dry_atmos=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].dry_atmos);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u wet_atmos=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].wet_atmos);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u iono_atmos=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].iono_atmos);
                 printf("CALCIF2_RESULTS:request res: station=%02u source=%02u az_corr=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_corr);
                 printf("CALCIF2_RESULTS:request res: station=%02u source=%02u el_corr=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_corr);
                 printf("CALCIF2_RESULTS:request res: station=%02u source=%02u az_geom=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_geom);
@@ -1317,10 +1317,10 @@ static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct get
                 printf("CALCIF2_RESULTS:request res: station=%02u source=%02u station_antenna_phi=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].station_antenna_phi);
                 printf("CALCIF2_RESULTS:request res: station=%02u source=%02u source_antenna_theta=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_theta);
                 printf("CALCIF2_RESULTS:request res: station=%02u source=%02u source_antenna_phi=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_phi);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u UVW = [%24.15E, %24.15E, %24.15E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.z);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineP2000 = [%24.15E, %24.15E, %24.15E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.z);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineV2000 = [%24.15E, %24.15E, %24.15E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.z);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineA2000 = [%24.15E, %24.15E, %24.15E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.z);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u UVW = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.z);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.z);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineV2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.z);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineA2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.z);
             }
         }
     } /* if verbose >= 3 */
@@ -1411,12 +1411,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelLMN->dDelay_dl[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lm]) * 0.5;
             modelLMN->dDelay_dm[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mm]) * 0.5;
             modelLMN->dDelay_dn[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Np] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Nm]) * 0.5 / DIFXIO_DELTA_LMN_N_FACTOR;
-            modelLMN->d2Delay_dldl[index] = -999.0;
-            modelLMN->d2Delay_dldm[index] = -999.0;
-            modelLMN->d2Delay_dldn[index] = -999.0;
-            modelLMN->d2Delay_dmdm[index] = -999.0;
-            modelLMN->d2Delay_dmdn[index] = -999.0;
-            modelLMN->d2Delay_dndn[index] = -999.0;
+            modelLMN->d2Delay_dldl[index] = NAN;
+            modelLMN->d2Delay_dldm[index] = NAN;
+            modelLMN->d2Delay_dldn[index] = NAN;
+            modelLMN->d2Delay_dmdm[index] = NAN;
+            modelLMN->d2Delay_dmdn[index] = NAN;
+            modelLMN->d2Delay_dndn[index] = NAN;
         }
         break;
     case PerformDirectionDerivativeFirstDerivative:
@@ -1424,12 +1424,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelLMN->dDelay_dl[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelLMN->dDelay_dm[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelLMN->dDelay_dn[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Np] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]) / DIFXIO_DELTA_LMN_N_FACTOR;
-            modelLMN->d2Delay_dldl[index] = -999.0;
-            modelLMN->d2Delay_dldm[index] = -999.0;
-            modelLMN->d2Delay_dldn[index] = -999.0;
-            modelLMN->d2Delay_dmdm[index] = -999.0;
-            modelLMN->d2Delay_dmdn[index] = -999.0;
-            modelLMN->d2Delay_dndn[index] = -999.0;
+            modelLMN->d2Delay_dldl[index] = NAN;
+            modelLMN->d2Delay_dldm[index] = NAN;
+            modelLMN->d2Delay_dldn[index] = NAN;
+            modelLMN->d2Delay_dmdm[index] = NAN;
+            modelLMN->d2Delay_dmdn[index] = NAN;
+            modelLMN->d2Delay_dndn[index] = NAN;
         }
         break;
     default:;
@@ -1468,12 +1468,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelXYZ->dDelay_dX[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Xp] - dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Xm]) * 0.5;
             modelXYZ->dDelay_dY[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Yp] - dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Ym]) * 0.5;
             modelXYZ->dDelay_dZ[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Zp] - dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Zm]) * 0.5;
-            modelXYZ->d2Delay_dXdX[index] = -999.0;
-            modelXYZ->d2Delay_dXdY[index] = -999.0;
-            modelXYZ->d2Delay_dXdZ[index] = -999.0;
-            modelXYZ->d2Delay_dYdY[index] = -999.0;
-            modelXYZ->d2Delay_dYdZ[index] = -999.0;
-            modelXYZ->d2Delay_dZdZ[index] = -999.0;
+            modelXYZ->d2Delay_dXdX[index] = NAN;
+            modelXYZ->d2Delay_dXdY[index] = NAN;
+            modelXYZ->d2Delay_dXdZ[index] = NAN;
+            modelXYZ->d2Delay_dYdY[index] = NAN;
+            modelXYZ->d2Delay_dYdZ[index] = NAN;
+            modelXYZ->d2Delay_dZdZ[index] = NAN;
         }
         break;
     case PerformDirectionDerivativeFirstDerivative:
@@ -1481,12 +1481,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelXYZ->dDelay_dX[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Xp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelXYZ->dDelay_dY[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Yp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelXYZ->dDelay_dZ[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Zp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
-            modelXYZ->d2Delay_dXdX[index] = -999.0;
-            modelXYZ->d2Delay_dXdY[index] = -999.0;
-            modelXYZ->d2Delay_dXdZ[index] = -999.0;
-            modelXYZ->d2Delay_dYdY[index] = -999.0;
-            modelXYZ->d2Delay_dYdZ[index] = -999.0;
-            modelXYZ->d2Delay_dZdZ[index] = -999.0;
+            modelXYZ->d2Delay_dXdX[index] = NAN;
+            modelXYZ->d2Delay_dXdY[index] = NAN;
+            modelXYZ->d2Delay_dXdZ[index] = NAN;
+            modelXYZ->d2Delay_dYdY[index] = NAN;
+            modelXYZ->d2Delay_dYdZ[index] = NAN;
+            modelXYZ->d2Delay_dZdZ[index] = NAN;
         }
         break;
     default:;
@@ -2790,7 +2790,7 @@ static int adjustSingleSpacecraftAntennaCalcResults(const DifxScan* const scan, 
 
     if(sc->spacecraft_time_type == SpacecraftTimeLocal)
     {
-        if(sc->GS_recording_delay > -DBL_MAX)
+        if(!isnan(sc->GS_recording_delay))
         {
             /* do nothing */
         }
@@ -2807,7 +2807,7 @@ static int adjustSingleSpacecraftAntennaCalcResults(const DifxScan* const scan, 
     }
     else if(sc->spacecraft_time_type == SpacecraftTimeGroundReception)
     {
-        if(sc->GS_recording_delay > -DBL_MAX)
+        if(!isnan(sc->GS_recording_delay))
         {
             /* constant delay offset already calculated, so use it */
             if(verbose >= 3)
@@ -2843,7 +2843,7 @@ static int adjustSingleSpacecraftAntennaCalcResults(const DifxScan* const scan, 
         /* How do I deal with the spacecraft clock running off of the ground
            maser, correcting for all special and general relativistic effects
            for clock transfer? */
-        if(sc->GS_transmission_delay > -DBL_MAX)
+        if(!isnan(sc->GS_transmission_delay))
         {
             sc->GS_recording_delay = 0.0;
             sc->GS_transmission_delay_sync = 0.0;
@@ -2860,7 +2860,7 @@ static int adjustSingleSpacecraftAntennaCalcResults(const DifxScan* const scan, 
     }
     else if(sc->spacecraft_time_type == SpacecraftTimeGroundClockReception)
     {
-        if(sc->GS_recording_delay > -DBL_MAX)
+        if(!isnan(sc->GS_recording_delay))
         {
             sc->GS_transmission_delay = 0.0;
             sc->GS_transmission_delay_sync = 0.0;
@@ -4225,7 +4225,7 @@ static int scanCalcGetDelays(const DifxScan* const scan, const int haveSpacecraf
                 }
                 needToFreeResultsCall = 1;
                 scanCalcSourcePropDelayFill(scan, D, response, verbose);
-                if(((haveSpacecraftSource)) && ((D->calculate_own_retarded_position)))
+                if(((haveSpacecraftSource)) && ((D->job->calculate_own_retarded_position)))
                 {
                     scanCalcSourceLastDelaysInitialize(response, last_delay, verbose);
                     max_error = DBL_MAX;
