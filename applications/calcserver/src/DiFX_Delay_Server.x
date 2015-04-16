@@ -520,8 +520,8 @@ struct DIFX_DELAY_SERVER_1_RESULTS {
                              */
     double dry_atmos;       /* dry atmosphere delay in seconds */
     double wet_atmos;       /* wet atmosphere delay in seconds */
-    double iono_atmos;      /* ionospheric delay, in seconds, at the
-                               input sky_frequency */
+    double iono_atmos;      /* ionospheric delay, in seconds, at a
+                               frequency of 1 GHz */
     double az_corr;         /* azimuth in radians from North through East
                                corrected for refraction
                              */

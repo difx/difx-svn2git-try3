@@ -786,15 +786,15 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
             fprintf(flog, "request arg: source=%02u parallax=     %20.3f\n", s, argument.source.source_val[s].parallax);
             fprintf(flog, "request arg: source=%02u coord_frame= '%s'\n", s, argument.source.source_val[s].coord_frame);
             v = argument.source.source_val[s].source_pos;
-            fprintf(flog, "request arg: source=%02u source_pos= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            fprintf(flog, "request arg: source=%02u source_pos= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = argument.source.source_val[s].source_vel;
-            fprintf(flog, "request arg: source=%02u source_vel= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            fprintf(flog, "request arg: source=%02u source_vel= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = argument.source.source_val[s].source_acc;
-            fprintf(flog, "request arg: source=%02u source_acc= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            fprintf(flog, "request arg: source=%02u source_acc= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = argument.source.source_val[s].source_pointing_dir;
-            fprintf(flog, "request arg: source=%02u source_pointing_dir= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            fprintf(flog, "request arg: source=%02u source_pointing_dir= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
             v = argument.source.source_val[s].source_pointing_reference_dir;
-            fprintf(flog, "request arg: source=%02u source_pointing_reference_dir= [%24.15E, %24.15E, %24.15E]\n", s, v.x, v.y, v.z);
+            fprintf(flog, "request arg: source=%02u source_pointing_reference_dir= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
         }
         fprintf(flog, "EOP information\n");
         fprintf(flog, "request arg: Use_Server_EOP_Table=%d Num_EOPs=%d\n", argument.Use_Server_EOP_Table, argument.Num_EOPs);
@@ -862,15 +862,15 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
         fprintf(flog, "request res: delay_server_error=%d server_error=%d model_error=%d\n", result.getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, result.getDIFX_DELAY_SERVER_1_res_u.response.server_error, result.getDIFX_DELAY_SERVER_1_res_u.response.model_error);
         fprintf(flog, "request res: request_id=%ld delay_server=0x%lX server_struct_setup_code=0x%lX\n", result.getDIFX_DELAY_SERVER_1_res_u.response.request_id, result.getDIFX_DELAY_SERVER_1_res_u.response.delay_server, result.getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
         fprintf(flog, "request res: server_version=0x%lX\n", result.getDIFX_DELAY_SERVER_1_res_u.response.server_version);
-        fprintf(flog, "request res: date=%ld time=%.15f\n", result.getDIFX_DELAY_SERVER_1_res_u.response.date, result.getDIFX_DELAY_SERVER_1_res_u.response.time);
+        fprintf(flog, "request res: date=%ld time=%.16f\n", result.getDIFX_DELAY_SERVER_1_res_u.response.date, result.getDIFX_DELAY_SERVER_1_res_u.response.time);
         for(st=0; st < result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations; ++st)
         {
             for(so=0; so < result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources; ++so)
             {
-                fprintf(flog, "request res: station=%02u source=%02u delay=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].delay);
-                fprintf(flog, "request res: station=%02u source=%02u dry_atmos=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].dry_atmos);
-                fprintf(flog, "request res: station=%02u source=%02u wet_atmos=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].wet_atmos);
-                fprintf(flog, "request res: station=%02u source=%02u iono_atmos=%24.15E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].iono_atmos);
+                fprintf(flog, "request res: station=%02u source=%02u delay=%24.16E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].delay);
+                fprintf(flog, "request res: station=%02u source=%02u dry_atmos=%24.16E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].dry_atmos);
+                fprintf(flog, "request res: station=%02u source=%02u wet_atmos=%24.16E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].wet_atmos);
+                fprintf(flog, "request res: station=%02u source=%02u iono_atmos=%24.16E\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].iono_atmos);
                 fprintf(flog, "request res: station=%02u source=%02u az_corr=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_corr);
                 fprintf(flog, "request res: station=%02u source=%02u el_corr=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_corr);
                 fprintf(flog, "request res: station=%02u source=%02u az_geom=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_geom);
@@ -882,10 +882,10 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
                 fprintf(flog, "request res: station=%02u source=%02u station_antenna_phi=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].station_antenna_phi);
                 fprintf(flog, "request res: station=%02u source=%02u source_antenna_theta=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_theta);
                 fprintf(flog, "request res: station=%02u source=%02u source_antenna_phi=%10.6f\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_phi);
-                fprintf(flog, "request res: station=%02u source=%02u UVW = [%24.15E, %24.15E, %24.15E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.z);
-                fprintf(flog, "request res: station=%02u source=%02u baselineP2000 = [%24.15E, %24.15E, %24.15E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.z);
-                fprintf(flog, "request res: station=%02u source=%02u baselineV2000 = [%24.15E, %24.15E, %24.15E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.z);
-                fprintf(flog, "request res: station=%02u source=%02u baselineA2000 = [%24.15E, %24.15E, %24.15E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.z);
+                fprintf(flog, "request res: station=%02u source=%02u UVW = [%24.16E, %24.16E, %24.16E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.z);
+                fprintf(flog, "request res: station=%02u source=%02u baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.z);
+                fprintf(flog, "request res: station=%02u source=%02u baselineV2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.z);
+                fprintf(flog, "request res: station=%02u source=%02u baselineA2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.x, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.y, result.getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*result.getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.z);
             }
         }
     }
