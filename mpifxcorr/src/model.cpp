@@ -584,6 +584,7 @@ bool Model::readEOPData(ifstream * input)
 bool Model::readSpacecraftData(ifstream * input)
 {
   string line = "";
+  string key = "";
   bool retval;
   bool old_style_state_info_warning = false;
 
@@ -591,7 +592,9 @@ bool Model::readSpacecraftData(ifstream * input)
   numspacecraft = atoi(line.c_str());
   spacecrafttable = new spacecraft[numspacecraft];
   for(int i=0;i<numspacecraft;i++) {
-    config->getinputline(input, &spacecrafttable[i].name, "SPACECRAFT ", i);
+#error "fix this area to deal with FRAME not being used, new spacecraft stuff, ..."
+#error "and fix getting the name too to use a numberd line, like telescopes"      
+          config->getinputline(input, &spacecrafttable[i].name, "SPACECRAFT ", i);
     retval = config->getinputline(input, &line, "SPACECRAFT ", i, " ISANT", false);
     spacecrafttable[i].is_antenna = false;
     if(retval && ((line[0] == '1') || (line[0] == 'T') || (line[0] == 't')))
@@ -723,18 +726,18 @@ bool Model::readPolynomialSamples(ifstream * input)
   for(int i=0;i<numscans;i++) {
       config->getinputline(input, &line, "SCAN ", i, " POINTING SRC");
     if(line.compare((scantable[i].pointingcentre)->name) != 0) {
-      cfatal << startl << "IM file and CALC file disagree on scan " << i << " pointing centre - aborting!!!" << endl;
+      cfatal << startl << "IM file and CALC file disagree on scan " << i << " pointing centre (" << line << " vs. " << (scantable[i].pointingcentre)->name << ") - aborting!!!" << endl;
       return false;
     }
     config->getinputline(input, &line, "SCAN ", i);
     if(scantable[i].numphasecentres != atoi(line.c_str())) {
-      cfatal << startl << "IM file and CALC file disagree on scan " << i << " number of phase centres - aborting!!!" << endl;
+      cfatal << startl << "IM file and CALC file disagree on scan " << i << " number of phase centres (" << line << " vs. " << scantable[i].numphasecentres << ") - aborting!!!" << endl;
       return false;
     }
     for(int j=0;j<scantable[i].numphasecentres;j++) {
       config->getinputline(input, &line, "SCAN ", i);
       if(line.compare((scantable[i].phasecentres[j])->name) != 0) {
-        cfatal << startl << "IM file and CALC file disagree on scan " << i << " phase centre " << j << " - aborting!!!" << endl;
+        cfatal << startl << "IM file and CALC file disagree on scan " << i << " phase centre " << j << " (" << line << " vs. " << (scantable[i].phasecentres[j])->name << ") - aborting!!!" << endl;
         return false;
       }
     }
@@ -824,6 +827,7 @@ bool Model::readPolynomialSamples(ifstream * input)
              (scantable[i].delay[j][k][l][0] > 0.0 || stationtable[l].mount == ORB))
             //ignore rates from Earth-based antennas when the delay is negative - they are junk
             maxrate[l] = fabs(scantable[i].delay[j][k][l][1]);
+#error "put in iono and othe stuff too"
           //look for optional "DRY" delay subcomponent
           retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " DRY (us)", false, 0);
           if(retval) {
@@ -939,7 +943,7 @@ bool Model::fillPolyRow(f64* vals, string line, int npoly)
   return true;
 }
 
-//zero an array of doubles
+//fill an array of doubles
 bool Model::fillPolyRow(f64* vals, double fill, int npoly)
 {
   for(int i=0;i<npoly;i++) {
@@ -972,7 +976,7 @@ Model::axistype Model::getMount(string mount)
   cerror << startl << "Warning - unknown mount type: Assuming Az-El" << endl;
   return ALTAZ;
 }
-Model::sitetypeenum Model::getSiteType(string sitetype_)
+, 2015Model::sitetypeenum Model::getSiteType(string sitetype_)
 {
   if(strcasecmp(sitetype_.c_str(), "fixed") == 0) 
     return SITEFIXED;
