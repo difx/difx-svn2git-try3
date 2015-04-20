@@ -138,7 +138,7 @@ void VexInterval::logicalOr(const VexInterval &v)
 void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, double guardBandMHz)
 {
 	double epsilonHz = 1.0;
-	int tonesInBand;
+	unsigned int tonesInBand;
 	int firstToneMHz;
 
 	if(toneIntervalMHz <= 0)
@@ -202,7 +202,7 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 		}
 		break;
 	case ToneSelectionAll:
-		for(int i = 0; i < tonesInBand; ++i)
+		for(unsigned int i = 0; i < tonesInBand; ++i)
 		{
 			tones.push_back(i);
 		}
@@ -219,7 +219,7 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 		}
 		else if(tonesInBand > 2)
 		{
-			for(int i = 0; i < tonesInBand; ++i)
+			for(unsigned int i = 0; i < tonesInBand; ++i)
 			{
 				if(bbcSideBand == 'U')
 				{
@@ -261,7 +261,7 @@ void VexChannel::selectTones(int toneIntervalMHz, enum ToneSelection selection, 
 		}
 		break;
 	case ToneSelectionMost:
-		for(int i = 0; i < tonesInBand; ++i)
+		for(unsigned int i = 0; i < tonesInBand; ++i)
 		{
 			if(bbcSideBand == 'U')
 			{

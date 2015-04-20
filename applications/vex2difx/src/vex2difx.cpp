@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2009-2015 by Walter Brisken & Adam Deller               *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2009-2015 by Walter Brisken & Adam Deller			   *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <cstdint>
 #include <difxio/difx_input.h>
 #include <difxmessage.h>
 #include "vextables.h"
@@ -62,7 +63,7 @@ static double current_mjd()
 
 	gettimeofday(&t, 0);
 
-	return MJD_UNIX0 + t.tv_sec/SEC_DAY + t.tv_usec/MUSEC_DAY;
+	return MJD_UNIX0 + t.tv_sec/SEC_DAY_DBL_ + t.tv_usec/MUSEC_DAY;
 }
 
 static int calcDecimation(int overSamp)
@@ -122,11 +123,11 @@ static int calculateWorstcaseGuardNS(double sampleRate, int subintNS)
 
 int calculateWorstcaseGuardNS_spacecraft(double max_speed, double samplerate, int subintNS)
 {
-    // guard nanosecond calculation for spacecraft moving with speed
-    // max_speed in m/s.  The maximum rate for the spacecraft is given by
-    // max_speed/c, where c is the speed of light.
-    // Fudge factor to make sure everything stays within reasonable limits
-    max_speed *= 1.2;
+	// guard nanosecond calculation for spacecraft moving with speed
+	// max_speed in m/s.  The maximum rate for the spacecraft is given by
+	// max_speed/c, where c is the speed of light.
+	// Fudge factor to make sure everything stays within reasonable limits
+	max_speed *= 1.2;
 	double sampleTimeNS = 1.0e9/samplerate;
 	double nsAccumulate = sampleTimeNS;
 	while(fabs(nsAccumulate - static_cast<int>(nsAccumulate)) > 1.0e-12)
@@ -172,7 +173,7 @@ static void genJobGroups(vector<VexJobGroup> &JGs, const VexData *V, const CorrP
 	while(!scans.empty())
 	{
 		const VexScan *scan = V->getScanByDefName(scans.front());
-		int nRecordedAnt = scan->nAntennasWithRecordedData(V);
+		unsigned int nRecordedAnt = scan->nAntennasWithRecordedData(V);
 
 		if(nRecordedAnt < P->minSubarraySize)
 		{
@@ -364,10 +365,10 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 			--usage[e->mjd];
 		}
 		else if(e->eventType == VexEvent::CLOCK_BREAK ||
-			e->eventType == VexEvent::LEAP_SECOND ||
-			e->eventType == VexEvent::ANTENNA_START ||
-			e->eventType == VexEvent::ANTENNA_STOP ||
-			e->eventType == VexEvent::MANUAL_BREAK)
+				e->eventType == VexEvent::LEAP_SECOND ||
+				e->eventType == VexEvent::ANTENNA_START ||
+				e->eventType == VexEvent::ANTENNA_STOP ||
+				e->eventType == VexEvent::MANUAL_BREAK)
 		{
 			if(JG.containsAbsolutely(e->mjd))
 			{
@@ -392,7 +393,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 			list<VexEvent>::const_iterator iter;
 			for(iter = JG.events.begin(); iter != JG.events.end(); ++iter)
 			{
-				cerr << "   " << *iter << endl;
+				cerr << "	" << *iter << endl;
 			}
 
 			cerr << "nClockBreaks = " << nClockBreaks << endl;
@@ -401,7 +402,7 @@ static void genJobs(vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, const
 			list<MediaChange>::const_iterator it;
 			for(it = changes.begin(); it != changes.end(); ++it)
 			{
-				cerr << "   " << *it << endl;
+				cerr << "	" << *it << endl;
 			}
 
 			exit(EXIT_FAILURE);
@@ -509,7 +510,7 @@ static void makeJobs(vector<VexJob>& J, VexData *V, const CorrParams *P, int ver
 		name << j->jobSeries << "_" << j->jobId;
 
 		V->addEvent(j->mjdStart, VexEvent::JOB_START, name.str());
-		V->addEvent(j->mjdStop,  VexEvent::JOB_STOP,  name.str());
+		V->addEvent(j->mjdStop,	 VexEvent::JOB_STOP,  name.str());
 		j->assignVSNs(*V);
 
 		jobId++;
@@ -549,17 +550,29 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, const CorrParams 
 	job->jobStart = J.mjdStart;
 	job->jobStop  = J.mjdStop;
 	job->mjdStart = J.mjdStart;
-	job->duration = trunc((J.mjdStop - J.mjdStart) * 86400.0 + 0.001);
-	job->jobId    = J.jobId;
+	job->duration = trunc((J.mjdStop - J.mjdStart) * SEC_DAY_DBL + 0.001);
+	job->jobId	  = J.jobId;
 	job->subarrayId = 0;
 	snprintf(job->obsCode, DIFXIO_OBSCODE_LENGTH, "%s", obsCode.c_str());
 	job->obsCode[7] = 0;
 	snprintf(job->taperFunction, DIFXIO_TAPER_LENGTH, "%s", "UNIFORM");
-	job->polyOrder = P->DelayPolyOrder;
-	job->polyInterval = P->DelayPolyInterval;
-	job->aberCorr = AberCorrExact;
+	snprintf(job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", P->delayServerHost.c_str());
+	job->delayServerType = stringToDelayServerType(P->delayServerType.c_str());
+	job->delayVersion = P->delayVersion;
+	job->delayProgram = P->delayProgram;
+	job->delayHandler = P->delayHandler;
 	job->activeDatastreams = nAntenna;
 	job->activeBaselines = nAntenna*(nAntenna-1)/2;
+	job->polyOrder = P->DelayPolyOrder;
+	job->polyInterval = P->DelayPolyInterval;
+	job->delayModelPrecision = P->delayModelPrecision;
+	job->perform_uvw_deriv = stringToPerformDirectionDerivativeType(P->perform_uvw_deriv.c_str());
+	job->perform_lmn_deriv = stringToPerformDirectionDerivativeType(P->perform_lmn_deriv.c_str());
+	job->perform_xyz_deriv = stringToPerformDirectionDerivativeType(P->perform_xyz_deriv.c_str());
+	job->delta_lmn = P->delta_lmn;
+	job->delta_xyz = P->delta_xyz;
+	job->aberCorr = AberCorrExact;
+	job->calculate_own_retarded_position = (P->calculate_own_retarded_position) ? 1:0;
 	job->dutyCycle = J.dutyCycle;
 
 	// The following line defines the format of the job filenames
@@ -572,7 +585,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, const CorrParams 
 		v = snprintf(format, FormatLength, "%%s/%%s_%%0%dd%%c", nDigit);
 		if(v >= FormatLength)
 		{
-			cerr << "Developer error: makeDifxJob: format being truncated.  Needed " << v << " bytes." << endl;
+			cerr << "Developer error: makeDifxJob: format being truncated.	Needed " << v << " bytes." << endl;
 
 			exit(EXIT_FAILURE);
 		}
@@ -596,9 +609,9 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, const CorrParams 
 	}
 
 	snprintf(job->inputFile,   DIFXIO_FILENAME_LENGTH, "%s.input", fileBase);
-	snprintf(job->calcFile,    DIFXIO_FILENAME_LENGTH, "%s.calc",  fileBase);
-	snprintf(job->flagFile,    DIFXIO_FILENAME_LENGTH, "%s.flag",  fileBase);
-	snprintf(job->imFile,      DIFXIO_FILENAME_LENGTH, "%s.im",    fileBase);
+	snprintf(job->calcFile,	   DIFXIO_FILENAME_LENGTH, "%s.calc",  fileBase);
+	snprintf(job->flagFile,	   DIFXIO_FILENAME_LENGTH, "%s.flag",  fileBase);
+	snprintf(job->imFile,	   DIFXIO_FILENAME_LENGTH, "%s.im",	   fileBase);
 	snprintf(job->outputFile,  DIFXIO_FILENAME_LENGTH, "%s.difx",  fileBase);
 	if(threadsFile != "")
 	{
@@ -610,7 +623,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, const CorrParams 
 	}
 	if(v >= DIFXIO_FILENAME_LENGTH)
 	{
-		cerr << "Developer error: makeDifxJob: threadsFile wanted " << v << " bytes, not " << DIFXIO_FILENAME_LENGTH << " .  Truncating."  << endl;
+		cerr << "Developer error: makeDifxJob: threadsFile wanted " << v << " bytes, not " << DIFXIO_FILENAME_LENGTH << " .	 Truncating."  << endl;
 	}
 
 	return job;
@@ -638,16 +651,16 @@ static DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const Co
 		const VexAntenna *ant = V->getAntenna(a->first);
 		
 		snprintf(A[i].name, DIFXIO_NAME_LENGTH, "%s", a->first.c_str());
-		A[i].X = ant->x + ant->dx*(mjd-ant->posEpoch)*86400.0;
-		A[i].Y = ant->y + ant->dy*(mjd-ant->posEpoch)*86400.0;
-		A[i].Z = ant->z + ant->dz*(mjd-ant->posEpoch)*86400.0;
+		A[i].X = ant->x + ant->dx*(mjd-ant->posEpoch)*SEC_DAY_DBL;
+		A[i].Y = ant->y + ant->dy*(mjd-ant->posEpoch)*SEC_DAY_DBL;
+		A[i].Z = ant->z + ant->dz*(mjd-ant->posEpoch)*SEC_DAY_DBL;
 		A[i].mount = stringToMountType(ant->axisType.c_str());
 		A[i].sitetype = ant->sitetype;
 		clockrefmjd = ant->getVexClocks(J.mjdStart, A[i].clockcoeff);
 		if(clockrefmjd < 0.0 && !P->fakeDatasource)
 		{
 			cerr << "WARNING: Job " << J.jobSeries << " " << J.jobId << ": no clock offsets being applied to antenna " << a->first << endl;
-			cerr << "          Unless this is intentional, your results will suffer!" << endl;
+			cerr << "		   Unless this is intentional, your results will suffer!" << endl;
 		}
 		A[i].clockrefmjd = clockrefmjd;
 		A[i].clockorder = 1;
@@ -661,6 +674,26 @@ static DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const Co
 		const AntennaSetup *antSetup = P->getAntennaSetup(a->first);
 		if(antSetup)
 		{
+			if(!antSetup->difxName.empty())
+			{
+				snprintf(A[i].name, DIFXIO_NAME_LENGTH, "%s", antSetup->difxName.c_str());
+			}
+			if(!antSetup->calcName.empty())
+			{
+				snprintf(A[i].calcname, DIFXIO_NAME_LENGTH, "%s", antSetup->calcName.c_str());
+			}
+			A[i].clockcoeff[0] += antSetup->deltaClock*1.0e6;	// convert to us from sec
+			A[i].clockcoeff[1] += antSetup->deltaClockRate*1.0e6;	// convert to us/sec from sec/sec
+			A[i].clockorder	 = antSetup->clockorder;
+			switch(A[i].clockorder) {
+			case 5: A[i].clockcoeff[5] = antSetup->clock5*1.0e6; // convert to us/sec^5 from sec/sec^5
+			case 4: A[i].clockcoeff[4] = antSetup->clock4*1.0e6; // convert to us/sec^4 from sec/sec^4
+			case 3: A[i].clockcoeff[3] = antSetup->clock3*1.0e6; // convert to us/sec^3 from sec/sec^3
+			case 2: A[i].clockcoeff[2] = antSetup->clock2*1.0e6; // convert to us/sec^2 from sec/sec^2
+			case 1: break;
+			default: cerr << "Crazy clock order " << A[i].clockorder << "!" << endl;
+			}
+			A[i].site_coord_frame = stringToSourceCoordinateFrameType(antSetup->site_coord_frame.c_str());
 			if((fabs(antSetup->X) > 0.1)
 			  || (fabs(antSetup->Y) > 0.1)
 			  || (fabs(antSetup->Z) > 0.1))
@@ -673,26 +706,19 @@ static DifxAntenna *makeDifxAntennas(const VexJob& J, const VexData *V, const Co
 			{
 				A[i].offset[0] = antSetup->axisOffset;
 			}
-			if(!antSetup->difxName.empty())
+			if(!antSetup->sc_difxname.empty())
 			{
-				snprintf(A[i].name, DIFXIO_NAME_LENGTH, "%s", antSetup->difxName.c_str());
-			}
-			A[i].clockcoeff[0] += antSetup->deltaClock*1.0e6;	// convert to us from sec
-			A[i].clockcoeff[1] += antSetup->deltaClockRate*1.0e6;	// convert to us/sec from sec/sec
-			A[i].clockorder  = antSetup->clockorder;
-			switch(A[i].clockorder) {
-				case 5: A[i].clockcoeff[5] = antSetup->clock5*1.0e6; // convert to us/sec^5 from sec/sec^5
-				case 4: A[i].clockcoeff[4] = antSetup->clock4*1.0e6; // convert to us/sec^4 from sec/sec^4
-				case 3: A[i].clockcoeff[3] = antSetup->clock3*1.0e6; // convert to us/sec^3 from sec/sec^3
-				case 2: A[i].clockcoeff[2] = antSetup->clock2*1.0e6; // convert to us/sec^2 from sec/sec^2
-				case 1: break;
-				default: cerr << "Crazy clock order " << A[i].clockorder << "!" << endl;
+				snprintf(A[i].sc_name, DIFXIO_NAME_LENGTH, "%s", antSetup->sc_difxname.c_str());
 			}
 		}
 
 		if(A[i].calcname[0] == 0)
 		{
 			std::memcpy(A[i].calcname, A[i].name, DIFXIO_NAME_LENGTH);
+		}
+		if(A[i].sc_name[0] == 0)
+		{
+			std::memcpy(A[i].sc_name, A[i].name, DIFXIO_NAME_LENGTH);
 		}
 
 		antList.push_back(a->first);
@@ -783,35 +809,49 @@ static DifxDatastream *makeDifxDatastreams(const VexJob& J, const VexData *V, co
 
 // round up to the next power of two
 // There must be a more elegant solution!
-static int next2(int x)
+inline uint32_t next2(uint32_t x)
 {
-	int n=0; 
-	int m=0;
-	
-	for(int i=0; i < 31; ++i)
-	{
-		if(x & (1 << i))
-		{
-			++n;
-			m = i;
-		}
-	}
+	// This function returns the next higher power of 2 for some integer input.
+	// If x is already a power of 2 value, it returns x.
+	// If x==0, it returns 0;
+	// See http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+	--x;
+	x |= x >> 1;
+	x |= x >> 2;
+	x |= x >> 4;
+	x |= x >> 8;
+	x |= x >> 16;
+	++x;
+	return x;
 
-	if(n < 2)
-	{
-		return x;
-	}
-	else
-	{
-		return 2<<m;
-	}
+	// Original next2 code was for int x input, then:
+	// int n=0; 
+	// int m=0;
+	
+	// for(int i=0; i < 31; ++i)
+	// {
+	// 	if(x & (1 << i))
+	// 	{
+	// 		++n;
+	// 		m = i;
+	// 	}
+	// }
+
+	// if(n < 2)
+	// {
+	// 	return x;
+	// }
+	// else
+	// {
+	// 	return 2<<m;
+	// }
 }
 
 class freq
 {
 public:
 	freq(double f=0.0, double b=0.0, char s=' ', double isr=0.0, double osr=0.0, int os=0, int d=0, int iz=0, unsigned int t=0) 
-		: fq(f), bw(b), inputSpecRes(isr), outputSpecRes(osr), overSamp(os), decimation(d), isZoomFreq(iz), toneSetId(t), sideBand(s) {};
+			: fq(f), bw(b), inputSpecRes(isr), outputSpecRes(osr), overSamp(os), decimation(d), isZoomFreq(iz), toneSetId(t), sideBand(s) {};
 	double fq;		// Hz
 	double bw;		// Hz
 	double inputSpecRes;	// Hz
@@ -914,7 +954,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		exit(EXIT_FAILURE);
 	}
 
-	int n2 = next2(setup->nRecordChan);
+	int n2(next2(uint32_t(setup->nRecordChan)));
 
 	overSamp = 1;	// FIXME: eventually allow other values?
 	decimation = calcDecimation(overSamp);
@@ -976,7 +1016,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	}
 	else if(setup->formatName == string("VDIF"))
 	{
-		// look for pure "VDIF".  This implies single thread VDIF.  Assumes 5032 byte frames.  Not recommended to use this route
+		// look for pure "VDIF".  This implies single thread VDIF.	Assumes 5032 byte frames.  Not recommended to use this route
 		
 		strcpy(D->datastream[dsId].dataFormat, "VDIF");
 		D->datastream[dsId].dataFrameSize = 5032;
@@ -985,51 +1025,51 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	{
 		// look for VDIF + extra information
 		// Formats supported are  VDIF, VDIFL, VDIFC and VDIFD
-		//   VDIFLxxx		xxxx = frame size
-		//   VDIF/xxxx		xxxx = frame size
-		//   VDIF/xxxx/bb	xxxx = frame size, bb = # bits
-	  int strOff;
-	  if (setup->formatName.substr(0,5) == string("VDIFL")) 
-	    {
-	      strcpy(D->datastream[dsId].dataFormat, "VDIFL");
-	      strOff = 5;
-	    } 
-	  else if (setup->formatName.substr(0,5) == string("VDIFC")) 
-	    {
-	      D->datastream[dsId].dataSampling = SamplingComplex;
-	      strcpy(D->datastream[dsId].dataFormat, "VDIF");
-	      strOff = 5;
-	    }
-	  else if (setup->formatName.substr(0,5) == string("VDIFD")) 
-	    {
-	      D->datastream[dsId].dataSampling = SamplingComplexDSB;
-	      strcpy(D->datastream[dsId].dataFormat, "VDIF");
-	      strOff = 5;
-	    }
-	  else 
-	    {
-	      
-	      if(usesCannonicalVDIFThreadIds(antName.c_str()))
+		//	 VDIFLxxx		xxxx = frame size
+		//	 VDIF/xxxx		xxxx = frame size
+		//	 VDIF/xxxx/bb	xxxx = frame size, bb = # bits
+		int strOff;
+		if (setup->formatName.substr(0,5) == string("VDIFL")) 
 		{
-			char sep = '/';
-			std::stringstream threadSS;
-			for(int threadId = 0; threadId < setup->channels.size(); ++threadId)
-			{
-				threadSS << sep;
-				threadSS << setup->channels[threadId].threadId;
-				sep = ':';
-			}
-			snprintf(D->datastream[dsId].dataFormat, DIFXIO_FORMAT_LENGTH, "INTERLACEDVDIF%s", threadSS.str().c_str());
-		}
-		else
+			strcpy(D->datastream[dsId].dataFormat, "VDIFL");
+			strOff = 5;
+		} 
+		else if (setup->formatName.substr(0,5) == string("VDIFC")) 
 		{
+			D->datastream[dsId].dataSampling = SamplingComplex;
 			strcpy(D->datastream[dsId].dataFormat, "VDIF");
+			strOff = 5;
 		}
-	      strOff = 4;
-	    }
+		else if (setup->formatName.substr(0,5) == string("VDIFD")) 
+		{
+			D->datastream[dsId].dataSampling = SamplingComplexDSB;
+			strcpy(D->datastream[dsId].dataFormat, "VDIF");
+			strOff = 5;
+		}
+		else 
+		{
+		  
+			if(usesCannonicalVDIFThreadIds(antName.c_str()))
+			{
+				char sep = '/';
+				std::stringstream threadSS;
+				for(unsigned int threadId = 0; threadId < setup->channels.size(); ++threadId)
+				{
+					threadSS << sep;
+					threadSS << setup->channels[threadId].threadId;
+					sep = ':';
+				}
+				snprintf(D->datastream[dsId].dataFormat, DIFXIO_FORMAT_LENGTH, "INTERLACEDVDIF%s", threadSS.str().c_str());
+			}
+			else
+			{
+				strcpy(D->datastream[dsId].dataFormat, "VDIF");
+			}
+			strOff = 4;
+		}
 
 
-	  size_t p = setup->formatName.find_first_of('/');
+		size_t p = setup->formatName.find_first_of('/');
 		if(p == string::npos)
 		{
 			// VDIFxxxx case
@@ -1038,20 +1078,20 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		}
 		else
 		{
-		  string fstr = setup->formatName.substr(p+1);
+			string fstr = setup->formatName.substr(p+1);
 
-		  p = fstr.find_last_of('/');
-		  if (p == string::npos)
-		  {
-		      // VDIF/xxxx  case
-		      D->datastream[dsId].dataFrameSize = atoi(fstr.c_str());
-		  } 
-		  else 
-		  {
-		      // VDIF/xxxx/xxxx  case
-		      D->datastream[dsId].dataFrameSize = atoi(fstr.substr(0,p).c_str());
-		      nBits = atoi(fstr.substr(p+1).c_str());
-		  }
+			p = fstr.find_last_of('/');
+			if (p == string::npos)
+			{
+				// VDIF/xxxx  case
+				D->datastream[dsId].dataFrameSize = atoi(fstr.c_str());
+			} 
+			else 
+			{
+				// VDIF/xxxx/xxxx  case
+				D->datastream[dsId].dataFrameSize = atoi(fstr.substr(0,p).c_str());
+				nBits = atoi(fstr.substr(p+1).c_str());
+			}
 		}
 	}
 	else if(setup->formatName.substr(0,14) == string("INTERLACEDVDIF"))
@@ -1082,7 +1122,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	}
 	else
 	{
-		cerr << "Error: setFormat: format " << setup->formatName << " not currently supported.  Mode=" << mode->defName << ", ant=" << antName << "." << endl;
+		cerr << "Error: setFormat: format " << setup->formatName << " not currently supported.	Mode=" << mode->defName << ", ant=" << antName << "." << endl;
 
 		return 0;
 	}
@@ -1116,7 +1156,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 			}
 			
 			fqId = getFreqId(freqs, subband.freq, subband.bandwidth, subband.sideBand,
-					corrSetup->FFTSpecRes, corrSetup->outputSpecRes, overSamp, decimation, 0, toneSetId);	// 0 means not zoom band
+							 corrSetup->FFTSpecRes, corrSetup->outputSpecRes, overSamp, decimation, 0, toneSetId);	// 0 means not zoom band
 			
 			if(r < 0 || r >= D->datastream[dsId].nRecBand)
 			{
@@ -1132,7 +1172,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	for(unsigned int j = 0; j < bandMap.size(); ++j)
 	{
 		D->datastream[dsId].recFreqId[j] = bandMap[j].first;
-		D->datastream[dsId].nRecPol[j]   = bandMap[j].second;
+		D->datastream[dsId].nRecPol[j]	 = bandMap[j].second;
 	}
 
 	return setup->nRecordChan;
@@ -1200,7 +1240,7 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 		double chanBW;
 
 		df->freq = freqs[f].fq/1.0e6;
-		df->bw   = freqs[f].bw/1.0e6;
+		df->bw	 = freqs[f].bw/1.0e6;
 		df->sideband = freqs[f].sideBand;
 		df->nChan = static_cast<int>(freqs[f].bw/freqs[f].inputSpecRes + 0.5);	// df->nChan is the number of pre-averaged channels
 		df->specAvg = freqs[f].specAvg();
@@ -1211,7 +1251,7 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 		if(chanBW > 0.51 && firstChanBWWarning)
 		{
 			firstChanBWWarning = 0;
-			cout << "Warning: channel bandwidth is " << chanBW << " MHz, which is larger than the minimum recommended 0.5 MHz.  Consider decreasing the output spectral resolution." << endl;
+			cout << "Warning: channel bandwidth is " << chanBW << " MHz, which is larger than the minimum recommended 0.5 MHz.	Consider decreasing the output spectral resolution." << endl;
 		}
 
 		// This is to correct for the fact that mpifxcorr does not know about oversampling
@@ -1402,9 +1442,9 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 		else // Not profile mode
 		{
 			// Beware those who try to follow the logic below!
-			// Its actually not to tricky.  There are 8 cases of matching between 
+			// Its actually not to tricky.	There are 8 cases of matching between 
 			// sub-bands to consider.
-			// First all antenna 1 recorded bands to be correlated are considered.  Pairing
+			// First all antenna 1 recorded bands to be correlated are considered.	Pairing
 			// with sub-bands from antenna 2 is done with the following priority:
 			// 1. a recorded band with same sideband
 			// 2. a recorded band with opposite sideband
@@ -1479,7 +1519,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								{
 									altlowedgefreq -= D->freq[altFreqId].bw;
 								}
-								if(altlowedgefreq     == lowedgefreq &&
+								if(altlowedgefreq	  == lowedgefreq &&
 								   D->freq[freqId].bw == D->freq[altFreqId].bw)
 								{
 									n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
@@ -1493,7 +1533,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 							{
 								altFreqId = D->datastream[a2].zoomFreqId[f2];
 								if(D->freq[freqId].freq == D->freq[altFreqId].freq &&
-								   D->freq[freqId].bw   == D->freq[altFreqId].bw &&
+								   D->freq[freqId].bw	== D->freq[altFreqId].bw &&
 								   D->freq[freqId].sideband == D->freq[altFreqId].sideband)
 								{
 									n2 = DifxDatastreamGetZoomBands(D->datastream+a2, altFreqId, a2p, a2c);
@@ -1587,8 +1627,8 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 						{
 							altFreqId = D->datastream[a2].recFreqId[f2];
 							if(D->freq[freqId].freq == D->freq[altFreqId].freq &&
-							   D->freq[freqId].bw   == D->freq[altFreqId].bw &&
-                               D->freq[altFreqId].sideband == 'U')
+							   D->freq[freqId].bw	== D->freq[altFreqId].bw &&
+							   D->freq[altFreqId].sideband == 'U')
 							{
 								n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
 							}
@@ -1605,7 +1645,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								{
 									altlowedgefreq -= D->freq[altFreqId].bw;
 								}
-								if(altlowedgefreq     == lowedgefreq &&
+								if(altlowedgefreq	  == lowedgefreq &&
 								   D->freq[freqId].bw == D->freq[altFreqId].bw)
 								{
 									n2 = DifxDatastreamGetRecBands(D->datastream+a2, altFreqId, a2p, a2c);
@@ -1752,7 +1792,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	nConfig = configs.size();
 	for(int i = 0; i < nConfig; ++i)
 	{
-		if(configs[i].first  == S->modeDefName &&
+		if(configs[i].first	 == S->modeDefName &&
 		   configs[i].second == S->corrSetupName)
 		{
 			return i;
@@ -1854,7 +1894,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 		max5div = 0;
 		max2div = 0;
 		nscounter = tintNS/5;
-	 	while(nscounter > 0 && fabs(nscounter/floatFFTDurNS - static_cast<int>(nscounter/floatFFTDurNS + 0.5)) < 1e-9)
+		while(nscounter > 0 && fabs(nscounter/floatFFTDurNS - static_cast<int>(nscounter/floatFFTDurNS + 0.5)) < 1e-9)
 		{
 			nscounter /= 5;
 			++max5div;
@@ -1885,8 +1925,8 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 				msgSize = (testsubintNS*1.0e-9)*dataRate/8.0;
 				readSize = msgSize*D->dataBufferFactor/D->nDataSegments;
 				if(readSize > P->minReadSize && readSize < P->maxReadSize && 
-					testsubintNS <= 1020000000 && testsubintNS > config->subintNS && 
-					fabs(testsubintNS/floatFFTDurNS - static_cast<int>(testsubintNS/floatFFTDurNS + 0.5)) < 1e-9)
+				   testsubintNS <= 1020000000 && testsubintNS > config->subintNS && 
+				   fabs(testsubintNS/floatFFTDurNS - static_cast<int>(testsubintNS/floatFFTDurNS + 0.5)) < 1e-9)
 				{
 					config->subintNS = testsubintNS;
 				}
@@ -2053,44 +2093,44 @@ static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int
 {
 	const double epsilon = 0.000001;
 	double channeloffset;
-    double parent_bottom,
-           parent_top;
+	double parent_bottom,
+		parent_top;
 	const freq &f = freqs[dd->recFreqId[dfreqIndex]];
 
-	if(f.sideBand == 'L')           // is parent LSB?
+	if(f.sideBand == 'L')			// is parent LSB?
 	{
 		channeloffset = (f.fq - zoomfreq.frequency - zoomfreq.bandwidth)/f.inputSpecRes;
-        parent_bottom = f.fq - f.bw;
-        parent_top = f.fq;
-    }
-    else                            // parent is USB
-    {
+		parent_bottom = f.fq - f.bw;
+		parent_top = f.fq;
+	}
+	else							// parent is USB
+	{
 		channeloffset = (zoomfreq.frequency - f.fq)/f.inputSpecRes;
-        parent_bottom = f.fq;
-        parent_top = f.fq + f.bw;
-    }
+		parent_bottom = f.fq;
+		parent_top = f.fq + f.bw;
+	}
 
-    if(zoomfreq.frequency < parent_bottom - epsilon)
-    {
-        return false;
-    }
+	if(zoomfreq.frequency < parent_bottom - epsilon)
+	{
+		return false;
+	}
 
-    if(zoomfreq.frequency + zoomfreq.bandwidth > parent_top + epsilon)
-    {
-        return false;
-    }
+	if(zoomfreq.frequency + zoomfreq.bandwidth > parent_top + epsilon)
+	{
+		return false;
+	}
 
-    if(zoomfreq.spectralaverage > 0 && zoomfreq.spectralaverage != f.specAvg()) //0 means default to parent
-    {
-        return false;
-    }
+	if(zoomfreq.spectralaverage > 0 && zoomfreq.spectralaverage != f.specAvg()) //0 means default to parent
+	{
+		return false;
+	}
 
-    if(fabs(channeloffset - static_cast<int>(channeloffset+0.5)) > epsilon)
-    {
-        return false;
-    }
+	if(fabs(channeloffset - static_cast<int>(channeloffset+0.5)) > epsilon)
+	{
+		return false;
+	}
 
-    return true;
+	return true;
 }
 
 static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int os, int verbose, ofstream *of, int nDigit, char ext, int strict)
@@ -2169,7 +2209,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	D = newDifxInput();
 
 	D->mjdStart = J.mjdStart;
-	D->mjdStop  = J.mjdStop;
+	D->mjdStop	= J.mjdStop;
 	D->visBufferLength = P->visBufferLength;
 	D->dataBufferFactor = P->dataBufferFactor;
 	D->outputFormat = P->outputFormat;
@@ -2212,7 +2252,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		S = V->getScanByDefName(*si);
 		if(!S)
 		{
-			cerr << "Developer error: source[" << *si << "] not found!  This cannot be!" << endl;
+			cerr << "Developer error: source[" << *si << "] not found!	This cannot be!" << endl;
 			
 			exit(EXIT_FAILURE);
 		}
@@ -2227,7 +2267,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		sourceSetup = P->getSourceSetup(src->sourceNames);
 		if(!sourceSetup)
 		{
-			cerr << "Error: no source setup for " << S->sourceDefName << ".  Aborting!" << endl;
+			cerr << "Error: no source setup for " << S->sourceDefName << ".	 Aborting!" << endl;
 
 			exit(EXIT_FAILURE);
 		}
@@ -2256,18 +2296,19 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		srcsc_epoch = pointingCentre->sc_epoch;
 		for(int i = 0; i < D->nSource; ++i)
 		{
-			radiff  = fabs(D->source[i].ra - srcra);
+			radiff	= fabs(D->source[i].ra - srcra);
 			if(radiff > 3.14159265358979323846264338327950)
 			{
 				radiff = fabs(2.0*3.14159265358979323846264338327950-radiff);
 			}
 			decdiff = fabs(D->source[i].dec - srcdec);
 			if(radiff < MAX_POS_DIFF && decdiff < MAX_POS_DIFF &&
+			   (strcmp(D->source[i].sc_name, pointingCentre->sc_difxname.c_str())==0) &&
 			   D->source[i].sc_epoch == srcsc_epoch &&
 			   D->source[i].calCode[0] == src->calCode &&
 			   D->source[i].qual == src->qualifier)
-			 {
-			 	if(pointingCentre->difxName.compare(PhaseCentre::DEFAULT_NAME) != 0)
+			{
+				if(pointingCentre->difxName.compare(PhaseCentre::DEFAULT_NAME) != 0)
 				{
 					if(strcmp(D->source[i].name, pointingCentre->difxName.c_str()) == 0)
 					{
@@ -2295,9 +2336,16 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			snprintf(D->source[pointingSrcIndex].name, DIFXIO_NAME_LENGTH, "%s", src->sourceNames[0].c_str());
 			D->source[pointingSrcIndex].ra = src->ra;
 			D->source[pointingSrcIndex].dec = src->dec;
-			D->source[pointingSrcIndex].sc_epoch = pointingCentre->sc_epoch;
 			D->source[pointingSrcIndex].calCode[0] = src->calCode;
+			D->source[pointingSrcIndex].coord_frame = stringToSourceCoordinateFrameType(pointingCentre->source_coordinate_frame.c_str());
+			D->source[pointingSrcIndex].perform_uvw_deriv = stringToPerformDirectionDerivativeType(pointingCentre->perform_uvw_deriv.c_str());
+			D->source[pointingSrcIndex].perform_lmn_deriv = stringToPerformDirectionDerivativeType(pointingCentre->perform_lmn_deriv.c_str());
+			D->source[pointingSrcIndex].perform_xyz_deriv = stringToPerformDirectionDerivativeType(pointingCentre->perform_xyz_deriv.c_str());
+			D->source[pointingSrcIndex].delta_lmn = pointingCentre->delta_lmn;
+			D->source[pointingSrcIndex].delta_xyz = pointingCentre->delta_xyz;
 			D->source[pointingSrcIndex].qual = src->qualifier;
+			snprintf(D->source[pointingSrcIndex].sc_name, DIFXIO_NAME_LENGTH, "%s", pointingCentre->sc_difxname.c_str());
+			D->source[pointingSrcIndex].sc_epoch = pointingCentre->sc_epoch;
 			//overwrite with stuff from the source setup if it exists
 			if(pointingCentre->difxName.compare(PhaseCentre::DEFAULT_NAME) != 0)
 			{
@@ -2310,6 +2358,11 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			if(pointingCentre->dec > PhaseCentre::DEFAULT_DEC)
 			{
 				D->source[pointingSrcIndex].dec = pointingCentre->dec;
+			}
+			if(pointingCentre->calCode != ' ')
+			{
+				D->source[pointingSrcIndex].calCode[0] = pointingCentre->calCode;
+				D->source[pointingSrcIndex].calCode[1] = 0;
 			}
 			++D->nSource;
 		}
@@ -2325,6 +2378,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			for(int i = 0; i < D->nSource; ++i)
 			{
 				if(D->source[i].ra == p->ra && D->source[i].dec == p->dec &&
+				   (strcmp(D->source[i].sc_name, p->sc_difxname.c_str())==0) &&
 				   D->source[i].sc_epoch == p->sc_epoch &&
 				   D->source[i].calCode[0] == p->calCode &&
 				   D->source[i].qual == p->qualifier	 &&
@@ -2340,9 +2394,16 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				snprintf(D->source[foundSrcIndex].name, DIFXIO_NAME_LENGTH, "%s", p->difxName.c_str());
 				D->source[foundSrcIndex].ra = p->ra;
 				D->source[foundSrcIndex].dec = p->dec;
-				D->source[foundSrcIndex].sc_epoch = p->sc_epoch;
 				D->source[foundSrcIndex].calCode[0] = p->calCode;
+				D->source[foundSrcIndex].coord_frame = stringToSourceCoordinateFrameType(p->source_coordinate_frame.c_str());
+				D->source[foundSrcIndex].perform_uvw_deriv = stringToPerformDirectionDerivativeType(p->perform_uvw_deriv.c_str());
+				D->source[foundSrcIndex].perform_lmn_deriv = stringToPerformDirectionDerivativeType(p->perform_lmn_deriv.c_str());
+				D->source[foundSrcIndex].perform_xyz_deriv = stringToPerformDirectionDerivativeType(p->perform_xyz_deriv.c_str());
+				D->source[foundSrcIndex].delta_lmn = p->delta_lmn;
+				D->source[foundSrcIndex].delta_xyz = p->delta_xyz;
 				D->source[foundSrcIndex].qual = p->qualifier;
+				snprintf(D->source[foundSrcIndex].sc_name, DIFXIO_NAME_LENGTH, "%s", p->sc_difxname.c_str());
+				D->source[foundSrcIndex].sc_epoch = p->sc_epoch;
 				++D->nSource;
 			}
 			scan->phsCentreSrcs[atSource] = foundSrcIndex; 
@@ -2396,6 +2457,11 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		if(sourceSetup->pointingCentre.isSpacecraft())
 		{
 			spacecraftSet.insert(sourceSetup->pointingCentre.difxName);
+			if((!sourceSetup->pointingCentre.sc_difxname.empty()) &&
+			   (sourceSetup->pointingCentre.sc_difxname != sourceSetup->pointingCentre.difxName))
+			{
+				spacecraftSet.insert(sourceSetup->pointingCentre.sc_difxname);
+			}
 		}
 		for(vector<PhaseCentre>::const_iterator p=sourceSetup->phaseCentres.begin(); p != sourceSetup->phaseCentres.end(); ++p)
 		{
@@ -2475,7 +2541,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				ok = checkCRLF(D->pulsar[D->nPulsar-1].polyco[p].fileName);
 				if(ok < 0)
 				{
-					cerr << "The pulsar polyco file " << D->pulsar[D->nPulsar-1].polyco[p].fileName << " has problems.  Exiting." << endl;
+					cerr << "The pulsar polyco file " << D->pulsar[D->nPulsar-1].polyco[p].fileName << " has problems.	Exiting." << endl;
 
 					exit(EXIT_FAILURE);
 				}
@@ -2553,8 +2619,8 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 							zoomChans = static_cast<int>(zf.bandwidth/corrSetup->FFTSpecRes);
 							fqId = getFreqId(freqs, zf.frequency, zf.bandwidth,
 //							freqs[dd->recFreqId[parentFreqIndices[i]]].sideBand,
-  							        'U',
-									corrSetup->FFTSpecRes, corrSetup->outputSpecRes, overSamp, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
+											 'U',
+											 corrSetup->FFTSpecRes, corrSetup->outputSpecRes, overSamp, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
 							if(zoomChans < minChans)
 							{
 								minChans = zoomChans;
@@ -2690,15 +2756,15 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	populateEOPTable(D, V->getEOPs());
 
 	// Check antenna list for spacecraft
-	for(vector<AntennaSetup>::const_iterator ss=P->antennaSetups.begin(); ss != P->antennaSetups.end(); --ss)
+	for(vector<AntennaSetup>::const_iterator as=P->antennaSetups.begin(); as != P->antennaSetups.end(); ++as)
 	{
-		if(ss->ephemFile.size() > 0)
+		if(as->isSpacecraft())
 		{
-			if(ss->difxName.size() > 0) {
-				spacecraftSet.insert(ss->difxName);
+			if(!as->difxName.empty()) {
+				spacecraftSet.insert(as->difxName);
 			}
 			else {
-				spacecraftSet.insert(ss->vexName);
+				spacecraftSet.insert(as->vexName);
 			}
 		}
 	}
@@ -2722,10 +2788,20 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		{
 			if((phaseCentre = P->getPhaseCentre(*s)))
 			{
-				// Handle spacecraft target source information
+                // give the spacecraft table the right name so it can be linked to the source
+				if(!phaseCentre->sc_difxname.empty())
+				{
+					snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", phaseCentre->sc_difxname.c_str());
+				}
+				else
+				{
+					snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", phaseCentre->difxName.c_str());
+				}
+                // Handle spacecraft target source information
 				ds->is_antenna = false;
 				ds->GS_exists = false;
 				ds->spacecraft_time_type = SpacecraftTimeOther;
+				ds->calculate_own_retarded_position = phaseCentre->calculate_own_retarded_position;
 				// TODO: Spacecraft position offsets from the
 				// ephemeris information are not implemented
 				// yet for spacecraft target sources
@@ -2748,73 +2824,107 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				// ds->SC_pos_offset_refmjd = phaseCentre->SC_pos_offset_refmjd;
 				// ds->SC_pos_offset_reffracDay = phaseCentre->SC_pos_offset_reffracDay;
 
-				// make sure the spacecraft sync time is included
-				// in the ephemeris time range
 				double ephem_mjd_start = J.mjdStart;
 				double ephem_mjd_stop = J.mjdStop;
-				if(phaseCentre->sc_epoch != 0.0) {
-					// The spacecfraft phaseCentre ephemeris
-					// that is calculated below provides
-					// the retarded position of the spacecraft as
-					// seen by the center of Earth, so we do not
-					// need to worry about adjusting the start/stop
-					// times for light-travel time ourselves.
-					// Just make sure the sc_epoch is within the
-					// start/stop boundaries.
-					if(phaseCentre->sc_epoch < ephem_mjd_start) {
-						ephem_mjd_start = phaseCentre->sc_epoch;
+				if((ds->calculate_own_retarded_position))
+				{
+					if(!phaseCentre->ephemObject.empty())		// process a .bsp file through spice
+					{
+
+						v = computeDifxSpacecraftSourceEphemeris(ds, phaseCentre->sc_epoch,
+																 (ephem_mjd_start+ephem_mjd_stop)*0.5, 0.0, 1, 
+																 phaseCentre->ephemObject.c_str(),
+																 phaseCentre->ephemType.c_str(),
+																 phaseCentre->naifFile.c_str(),
+																 phaseCentre->ephemFile.c_str(),
+																 phaseCentre->orientationFile.c_str(),
+																 "",
+																 phaseCentre->ephemStellarAber,
+																 phaseCentre->ephemClockError);
 					}
-					else if(phaseCentre->sc_epoch > ephem_mjd_stop) {
-						ephem_mjd_stop = phaseCentre->sc_epoch;
+					else if(phaseCentre->isGeosync())
+					{
+						v = computeDifxSpacecraftSourceEphemerisFromXYZ(ds, phaseCentre->sc_epoch,
+																		(ephem_mjd_start+ephem_mjd_stop)*0.5, 0.0, 1,
+																		phaseCentre->X, phaseCentre->Y, phaseCentre->Z,
+																		phaseCentre->ephemType.c_str(),
+																		phaseCentre->naifFile.c_str(),
+																		phaseCentre->orientationFile.c_str(),
+																		phaseCentre->ephemClockError);
 					}
+					else
+					{
+						cerr << "Developer error: not bsp or gps spacecraft type." << endl;
+						
+						exit(EXIT_FAILURE);
+					}
+					if(v != 0)
+					{
+						cerr << "Error: test source ephemeris calculation failed.  Must stop." << endl;
+						
+						exit(EXIT_FAILURE);
+					}
+					double radius(std::sqrt(ds->pos->X*ds->pos->X+ds->pos->Y*ds->pos->Y+ds->pos->Z*ds->pos->Z));
+					double travel_time = radius/299792458.0;
+					// adjust the start time to allow for light
+					// travel time, with some fudge factor
+					ephem_mjd_start -= travel_time / SEC_DAY_DBL * 3.0;
 				}
+							
+							
 				mjdint = static_cast<int>(ephem_mjd_start);
 				fracday0 = ephem_mjd_start-mjdint;
 				ds->GS_mjd_sync = mjdint;
 				ds->GS_dayfraction_sync = fracday0;
 				ds->GS_clock_break_fudge_sec = 0.0;
-				deltat = antennaSetup->ephemDeltaT/86400.0;	// convert from seconds to days
+
+				deltat = antennaSetup->ephemDeltaT/SEC_DAY_DBL;	// convert from seconds to days
 				n0 = static_cast<int>(std::floor((fracday0-deltat_2min)/deltat - (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3.0)*0.5));	// start ephmemeris at least 2 minutes and some increments early
 				mjd0 = mjdint + n0*deltat;			// always start an integer number of increments into day
 				nPoint = static_cast<int>(std::ceil(((ephem_mjd_stop-ephem_mjd_start)+2.0*deltat_2min)/deltat) + (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3) +1); // make sure to extend beyond the end of the job
 
 
-							
-							
-				mjdint = static_cast<int>(J.mjdStart);
-				fracday0 = J.mjdStart-mjdint;
-				deltat = phaseCentre->ephemDeltaT/86400.0;	// convert from seconds to days
-				n0 = static_cast<int>(std::floor((fracday0-deltat_2min)/deltat - (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3.0)*0.5));	// start ephmemeris at least 2 minutes and some increments early
-				mjd0 = mjdint + n0*deltat;			// always start an integer number of increments into day
-				nPoint = static_cast<int>(std::ceil((J.duration()+2.0*deltat_2min)/deltat) + (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3) +1); // make sure to extend beyond the end of the job
 				if(!phaseCentre->ephemObject.empty())		// process a .bsp file through spice
 				{
+					if((stringToSourceCoordinateFrameType(phaseCentre->source_coordinate_frame.c_str()) == DIFXIO_DEFAULT_SOURCE_COORDINATE_FRAME) &&
+					   (stringToSourceCoordinateFrameType(phaseCentre->spacecraft_pointing_coord_frame.c_str()) == SourceCoordinateFrameJ2000_Earth))
+					{
+						// default values: assume SourceCoordinateFrameJ2000_Earth
+						ds->position_coord_frame = SourceCoordinateFrameJ2000_Earth;
+						ds->pointing_coord_frame = SourceCoordinateFrameJ2000_Earth;
+					}
+					else
+					{
+						ds->position_coord_frame = stringToSourceCoordinateFrameType(phaseCentre->source_coordinate_frame.c_str());
+						ds->pointing_coord_frame = stringToSourceCoordinateFrameType(phaseCentre->spacecraft_pointing_coord_frame.c_str());
+					}
 					if(verbose > 0)
 					{
 						int p_save = cout.precision();
 						cout << "Computing ephemeris:" << endl;
 						cout << "  source name = " << phaseCentre->difxName << endl;
-						cout << "  ephem object name = " << phaseCentre->ephemObject << endl;
+						cout << "  difx spacecraft name = " << phaseCentre->sc_difxname << endl;
 						cout << "  mjd = " << mjdint << "  deltat = " << deltat << endl;
 						cout << "  startPoint = " << n0 << "  nPoint = " << nPoint << endl;
 						cout.precision(12);
 						cout << "  mjd0 = " << mjd0 << " J.mjdStart = " <<	J.mjdStart << endl;
 						cout.precision(p_save);
+						cout << "  position_coord_frame = " << sourceCoordinateFrameTypeNames[ds->position_coord_frame] << endl;
+						cout << "  pointing_coord_frame = " << sourceCoordinateFrameTypeNames[ds->pointing_coord_frame] << endl;
+						cout << "  ephemType = " << phaseCentre->ephemType << endl;
+						cout << "  ephem object name = " << phaseCentre->ephemObject << endl;
 						cout << "  ephemFile = " << phaseCentre->ephemFile << endl;
 						cout << "  orientationFile = " << phaseCentre->orientationFile << endl;
 						cout << "  naifFile = " << phaseCentre->naifFile << endl;
 						cout << "  JPLplanetaryephem = " << "" << endl;
 						cout << "  ephemDeltaT = " << phaseCentre->ephemDeltaT << endl;
-						cout << "  ephemType = " << phaseCentre->ephemType << endl;
-						cout << "  SC_pos_offset_refmjd = " << ds->SC_pos_offset_refmjd << " + " << ds->SC_pos_offset_reffracDay << endl;
-						cout << "  SC_pos_offsetorder = " << ds->SC_pos_offsetorder;
-						for(int ii=0; ii < ds->SC_pos_offsetorder; ii++) {
-							cout << "  SC_pos_offset" << ii << " = " << ds->SC_pos_offset[ii].X << ',' << ds->SC_pos_offset[ii].Y << ',' << ds->SC_pos_offset[ii].Z << endl;
-						}
 						cout << "  ephemStellarAber = " << phaseCentre->ephemStellarAber << endl;
 						cout << "  ephemClockError = " << phaseCentre->ephemClockError << endl;
+						cout << "  sc_epoch = " << phaseCentre->sc_epoch << endl;
+						cout << "  calc_own_retardation = " << phaseCentre->calculate_own_retarded_position << endl;
 					}
-					v = computeDifxSpacecraftSourceEphemeris(ds, mjd0, deltat, nPoint, 
+					v = computeDifxSpacecraftSourceEphemeris(ds, phaseCentre->sc_epoch,
+															 mjd0, deltat, nPoint, 
 															 phaseCentre->ephemObject.c_str(),
 															 phaseCentre->ephemType.c_str(),
 															 phaseCentre->naifFile.c_str(),
@@ -2826,349 +2936,476 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 							
 					if(v != 0)
 					{
-						cerr << "Error: ephemeris calculation failed.  Must stop." << endl;
+						cerr << "Error: source ephemeris calculation failed.  Must stop." << endl;
 					
-                        exit(EXIT_FAILURE);
-                    }
-                    // correct the positions, if necessary
-                    if(ds->SC_pos_offsetorder >= 0)
-                    {
-                        v = computeDifxSpacecraftEphemerisOffsets(ds);
-                        if((v))
-                        {
-                            cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
-                                        
-                            exit(EXIT_FAILURE);
-                        }
-                    }
-                }
-                else if(phaseCentre->isGeosync())
-                {
-                    /* Note: these calculations are extremely naive and don't yield a model good for VLBI correlation */
+						exit(EXIT_FAILURE);
+					}
+					// correct the positions, if necessary
+					if(ds->SC_pos_offsetorder >= 0)
+					{
+						v = computeDifxSpacecraftEphemerisOffsets(ds);
+						if((v))
+						{
+							cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
+										
+							exit(EXIT_FAILURE);
+						}
+					}
+				}
+				else if(phaseCentre->isGeosync())
+				{
+					ds->position_coord_frame = SourceCoordinateFrameJ2000_Earth;
+					ds->pointing_coord_frame = SourceCoordinateFrameJ2000_Earth;
+					/* Note: these calculations are extremely naive and don't yield a model good for VLBI correlation */
 
-                    v = computeDifxSpacecraftEphemerisFromXYZ(ds, mjd0, deltat, nPoint, 
-                                                              phaseCentre->X, phaseCentre->Y, phaseCentre->Z,
-                                                              phaseCentre->naifFile.c_str(),
-                                                              phaseCentre->ephemClockError);
-                    if(v != 0)
-                    {
-                        cerr << "Error: ephemeris calculation failed.  Must stop." << endl;
+					if(verbose > 0)
+					{
+						int p_save = cout.precision();
+						cout << "Computing ephemeris:" << endl;
+						cout << "  source name = " << phaseCentre->difxName << endl;
+						cout << "  difx spacecraft name = " << phaseCentre->sc_difxname << endl;
+						cout << "  mjd = " << mjdint << "  deltat = " << deltat << endl;
+						cout << "  startPoint = " << n0 << "  nPoint = " << nPoint << endl;
+						cout.precision(12);
+						cout << "  mjd0 = " << mjd0 << " J.mjdStart = " <<	J.mjdStart << endl;
+						cout.precision(p_save);
+						cout << "  position_coord_frame = " << sourceCoordinateFrameTypeNames[ds->position_coord_frame] << endl;
+						cout << "  pointing_coord_frame = " << sourceCoordinateFrameTypeNames[ds->pointing_coord_frame] << endl;
+						cout << "  ephemType = " << phaseCentre->ephemType << endl;
+						cout << "  ephem object name = " << phaseCentre->ephemObject << endl;
+						cout << "  ephemFile = " << phaseCentre->ephemFile << endl;
+						cout << "  orientationFile = " << phaseCentre->orientationFile << endl;
+						cout << "  naifFile = " << phaseCentre->naifFile << endl;
+						cout << "  JPLplanetaryephem = " << "" << endl;
+						cout << "  ephemDeltaT = " << phaseCentre->ephemDeltaT << endl;
+						cout << "  ephemStellarAber = " << phaseCentre->ephemStellarAber << endl;
+						cout << "  ephemClockError = " << phaseCentre->ephemClockError << endl;
+						cout << "  sc_epoch = " << phaseCentre->sc_epoch << endl;
+						cout << "  calc_own_retardation = " << phaseCentre->calculate_own_retarded_position << endl;
+						cout << "  geo position X = " << phaseCentre->X << endl;
+						cout << "  geo position Y = " << phaseCentre->Y << endl;
+						cout << "  geo position Z = " << phaseCentre->Z << endl;
+					}
+					v = computeDifxSpacecraftSourceEphemerisFromXYZ(ds, phaseCentre->sc_epoch,
+																	mjd0, deltat, nPoint, 
+																	phaseCentre->X, phaseCentre->Y, phaseCentre->Z,
+																	phaseCentre->ephemType.c_str(),
+																	phaseCentre->naifFile.c_str(),
+																	phaseCentre->orientationFile.c_str(),
+																	phaseCentre->ephemClockError);
 					
-                        exit(EXIT_FAILURE);
-                    }
-                    else
-                    {
-                        cerr << "Developer error: not bsp or gps spacecraft type." << endl;
-                        
-                        exit(EXIT_FAILURE);
-                    }
+					if(v != 0)
+					{
+						cerr << "Error: source geostationary ephemeris calculation failed.  Must stop." << endl;
+					
+						exit(EXIT_FAILURE);
+					}
+					else
+					{
+						cerr << "Developer error: not bsp or gps spacecraft type." << endl;
+						
+						exit(EXIT_FAILURE);
+					}
+					// correct the positions, if necessary
+					if(ds->SC_pos_offsetorder >= 0)
+					{
+						v = computeDifxSpacecraftEphemerisOffsets(ds);
+						if((v))
+						{
+							cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
+										
+							exit(EXIT_FAILURE);
+						}
+					}
+				}
+			} // if phaseCentre
+			else if((antennaSetup = P->getAntennaSetupExact(*s)))
+			{
+				// give the spacecraft table the right name so it can be linked to the source
+				if(!antennaSetup->sc_difxname.empty())
+				{
+					snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->sc_difxname.c_str());
+				}
+				else if(!antennaSetup->difxName.empty())
+				{
+					snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->difxName.c_str());
+				}
+				else
+				{
+					snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->vexName.c_str());
+				}
 
-                    // give the spacecraft table the right name so it can be linked to the source
-                    snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", phaseCentre->difxName.c_str());
-                }
-                else if((antennaSetup = P->getAntennaSetupExact(*s)))
-                {
-                    ds->is_antenna = true;
-                    ds->spacecraft_time_type = stringToSpacecraftTimeType(antennaSetup->spacecraft_time_type.c_str());
-                    ds->GS_exists = antennaSetup->GS_exists;
-                    if(ds->GS_exists)
-                    {
-                        if(antennaSetup->GS_difxName.size() > 0)
-                        {
-                            snprintf(ds->GS_Name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->GS_difxName.c_str());
-                        }
-                        else
-                        {
-                            snprintf(ds->GS_Name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->GS_Name.c_str());
-                        }
-                        if(antennaSetup->GS_calcName.size() > 0)
-                        {
-                            snprintf(ds->GS_calcName, DIFXIO_NAME_LENGTH, "%s", antennaSetup->GS_calcName.c_str());
-                        }
-                        else
-                        {
-                            std::memcpy(ds->GS_calcName, ds->GS_Name, DIFXIO_NAME_LENGTH);
-                        }
-                        double mjd_center_time = 0.5*(J.mjdStart+J.mjdStop);
-                        if(antennaSetup->GS_pos_epoch == 0.0) {
-                            mjd_center_time = 0.0;
-                        }
-                        ds->GS_X = antennaSetup->GS_X + antennaSetup->GS_dX*(mjd_center_time-antennaSetup->GS_pos_epoch)*86400.0;
-                        ds->GS_Y = antennaSetup->GS_Y + antennaSetup->GS_dY*(mjd_center_time-antennaSetup->GS_pos_epoch)*86400.0;
-                        ds->GS_Z = antennaSetup->GS_Z + antennaSetup->GS_dZ*(mjd_center_time-antennaSetup->GS_pos_epoch)*86400.0;
-                        ds->SC_recording_delay = antennaSetup->SC_recording_delay;
-                        ds->GS_mount = stringToMountType(antennaSetup->GS_axisType.c_str());
-                        ds->GS_offset[0] = antennaSetup->GS_axisOffset0;
-                        ds->GS_offset[1] = antennaSetup->GS_axisOffset1;
-                        ds->GS_offset[2] = antennaSetup->GS_axisOffset2;
-                        for(std::vector<SpacecraftGroundClockBreak>::const_iterator it = antennaSetup->spacecraft_ground_clock_recording_breaks.begin();
-                            it != antennaSetup->spacecraft_ground_clock_recording_breaks.end();
-                            ++it)
-                        {
-                            double mjd_break_start = it->mjd_start + it->day_fraction_start;
-                            if(mjd_break_start < J.mjdStop - 0.5/86400.0)
-                            {
-                                if(it->mjd_sync + it->day_fraction_sync + (it->clock_break_fudge_seconds /86400.0) > ds->GS_mjd_sync + ds->GS_dayfraction_sync)
-                                {
-                                    ds->GS_mjd_sync = it->mjd_sync;
-                                    ds->GS_dayfraction_sync = it->day_fraction_sync;
-                                    ds->GS_clock_break_fudge_sec = it->clock_break_fudge_seconds;
-                                    // correct sync time
-                                    ds->GS_dayfraction_sync += ds->GS_clock_break_fudge_sec /86400.0;
-                                    if(ds->GS_dayfraction_sync >= 1.0)
-                                    {
-                                        ds->GS_dayfraction_sync -= 1.0;
-                                        ds->GS_mjd_sync++;
-                                    }
-                                    else if(ds->GS_dayfraction_sync <= 0.0)
-                                    {
-                                        ds->GS_dayfraction_sync += 1.0;
-                                        ds->GS_mjd_sync--;
-                                    }
-                                }
-                            }
-                        }
-                        ds->GS_clockorder = antennaSetup->GS_clockorder;
-                        switch(ds->GS_clockorder) {
-                        case 5: ds->GS_clockcoeff[5] = antennaSetup->GS_clock5*1.0e6; // convert to us/sec^5 from sec/sec^5
-                        case 4: ds->GS_clockcoeff[4] = antennaSetup->GS_clock4*1.0e6; // convert to us/sec^5 from sec/sec^5
-                        case 3: ds->GS_clockcoeff[3] = antennaSetup->GS_clock3*1.0e6; // convert to us/sec^5 from sec/sec^5
-                        case 2: ds->GS_clockcoeff[2] = antennaSetup->GS_clock2*1.0e6; // convert to us/sec^5 from sec/sec^5
-                        case 1: ds->GS_clockcoeff[1] = antennaSetup->GS_clock1*1.0e6; // convert to us/sec^5 from sec/sec^5
-                        case 0: ds->GS_clockcoeff[0] = antennaSetup->GS_clock0*1.0e6; // convert to us/sec^5 from sec/sec^5
-                            break;
-                        default: cerr << "Crazy ground station clock order " << ds->GS_clockorder << " for antenna " << antennaSetup->difxName << " (" << antennaSetup->vexName << ") with ground station " << ds->GS_Name << "!" << endl;
-                            cerr << "Defaulting to 0.0!!!" << endl;
-                            ds->GS_clockcoeff[0] = 0.0;
-                            ds->GS_clockorder = 0;
-                        }
-                        ds->GS_clockrefmjd = antennaSetup->GS_clockEpoch;
-                    } // if ds-GS_exists
-                    else {
-                        // verify that the time type is Local
-                        if(ds->spacecraft_time_type != SpacecraftTimeLocal)
-                        {
-                            cerr << "No ground station information provided, but spacecraft_time_type set to '" << spacecraftTimeTypeNames[ds->spacecraft_time_type] << "'" << endl;
-                        }
-                        ds->GS_mjd_sync = 0;
-                        ds->GS_dayfraction_sync = 0.0;
-                        ds->GS_clock_break_fudge_sec = 0.0;
-                    }
-                    // Set up the spacecraft position offset information
-                    ds->SC_pos_offsetorder = antennaSetup->SC_pos_offsetorder;
-                    switch(ds->SC_pos_offsetorder) {
-                    case 5: ds->SC_pos_offset[5] = antennaSetup->SC_pos_offset5;
-                    case 4: ds->SC_pos_offset[4] = antennaSetup->SC_pos_offset4;
-                    case 3: ds->SC_pos_offset[3] = antennaSetup->SC_pos_offset3;
-                    case 2: ds->SC_pos_offset[2] = antennaSetup->SC_pos_offset2;
-                    case 1: ds->SC_pos_offset[1] = antennaSetup->SC_pos_offset1;
-                    case 0: ds->SC_pos_offset[0] = antennaSetup->SC_pos_offset0;
-                    case -1: // no position offset information is ok
-                        break;
-                    default: cerr << "Crazy spacecraft position offset order " << ds->SC_pos_offsetorder << " for antenna " << antennaSetup->difxName << " (" << antennaSetup->vexName << "!" << endl;
-                        cerr << "Defaulting to no position offset!" << endl;
-                        ds->SC_pos_offsetorder = 0;
-                    }
-                            
-                    ds->SC_pos_offset_refmjd = antennaSetup->SC_pos_offset_refmjd;
-                    ds->SC_pos_offset_reffracDay = antennaSetup->SC_pos_offset_reffracDay;
-                    // make sure the spacecraft sync time is included
-                    // in the ephemeris time range
-                    double ephem_mjd_start = J.mjdStart;
-                    double ephem_mjd_stop = J.mjdStop;
-                    if(ds->spacecraft_time_type == SpacecraftTimeGroundReception) {
-                        double mjd_sync = ds->GS_mjd_sync + ds->GS_dayfraction_sync;
-                        if(mjd_sync == 0.0) {
-                            cerr << "No sync time provided for ground reception syncing of spacecraft clock for scan start at MJD " << ephem_mjd_start << endl;
-                        }
-                        else {
-                            if(mjd_sync < ephem_mjd_start) {
-                                ephem_mjd_start = mjd_sync;
-                            }
-                            else if(mjd_sync > ephem_mjd_stop) {
-                                ephem_mjd_stop = mjd_sync;
-                            }
-                        }
-#warning "Should also allow for light travel time from the spacecraft to the ground station here, when the light travel time is >> 1 s"
-                    }
-                    mjdint = static_cast<int>(ephem_mjd_start);
-                    fracday0 = ephem_mjd_start-mjdint;
-                    if((ds->GS_mjd_sync == 0)
-                      && (ds->GS_dayfraction_sync == 0.0)) {
-                        ds->GS_mjd_sync = mjdint;
-                        ds->GS_dayfraction_sync = fracday0;
-                    }
-                                    
-                    deltat = antennaSetup->ephemDeltaT/86400.0;	// convert from seconds to days
-                    n0 = static_cast<int>(std::floor((fracday0-deltat_2min)/deltat - (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3.0)*0.5));	// start ephmemeris at least 2 minutes and some increments early
-                    mjd0 = mjdint + n0*deltat;			// always start an integer number of increments into day
-                    nPoint = static_cast<int>(std::ceil(((ephem_mjd_stop-ephem_mjd_start)+2.0*deltat_2min)/deltat) + (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3) +1); // make sure to extend beyond the end of the job
-                    if(verbose > 0)
-                    {
-                        int p_save = cout.precision();
-                        cout << "Computing spacecraft antenna ephemeris:" << endl;
-                        cout << "  antenna name = " << antennaSetup->vexName << endl;
-                        cout << "  ephem object name = " << antennaSetup->ephemObject << endl;
-                        cout << "  mjdint = " << mjdint << "  deltat = " << deltat << endl;
-                        cout << "  startPoint = " << n0 << "  nPoint = " << nPoint << endl;
-                        cout.precision(12);
-                        cout << "  mjd0 = " << mjd0 << " J.mjdStart = " <<  J.mjdStart << endl;
-                        cout.precision(p_save);
-                        cout << "  ephemFile = " << antennaSetup->ephemFile << endl;
-                        cout << "  orientationFile = " << antennaSetup->orientationFile << endl;
-                        cout << "  naifFile = " << antennaSetup->naifFile << endl;
-                        cout << "  JPLplanetaryephem = " << antennaSetup->JPLplanetaryephem << endl;
-                        cout << "  ephemDeltaT = " << antennaSetup->ephemDeltaT << endl;
-                        cout << "  ephemType = " << antennaSetup->ephemType << endl;
-                        cout << "  GS_clockrefmjd = " << ds->GS_clockrefmjd;
-                        cout << "  GS_clockorder = " << ds->GS_clockorder;
-                        for(int ii=0; ii < ds->GS_clockorder+1; ii++) {
-                            cout << "  GS_clockcoeff" << ii << " = " << ds->GS_clockcoeff[ii] << endl;
-                        }
-                        cout << "  SC_pos_offset_refmjd = " << ds->SC_pos_offset_refmjd << " + " << ds->SC_pos_offset_reffracDay << endl;
-                        cout << "  SC_pos_offsetorder = " << ds->SC_pos_offsetorder;
-                        for(int ii=0; ii < ds->SC_pos_offsetorder+1; ii++) {
-                            cout << "  SC_pos_offset" << ii << " = " << ds->SC_pos_offset[ii].X << ',' << ds->SC_pos_offset[ii].Y << ',' << ds->SC_pos_offset[ii].Z << endl;
-                        }
-                        cout << "  ephemClockError = " << antennaSetup->ephemClockError << endl;
-                    }
-                    v = computeDifxSpacecraftAntennaEphemeris(ds, mjd0, deltat, nPoint, 
-                                                              antennaSetup->ephemObject.c_str(),
-                                                              antennaSetup->ephemType.c_str(),
-                                                              antennaSetup->naifFile.c_str(),
-                                                              antennaSetup->ephemFile.c_str(),
-                                                              antennaSetup->orientationFile.c_str(),
-                                                              antennaSetup->JPLplanetaryephem.c_str(),
-                                                              antennaSetup->ephemClockError);
-                    if(v != 0)
-                    {
-                        cerr << "Error: ephemeris calculation failed.  Must stop." << endl;
+				ds->is_antenna = true;
+				ds->spacecraft_time_type = stringToSpacecraftTimeType(antennaSetup->spacecraft_time_type.c_str());
+				ds->SC_recording_delay = antennaSetup->SC_recording_delay;
+				ds->SC_Comm_Rec_to_Elec = antennaSetup->SC_Comm_Rec_to_Elec;
+				ds->SC_Elec_to_Comm = antennaSetup->SC_Elec_to_Comm;
+				ds->GS_exists = antennaSetup->GS_exists;
+				if(ds->GS_exists)
+				{
+					if(antennaSetup->GS_difxName.size() > 0)
+					{
+						snprintf(ds->GS_Name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->GS_difxName.c_str());
+					}
+					else
+					{
+						snprintf(ds->GS_Name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->GS_Name.c_str());
+					}
+					if(antennaSetup->GS_calcName.size() > 0)
+					{
+						snprintf(ds->GS_calcName, DIFXIO_NAME_LENGTH, "%s", antennaSetup->GS_calcName.c_str());
+					}
+					else
+					{
+						std::memcpy(ds->GS_calcName, ds->GS_Name, DIFXIO_NAME_LENGTH);
+					}
+					double mjd_center_time = 0.5*(J.mjdStart+J.mjdStop);
+					if(antennaSetup->GS_pos_epoch == 0.0) {
+						mjd_center_time = 0.0;
+					}
+					ds->GS_X = antennaSetup->GS_X + antennaSetup->GS_dX*(mjd_center_time-antennaSetup->GS_pos_epoch)*SEC_DAY_DBL;
+					ds->GS_Y = antennaSetup->GS_Y + antennaSetup->GS_dY*(mjd_center_time-antennaSetup->GS_pos_epoch)*SEC_DAY_DBL;
+					ds->GS_Z = antennaSetup->GS_Z + antennaSetup->GS_dZ*(mjd_center_time-antennaSetup->GS_pos_epoch)*SEC_DAY_DBL;
+					ds->GS_mount = stringToMountType(antennaSetup->GS_axisType.c_str());
+					ds->GS_offset[0] = antennaSetup->GS_axisOffset0;
+					ds->GS_offset[1] = antennaSetup->GS_axisOffset1;
+					ds->GS_offset[2] = antennaSetup->GS_axisOffset2;
+					for(std::vector<SpacecraftGroundClockBreak>::const_iterator it = antennaSetup->spacecraft_ground_clock_recording_breaks.begin();
+						it != antennaSetup->spacecraft_ground_clock_recording_breaks.end();
+						++it)
+					{
+						double mjd_break_start = it->mjd_start + it->day_fraction_start;
+						if(mjd_break_start < J.mjdStop - 0.5/SEC_DAY_DBL)
+						{
+							if(it->mjd_sync + it->day_fraction_sync + (it->clock_break_fudge_seconds /86400.0) > ds->GS_mjd_sync + ds->GS_dayfraction_sync)
+							{
+								ds->GS_mjd_sync = it->mjd_sync;
+								ds->GS_dayfraction_sync = it->day_fraction_sync;
+								ds->GS_clock_break_fudge_sec = it->clock_break_fudge_seconds;
+								// correct sync time
+								ds->GS_dayfraction_sync += ds->GS_clock_break_fudge_sec /86400.0;
+								if(ds->GS_dayfraction_sync >= 1.0)
+								{
+									ds->GS_dayfraction_sync -= 1.0;
+									ds->GS_mjd_sync++;
+								}
+								else if(ds->GS_dayfraction_sync <= 0.0)
+								{
+									ds->GS_dayfraction_sync += 1.0;
+									ds->GS_mjd_sync--;
+								}
+							}
+						}
+					}
+					ds->GS_clockorder = antennaSetup->GS_clockorder;
+					switch(ds->GS_clockorder) {
+					case 5: ds->GS_clockcoeff[5] = antennaSetup->GS_clock5*1.0e6; // convert to us/sec^5 from sec/sec^5
+					case 4: ds->GS_clockcoeff[4] = antennaSetup->GS_clock4*1.0e6; // convert to us/sec^5 from sec/sec^5
+					case 3: ds->GS_clockcoeff[3] = antennaSetup->GS_clock3*1.0e6; // convert to us/sec^5 from sec/sec^5
+					case 2: ds->GS_clockcoeff[2] = antennaSetup->GS_clock2*1.0e6; // convert to us/sec^5 from sec/sec^5
+					case 1: ds->GS_clockcoeff[1] = antennaSetup->GS_clock1*1.0e6; // convert to us/sec^5 from sec/sec^5
+					case 0: ds->GS_clockcoeff[0] = antennaSetup->GS_clock0*1.0e6; // convert to us/sec^5 from sec/sec^5
+						break;
+					default: cerr << "Crazy ground station clock order " << ds->GS_clockorder << " for antenna " << antennaSetup->difxName << " (" << antennaSetup->vexName << ") with ground station " << ds->GS_Name << "!" << endl;
+						cerr << "Defaulting to 0.0!!!" << endl;
+						ds->GS_clockcoeff[0] = 0.0;
+						ds->GS_clockorder = 0;
+					}
+					ds->GS_clockrefmjd = antennaSetup->GS_clockEpoch;
+				} // if ds-GS_exists
+				else {
+					// verify that the time type is Local
+					if(ds->spacecraft_time_type != SpacecraftTimeLocal)
+					{
+						cerr << "No ground station information provided, but spacecraft_time_type set to '" << spacecraftTimeTypeNames[ds->spacecraft_time_type] << "'" << endl;
+					}
+					ds->GS_mjd_sync = 0;
+					ds->GS_dayfraction_sync = 0.0;
+					ds->GS_clock_break_fudge_sec = 0.0;
+				}
+				if((stringToSourceCoordinateFrameType(antennaSetup->site_coord_frame.c_str()) == DIFXIO_DEFAULT_STATION_COORDINATE_FRAME) &&
+				   (stringToSourceCoordinateFrameType(antennaSetup->spacecraft_pointing_coord_frame.c_str()) == SourceCoordinateFrameJ2000_Earth))
+				{
+					// default values: assume SourceCoordinateFrameJ2000_Earth
+					ds->position_coord_frame = SourceCoordinateFrameJ2000_Earth;
+					ds->pointing_coord_frame = SourceCoordinateFrameJ2000_Earth;
+				}
+				else
+				{
+					ds->position_coord_frame = stringToSourceCoordinateFrameType(antennaSetup->site_coord_frame.c_str());
+					ds->pointing_coord_frame = stringToSourceCoordinateFrameType(antennaSetup->spacecraft_pointing_coord_frame.c_str());
+				}
+				// Set up the spacecraft position offset information
+				ds->SC_pos_offsetorder = antennaSetup->SC_pos_offsetorder;
+				switch(ds->SC_pos_offsetorder) {
+				case 5: ds->SC_pos_offset[5] = antennaSetup->SC_pos_offset5;
+				case 4: ds->SC_pos_offset[4] = antennaSetup->SC_pos_offset4;
+				case 3: ds->SC_pos_offset[3] = antennaSetup->SC_pos_offset3;
+				case 2: ds->SC_pos_offset[2] = antennaSetup->SC_pos_offset2;
+				case 1: ds->SC_pos_offset[1] = antennaSetup->SC_pos_offset1;
+				case 0: ds->SC_pos_offset[0] = antennaSetup->SC_pos_offset0;
+				case -1: // no position offset information is ok
+					break;
+				default: cerr << "Crazy spacecraft position offset order " << ds->SC_pos_offsetorder << " for antenna " << antennaSetup->difxName << " (" << antennaSetup->vexName << "!" << endl;
+					cerr << "Defaulting to no position offset!" << endl;
+					ds->SC_pos_offsetorder = 0;
+				}
+							
+				ds->SC_pos_offset_refmjd = antennaSetup->SC_pos_offset_refmjd;
+				ds->SC_pos_offset_reffracDay = antennaSetup->SC_pos_offset_reffracDay;
+				ds->calculate_own_retarded_position = antennaSetup->calculate_own_retarded_position;
+				// make sure the spacecraft sync time is included
+				// in the ephemeris time range
+				double ephem_mjd_start = J.mjdStart;
+				double ephem_mjd_stop = J.mjdStop;
+				if(ds->spacecraft_time_type == SpacecraftTimeGroundReception) {
+					double mjd_sync = ds->GS_mjd_sync + ds->GS_dayfraction_sync;
+					if(mjd_sync == 0.0) {
+						cerr << "No sync time provided for ground reception syncing of spacecraft clock for scan start at MJD " << ephem_mjd_start << endl;
+					}
+					else {
+						if(mjd_sync < ephem_mjd_start) {
+							ephem_mjd_start = mjd_sync;
+						}
+						else if(mjd_sync > ephem_mjd_stop) {
+							ephem_mjd_stop = mjd_sync;
+						}
+					}
+				}
+				{
+					// allow for light travel time issues which may require
+					// an extended ephemeris
+
+					v = computeDifxSpacecraftAntennaEphemeris(ds, (ephem_mjd_start+ephem_mjd_stop)*0.5, 0.0, 1, 
+															  antennaSetup->ephemObject.c_str(),
+															  antennaSetup->ephemType.c_str(),
+															  antennaSetup->naifFile.c_str(),
+															  antennaSetup->ephemFile.c_str(),
+															  antennaSetup->orientationFile.c_str(),
+															  antennaSetup->JPLplanetaryephem.c_str(),
+															  antennaSetup->ephemClockError);
+					if(v != 0)
+					{
+						cerr << "Error: test spacecraft antenna ephemeris calculation failed.  Must stop." << endl;
+						
+						exit(EXIT_FAILURE);
+					}
+					double radius(std::sqrt(ds->pos->X*ds->pos->X+ds->pos->Y*ds->pos->Y+ds->pos->Z*ds->pos->Z));
+					double travel_time = radius/299792458.0;
+					// adjust the start time to allow for light
+					// travel time, with some fudge factor
+					ephem_mjd_start -= travel_time / SEC_DAY_DBL * 3.0;
+				}
 				
-                        exit(EXIT_FAILURE);
-                    }
-                    // correct the positions, if necessary
-                    if(ds->SC_pos_offsetorder >= 0)
-                    {
-                        v = computeDifxSpacecraftEphemerisOffsets(ds);
-                        if((v))
-                        {
-                            cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
+				mjdint = static_cast<int>(ephem_mjd_start);
+				fracday0 = ephem_mjd_start-mjdint;
+				if((ds->GS_mjd_sync == 0)
+				  && (ds->GS_dayfraction_sync == 0.0)) {
+					ds->GS_mjd_sync = mjdint;
+					ds->GS_dayfraction_sync = fracday0;
+				}
+									
+				deltat = antennaSetup->ephemDeltaT/SEC_DAY_DBL;	// convert from seconds to days
+				n0 = static_cast<int>(std::floor((fracday0-deltat_2min)/deltat - (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3.0)*0.5));	// start ephmemeris at least 2 minutes and some increments early
+				mjd0 = mjdint + n0*deltat;			// always start an integer number of increments into day
+				nPoint = static_cast<int>(std::ceil(((ephem_mjd_stop-ephem_mjd_start)+2.0*deltat_2min)/deltat) + (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3) +1); // make sure to extend beyond the end of the job
+				if(verbose > 0)
+				{
+					int p_save = cout.precision();
+					cout << "Computing spacecraft antenna ephemeris:" << endl;
+					cout << "  antenna name = " << antennaSetup->vexName << endl;
+					cout << "  antenna difx name = " << antennaSetup->difxName << endl;
+					cout << "  difx spacecraft name = " << phaseCentre->sc_difxname << endl;
+					cout << "  ephem object name = " << antennaSetup->ephemObject << endl;
+					cout << "  mjdint = " << mjdint << "  deltat = " << deltat << endl;
+					cout << "  startPoint = " << n0 << "  nPoint = " << nPoint << endl;
+					cout.precision(12);
+					cout << "  mjd0 = " << mjd0 << " J.mjdStart = " <<	J.mjdStart << endl;
+					cout.precision(p_save);
+					cout << "  spacecraft_time_type = " << spacecraftTimeTypeNames[ds->spacecraft_time_type] << endl;
+					cout << "  position_coord_frame = " << sourceCoordinateFrameTypeNames[ds->position_coord_frame] << endl;
+					cout << "  pointing_coord_frame = " << sourceCoordinateFrameTypeNames[ds->pointing_coord_frame] << endl;
+					cout << "  SC_recording_delay = " << ds->SC_recording_delay << endl;
+					cout << "  SC_Comm_Rec_to_Elec = " << ds->SC_Comm_Rec_to_Elec << endl;
+					cout << "  SC_Elec_to_Comm = " << ds->SC_Elec_to_Comm << endl;
+					cout << "  ephemType = " << antennaSetup->ephemType << endl;
+					cout << "  ephem object name = " << antennaSetup->ephemObject << endl;
+					cout << "  ephemFile = " << antennaSetup->ephemFile << endl;
+					cout << "  orientationFile = " << antennaSetup->orientationFile << endl;
+					cout << "  naifFile = " << antennaSetup->naifFile << endl;
+					cout << "  JPLplanetaryephem = " << antennaSetup->JPLplanetaryephem << endl;
+					cout << "  ephemDeltaT = " << antennaSetup->ephemDeltaT << endl;
+					cout << "  ephemClockError = " << antennaSetup->ephemClockError << endl;
+					
+					cout << "  GS_clockrefmjd = " << ds->GS_clockrefmjd;
+					cout << "  GS_clockorder = " << ds->GS_clockorder;
+					for(int ii=0; ii < ds->GS_clockorder+1; ii++) {
+						cout << "  GS_clockcoeff" << ii << " = " << ds->GS_clockcoeff[ii] << endl;
+					}
+					cout << "  SC_pos_offset_refmjd = " << ds->SC_pos_offset_refmjd << " + " << ds->SC_pos_offset_reffracDay << endl;
+					cout << "  SC_pos_offsetorder = " << ds->SC_pos_offsetorder;
+					for(int ii=0; ii < ds->SC_pos_offsetorder+1; ii++) {
+						cout << "  SC_pos_offset" << ii << " = " << ds->SC_pos_offset[ii].X << ',' << ds->SC_pos_offset[ii].Y << ',' << ds->SC_pos_offset[ii].Z << endl;
+					}
+					cout << "  ephemClockError = " << antennaSetup->ephemClockError << endl;
+					cout << "  calc_own_retardation = " << antennaSetup->calculate_own_retarded_position << endl;
+				}
+				v = computeDifxSpacecraftAntennaEphemeris(ds, mjd0, deltat, nPoint, 
+														  antennaSetup->ephemObject.c_str(),
+														  antennaSetup->ephemType.c_str(),
+														  antennaSetup->naifFile.c_str(),
+														  antennaSetup->ephemFile.c_str(),
+														  antennaSetup->orientationFile.c_str(),
+														  antennaSetup->JPLplanetaryephem.c_str(),
+														  antennaSetup->ephemClockError);
+				if(v != 0)
+				{
+					cerr << "Error: ephemeris calculation failed.  Must stop." << endl;
 				
-                            exit(EXIT_FAILURE);
-                        }
-                    }
-
-                    // give the spacecraft table the right name so it can be linked to the source
-                    if(antennaSetup->difxName.size() > 0)
-                    {
-                        snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->difxName.c_str());
-                    }
-                    else
-                    {
-                        snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->vexName.c_str());
-                    }
-
-                            
-                    // calculate the maximum speed of the spacecraft
-                    for(int ii=0; ii < ds->nPoint; --ii) {
-                        double s2(ds->pos[ii].dX*ds->pos[ii].dX
-                                 + ds->pos[ii].dY*ds->pos[ii].dY
-                                 + ds->pos[ii].dZ*ds->pos[ii].dZ);
-                        s2 = std::sqrt(s2);
-                        if(s2 > max_speed) {
-                            max_speed = s2;
-                        }
-                    }
-                }
-                else {
-                    cerr << "Developer error: couldn't find " << *s << " in the spacecraft table, aborting!)" << endl;
+					exit(EXIT_FAILURE);
+				}
+				// correct the positions, if necessary
+				if(ds->SC_pos_offsetorder >= 0)
+				{
+					v = computeDifxSpacecraftEphemerisOffsets(ds);
+					if((v))
+					{
+						cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
 				
-                    exit(EXIT_FAILURE);
-                }
-            }
+						exit(EXIT_FAILURE);
+					}
+				}
+
+							
+				// calculate the maximum speed of the spacecraft
+				for(int ii=0; ii < ds->nPoint; --ii) {
+					double s2(ds->pos[ii].dX*ds->pos[ii].dX
+							 + ds->pos[ii].dY*ds->pos[ii].dY
+							 + ds->pos[ii].dZ*ds->pos[ii].dZ);
+					s2 = std::sqrt(s2);
+					if(s2 > max_speed) {
+						max_speed = s2;
+					}
+				}
+			}
+			else {
+				cerr << "Developer error: couldn't find " << *s << " in the spacecraft table, aborting!)" << endl;
+				
+				exit(EXIT_FAILURE);
+			}
 
 
-            for(int c = 0; c < D->nConfig; c++) {
-                const VexMode *mode;
-                    
-                mode = V->getModeByDefName(configs[c].first);
-                corrSetup = P->getCorrSetup(configs[c].second);
-                {
-                    double max_sampRate = 0.0;
-                    for(map<string,VexSetup>::const_iterator sp = mode->setups.begin(); sp != mode->setups.end(); ++sp)
-                    {
-                        if(sp->second.sampRate > max_sampRate)
-                        {
-                            max_sampRate = sp->second.sampRate;
-                        }
-                    }
-                    worstcaseguardns = calculateWorstcaseGuardNS_spacecraft(max_speed, max_sampRate, D->config[c].subintNS);
-                }
-                    
-                if(D->config[c].guardNS < worstcaseguardns)
-                {
-                    cerr << "vex2difx calculates the worst-case guardNS for configuration " << c << " (" << D->config[c].name << ") as " << worstcaseguardns << " including spacecraft antennas.  The current value is " << D->config[c].guardNS << ".  You should probably set guardNS to " << worstcaseguardns << " or higher in the SETUP areas in your .v2d file, or the correlator will probably fail.  " << endl;
-                    if((strict) && (corrSetup->explicitGuardNS))
-                    {
-                        cerr << "\nExiting since strict mode was enabled and explicit guardNS set in .v2d file." << endl;
-                        exit(EXIT_FAILURE);
-                    }
-                    else if(corrSetup->explicitGuardNS)
-                    {
-                        cerr << "\nexplicit guardNS value set in .v2d file will be ignored since --force was given." << endl;
-                    }
-                    else 
-                    {
-                        cerr << "Automagically correcting guardNS value to " << worstcaseguardns << " for configuration " << c << " (" << D->config[c].name << ")." << endl;
-                    }
-                    D->config[c].guardNS = worstcaseguardns;
-                }
-            }
+			for(int c = 0; c < D->nConfig; c++) {
+				const VexMode *mode;
+					
+				mode = V->getModeByDefName(configs[c].first);
+				corrSetup = P->getCorrSetup(configs[c].second);
+				{
+					double max_sampRate = 0.0;
+					for(map<string,VexSetup>::const_iterator sp = mode->setups.begin(); sp != mode->setups.end(); ++sp)
+					{
+						if(sp->second.sampRate > max_sampRate)
+						{
+							max_sampRate = sp->second.sampRate;
+						}
+					}
+					worstcaseguardns = calculateWorstcaseGuardNS_spacecraft(max_speed, max_sampRate, D->config[c].subintNS);
+				}
+					
+				if(D->config[c].guardNS < worstcaseguardns)
+				{
+					cerr << "vex2difx calculates the worst-case guardNS for configuration " << c << " (" << D->config[c].name << ") as " << worstcaseguardns << " including spacecraft antennas.  The current value is " << D->config[c].guardNS << ".	You should probably set guardNS to " << worstcaseguardns << " or higher in the SETUP areas in your .v2d file, or the correlator will probably fail.	 " << endl;
+					if((strict) && (corrSetup->explicitGuardNS))
+					{
+						cerr << "\nExiting since strict mode was enabled and explicit guardNS set in .v2d file." << endl;
+						exit(EXIT_FAILURE);
+					}
+					else if(corrSetup->explicitGuardNS)
+					{
+						cerr << "\nexplicit guardNS value set in .v2d file will be ignored since --force was given." << endl;
+					}
+					else 
+					{
+						cerr << "Automagically correcting guardNS value to " << worstcaseguardns << " for configuration " << c << " (" << D->config[c].name << ")." << endl;
+					}
+					D->config[c].guardNS = worstcaseguardns;
+				}
+			}
 
-            //Fill in the spacecraft IDs in the DifxInput object
-            for(int sc = 0; sc < D->nSpacecraft; ++sc)
-            {
-                bool spacecraft_found = false;
-                if(D->spacecraft[sc].is_antenna)
-                {
-                    // First do the antennas
-                    for(int a = 0; a < D->nAntenna; ++a)
-                    {
-                        if(strcmp(D->spacecraft[sc].name, D->antenna[a].name) == 0)
-                        {
-                            D->antenna[a].spacecraftId = sc;
-                            spacecraft_found = true;
-                                
-                            break;
-                        }
-                    }
-                        
-                    if((!spacecraft_found) && (verbose))
-                    {
-                        cerr << "Warning: No antenna match found for spacecraft antenna " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
-                    }
-                }
-                else
-                {
-                    // Next do the sources
-                    for(int s = 0; s < D->nSource; ++s)
-                    {
-                        if(strcmp(D->spacecraft[sc].name, D->source[s].name) == 0)
-                        {
-                            D->source[s].spacecraftId = sc;
-                            spacecraft_found = true;
-                                
-                            break;
-                        }
-                    }
-                    if((!spacecraft_found) && (verbose))
-                    {
-                        cerr << "Warning: No source match found for spacecraft source " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
-                    }
-                }
-            } 
-        }
-    }
+			//Fill in the spacecraft IDs in the DifxInput object
+			for(int sc = 0; sc < D->nSpacecraft; ++sc)
+			{
+				bool spacecraft_found = false;
+				if(D->spacecraft[sc].is_antenna)
+				{
+					// First do the antennas
+					for(int a = 0; a < D->nAntenna; ++a)
+					{
+						if(strcmp(D->spacecraft[sc].name, D->antenna[a].sc_name) == 0)
+						{
+							D->antenna[a].spacecraftId = sc;
+							spacecraft_found = true;
+								
+							break;
+						}
+					}	
+					if(!spacecraft_found)
+					{
+						cerr << "Error: programmer did not copy spacecraft name into antenna sc_name area for " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
+						for(int a = 0; a < D->nAntenna; ++a)
+						{
+							if(strcmp(D->spacecraft[sc].name, D->antenna[a].name) == 0)
+							{
+								D->antenna[a].spacecraftId = sc;
+								cerr << "Found match at antenna " << D->antenna[a].name << endl;
+								spacecraft_found = true;
+								
+								break;
+							}
+						}
+					}
+						
+					if((!spacecraft_found) && (verbose))
+					{
+						cerr << "Warning: No antenna match found for spacecraft antenna " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
+					}
+				}
+				else
+				{
+					// Next do the sources
+					for(int s = 0; s < D->nSource; ++s)
+					{
+						if(strcmp(D->spacecraft[sc].name, D->source[s].sc_name) == 0)
+						{
+							D->source[s].spacecraftId = sc;
+							spacecraft_found = true;
+								
+							break;
+						}
+					}
+					if(!spacecraft_found)
+					{
+						cerr << "Error: programmer did not copy spacecraft name into source sc_name area for " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
+						for(int s = 0; s < D->nSource; ++s)
+						{
+							if(strcmp(D->spacecraft[sc].name, D->source[s].name) == 0)
+							{
+								D->source[s].spacecraftId = sc;
+								cerr << "Found match at source " << D->source[s].name << endl;
+								spacecraft_found = true;
+								
+								break;
+							}
+						}
+					}
+					if((!spacecraft_found) && (verbose))
+					{
+						cerr << "Warning: No source match found for spacecraft source " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
+					}
+				}
+			} 
+		}
+	}
 
 	// Make frequency table
 	populateFreqTable(D, freqs, toneSets);
@@ -3203,7 +3440,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	}
 
 	//All averaging will always be in correlator by default, not difx2fits
-	D->specAvg  = 1;
+	D->specAvg	= 1;
 
 	// Check if spacecraft clock polys need to be shifted in time
 	if(!spacecraftSet.empty())
@@ -3263,7 +3500,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		if(of)
 		{
 			char fileBase[DIFXIO_FILENAME_LENGTH];
-			double tops;    // Trillion operations
+			double tops;	// Trillion operations
 			int p;
 
 			generateDifxJobFileBase(D->job, fileBase);
@@ -3364,7 +3601,7 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 		}
 		if(n != 0 && n != 7)
 		{
-			cerr << "Warning: source " << s->vexName << " seems to have an incomplete set of ephemeris parameters.  All or none of ephemObject, ephemFile, naifFile must be given.  Error code = " << n << endl;
+			cerr << "Warning: source " << s->vexName << " seems to have an incomplete set of ephemeris parameters.	All or none of ephemObject, ephemFile, naifFile must be given.	Error code = " << n << endl;
 			++nWarn;
 		}
 	}
@@ -3476,28 +3713,28 @@ static int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 static void usage(int argc, char **argv)
 {
 	cout << endl;
-	cout << program << " version " << version << "  " << author << " " << verdate << endl;
+	cout << program << " version " << version << "	" << author << " " << verdate << endl;
 	cout << endl;
-	cout << "Usage:  " << argv[0] << " [<options>] <v2d file>" << endl;
+	cout << "Usage:	 " << argv[0] << " [<options>] <v2d file>" << endl;
 	cout << endl;
 	cout << "  options can include:" << endl;
-	cout << "     -h" << endl;
-	cout << "     --help        display this information and quit." << endl;
+	cout << "	  -h" << endl;
+	cout << "	  --help		display this information and quit." << endl;
 	cout << endl;
-	cout << "     -v" << endl;
-	cout << "     --verbose     increase the verbosity of the output; -v -v for more." << endl;
+	cout << "	  -v" << endl;
+	cout << "	  --verbose		increase the verbosity of the output; -v -v for more." << endl;
 	cout << endl;
-	cout << "     -o" << endl;
-	cout << "     --output      create a v2d file with all defaults populated." << endl;
+	cout << "	  -o" << endl;
+	cout << "	  --output		create a v2d file with all defaults populated." << endl;
 	cout << endl;
-	cout << "     -d" << endl;
-	cout << "     --delete-old  delete all jobs in this series before running." << endl;
+	cout << "	  -d" << endl;
+	cout << "	  --delete-old	delete all jobs in this series before running." << endl;
 	cout << endl;
-	cout << "     -f" << endl;
-	cout << "     --force       continue desipte warnings." << endl;
+	cout << "	  -f" << endl;
+	cout << "	  --force		continue desipte warnings." << endl;
 	cout << endl;
-	cout << "     -s" << endl;
-	cout << "     --strict      treat some warnings as errors and quit [default]." << endl;
+	cout << "	  -s" << endl;
+	cout << "	  --strict		treat some warnings as errors and quit [default]." << endl;
 	cout << endl;
 	cout << "  the v2d file is the vex2difx configuration file to process." << endl;
 	cout << endl;
@@ -3563,27 +3800,27 @@ int main(int argc, char **argv)
 				return EXIT_SUCCESS;
 			}
 			else if(strcmp(argv[a], "-v") == 0 ||
-				strcmp(argv[a], "--verbose") == 0)
+					strcmp(argv[a], "--verbose") == 0)
 			{
 				++verbose;
 			}
 			else if(strcmp(argv[a], "-o") == 0 ||
-				strcmp(argv[a], "--output") == 0)
+					strcmp(argv[a], "--output") == 0)
 			{
 				writeParams = 1;
 			}
 			else if(strcmp(argv[a], "-d") == 0 ||
-				strcmp(argv[a], "--delete-old") == 0)
+					strcmp(argv[a], "--delete-old") == 0)
 			{
 				deleteOld = 1;
 			}
 			else if(strcmp(argv[a], "-f") == 0 ||
-				strcmp(argv[a], "--force") == 0)
+					strcmp(argv[a], "--force") == 0)
 			{
 				strict = 0;
 			}
 			else if(strcmp(argv[a], "-s") == 0 ||
-				strcmp(argv[a], "--strict") == 0)
+					strcmp(argv[a], "--strict") == 0)
 			{
 				strict = 1;
 			}
@@ -3610,7 +3847,7 @@ int main(int argc, char **argv)
 
 	if(v2dFile.size() > DIFX_MESSAGE_PARAM_LENGTH-2)
 	{
-		//job numbers into the tens of thousands will be truncated in difxmessage.  Better warn the user.
+		//job numbers into the tens of thousands will be truncated in difxmessage.	Better warn the user.
 		cout << "Filename " << v2dFile << " is too long - its job name might be truncated by difxmessage!" << endl;
 		cout << "You are strongly suggested to choose a shorter .v2d name (root shorter than 26 characters)" << endl;
 	}
@@ -3658,7 +3895,7 @@ int main(int argc, char **argv)
 	ok = checkCRLF(P->vexFile.c_str());
 	if(ok < 0)
 	{
-		cerr << "The vex file has problems.  Exiting." << endl;
+		cerr << "The vex file has problems.	 Exiting." << endl;
 
 		exit(EXIT_FAILURE);
 	}
@@ -3815,10 +4052,10 @@ int main(int argc, char **argv)
 	difxLabel = getenv("DIFX_LABEL");
 	of.open(jobListFile.c_str());
 	of.precision(12);
-	of << "exper=" << V->getExper()->name << "  v2d=" << v2dFile <<"  pass=" << P->jobSeries << "  mjd=" << current_mjd() << "  DiFX=" << difxVersion << "  vex2difx=" << version << "  vex=" << P->vexFile;
+	of << "exper=" << V->getExper()->name << "	v2d=" << v2dFile <<"  pass=" << P->jobSeries << "  mjd=" << current_mjd() << "	DiFX=" << difxVersion << "	vex2difx=" << version << "	vex=" << P->vexFile;
 	if(difxLabel)
 	{
-		of << "  label=" << difxLabel;
+		of << "	 label=" << difxLabel;
 	}
 	of << endl;
 	
@@ -3845,10 +4082,10 @@ int main(int argc, char **argv)
 	{
 		cout << endl;
 		cout << "Notice!  " << nMulti << " jobs were replicated multiple times and have a letter suffix" << endl;
-		cout << "after the job number.  This is probably due to mixed amounts of oversampling" << endl;
+		cout << "after the job number.	This is probably due to mixed amounts of oversampling" << endl;
 		cout << "at the same time within one or more observing modes. In cases like this the" << endl;
 		cout << "PI might want different processing to be done on each IF (such as number of" << endl;
-		cout << "spectral lines or integration times).  Consider explicitly making multiple" << endl;
+		cout << "spectral lines or integration times).	Consider explicitly making multiple" << endl;
 		cout << ".v2d files, one for each oversample factor, that operate only on the" << endl;
 		cout << "relavant baseband channels." << endl;
 	}
