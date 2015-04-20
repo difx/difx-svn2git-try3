@@ -59,6 +59,7 @@ enum AberCorr stringToAberCorr(const char* str)
 const char performDirectionDerivativeTypeNames[][MAX_PERFORM_DIRECTION_DERIVATIVE_STRING_LENGTH] = 
 {
 	"NONE",
+	"UNKNOWN",
 	"DEFAULT",
 	"FIRST",
 	"FIRST2",
@@ -91,7 +92,7 @@ enum PerformDirectionDerivativeType stringToPerformDirectionDerivativeType(const
 	{
 		return PerformDirectionDerivativeSecondDerivative2;
 	}
-	return PerformDirectionDerivativeNone;
+	return PerformDirectionDerivativeUnknown;
 }
 
 const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
@@ -137,10 +138,10 @@ DifxJob *newDifxJobArray(int nJob)
 		dj[j].polyOrder = DIFXIO_DEFAULT_POLY_ORDER;
 		dj[j].polyInterval = DIFXIO_DEFAULT_POLY_INTERVAL;
 		dj[j].delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
-		dj[j].delayServerType = DIFX_DEFAULT_DELAY_SERVER_TYPE;
-		dj[j].delayVersion = DEFIX_DEFAULT_DELAY_SERVER_VERSION;
-		dj[j].delayProgram = delayServerTypeIds[DIFX_DEFAULT_DELAY_SERVER_TYPE];
-		dj[j].delayHandler = DEFIX_DEFAULT_DELAY_SERVER_HANDLER;
+		dj[j].delayServerType = DIFXIO_DEFAULT_DELAY_SERVER_TYPE;
+		dj[j].delayVersion = DIFXIO_DEFAULT_DELAY_SERVER_VERSION;
+		dj[j].delayProgram = delayServerTypeIds[DIFXIO_DEFAULT_DELAY_SERVER_TYPE];
+		dj[j].delayHandler = DIFXIO_DEFAULT_DELAY_SERVER_HANDLER;
 		dj[j].perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative;
 		dj[j].perform_uvw_deriv = PerformDirectionDerivativeNone;
 		dj[j].perform_uvw_deriv = PerformDirectionDerivativeNone;

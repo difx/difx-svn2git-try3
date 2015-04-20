@@ -681,8 +681,7 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		config = dc + i;
 
 		writeDifxLine(out, "CONFIG NAME", config->name);
-		writeDifxLineDouble(out, "INT TIME (SEC)", "%8.6f",
-							config->tInt);
+		writeDifxLineDouble(out, "INT TIME (SEC)", "%15.12f", config->tInt);
 		writeDifxLineInt(out, "SUBINT NANOSECONDS", config->subintNS);
 		writeDifxLineInt(out, "GUARD NANOSECONDS", config->guardNS);
 		writeDifxLineInt(out, "FRINGE ROTN ORDER", config->fringeRotOrder);
@@ -691,8 +690,7 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		writeDifxLineInt(out, "NUM BUFFERED FFTS", config->numBufferedFFTs);
 		writeDifxLineBoolean(out, "WRITE AUTOCORRS", config->doAutoCorr);
 		writeDifxLineBoolean(out, "WRITE MSA CALIB", config->doMSAcalibration);
-		writeDifxLineDouble(out, "MC TABLE INTERVAL", "%8.6f",
-							config->MC_table_output_interval);
+		writeDifxLineDouble(out, "MC TABLE INTERVAL", "%12.9f", config->MC_table_output_interval);
 		if(config->pulsarId >= 0 && pulsar)
 		{
 			writeDifxLine(out, "PULSAR BINNING", "TRUE");

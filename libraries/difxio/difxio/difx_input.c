@@ -903,7 +903,6 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 			"XMAC STRIDE LENGTH",
 			"NUM BUFFERED FFTS",
 			"WRITE AUTOCORRS",
-			"MC TABLE INTERVAL",
 			"PULSAR BINNING",
 			"PHASED ARRAY"
 		};
@@ -950,7 +949,6 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 		dc->xmacLength	   = atoi(DifxParametersvalue(ip, rows[6]));
 		dc->numBufferedFFTs= atoi(DifxParametersvalue(ip, rows[7]));
 		dc->doAutoCorr	   = abs(strcmp("FALSE", DifxParametersvalue(ip, rows[8])));
-		dc->MC_table_output_interval = atof(DifxParametersvalue(ip, rows[9]));
 		dc->nDatastream	 = D->job->activeDatastreams;
 		dc->nBaseline	 = D->job->activeBaselines;
 
@@ -960,10 +958,16 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 		{
 			dc->doMSAcalibration = abs(strcmp("FALSE", DifxParametersvalue(ip, r)));
 		}
-		/* pulsar stuff */
-		if(strcmp(DifxParametersvalue(ip, rows[10]), "TRUE") == 0)
+		/* model component table interval --- This is not required to be present */
+		r =  DifxParametersfind(ip, 0, "MC TABLE INTERVAL");
+		if(r >= 0)
 		{
-			r = DifxParametersfind(ip, rows[10], "PULSAR CONFIG FILE");
+			dc->MC_table_output_interval = atof(DifxParametersvalue(ip, r));
+		}
+		/* pulsar stuff */
+		if(strcmp(DifxParametersvalue(ip, rows[9]), "TRUE") == 0)
+		{
+			r = DifxParametersfind(ip, rows[9], "PULSAR CONFIG FILE");
 			if(r <= 0)
 			{
 				fprintf(stderr, "input file row %d : PULSAR CONFIG FILE expected\n", rows[11] + 2);
@@ -977,9 +981,9 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 			}
 		}
 		/* phased array stuff */
-		if(strcmp(DifxParametersvalue(ip, rows[11]), "TRUE") == 0)
+		if(strcmp(DifxParametersvalue(ip, rows[10]), "TRUE") == 0)
 		{
-			r = DifxParametersfind(ip, rows[11], "PHASED ARRAY CONFIG FILE");
+			r = DifxParametersfind(ip, rows[10], "PHASED ARRAY CONFIG FILE");
 			if(r <= 0)
 			{
 				fprintf(stderr, "input file row %d : PHASED ARRAY CONFIG FILE expected\n", rows[12] + 2);
@@ -1979,7 +1983,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	}
 	else
 	{
-		D->job->delayVersion = DEFIX_DEFAULT_DELAY_SERVER_VERSION;
+		D->job->delayVersion = DIFXIO_DEFAULT_DELAY_SERVER_VERSION;
 		row=0;
 	}
 	row = DifxParametersfind_limited(cp, row, 10, "DELAY PROGRAM");
@@ -2574,6 +2578,11 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 					}
 				}
 			}
+			/* calculate retarded position */
+			row = DifxParametersfind1_limited(cp, rows[0], 100, "SPACECRAFT %d CALC_OWN_RETARDATION", s);
+			if(row > 0) {
+				D->spacecraft[s].calculate_own_retarded_position = atoi(DifxParametersvalue(cp, row));
+			}
 				
 				
 			/* start reading ephemeris information */
@@ -2719,7 +2728,7 @@ static DifxInput *parseCalcServerInfo(DifxInput *D, DifxParameters *cp)
 	}
 	else
 	{
-		D->job->delayVersion = DEFIX_DEFAULT_DELAY_SERVER_VERSION;
+		D->job->delayVersion = DIFXIO_DEFAULT_DELAY_SERVER_VERSION;
 		row=0;
 	}
 	row = DifxParametersfind(cp, row, "DELAY PROGRAM");

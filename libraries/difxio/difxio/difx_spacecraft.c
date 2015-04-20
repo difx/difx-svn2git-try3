@@ -206,6 +206,7 @@ void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds)
 	fprintf(fp, "	 SC_pos_offset_refmjd = %d\n", ds->SC_pos_offset_refmjd);
 	fprintf(fp, "	 SC_pos_offset_reffracDay = %.16f\n", ds->SC_pos_offset_reffracDay);
 	fprintf(fp, "	 SC_pos_offsetorder = %d\n", ds->SC_pos_offsetorder);
+	fprintf(fp, "	 CalcOwnRetardation = %d\n", ds->calculate_own_retarded_position);
 }
 
 void printDifxSpacecraft(const DifxSpacecraft *ds)
@@ -410,8 +411,13 @@ static void ECI2J2000(doublereal et, doublereal state[6])
 }
 #endif
 
-int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, double X, double Y, double Z, const char *naifFile, double ephemClockError)
+int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double sc_epoch_mjd, double mjd0, double deltat, int nPoint, double X, double Y, double Z, const char *naifFile, double ephemClockError)
 {
+	if((ds->calculate_own_retarded_position))
+	{
+		fprintf(stderr, "Error: computing non-retarded spacecraft positions is not yet implemented.\n");
+		return -1;
+	}
 #if HAVE_SPICE
 	doublereal state[6];
 	int p;
@@ -426,36 +432,63 @@ int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double mjd0,
 
 	ldpool_c(naifFile);
 
-	for(p = 0; p < nPoint; ++p)
+	if(sc_epoch_mjd == 0.0)
+	{
+		for(p = 0; p < nPoint; ++p)
+		{
+			long double mjd, jd;
+			char jdstr[24];
+			doublereal et;
+
+			mjd = mjd0 + p*deltat;
+			jd = mjd + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
+			sprintf(jdstr, "JD %18.12Lf", jd);
+			str2et_c(jdstr, &et);
+
+			ECI2J2000(et, state);
+
+			ds->pos[p].mjd = mjd;
+			ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
+			ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+			ds->pos[p].Y = state[1]*1000.0;
+			ds->pos[p].Z = state[2]*1000.0;
+			ds->pos[p].dX = state[3]*1000.0;
+			ds->pos[p].dY = state[4]*1000.0;
+			ds->pos[p].dZ = state[5]*1000.0;
+		}
+	}
+	else
 	{
 		long double mjd, jd;
 		char jdstr[24];
 		doublereal et;
 
-		mjd = mjd0 + p*deltat;
-		jd = mjd + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
+		jd = (long double)(sc_epoch_mjd) + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
 		sprintf(jdstr, "JD %18.12Lf", jd);
 		str2et_c(jdstr, &et);
 
 		ECI2J2000(et, state);
+		for(p = 0; p < nPoint; ++p)
+		{
+			mjd = mjd0 + p*deltat;
 
-		ds->pos[p].mjd = mjd;
-		ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
-		ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
-		ds->pos[p].Y = state[1]*1000.0;
-		ds->pos[p].Z = state[2]*1000.0;
-		ds->pos[p].dX = state[3]*1000.0;
-		ds->pos[p].dY = state[4]*1000.0;
-		ds->pos[p].dZ = state[5]*1000.0;
-	}
-
+			ds->pos[p].mjd = mjd;
+			ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
+			ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+			ds->pos[p].Y = state[1]*1000.0;
+			ds->pos[p].Z = state[2]*1000.0;
+			ds->pos[p].dX = 0.0;
+			ds->pos[p].dY = 0.0;
+			ds->pos[p].dZ = 0.0;
+		}
+	}	
 	clpool_c();
 
 	return 0;
 #else
 	fprintf(stderr, "Error: computeDifxSpacecraftEphemerisFromXYZ: spice not compiled into difxio.\n");
 	
-	return -1;
+	return -2;
 #endif
 }
 
@@ -465,7 +498,7 @@ int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double mjd0,
 
 
 
-static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
+static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double sc_epoch_mjd, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
 {
 	ds->is_antenna = 0;
 	if(strcmp(ephemType, "SPICE")==0)
@@ -485,15 +518,59 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double m
 		}
 		ds->nPoint = nPoint;
 		ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
-		for(p = 0; p < nPoint; ++p)
+		if(sc_epoch_mjd == 0.0)
+		{
+			for(p = 0; p < nPoint; ++p)
+			{
+				double state[6], range;
+				long double mjd, jd;
+				char jdstr[24];
+				double et;
+		
+				mjd = mjd0 + p*deltat;
+				jd = mjd + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
+				sprintf(jdstr, "JD %18.12Lf", jd);
+				str2et_c(jdstr, &et);
+				if(ephemStellarAber == 0.0)
+				{
+					spkezr_c(objectName, et, "J2000", "LT", "399", state, &range);	/* 399 is the earth geocenter */
+				}
+				else if(ephemStellarAber == 1.0)
+				{
+					spkezr_c(objectName, et, "J2000", "LT+S", "399", state, &range);
+				}
+				else
+				{
+					double state2[6];
+					int q;
+
+					spkezr_c(objectName, et, "J2000", "LT+S", "399", state2, &range);
+					spkezr_c(objectName, et, "J2000", "LT", "399", state, &range);
+
+					for(q = 0; q < 6; ++q)
+					{
+						state[q] += ephemStellarAber*(state2[q] - state[q]);
+					}
+				}
+
+				ds->pos[p].mjd = mjd;
+				ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
+				ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+				ds->pos[p].Y = state[1]*1000.0;
+				ds->pos[p].Z = state[2]*1000.0;
+				ds->pos[p].dX = state[3]*1000.0;
+				ds->pos[p].dY = state[4]*1000.0;
+				ds->pos[p].dZ = state[5]*1000.0;
+			}
+		}
+		else
 		{
 			double state[6], range;
 			long double mjd, jd;
 			char jdstr[24];
 			double et;
 		
-			mjd = mjd0 + p*deltat;
-			jd = mjd + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
+			jd = (long double)(sc_epoch_mjd) + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
 			sprintf(jdstr, "JD %18.12Lf", jd);
 			str2et_c(jdstr, &et);
 			if(ephemStellarAber == 0.0)
@@ -517,17 +594,20 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double m
 					state[q] += ephemStellarAber*(state2[q] - state[q]);
 				}
 			}
+			for(p = 0; p < nPoint; ++p)
+			{
+				mjd = mjd0 + p*deltat;
 
-			ds->pos[p].mjd = mjd;
-			ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
-			ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
-			ds->pos[p].Y = state[1]*1000.0;
-			ds->pos[p].Z = state[2]*1000.0;
-			ds->pos[p].dX = state[3]*1000.0;
-			ds->pos[p].dY = state[4]*1000.0;
-			ds->pos[p].dZ = state[5]*1000.0;
+				ds->pos[p].mjd = mjd;
+				ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
+				ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+				ds->pos[p].Y = state[1]*1000.0;
+				ds->pos[p].Z = state[2]*1000.0;
+				ds->pos[p].dX = 0.0;
+				ds->pos[p].dY = 0.0;
+				ds->pos[p].dZ = 0.0;
+			}
 		}
-
 		spkuef_c(spiceHandle);
 		clpool_c();
 
@@ -645,7 +725,7 @@ void evaluateTLE(doublereal et, doublereal *elems, doublereal *state)
 }
 #endif
 
-static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
+static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double sc_epoch_mjd, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
 {
 	ds->is_antenna = 0;
 	if(strcmp(ephemType, "SPICE")==0)
@@ -738,7 +818,60 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 		free(ds->pos);
 		ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
 
-		for(p = 0; p < nPoint; ++p)
+		if(sc_epoch_mjd == 0.0)
+		{
+			for(p = 0; p < nPoint; ++p)
+			{
+				long double mjd, jd;
+				char jdstr[24];
+				doublereal et;
+				int set;
+				doublereal state[6];
+				double f = -1.0;
+
+				mjd = mjd0 + p*deltat;
+				jd = mjd + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
+				sprintf(jdstr, "JD %18.12Lf", jd);
+				str2et_c(jdstr, &et);
+
+				set = findBestSet(et, epochs, nSet, &f);
+
+				if(f < 0.0)
+				{
+					fprintf(stderr, "Developer error: computeDifxSpacecraftSourceEphemeris_tle: f < 0 (= %f)\n", f);
+
+					exit(EXIT_FAILURE);
+				}
+
+				evaluateTLE(et, elems[set], state);
+
+				if(f < 1.0)
+				{
+					/* linear interpolation between two TLE values */
+
+					doublereal state2[6];
+					int j;
+
+					evaluateTLE(et, elems[set+1], state2);
+					for(j = 0; j < 6; ++j)
+					{
+						state[j] = f*state[j] + (1.0-f)*state2[j];
+					}
+				}
+
+				ECI2J2000(et, state);
+
+				ds->pos[p].mjd = mjd;
+				ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
+				ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+				ds->pos[p].Y = state[1]*1000.0;
+				ds->pos[p].Z = state[2]*1000.0;
+				ds->pos[p].dX = state[3]*1000.0;
+				ds->pos[p].dY = state[4]*1000.0;
+				ds->pos[p].dZ = state[5]*1000.0;
+			}
+		}
+		else
 		{
 			long double mjd, jd;
 			char jdstr[24];
@@ -747,8 +880,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 			doublereal state[6];
 			double f = -1.0;
 
-			mjd = mjd0 + p*deltat;
-			jd = mjd + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
+			jd = (long double)(sc_epoch_mjd) + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
 			sprintf(jdstr, "JD %18.12Lf", jd);
 			str2et_c(jdstr, &et);
 
@@ -778,17 +910,20 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 			}
 
 			ECI2J2000(et, state);
+			for(p = 0; p < nPoint; ++p)
+			{
+				mjd = mjd0 + p*deltat;
 
-			ds->pos[p].mjd = mjd;
-			ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
-			ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
-			ds->pos[p].Y = state[1]*1000.0;
-			ds->pos[p].Z = state[2]*1000.0;
-			ds->pos[p].dX = state[3]*1000.0;
-			ds->pos[p].dY = state[4]*1000.0;
-			ds->pos[p].dZ = state[5]*1000.0;
+				ds->pos[p].mjd = mjd;
+				ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
+				ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+				ds->pos[p].Y = state[1]*1000.0;
+				ds->pos[p].Z = state[2]*1000.0;
+				ds->pos[p].dX = 0.0;
+				ds->pos[p].dY = 0.0;
+				ds->pos[p].dZ = 0.0;
+			}
 		}
-
 		clpool_c();
 
 
@@ -831,9 +966,18 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double m
 	return -1;
 }
 
-int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
+int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double sc_epoch_mjd, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError)
 {
-	ds->is_antenna = 1;
+	if((ds->calculate_own_retarded_position))
+	{
+		fprintf(stderr, "Error: computing non-retarded positions for sources is not yet implemented.\n");
+		return -1;
+	}
+	if((ds->is_antenna))
+	{
+		fprintf(stderr, "Error: computing source ephemeris for spacecraft antenna is not allowed.\n");
+		return -2;
+	}
 	if(strcmp(ephemType, "SPICE")==0)
 	{
 		int l;
@@ -843,26 +987,26 @@ int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double
 		l = strlen(ephemFile);
 		if(l > 4 && strcmp(ephemFile+l-4, ".bsp") == 0)
 		{
-			return computeDifxSpacecraftSourceEphemeris_bsp(ds, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
+			return computeDifxSpacecraftSourceEphemeris_bsp(ds, sc_epoch_mjd, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
 		}
 		else if(l > 4 && strcmp(ephemFile+l-4, ".tle") == 0)
 		{
-			return computeDifxSpacecraftSourceEphemeris_tle(ds, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
+			return computeDifxSpacecraftSourceEphemeris_tle(ds, sc_epoch_mjd, mjd0, deltat, nPoint, objectName, ephemType, naifFile, ephemFile, orientationFile, JPLplanetaryephem, ephemStellarAber, ephemClockError);
 		}
 		else
 		{
 			fprintf(stderr, "Error: ephemFile (%s) is not of a recognized ephemeris type.  The file should end in .tle or .bsp .\n", ephemFile);
 		
-			return -1;
+			return -3;
 		}
 	}
 	else {
 		fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris: Unknown ephemType '%s'.\n", ephemType);
 	}
-	return -1;
+	return -4;
 }
 
-int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemClockError)
+int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemClockError, int computeRetardedPos)
 {
 	ds->is_antenna = 1;
 	if(strcmp(ephemType, "SPICE")==0)
@@ -1714,6 +1858,8 @@ int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds)
 			writeDifxLine2(out, "SPACECRAFT %d SC_POSOFFSET %d", i, j, value);
 		}
 		n += 4 + ds[i].SC_pos_offsetorder+1;
+		writeDifxLineInt1(out,    "SPACECRAFT %d CALC_OWN_RETARDATION", i, ds[i].calculate_own_retarded_position);
+		++n;
 		/* write out ephemeris information */
 		writeDifxLineInt1(out, "SPACECRAFT %d ROWS", i, ds[i].nPoint);
 		for(j = 0; j < ds[i].nPoint; ++j)

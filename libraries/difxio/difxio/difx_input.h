@@ -138,6 +138,7 @@ extern const char aberCorrStrings[][MAX_ABER_CORR_STRING_LENGTH];
 enum PerformDirectionDerivativeType
 {
 	PerformDirectionDerivativeNone = 0,
+	PerformDirectionDerivativeUnknown,
 	PerformDirectionDerivativeDefault,
 	PerformDirectionDerivativeFirstDerivative,
 	PerformDirectionDerivativeFirstDerivative2,
@@ -260,7 +261,7 @@ enum ToneSelection
 extern const char toneSelectionNames[][MAX_TONE_SELECTION_STRING_LENGTH];
 
 
-/* keep this current with samplingTypeNames in difx_write_calc.c */
+/* keep this current with delayServerTypeNames in difx_job.c */
 enum DelayServerType
 {
 	CALCServer = 0,		/* CALC 9.1, original delay server */
@@ -269,9 +270,9 @@ enum DelayServerType
 };
 extern const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH];
 extern const unsigned long delayServerTypeIds[];
-#define DIFX_DEFAULT_DELAY_SERVER_TYPE CALCServer
-#define DEFIX_DEFAULT_DELAY_SERVER_VERSION 0
-#define DEFIX_DEFAULT_DELAY_SERVER_HANDLER 0x20000342
+#define DIFXIO_DEFAULT_DELAY_SERVER_TYPE CALCServer
+#define DIFXIO_DEFAULT_DELAY_SERVER_VERSION 0
+#define DIFXIO_DEFAULT_DELAY_SERVER_HANDLER 0x20000342
 
 /* keep this current with sourceCoordinateFrameTypeNames in difx_source.c */
 /* See DiFX_Delay_Server.x for more information */
@@ -290,6 +291,8 @@ enum SourceCoordinateFrameType
 	NumSourceCoordinateFrames  /* must remain as last entry */
 };
 extern const char sourceCoordinateFrameTypeNames[][MAX_SOURCE_COORDINATE_FRAME_STRING_LENGTH];
+#define DIFXIO_DEFAULT_STATION_COORDINATE_FRAME SourceCoordinateFrameITRF2008
+#define DIFXIO_DEFAULT_SOURCE_COORDINATE_FRAME SourceCoordinateFrameJ2000
 
 
 /* Straight from DiFX frequency table */
@@ -834,6 +837,13 @@ typedef struct
 	simple3Vector SC_pos_offset[MAX_MODEL_ORDER+1]; /* spacecraft
 													   position offset polynomial information, as
 													   m, m/s, m/s^2, ... */
+	int calculate_own_retarded_position;
+						/* If 0, let the spacecraft software calculate its
+						   own time retardation for spacecraft.
+						   Otherwise, use our own predicted delay to the
+						   center of the Earth to calculate the retarded
+						   positions.
+						 */
 } DifxSpacecraft;
 
 typedef struct
@@ -1183,8 +1193,8 @@ void deleteDifxSpacecraftArray(DifxSpacecraft *ds, int nSpacecraft);
 void printDifxSpacecraft(const DifxSpacecraft *ds);
 void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds);
 int shiftSpacecraftClockPolys(DifxInput *D);
-int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError);
-int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, double X, double Y, double Z, const char *ephemType, const char *naifFile,	const char* orientationFile, double ephemClockError);
+int computeDifxSpacecraftSourceEphemeris(DifxSpacecraft *ds, double sc_epoch_mjd, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemStellarAber, double ephemClockError);
+int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double sc_epoch_mjd, double mjd0, double deltat, int nPoint, double X, double Y, double Z, const char *ephemType, const char *naifFile,	const char* orientationFile, double ephemClockError);
 int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *ephemType, const char *naifFile, const char *ephemFile, const char* orientationFile, const char* JPLplanetaryephem, double ephemClockError);
 int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplanetaryephem);
 int computeDifxSpacecraftEphemerisOffsets(DifxSpacecraft *ds);

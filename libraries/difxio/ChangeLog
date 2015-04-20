@@ -1,3 +1,14 @@
+2015-04-20  James Anderson  <anderson@gfz-potsdam>
+
+	* difxio/difx_config.c:
+	* difxio/difx_input.c:
+	* difxio/difx_source.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_job.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_input.h: Updates while updating vex2difx code to fix
+	remaining bugs in difxio
+
 2015-04-16  James Anderson  <anderson@gfz-potsdam>
 
 	* difxio/difx_baseline.c:
