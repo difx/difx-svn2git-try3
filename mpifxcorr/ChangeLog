@@ -1,3 +1,14 @@
+2015-04-20  James Anderson  <anderson@gfz-potsdam>
+
+	* src/configuration.cpp:
+	* src/model.cpp:
+	* src/mpifxcorr.cpp:
+	* src/core.cpp:
+	* src/core.h:
+	* src/configuration.h:
+	* src/model.h: updates to match vex2difx changes for new delay
+	server changes
+
 Version ?.?.?
 
 * Changes to support space VLBI correlation
