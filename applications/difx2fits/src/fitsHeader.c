@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,9 +32,15 @@
 #include <stdlib.h>
 #include "difx2fits.h"
 
-#define SEC_DAY         86400.0             /* seconds in a mean solar day */
-#define MUSEC_DAY       86400000000.0       /* mus in a mean solar day */
-#define MJD_UNIX0       40587.0             /* MJD at beginning of unix time */
+#ifndef SEC_DAY_DBL
+#    define SEC_DAY_DBL 86400.0             /* seconds in a mean solar day */
+#endif
+#ifndef MUSEC_DAY
+#    define MUSEC_DAY   86400000000.0       /* mus in a mean solar day */
+#endif
+#ifndef MJD_UNIX0
+#    define MJD_UNIX0   40587.0             /* MJD at beginning of unix time */
+#endif
 
 double timeMjd()
 {
@@ -42,7 +48,7 @@ double timeMjd()
 
 	gettimeofday(&t, 0);
 	
-	return MJD_UNIX0 + t.tv_sec/SEC_DAY + t.tv_usec/MUSEC_DAY;
+	return MJD_UNIX0 + t.tv_sec/SEC_DAY_DBL + t.tv_usec/MUSEC_DAY;
 }
 
 const DifxInput *DifxInput2FitsHeader(const DifxInput *D, struct fitsPrivate *out, const struct CommandLineOptions *opts)
@@ -61,6 +67,7 @@ const DifxInput *DifxInput2FitsHeader(const DifxInput *D, struct fitsPrivate *ou
 
 	mjd2fits((int)(D->mjdStart), ref_date);
 
+#warning "get information from VEX file for observer, telescope, origin, ..."
 	fitsWriteLogical(out, "SIMPLE", 1, "Standard FITS format");
 	fitsWriteInteger(out, "BITPIX", 8, "");
 	fitsWriteInteger(out, "NAXIS",  0, "");

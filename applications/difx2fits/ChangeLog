@@ -1,3 +1,23 @@
+2015-04-22  James Anderson  <anderson@gfz-potsdam>
+
+	* src/difx2fits.c:
+	* src/fitsCT.c:
+	* src/fitsAN.c:
+	* src/fitsML.c:
+	* src/fitsAG.c:
+	* src/fitsGM.c:
+	* src/fitsHeader.c:
+	* src/fits.c:
+	* src/fitsTS.c:
+	* src/time2str.c:
+	* src/fitsMC.c:
+	* src/fitsGN.c:
+	* src/fitsPH.c:
+	* src/fitsSO.c:
+	* src/fitsUV.c:
+	* src/difx2fits.h:
+	* src/fits.h: updates for conversion to new delay server code
+
 Version ?.?.?
 * changes for space VLBI support
 

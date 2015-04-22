@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2013 by Walter Brisken                             *
+ *   Copyright (C) 2008-2013, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -27,13 +27,18 @@
 //
 //============================================================================
 
+#include "config.h"
+#ifdef __GNUC__
+#    ifndef _GNU_SOURCE
+#        define _GNU_SOURCE 1
+#    endif
+#endif
 #include <stdlib.h>
 #include <sys/types.h>
 #include <string.h>
 #include <ctype.h>
 #include <strings.h>
 #include <glob.h>
-#include "config.h"
 #include "difx2fits.h"
 #include "util.h"
 #include "other.h"
@@ -59,21 +64,21 @@ typedef struct
 } GainRow;
 	
 static const float bandEdges[N_VLBA_BANDS+1] = 
-{
-	0, 	/* 90cm P  */
-	450,	/* 50cm    */
-	900, 	/* 21cm L  */
-	1550, 	/* 18cm L  Different from above due to two separate gain curve files */
-	2000,	/* 13cm S  */
-	4000,	/* 6cm  C  */
-	6000,	/* 4cm  X  */
-	10000,	/* 2cm  U  */
-	18000, 	/* 1cm  K  */
-	26000, 	/*      Ka  Not yet existing */
-	40000,	/* 7mm  Q  */
-	70000,	/* 3mm  W  */
-	100000	/* end of list marker */
-};
+	{
+		0, 	/* 90cm P  */
+		450,	/* 50cm    */
+		900, 	/* 21cm L  */
+		1550, 	/* 18cm L  Different from above due to two separate gain curve files */
+		2000,	/* 13cm S  */
+		4000,	/* 6cm  C  */
+		6000,	/* 4cm  X  */
+		10000,	/* 2cm  U  */
+		18000, 	/* 1cm  K  */
+		26000, 	/*      Ka  Not yet existing */
+		40000,	/* 7mm  Q  */
+		70000,	/* 3mm  W  */
+		100000	/* end of list marker */
+	};
 
 /* function that just renames matching antennas in the table to render them useless */
 static void nullifyGainRows(GainRow *G, int nRow, const char *antenna)
@@ -455,13 +460,13 @@ static void GainRowsSetTimeBand(GainRow *G, int nRow)
 		   G[i].nTime != 0 && G[i].nDPFU != 0)
 		{
 			G[i].mjd1 = ymd2mjd(G[i].time[0], 
-					    G[i].time[1], 
-					    G[i].time[2]) + 
-					    G[i].time[3]/24.0;
+			                    G[i].time[1], 
+			                    G[i].time[2]) + 
+			            G[i].time[3]/24.0;
 			G[i].mjd2 = ymd2mjd(G[i].time[4], 
-					    G[i].time[5], 
-					    G[i].time[6]) +
-					    G[i].time[7]/24.0;
+			                    G[i].time[5], 
+			                    G[i].time[6]) +
+			            G[i].time[7]/24.0;
 		}
 		for(j = 0; j < N_VLBA_BANDS; ++j)
 		{
@@ -591,27 +596,27 @@ const DifxInput *DifxInput2FitsGN(const DifxInput *D, struct fits_keywords *p_fi
 	
 	/*  define the flag FITS table columns */
 	struct fitsBinTableColumn columns[] =
-	{
-		{"ANTENNA_NO", "1J", "antenna id from array geom. tbl", 0},
-		{"ARRAY", "1J", "????", 0},
-		{"FREQID", "1J", "freq id from frequency tbl", 0}, 
-		{"TYPE_1", bandFormInt, "gain curve type", 0},
-		{"NTERM_1", bandFormInt, "number of terms", 0},
-		{"X_TYP_1", bandFormInt, "abscissa type of plot", 0},
-		{"Y_TYP_1", bandFormInt, "second axis of 3d plot", 0},
-		{"X_VAL_1", bandFormFloat, "For tabulated curves", 0},
-		{"Y_VAL_1", tabFormFloat, "For tabulated curves", 0},
-		{"GAIN_1", tabFormFloat, "Gain curve", 0},
-		{"SENS_1", bandFormFloat, "Sensitivity", "K/JY"},
-		{"TYPE_2", bandFormInt, "gain curve type", 0},
-		{"NTERM_2", bandFormInt, "number of terms", 0},
-		{"X_TYP_2", bandFormInt, "abscissa type of plot", 0},
-		{"Y_TYP_2", bandFormInt, "second axis of 3d plot", 0},
-		{"X_VAL_2", bandFormFloat, "For tabulated curves", 0},
-		{"Y_VAL_2", tabFormFloat, "For tabulated curves", 0},
-		{"GAIN_2", tabFormFloat, "Gain curve", 0},
-		{"SENS_2", bandFormFloat, "Sensitivity", "K/JY"}
-	};
+		{
+			{"ANTENNA_NO", "1J", "antenna id from array geom. tbl", 0},
+			{"ARRAY", "1J", "????", 0},
+			{"FREQID", "1J", "freq id from frequency tbl", 0}, 
+			{"TYPE_1", bandFormInt, "gain curve type", 0},
+			{"NTERM_1", bandFormInt, "number of terms", 0},
+			{"X_TYP_1", bandFormInt, "abscissa type of plot", 0},
+			{"Y_TYP_1", bandFormInt, "second axis of 3d plot", 0},
+			{"X_VAL_1", bandFormFloat, "For tabulated curves", 0},
+			{"Y_VAL_1", tabFormFloat, "For tabulated curves", 0},
+			{"GAIN_1", tabFormFloat, "Gain curve", 0},
+			{"SENS_1", bandFormFloat, "Sensitivity", "K/JY"},
+			{"TYPE_2", bandFormInt, "gain curve type", 0},
+			{"NTERM_2", bandFormInt, "number of terms", 0},
+			{"X_TYP_2", bandFormInt, "abscissa type of plot", 0},
+			{"Y_TYP_2", bandFormInt, "second axis of 3d plot", 0},
+			{"X_VAL_2", bandFormFloat, "For tabulated curves", 0},
+			{"Y_VAL_2", tabFormFloat, "For tabulated curves", 0},
+			{"GAIN_2", tabFormFloat, "Gain curve", 0},
+			{"SENS_2", bandFormFloat, "Sensitivity", "K/JY"}
+		};
 	
 	int nColumn;
 	int nRowBytes;
@@ -638,10 +643,10 @@ const DifxInput *DifxInput2FitsGN(const DifxInput *D, struct fits_keywords *p_fi
 	 * wants, namely 0xFFFFFFFF */
 	union
 	{
-		int32_t i32;
+		uint32_t u32;
 		float f;
-	} nan;
-	nan.i32 = -1;
+	} fitsnan;
+	fitsnan.u32 = UINT32_C(0xFFFFFFFF);
 
 	if(!D)
 	{
@@ -703,11 +708,11 @@ const DifxInput *DifxInput2FitsGN(const DifxInput *D, struct fits_keywords *p_fi
 		curveType[i] = 2;
 		xType[i] = 0;
 		yType[i] = 2;
-		xVal[i] = nan.f;	/* NaN */
+		xVal[i] = fitsnan.f;	/* NaN */
 	}
 	for(i = 0; i < array_MAX_BANDS*MAXTAB; ++i)
 	{
-		yVal[i] = nan.f;	/* NaN */
+		yVal[i] = fitsnan.f;	/* NaN */
 	}
 	arrayId1 = 1;
 	mjd = 0.5*(D->mjdStart + D->mjdStop);

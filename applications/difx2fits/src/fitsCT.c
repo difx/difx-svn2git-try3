@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2009 by Walter Brisken                             *
+ *   Copyright (C) 2008-2009, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -33,6 +33,7 @@
 #include "difx2fits.h"
 
 
+#warning "Check whether or not these values need to be revised when usign other delay servers"
 /*
 * IAU (1976) System of Astronomical Constants
 * SOURCE:  USNO Circular # 163 (1981dec10)
@@ -98,6 +99,15 @@ struct __attribute__((packed)) CTrow
 	double dPsi, ddPsi, dEps, ddEps;
 };
 
+
+static void fill_version_string(unsigned long v, char* vs, const size_t size)
+{
+	snprintf(vs, size, "%lu.%lu.%lu.%lu", v >> 24, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+	return;
+}
+
+
+
 const DifxInput *DifxInput2FitsCT(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
 {
@@ -122,6 +132,8 @@ const DifxInput *DifxInput2FitsCT(const DifxInput *D,
 	int nColumn;
 	int e;
 	const DifxEOP *eop;
+	const size_t V_SIZE = 32;
+	char v_string[V_SIZE];
 
 	if(D == 0)
 	{
@@ -134,11 +146,19 @@ const DifxInput *DifxInput2FitsCT(const DifxInput *D,
 	fitsWriteBinTable(out, nColumn, columns, nRowBytes, "CALC");
 	arrayWriteKeys(p_fits_keys, out);
 	fitsWriteInteger(out, "TABREV", 2, "");
-	fitsWriteString (out, "C_SRVR", D->job->calcServer, "");
-	fitsWriteString (out, "C_VERSN", "9.1", "");
-	fitsWriteString (out, "A_VERSN", "2.2", "");
-	fitsWriteString (out, "I_VERSN", "0.0", "");
-	fitsWriteString (out, "E_VERSN", "9.1", "");
+	fitsWriteString (out, "C_SRVR", delayServerTypeNames[D->job->delayServerType], "");
+	/* fitsWriteString (out, "C_VERSN", "9.1", ""); */
+	/* fitsWriteString (out, "A_VERSN", "2.2", ""); */
+	/* fitsWriteString (out, "I_VERSN", "0.0", ""); */
+	/* fitsWriteString (out, "E_VERSN", "9.1", ""); */
+	fill_version_string(D->job->delayProgramDetailedVersion, v_string, V_SIZE);
+	fitsWriteString (out, "C_VERSN", v_string, "");
+	fill_version_string(D->job->delayVersion, v_string, V_SIZE);
+	fitsWriteString (out, "A_VERSN", v_string, "");
+	fill_version_string(D->job->delayProgram, v_string, V_SIZE);
+	fitsWriteString (out, "I_VERSN", v_string, "");
+	fill_version_string(D->job->delayHandler, v_string, V_SIZE);
+	fitsWriteString (out, "E_VERSN", v_string, "");
 
 	fitsWriteFloat(out, "ACCELGRV", ACCEL_GRV, "");
 	fitsWriteFloat(out, "E-FLAT", E_FLAT_FCTR, "");

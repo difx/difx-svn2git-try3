@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *   Copyright (C) 2008-2010, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -34,84 +34,84 @@
 
 /* return -1 on out-of-range */
 int getGateWindow(const DifxPulsar *dp, int bin,
-        double *phaseOpen, double *phaseClose)
+                  double *phaseOpen, double *phaseClose)
 {
-        if(!dp->scrunch)
-        {
-                /* First the simple case: no scrunching */
-                if(bin < 0 || bin >= dp->nBin)
-                {
-                        return -1;
-                }
-                *phaseClose = dp->binEnd[bin];
-                bin--;
-                if(bin < 0)
-                {
-                        bin = dp->nBin-1;
-                }
-                *phaseOpen = dp->binEnd[bin];
-        }
-        else if(bin == 0)
-        {
+	if(!dp->scrunch)
+	{
+		/* First the simple case: no scrunching */
+		if(bin < 0 || bin >= dp->nBin)
+		{
+			return -1;
+		}
+		*phaseClose = dp->binEnd[bin];
+		bin--;
+		if(bin < 0)
+		{
+			bin = dp->nBin-1;
+		}
+		*phaseOpen = dp->binEnd[bin];
+	}
+	else if(bin == 0)
+	{
 		/* More complicated: include all phases with weight > 0 */
-                /* Note: this will get confused for pulsars with interpulses */
-                int b;
-                int lastBin = dp->nBin-1;
-                int binOpen = -1;
-                int binClose = -1;
-                for(b = 0; b < dp->nBin; b++)
-                {
-                        if(dp->binWeight[lastBin] <= 0.0 &&
-                           dp->binWeight[b] > 0.0)
-                        {
-                                binOpen = lastBin;
-                        }
-                        if(dp->binWeight[lastBin] > 0.0 &&
-                           dp->binWeight[b] <= 0.0)
-                        {
-                                binClose = lastBin;
-                        }
-                        lastBin = b;
-                }
-                if(binOpen >= 0 && binClose >= 0)
-                {
-                        *phaseOpen  = dp->binEnd[binOpen];
-                        *phaseClose = dp->binEnd[binClose];
-                }
-                else
-                {
-                        *phaseOpen = 0.0;
-                        *phaseClose = 1.0;
-                }
+		/* Note: this will get confused for pulsars with interpulses */
+		int b;
+		int lastBin = dp->nBin-1;
+		int binOpen = -1;
+		int binClose = -1;
+		for(b = 0; b < dp->nBin; b++)
+		{
+			if(dp->binWeight[lastBin] <= 0.0 &&
+			   dp->binWeight[b] > 0.0)
+			{
+				binOpen = lastBin;
+			}
+			if(dp->binWeight[lastBin] > 0.0 &&
+			   dp->binWeight[b] <= 0.0)
+			{
+				binClose = lastBin;
+			}
+			lastBin = b;
+		}
+		if(binOpen >= 0 && binClose >= 0)
+		{
+			*phaseOpen  = dp->binEnd[binOpen];
+			*phaseClose = dp->binEnd[binClose];
+		}
+		else
+		{
+			*phaseOpen = 0.0;
+			*phaseClose = 1.0;
+		}
 	}
 	else
-        {
-                /* scrunching and bin > 1 doesn't make sense */
-                return -1;
-        }
+	{
+		/* scrunching and bin > 1 doesn't make sense */
+		return -1;
+	}
 
-        return 0;
+	return 0;
 }
 
 const DifxInput *DifxInput2FitsGM(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
-	struct CommandLineOptions *opts)
+                                  struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
+                                  struct CommandLineOptions *opts)
 {
 	char bandFormFloat[8], polyFormDouble[8];
 
 	struct fitsBinTableColumn columns[] =
-	{
-		{"GATEID",    "1J", "id of this row", 0},
-		{"START",     "1D", "time of model start", "MJD"},
-		{"STOP",      "1D", "time of model stop", "MJD"},
-		{"SOURCE",    "1J", "sourde id from sources tbl", 0},
-		{"FREQID",    "1J", "frequency id from frequency tbl", 0},
-		{"DISP",      "1D", "dispersion measure. PC/CM^3", 0},
-		{"ON_PHASE",  bandFormFloat, "phase gate opens by band", 0},
-		{"OFF_PHASE", bandFormFloat, "phase gate closess by band", 0},
-		{"REF_FREQ",  "1D", "reference frequency, HZ", 0},
-		{"MODEL",     polyFormDouble, "gate control polynomial, PHASE", 0}
-	};
+		{
+			{"GATEID",    "1J", "id of this row", 0},
+			{"START",     "1D", "time of model start", "MJD"},
+			{"STOP",      "1D", "time of model stop", "MJD"},
+			{"SOURCE",    "1J", "sourde id from sources tbl", 0},
+			{"FREQID",    "1J", "frequency id from frequency tbl", 0},
+			{"DISP",      "1D", "dispersion measure. PC/CM^3", 0},
+			{"ON_PHASE",  bandFormFloat, "phase gate opens by band", 0},
+			{"OFF_PHASE", bandFormFloat, "phase gate closess by band", 0},
+			{"REF_FREQ",  "1D", "reference frequency, HZ", 0},
+			{"MODEL",     polyFormDouble, "gate control polynomial, PHASE", 0}
+		};
 
 	int nColumn;
 	int nRowBytes;
@@ -220,7 +220,7 @@ const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 		if(scanId >= D->nScan)
 		{
 			fprintf(stderr, "PulsarId %d not linked to any scans!\n",
-				 psr);
+			        psr);
 			continue;
 		}
 		dp = D->pulsar + psr;
@@ -231,10 +231,10 @@ const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 			continue;
 		}
 		if(dp->nBin > 1) for(i = 0; i < nBand; i++)
-		{
-			onPhase[i]  = phaseOpen;
-			offPhase[i] = phaseClose;
-		}
+		                 {
+			                 onPhase[i]  = phaseOpen;
+			                 offPhase[i] = phaseClose;
+		                 }
 
 		for(p = 0; p < dp->nPolyco; p++)
 		{
@@ -261,9 +261,9 @@ const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 				f /= 60.0;
 			}
 			if(c < nPoly) for(; c < nPoly; c++)
-			{
-				poly[c] = 0.0;
-			}
+			              {
+				              poly[c] = 0.0;
+			              }
 			poly[0] += pc->p0;
 			poly[1] += pc->f0;
 

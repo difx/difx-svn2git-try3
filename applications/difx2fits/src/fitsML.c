@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012, 2014 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2012, 2014, 2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -49,61 +49,61 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 {
 	char bandFormDouble[8];
 	char bandFormFloat[8];
-        char arrayFormDouble[8];
+	char arrayFormDouble[8];
 
 	struct fitsBinTableColumn columns[] =
-	{
-		{"TIME", "1D", "time of model start", "DAYS"},
-		{"TIME_INTERVAL", "1E", "model interval", "DAYS"},
-		{"SOURCE_ID", "1J", "source id from sources tbl", 0},
-		{"ANTENNA_NO", "1J", "antenna number from antennas tbl", 0},
-		{"ARRAY", "1J", "array id number", 0},
-		{"FREQID", "1J", "frequency id number from frequency tbl", 0},
-		{"I.FAR.ROT", "1E", "ionospheric faraday rotation", "RAD/METER**2"},
-		{"FREQ.VAR", bandFormFloat, "time variable freq. offset", "HZ"},
-		{"PDELAY_1", bandFormDouble, "total phase delay at ref time", "TURNS"},
-		{"GDELAY_1", arrayFormDouble, "total group delay at ref time", "SECONDS"},
-		{"PRATE_1", bandFormDouble, "phase delay rate", "HZ"},
-		{"GRATE_1", arrayFormDouble, "group delay rate", "SEC/SEC"},
-		{"DISP_1", "1E", "dispersive delay for polar.1", "SECONDS"},
-		{"DDISP_1", "1E", "dispersive delay rate for polar. 1", "SEC/SEC"},
-		{"PDELAY_2", bandFormDouble, "total phase delay at ref time", "TURNS"},
-		{"GDELAY_2", arrayFormDouble, "total group delay at ref time", "SECONDS"},
-		{"PRATE_2", bandFormDouble, "phase delay rate", "HZ"},
-		{"GRATE_2", arrayFormDouble, "group delay rate", "SEC/SEC"},
-		{"DISP_2", "1E", "dispersive delay for polar.2", "SECONDS"},
-		{"DDISP_2", "1E", "dispersive delay rate for polar. 2", "SEC/SEC"}
-	};
+		{
+			{"TIME", "1D", "time of model start", "DAYS"},
+			{"TIME_INTERVAL", "1E", "model interval", "DAYS"},
+			{"SOURCE_ID", "1J", "source id from sources tbl", 0},
+			{"ANTENNA_NO", "1J", "antenna number from antennas tbl", 0},
+			{"ARRAY", "1J", "array id number", 0},
+			{"FREQID", "1J", "frequency id number from frequency tbl", 0},
+			{"I.FAR.ROT", "1E", "ionospheric faraday rotation", "RAD/METER**2"},
+			{"FREQ.VAR", bandFormFloat, "time variable freq. offset", "HZ"},
+			{"PDELAY_1", bandFormDouble, "total phase delay at ref time", "TURNS"},
+			{"GDELAY_1", arrayFormDouble, "total group delay at ref time", "SECONDS"},
+			{"PRATE_1", bandFormDouble, "phase delay rate", "HZ"},
+			{"GRATE_1", arrayFormDouble, "group delay rate", "SEC/SEC"},
+			{"DISP_1", "1E", "dispersive delay for polar.1", "SECONDS"},
+			{"DDISP_1", "1E", "dispersive delay rate for polar. 1", "SEC/SEC"},
+			{"PDELAY_2", bandFormDouble, "total phase delay at ref time", "TURNS"},
+			{"GDELAY_2", arrayFormDouble, "total group delay at ref time", "SECONDS"},
+			{"PRATE_2", bandFormDouble, "phase delay rate", "HZ"},
+			{"GRATE_2", arrayFormDouble, "group delay rate", "SEC/SEC"},
+			{"DISP_2", "1E", "dispersive delay for polar.2", "SECONDS"},
+			{"DDISP_2", "1E", "dispersive delay rate for polar. 2", "SEC/SEC"}
+		};
 	struct fitsBinTableColumn columns_with_spacecraft[] =
-	{
-		{"TIME", "1D", "time of model start", "DAYS"},
-		{"TIME_INTERVAL", "1E", "model interval", "DAYS"},
-		{"SOURCE_ID", "1J", "source id from sources tbl", 0},
-		{"ANTENNA_NO", "1J", "antenna number from antennas tbl", 0},
-		{"ARRAY", "1J", "array id number", 0},
-		{"FREQID", "1J", "frequency id number from frequency tbl", 0},
-		{"I.FAR.ROT", "1E", "ionospheric faraday rotation", 
-			"RAD/METER**2"},
-		{"FREQ.VAR", bandFormFloat, "time variable freq. offset", "HZ"},
-		{"PDELAY_1", bandFormDouble, "total phase delay at ref time", "TURNS"},
-		{"GDELAY_1", arrayFormDouble, "total group delay at ref time", "SECONDS"},
-		{"PRATE_1", bandFormDouble, "phase delay rate", "HZ"},
-		{"GRATE_1", arrayFormDouble, "group delay rate", "SEC/SEC"},
-		{"DISP_1", "1E", "dispersive delay for polar.1", "SECONDS"},
-		{"DDISP_1", "1E", "dispersive delay rate for polar. 1", "SEC/SEC"},
-		{"SCGSDELAY_1", arrayFormDouble, "spacecraft to ground station delay", "SECONDS"},
-		{"GSCLOCK_1", arrayFormDouble, "ground station electronic delay", "SECONDS"},
-		{"MSANGLE_1", arrayFormDouble, "mount source angle", "DEGREES"},
-		{"PDELAY_2", bandFormDouble, "total phase delay at ref time", "TURNS"},
-		{"GDELAY_2", arrayFormDouble, "total group delay at ref time", "SECONDS"},
-		{"PRATE_2", bandFormDouble, "phase delay rate", "HZ"},
-		{"GRATE_2", arrayFormDouble, "group delay rate", "SEC/SEC"},
-		{"DISP_2", "1E", "dispersive delay for polar.2", "SECONDS"},
-		{"DDISP_2", "1E", "dispersive delay rate for polar. 2", "SEC/SEC"},
-		{"SCGSDELAY_2", arrayFormDouble, "spacecraft to ground station delay", "SECONDS"},
-		{"GSCLOCK_2", arrayFormDouble, "ground station electronic delay", "SECONDS"},
-		{"MSANGLE_2", arrayFormDouble, "mount source angle", "DEGREES"}
-	};
+		{
+			{"TIME", "1D", "time of model start", "DAYS"},
+			{"TIME_INTERVAL", "1E", "model interval", "DAYS"},
+			{"SOURCE_ID", "1J", "source id from sources tbl", 0},
+			{"ANTENNA_NO", "1J", "antenna number from antennas tbl", 0},
+			{"ARRAY", "1J", "array id number", 0},
+			{"FREQID", "1J", "frequency id number from frequency tbl", 0},
+			{"I.FAR.ROT", "1E", "ionospheric faraday rotation", 
+			 "RAD/METER**2"},
+			{"FREQ.VAR", bandFormFloat, "time variable freq. offset", "HZ"},
+			{"PDELAY_1", bandFormDouble, "total phase delay at ref time", "TURNS"},
+			{"GDELAY_1", arrayFormDouble, "total group delay at ref time", "SECONDS"},
+			{"PRATE_1", bandFormDouble, "phase delay rate", "HZ"},
+			{"GRATE_1", arrayFormDouble, "group delay rate", "SEC/SEC"},
+			{"DISP_1", "1E", "dispersive delay for polar.1", "SECONDS"},
+			{"DDISP_1", "1E", "dispersive delay rate for polar. 1", "SEC/SEC"},
+			{"SCGSDELAY_1", arrayFormDouble, "spacecraft to ground station delay", "SECONDS"},
+			{"GSCLOCK_1", arrayFormDouble, "ground station electronic delay", "SECONDS"},
+			{"MSANGLE_1", arrayFormDouble, "mount source angle", "DEGREES"},
+			{"PDELAY_2", bandFormDouble, "total phase delay at ref time", "TURNS"},
+			{"GDELAY_2", arrayFormDouble, "total group delay at ref time", "SECONDS"},
+			{"PRATE_2", bandFormDouble, "phase delay rate", "HZ"},
+			{"GRATE_2", arrayFormDouble, "group delay rate", "SEC/SEC"},
+			{"DISP_2", "1E", "dispersive delay for polar.2", "SECONDS"},
+			{"DDISP_2", "1E", "dispersive delay rate for polar. 2", "SEC/SEC"},
+			{"SCGSDELAY_2", arrayFormDouble, "spacecraft to ground station delay", "SECONDS"},
+			{"GSCLOCK_2", arrayFormDouble, "ground station electronic delay", "SECONDS"},
+			{"MSANGLE_2", arrayFormDouble, "mount source angle", "DEGREES"}
+		};
 
 	char *fitsbuf;		/* compose FITS file rows here */
 	int nBand;
@@ -126,7 +126,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 	int *skip;
 	int skipped=0;
 	int printed=0;
-        int has_no_spacecraft=1;
+	int has_no_spacecraft=1;
 	/* 1-based indices for FITS */
 
 	if(D == 0)
@@ -134,61 +134,61 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 		return 0;
 	}
 
-        /* find out whether or not there are spacecraft antennas */
-        /* Because of the way that AIPS loads in FITS files, if */
-        /* any job of an experiment has a spacecraft antenna, then */
-        /* all jobs of the experiment must write out information */
-        /* for the spacecraft antenna mode. */
+	/* find out whether or not there are spacecraft antennas */
+	/* Because of the way that AIPS loads in FITS files, if */
+	/* any job of an experiment has a spacecraft antenna, then */
+	/* all jobs of the experiment must write out information */
+	/* for the spacecraft antenna mode. */
 	for(s = 0; s < D->nSpacecraft; s++)
 	{
-            if((D->spacecraft[s].is_antenna))
-            {
-                has_no_spacecraft = 0;
-                break;
-            }
-        }
+		if((D->spacecraft[s].is_antenna))
+		{
+			has_no_spacecraft = 0;
+			break;
+		}
+	}
 
 	nBand = p_fits_keys->no_band;
 	nPol = D->nPol;
   
 	/* set FITS header to reflect number of bands in observation */
-        sprintf(arrayFormDouble, "%dD", array_N_POLY);
+	sprintf(arrayFormDouble, "%dD", array_N_POLY);
 	sprintf(bandFormDouble, "%dD", array_N_POLY * nBand);  
 	sprintf(bandFormFloat, "%dE", nBand);  
   
 	/* determine size of records for FITS file */
-        if((has_no_spacecraft))
-        {
-            if(nPol == 2)
-            {
-		nColumn = NELEMENTS(columns);
-            }
-            else  /* don't populate last 6 columns if not full polar */
-            {
-		nColumn = NELEMENTS(columns) - 6;
-            }
-            nRowBytes = FitsBinTableSize(columns, nColumn);
+	if((has_no_spacecraft))
+	{
+		if(nPol == 2)
+		{
+			nColumn = NELEMENTS(columns);
+		}
+		else  /* don't populate last 6 columns if not full polar */
+		{
+			nColumn = NELEMENTS(columns) - 6;
+		}
+		nRowBytes = FitsBinTableSize(columns, nColumn);
  
-            /* write "binary file extension description" to output file */
-            fitsWriteBinTable(out, nColumn, columns, nRowBytes,
-                              "INTERFEROMETER_MODEL");
-       }
-        else
-        {
-            if(nPol == 2)
-            {
-		nColumn = NELEMENTS(columns_with_spacecraft);
-            }
-            else  /* don't populate last 9 columns if not full polar */
-            {
-		nColumn = NELEMENTS(columns_with_spacecraft) - 9;
-            }
-            nRowBytes = FitsBinTableSize(columns_with_spacecraft, nColumn);
+		/* write "binary file extension description" to output file */
+		fitsWriteBinTable(out, nColumn, columns, nRowBytes,
+		                  "INTERFEROMETER_MODEL");
+	}
+	else
+	{
+		if(nPol == 2)
+		{
+			nColumn = NELEMENTS(columns_with_spacecraft);
+		}
+		else  /* don't populate last 9 columns if not full polar */
+		{
+			nColumn = NELEMENTS(columns_with_spacecraft) - 9;
+		}
+		nRowBytes = FitsBinTableSize(columns_with_spacecraft, nColumn);
 
-            /* write "binary file extension description" to output file */
-            fitsWriteBinTable(out, nColumn, columns_with_spacecraft, nRowBytes,
-                              "INTERFEROMETER_MODEL");
-        }
+		/* write "binary file extension description" to output file */
+		fitsWriteBinTable(out, nColumn, columns_with_spacecraft, nRowBytes,
+		                  "INTERFEROMETER_MODEL");
+	}
   
 	/* calloc space for storing table in FITS order */
 	fitsbuf = (char *)calloc(nRowBytes, 1);
@@ -277,9 +277,9 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 				double gpoly[array_N_POLY];
 				double prate[array_MAX_BANDS][array_N_POLY];
 				double grate[array_N_POLY];
-                                double sc_gs_delay[array_N_POLY];
-                                double gs_clock_delay[array_N_POLY];
-                                double msa[array_N_POLY];
+				double sc_gs_delay[array_N_POLY];
+				double gs_clock_delay[array_N_POLY];
+				double msa[array_N_POLY];
 
 				dsId = config->ant2dsId[a];
 				if(dsId < 0 || dsId >= D->nDatastream)
@@ -319,12 +319,12 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 				for(k = 0; k < array_N_POLY; ++k)
 				{
 					gpoly[k] = -P->delay[k]*1.0e-6;
-                                        if(!has_no_spacecraft)
-                                        {
-                                                sc_gs_delay[k] = P->sc_gs_delay[k]*1.0e-6;
-                                                gs_clock_delay[k] = P->gs_clock_delay[k]*1.0e-6;
-                                                msa[k] = P->msa[k]*180.0/M_PI;
-                                        }
+					if(!has_no_spacecraft)
+					{
+						sc_gs_delay[k] = P->sc_gs_delay[k]*1.0e-6;
+						gs_clock_delay[k] = P->gs_clock_delay[k]*1.0e-6;
+						msa[k] = P->msa[k]*180.0/M_PI;
+					}
 				}
 
 				/* Add in the clock model */
@@ -370,24 +370,24 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 					FITS_WRITE_ARRAY(grate, p_fitsbuf, array_N_POLY);
 					FITS_WRITE_ITEM (dispDelay, p_fitsbuf);
 					FITS_WRITE_ITEM (dispDelayRate, p_fitsbuf);
-                                        if(!has_no_spacecraft)
-                                        {
-                                                FITS_WRITE_ARRAY(sc_gs_delay, p_fitsbuf, array_N_POLY);
-                                                FITS_WRITE_ARRAY(gs_clock_delay, p_fitsbuf, array_N_POLY);
-                                                FITS_WRITE_ARRAY(msa, p_fitsbuf, array_N_POLY);
-                                        }
+					if(!has_no_spacecraft)
+					{
+						FITS_WRITE_ARRAY(sc_gs_delay, p_fitsbuf, array_N_POLY);
+						FITS_WRITE_ARRAY(gs_clock_delay, p_fitsbuf, array_N_POLY);
+						FITS_WRITE_ARRAY(msa, p_fitsbuf, array_N_POLY);
+					}
 				} /* Polar loop */
 
 				testFitsBufBytes(p_fitsbuf - fitsbuf, nRowBytes, "ML");
 
 #ifndef WORDS_BIGENDIAN
-                                if((has_no_spacecraft))
-                                {
-                                        FitsBinRowByteSwap(columns, nColumn, fitsbuf);
-                                }
-                                else {
-                                        FitsBinRowByteSwap(columns_with_spacecraft, nColumn, fitsbuf);
-                                }
+				if((has_no_spacecraft))
+				{
+					FitsBinRowByteSwap(columns, nColumn, fitsbuf);
+				}
+				else {
+					FitsBinRowByteSwap(columns_with_spacecraft, nColumn, fitsbuf);
+				}
 #endif
 				fitsWriteBinRow(out, fitsbuf);
 
@@ -395,7 +395,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 		} /* end model loop */
 	} /* Scan loop */
 
-  	if(printed)
+	if(printed)
 	{
 		printf("\n                            ");
 	}

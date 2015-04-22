@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2013 by Walter Brisken & John Morgan               *
+ *   Copyright (C) 2008-2013, 2015 by Walter Brisken & John Morgan               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -40,8 +40,8 @@ const float pcaltiny = 1e-10;
 #warning "FIXME: even this could be too small!"
 const int MaxLineLength = 80000;
 const double DefaultDifxCableCalExtrapolate = 2.0; /* The timerange a cable cal measurement 
-						    * is valid over is the integration window
-						    * multiplied by this factor */
+                                                    * is valid over is the integration window
+                                                    * multiplied by this factor */
 
 
 #warning "FIXME: the generation of this FITS table is quite broken with regard to multiple datastreams per antenna."
@@ -274,16 +274,16 @@ inline int isUndefinedVLBA(double v)
  * Here there is an implicit assumption that there is one datastream per antenna 
  */
 static int parsePulseCal(const char *line, 
-	int antId,
-	int *sourceId,
-	double *time, float *timeInt, double *cableCal,
-	double freqs[2][array_MAX_TONES], 
-	float pulseCalRe[2][array_MAX_TONES], 
-	float pulseCalIm[2][array_MAX_TONES], 
-	float stateCount[2][array_MAX_STATES*array_MAX_BANDS],
-	float pulseCalRate[2][array_MAX_TONES],
-	int refDay, const DifxInput *D, int *configId, 
-	int phaseCentre, int doAll, int year)
+                         int antId,
+                         int *sourceId,
+                         double *time, float *timeInt, double *cableCal,
+                         double freqs[2][array_MAX_TONES], 
+                         float pulseCalRe[2][array_MAX_TONES], 
+                         float pulseCalIm[2][array_MAX_TONES], 
+                         float stateCount[2][array_MAX_STATES*array_MAX_BANDS],
+                         float pulseCalRate[2][array_MAX_TONES],
+                         int refDay, const DifxInput *D, int *configId, 
+                         int phaseCentre, int doAll, int year)
 {
 	int IFs[array_MAX_BANDS];
 	int states[array_MAX_STATES];
@@ -303,23 +303,23 @@ static int parsePulseCal(const char *line,
 	 * wants, namely 0xFFFFFFFF */
 	union
 	{
-		int32_t i32;
+		uint32_t u32;
 		float f;
-	} nan;
-	nan.i32 = -1;
+	} fitsnan;
+	fitsnan.u32 = UINT32_C(0xFFFFFFFF);
 	
 	for(pol = 0; pol < 2; ++pol)
 	{
 		for(toneIndex = 0; toneIndex < array_MAX_TONES; ++toneIndex)
 		{
 			freqs[pol][toneIndex] = 0.0;
-			pulseCalRe[pol][toneIndex] = nan.f;
-			pulseCalIm[pol][toneIndex] = nan.f;
+			pulseCalRe[pol][toneIndex] = fitsnan.f;
+			pulseCalIm[pol][toneIndex] = fitsnan.f;
 			pulseCalRate[pol][toneIndex] = 0.0;
 		}
 		for(s = 0; s < array_MAX_STATES*array_MAX_BANDS; ++s)
 		{
-			stateCount[pol][s] = nan.f;
+			stateCount[pol][s] = fitsnan.f;
 		}
 	}
 
@@ -340,7 +340,7 @@ static int parsePulseCal(const char *line,
 	/* A VLBA specialty! */
 	if(isUndefinedVLBA(*cableCal))
 	{
-		*cableCal = nan.f;
+		*cableCal = fitsnan.f;
 	}
 
 	if(*time > 50000)	/* must be an MJD */
@@ -483,8 +483,8 @@ static int parsePulseCal(const char *line,
  * value. Any values with their time centroid outside of a scan
  * will be discarded */
 static int parsePulseCalCableCal(const char *line, int antId, int *sourceId, int *scanId,
-	double *time, float *timeInt, double *cableCal, int refDay, const DifxInput *D, int *configId, 
-	int phaseCentre, int year)
+                                 double *time, float *timeInt, double *cableCal, int refDay, const DifxInput *D, int *configId, 
+                                 int phaseCentre, int year)
 {
 	int n, p;
 	double mjd;
@@ -494,10 +494,10 @@ static int parsePulseCalCableCal(const char *line, int antId, int *sourceId, int
 	 * wants, namely 0xFFFFFFFF */
 	union
 	{
-		int32_t i32;
+		uint32_t u32;
 		float f;
-	} nan;
-	nan.i32 = -1;
+	} fitsnan;
+	fitsnan.u32 = UINT32_C(0xFFFFFFFF);
 	
 	n = sscanf(line, "%31s%lf%f%lf%n", antName, time, timeInt, cableCal, &p);
 	if(n != 4)
@@ -549,7 +549,7 @@ static int parsePulseCalCableCal(const char *line, int antId, int *sourceId, int
 	
 	if(isUndefinedVLBA(*cableCal))
 	{
-		*cableCal = nan.f;
+		*cableCal = fitsnan.f;
 	}
 	else
 	{
@@ -563,18 +563,18 @@ static int parsePulseCalCableCal(const char *line, int antId, int *sourceId, int
 /* The following function is for parsing a line of the files containing 
  * The DiFX-extracted pulse cals */
 static int parseDifxPulseCal(const char *line, 
-	int dsId, int nBand, int nTone,
-	int *sourceId, int *scanId, double *time, int jobId,
-	double freqs[2][array_MAX_TONES], 
-	float pulseCalRe[2][array_MAX_TONES], 
-	float pulseCalIm[2][array_MAX_TONES], 
-	float stateCount[2][array_MAX_STATES*array_MAX_BANDS],
-	float pulseCalRate[2][array_MAX_TONES],
-	int refDay, const DifxInput *D, int *configId, 
-	int phaseCentre, int year)
+                             int dsId, int nBand, int nTone,
+                             int *sourceId, int *scanId, double *time, int jobId,
+                             double freqs[2][array_MAX_TONES], 
+                             float pulseCalRe[2][array_MAX_TONES], 
+                             float pulseCalIm[2][array_MAX_TONES], 
+                             float stateCount[2][array_MAX_STATES*array_MAX_BANDS],
+                             float pulseCalRate[2][array_MAX_TONES],
+                             int refDay, const DifxInput *D, int *configId, 
+                             int phaseCentre, int year)
 {
-	static int tooMany[2][array_MAX_BANDS] = { {0} };	/* zeros the values */
-	static int tooFew[2][array_MAX_BANDS] = { {0} };	/* zeros the values */
+	/* static int tooMany[2][array_MAX_BANDS] = { {0} };	/\* zeros the values *\/ */
+	/* static int tooFew[2][array_MAX_BANDS] = { {0} };	/\* zeros the values *\/ */
 	static int lastDsId = -1;
 	const DifxFreq *df;
 	const DifxDatastream *dd;
@@ -601,21 +601,21 @@ static int parseDifxPulseCal(const char *line,
 	 * wants, namely 0xFFFFFFFF */
 	union
 	{
-		int32_t i32;
+		uint32_t u32;
 		float f;
-	} nan;
-	nan.i32 = -1;
+	} fitsnan;
+	fitsnan.u32 = UINT32_C(0xFFFFFFFF);
 	
 	if(dsId != lastDsId)
 	{
-		for(pol = 0; pol < 2; ++pol)
-		{
-			for(i = 0; i < array_MAX_BANDS; ++i)
-			{
-				tooMany[pol][i] = 0;
-				tooFew[pol][i] = 0;
-			}
-		}
+		/* for(pol = 0; pol < 2; ++pol) */
+		/* { */
+		/* 	for(i = 0; i < array_MAX_BANDS; ++i) */
+		/* 	{ */
+		/* 		tooMany[pol][i] = 0; */
+		/* 		tooFew[pol][i] = 0; */
+		/* 	} */
+		/* } */
 		lastDsId = dsId;
 	}
 
@@ -631,7 +631,7 @@ static int parseDifxPulseCal(const char *line,
 		for(i = 0; i < array_MAX_STATES*array_MAX_BANDS; ++i)
 		{
 			/* No state counts are available for difx extracted pcals */
-			stateCount[pol][i] = nan.f;
+			stateCount[pol][i] = fitsnan.f;
 		}
 	}
 
@@ -735,6 +735,10 @@ static int parseDifxPulseCal(const char *line,
 		toneCount = 0;
 
 		v = DifxConfigRecBand2FreqPol(D, *configId, dd->antennaId, band, &recFreq, &bandPol);
+		if(v < 0)
+		{
+			return -8;
+		}
 		/* this pol/band combination is not used.  Read all of the dummies from PCAL file */
 		for(tone = 0; tone < nt; ++tone)	/* nt is taken from line header and is max number of tones */
 		{
@@ -755,7 +759,7 @@ static int parseDifxPulseCal(const char *line,
 					printf(" ^-Note: No more warnings of this kind will be produced\n");
 				}
 				
-				return -8;
+				return -9;
 			}
 			line += p;
 
@@ -856,7 +860,7 @@ static int parseDifxPulseCal(const char *line,
 	} /* loop over recbands */
 	if(nonTiny == 0)
 	{
-		return -8;
+		return -10;
 	}
 
 	return 0;
@@ -879,8 +883,8 @@ static int countTones(const DifxDatastream *dd)
 }
 
 const DifxInput *DifxInput2FitsPH(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
-	int phaseCentre, double avgSeconds, int verbose)
+                                  struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
+                                  int phaseCentre, double avgSeconds, int verbose)
 {
 	char stateFormFloat[8];
 	char toneFormDouble[8];
@@ -888,25 +892,25 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	
 	/*  define the flag FITS table columns */
 	struct fitsBinTableColumn columns[] =
-	{
-		{"TIME", "1D", "time of center of interval", "DAYS"},
-		{"TIME_INTERVAL", "1E", "time span of datum", "DAYS"},
-		{"SOURCE_ID", "1J", "source id number from source tbl", 0},
-		{"ANTENNA_NO", "1J", "antenna id from array geom. tbl", 0},
-		{"ARRAY", "1J", "????", 0},
-		{"FREQID", "1J", "freq id from frequency tbl", 0},
-		{"CABLE_CAL", "1D", "cable length calibration", "SECONDS"},
-		{"STATE_1", stateFormFloat, "state counts (4 per baseband)", 0},
-		{"PC_FREQ_1", toneFormDouble, "Pcal recorded frequency", "Hz"},
-		{"PC_REAL_1", toneFormFloat, "Pcal real", 0},
-		{"PC_IMAG_1", toneFormFloat, "Pcal imag", 0},
-		{"PC_RATE_1", toneFormFloat, "Pcal rate", 0},
-		{"STATE_2", stateFormFloat, "state counts (4 per baseband)", 0},
-		{"PC_FREQ_2", toneFormDouble, "Pcal recorded frequency", "Hz"},
-		{"PC_REAL_2", toneFormFloat, "Pcal real", 0},
-		{"PC_IMAG_2", toneFormFloat, "Pcal imag", 0},
-		{"PC_RATE_2", toneFormFloat, "Pcal rate", 0}
-	};
+		{
+			{"TIME", "1D", "time of center of interval", "DAYS"},
+			{"TIME_INTERVAL", "1E", "time span of datum", "DAYS"},
+			{"SOURCE_ID", "1J", "source id number from source tbl", 0},
+			{"ANTENNA_NO", "1J", "antenna id from array geom. tbl", 0},
+			{"ARRAY", "1J", "????", 0},
+			{"FREQID", "1J", "freq id from frequency tbl", 0},
+			{"CABLE_CAL", "1D", "cable length calibration", "SECONDS"},
+			{"STATE_1", stateFormFloat, "state counts (4 per baseband)", 0},
+			{"PC_FREQ_1", toneFormDouble, "Pcal recorded frequency", "Hz"},
+			{"PC_REAL_1", toneFormFloat, "Pcal real", 0},
+			{"PC_IMAG_1", toneFormFloat, "Pcal imag", 0},
+			{"PC_RATE_1", toneFormFloat, "Pcal rate", 0},
+			{"STATE_2", stateFormFloat, "state counts (4 per baseband)", 0},
+			{"PC_FREQ_2", toneFormDouble, "Pcal recorded frequency", "Hz"},
+			{"PC_REAL_2", toneFormFloat, "Pcal real", 0},
+			{"PC_IMAG_2", toneFormFloat, "Pcal imag", 0},
+			{"PC_RATE_2", toneFormFloat, "Pcal rate", 0}
+		};
 
 	int nColumn;
 	int nRowBytes;
@@ -920,7 +924,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	double time, dumpTime, accumStart=0.0, accumEnd=0.0;
 	float timeInt, dumpTimeInt;
 	int cableScanId, nextCableScanId, 
-	    lineCableScanId, lineCableSourceId, lineCableConfigId;
+		lineCableScanId, lineCableSourceId, lineCableConfigId;
 	int newScanId = -1, newSourceId = -1, newConfigId = -1;
 	double cableCal, nextCableCal, cableCalOut, lineCableCal;
 	double cableTime, nextCableTime, lineCableTime;
@@ -958,11 +962,11 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	 * wants, namely 0xFFFFFFFF, or 0xFFFFFFFFFFFFFFFF for double */
 	union
 	{
-		int64_t i64;
+		uint64_t u64;
 		double d;
 		float f;
-	} nan;
-	nan.i64 = -1;
+	} fitsnan;
+	fitsnan.u64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
 
 	if(D == 0)
 	{
@@ -1280,7 +1284,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 								continue;	/* to next line in file */	
 							}
 							v = parsePulseCal(line, a, &sourceId, &time, &timeInt, &cableCal, freqs, pulseCalReAcc, pulseCalImAcc,
-								stateCount, pulseCalRate, refDay, D, &configId, phaseCentre, doAll, year);
+							                  stateCount, pulseCalRate, refDay, D, &configId, phaseCentre, doAll, year);
 							if(v < 0)
 							{
 								continue;	/* to next line in file */
@@ -1331,8 +1335,8 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 							double mjdRecord;
 							
 							v = parseDifxPulseCal(line, dsId, nBand, nTone, &newSourceId, &newScanId, &time, j,
-										freqs, pulseCalRe, pulseCalIm, stateCount, pulseCalRate,
-										refDay, D, &newConfigId, phaseCentre, year);
+							                      freqs, pulseCalRe, pulseCalIm, stateCount, pulseCalRate,
+							                      refDay, D, &newConfigId, phaseCentre, year);
 							if(v < 0)
 							{
 								continue;	/* to next line in file */
@@ -1439,7 +1443,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 										continue;	/* to next line in file */	
 									}
 									v = parsePulseCalCableCal(line, a, &lineCableSourceId, &lineCableScanId, &lineCableTime, &lineCablePeriod, 
-										&lineCableCal, refDay, D, &lineCableConfigId, phaseCentre, year);
+									                         &lineCableCal, refDay, D, &lineCableConfigId, phaseCentre, year);
 									if(v < 0)
 									{
 										continue;	/* to next line in file */
@@ -1459,11 +1463,11 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 							cableSigma = 2*fabs(dumpTime - cableTime)/(cablePeriod);
 							if(cableSigma > DefaultDifxCableCalExtrapolate && nextCableSigma > DefaultDifxCableCalExtrapolate)
 							{
-								cableCalOut = nan.f;
+								cableCalOut = fitsnan.f;
 							}
 							else if(cableScanId != scanId && nextCableScanId != scanId)
 							{
-								cableCalOut = nan.f;
+								cableCalOut = fitsnan.f;
 							}
 							else if(cableScanId == scanId && nextCableScanId != scanId)
 							{
