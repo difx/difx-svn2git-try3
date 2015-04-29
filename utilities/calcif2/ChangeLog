@@ -1,3 +1,10 @@
+2015-04-29  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/calcif2.c:
+	* src/difxcalc.h:
+	* src/difxcalc.c: updates to handle new DiFX_Delay_Server RPC
+	calls to fill delay model parameters data for FITS CT table
+
 2015-04-13  James Anderson  <anderson@gfz-potsdam>
 
 	* src/MATHCNST.H:

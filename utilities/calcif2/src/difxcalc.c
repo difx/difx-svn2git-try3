@@ -676,7 +676,144 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
 
 
 
-int difxCalcInit(const DifxInput* const D, CalcParams* const p, const int verbose)
+static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* const p, const int verbose)
+{
+    getDIFX_DELAY_SERVER_PARAMETERS_1_arg request_args, *p_request;
+    getDIFX_DELAY_SERVER_PARAMETERS_1_res request_res,  *p_result;
+    struct DIFX_DELAY_SERVER_PARAMETERS_1_res* res;
+    int mode_failures;
+
+    mode_failures = 0;
+    p_request = &request_args;
+    memset(p_request, 0, sizeof(getDIFX_DELAY_SERVER_PARAMETERS_1_arg));
+    p_request->verbosity = verbose;
+    p_request->delay_server = delayServerTypeIds[p->delayServerType];
+    if(p->delayServerType == CALC_9_1_RA_Server)
+    {
+        p_request->server_struct_setup_code = 0x0510;
+    }
+    else
+    {
+        p_request->server_struct_setup_code = 0;
+    }
+    p_request->request_id = 0;
+
+    if((verbose))
+    {
+        printf("getting delay server parameters from host %s type %s handler version %lu\n", p->delayServerHost, delayServerTypeNames[p->delayServerType], p->delayVersion);
+    }
+    p_result = &request_res;
+    memset(p_result, 0, sizeof(struct getDIFX_DELAY_SERVER_PARAMETERS_1_res));
+    clnt_stat = clnt_call(p->clnt, GETDIFX_DELAY_SERVER_PARAMETERS,
+                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_arg, 
+                          (caddr_t)p_request,
+                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res, 
+                          (caddr_t)(p_result),
+                          TIMEOUT);
+    if((verbose))
+    {
+        printf("Return from clnt_call\n");
+    }
+
+    printf ("result: this_error = %d\n", p_result->this_error);
+    if(!p_result->this_error)
+    {
+        res = &(p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.response);
+        if(verbose >= 3)
+        {
+            printf("results: delay_server_error=%d server_error=%d model_error=%d\n", res->delay_server_error, res->server_error, res->model_error);
+            printf("results: request_id=%ld delay_server=0x%lX\n", res->request_id, res->delay_server);
+            printf("results: server_struct_setup_code=0x%lX server_version=0x%lX\n", res->server_struct_setup_code, res->server_version);
+            printf("results: accelgrv=%25.16E\n", res->accelgrv);
+            printf("results: e_flat=%25.16E\n", res->e_flat);
+            printf("results: earthrad=%25.16E\n", res->earthrad);
+            printf("results: mmsems=%25.16E\n", res->mmsems);
+            printf("results: ephepoc=%25.16E\n", res->ephepoc);
+            printf("results: gauss=%25.16E\n", res->gauss);
+            printf("results: u_grv_cn=%25.16E\n", res->u_grv_cn);
+            printf("results: gmsun=%25.16E\n", res->gmsun);
+            printf("results: gmmercury=%25.16E\n", res->gmmercury);
+            printf("results: gmvenus=%25.16E\n", res->gmvenus);
+            printf("results: gmearth=%25.16E\n", res->gmearth);
+            printf("results: gmmoon=%25.16E\n", res->gmmoon);
+            printf("results: gmmars=%25.16E\n", res->gmmars);
+            printf("results: gmjupiter=%25.16E\n", res->gmjupiter);
+            printf("results: gmsaturn=%25.16E\n", res->gmsaturn);
+            printf("results: gmuranus=%25.16E\n", res->gmuranus);
+            printf("results: gmneptune=%25.16E\n", res->gmneptune);
+            printf("results: etidelag=%25.16E\n", res->etidelag);
+            printf("results: love_h=%25.16E\n", res->love_h);
+            printf("results: love_l=%25.16E\n", res->love_l);
+            printf("results: pre_data=%25.16E\n", res->pre_data);
+            printf("results: rel_data=%25.16E\n", res->rel_data);
+            printf("results: tidalut1=%25.16E\n", res->tidalut1);
+            printf("results: au=%25.16E\n", res->au);
+            printf("results: tsecau=%25.16E\n", res->tsecau);
+            printf("results: vlight=%25.16E\n", res->vlight);
+        }
+        if((fabs(res->vlight - 299792458.0) > 1E-3)
+           || ((res->delay_server_error))
+           || ((res->server_error))
+           || ((res->model_error))
+            )
+        {
+            printf ("ERROR : Delay Server is returning BAD PARAMETER DATA.\n");
+            printf ("        Restart the Delay Server.\n");
+            mode_failures++;
+        }
+        else
+        {
+            free(D->job->calcParamTable);
+            D->job->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
+            
+            D->job->calcParamTable->accelgrv    = res->accelgrv     ;
+            D->job->calcParamTable->e_flat      = res->e_flat       ;
+            D->job->calcParamTable->earthrad    = res->earthrad     ;
+            D->job->calcParamTable->mmsems      = res->mmsems       ;
+            D->job->calcParamTable->ephepoc     = res->ephepoc      ;
+            D->job->calcParamTable->gauss       = res->gauss        ;
+            D->job->calcParamTable->u_grv_cn    = res->u_grv_cn     ;
+            D->job->calcParamTable->gmsun       = res->gmsun        ;
+            D->job->calcParamTable->gmmercury   = res->gmmercury    ;
+            D->job->calcParamTable->gmvenus     = res->gmvenus      ;
+            D->job->calcParamTable->gmearth     = res->gmearth      ;
+            D->job->calcParamTable->gmmoon      = res->gmmoon       ;
+            D->job->calcParamTable->gmmars      = res->gmmars       ;
+            D->job->calcParamTable->gmjupiter   = res->gmjupiter    ;
+            D->job->calcParamTable->gmsaturn    = res->gmsaturn     ;
+            D->job->calcParamTable->gmuranus    = res->gmuranus     ;
+            D->job->calcParamTable->gmneptune   = res->gmneptune    ;
+            D->job->calcParamTable->etidelag    = res->etidelag     ;
+            D->job->calcParamTable->love_h      = res->love_h       ;
+            D->job->calcParamTable->love_l      = res->love_l       ;
+            D->job->calcParamTable->pre_data    = res->pre_data     ;
+            D->job->calcParamTable->rel_data    = res->rel_data     ;
+            D->job->calcParamTable->tidalut1    = res->tidalut1     ;
+            D->job->calcParamTable->au          = res->au           ;
+            D->job->calcParamTable->tsecau      = res->tsecau       ;
+            D->job->calcParamTable->vlight      = res->vlight       ;
+        }
+    }
+    else {
+        printf ("ERROR : Delay Server is returning BAD PARAMETER DATA.\n");
+        printf ("        Restart the Delay Server.\n");
+        mode_failures++;
+    }
+        
+    if(clnt_freeres(cl, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res, (caddr_t) p_result) != 1)
+    {
+        fprintf(stderr, "Failed to free results buffer\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return mode_failures;
+};
+
+
+
+
+
+int difxCalcInit(DifxInput* const D, CalcParams* const p, const int verbose)
 {
     struct getDIFX_DELAY_SERVER_1_arg *p_request;
     int i;
@@ -689,8 +826,14 @@ int difxCalcInit(const DifxInput* const D, CalcParams* const p, const int verbos
     i = check_delayserver_operation(D, p, verbose);
     if(i < 0)
     {
-        fprintf(stderr, "Error: check_calcserver_operation not working in difxCalcInit, got return code %d\n", i);
+        fprintf(stderr, "Error: check_delayserver_operation not working in difxCalcInit, got return code %d\n", i);
         return -3;
+    }
+    i = get_Delay_Server_Parameters(D, p, verbose);
+    if(i < 0)
+    {
+        fprintf(stderr, "Error: get_Delay_Server_Parameters not working in difxCalcInit, got return code %d\n", i);
+        return -4;
     }
 
     p_request = &(p->request);

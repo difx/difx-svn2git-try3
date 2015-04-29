@@ -912,7 +912,6 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 	{
 		D->job->delay_xyz = p->delay_xyz;
 	}
-#error "check how delay_uvw gets set in difxio"
 	if(p->delay_lmn != 0.0)
 	{
 		D->job->delay_lmn = p->delay_lmn;
