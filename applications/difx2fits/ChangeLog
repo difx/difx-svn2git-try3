@@ -1,3 +1,8 @@
+2015-04-29  James Anderson  <anderson@gfz-potsdam>
+
+	* src/fitsCT.c: update for new delay server returning model
+	parameters for CT table
+
 2015-04-22  James Anderson  <anderson@gfz-potsdam>
 
 	* src/difx2fits.c:
