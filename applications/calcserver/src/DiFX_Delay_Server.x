@@ -1,5 +1,33 @@
+/***************************************************************************
+ *   Copyright (C) 2015 by James M Anderson                                *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
 /* DiFX_Delay_Server.x for rpcgen creation of interface to DiFX delay server */
-
+/*===========================================================================
+ * SVN properties (DO NOT CHANGE)
+ *
+ * $Id: fitsCT.c 6619 2015-04-22 14:26:47Z JamesAnderson $
+ * $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/branches/radioastron20140201/src/fitsCT.c $
+ * $LastChangedRevision: 6619 $
+ * $Author: JamesAnderson $
+ * $LastChangedDate: 2015-04-22 16:26:47 +0200 (Wed, 22 Apr 2015) $
+ *
+ *============================================================================
+ */
 
 const DIFX_DELAY_SERVER_STATION_STRING_SIZE=32;
 const NUM_DIFX_DELAY_SERVER_1_KFLAGS=64;
@@ -710,7 +738,7 @@ struct getDIFX_DELAY_SERVER_1_arg {
 
 
 
-/* DIFX_DELAY_SERVER server response */
+/* getDIFX_DELAY_SERVER server response */
 
 struct DIFX_DELAY_SERVER_1_res {
     /*************************************************************************/
@@ -773,9 +801,143 @@ struct DIFX_DELAY_SERVER_1_res {
 };
 
 
+
+struct getDIFX_DELAY_SERVER_PARAMETERS_1_arg {
+    /*************************************************************************/
+    /*** Setup ***************************************************************/
+    long request_id;        /* RPC request id number, user's choice          */
+    unsigned long delay_server; /* Which delay server to actually call       */
+                            /* Allowed values are:                           */
+                            /*     0x20000340    CALCServer                  */
+                            /*     0x20000341    CALC_9_1_RA_Server          */
+    long server_struct_setup_code;
+                            /* Server struct code. (struct_code in           */
+                            /* the original servers.) This specifies         */
+                            /* which of the elements of this
+                               structure are actually sent by the RPC
+                               call.  Elements that are not sent are
+                               automatically set to 0.  See
+                               the individual server codes for allowed
+                               options.
+                            */
+    int verbosity;          /* How verbose should logging be? Higher means more messages */
+};
+
+/* DIFX_DELAY_SERVER server response */
+
+struct DIFX_DELAY_SERVER_PARAMETERS_1_res {
+    /*************************************************************************/
+    /*** Setup ***************************************************************/
+    int delay_server_error; /* error code from the DiFX_Delay_Server itself  */
+    int server_error;       /* error code from the called delay server program*/
+    int model_error;        /* error code from the underlying delay modeling
+                               software */
+    long request_id;        /* RPC request id number, returned to user       */
+    unsigned long delay_server; /* Which delay server was actually called    */
+                            /* Allowed values are:                           */
+                            /*     0x20000340    CALCServer                  */
+                            /*     0x20000341    CALC_9_1_RA_Server          */
+    long server_struct_setup_code;
+                            /* Server struct code. (struct_code in           */
+                            /* the original servers.) This specifies         */
+                            /* which of the elements of this
+                               structure are actually sent by the RPC
+                               call.  Elements that are not sent are
+                               automatically set to 0.  See
+                               the individual server codes for allowed
+                               options.
+                            */
+    unsigned long server_version;
+                            /* The exact version number of the delay server
+                               software that was used.
+                             */
+    /*************************************************************************/
+    /*** Results *************************************************************/
+    double accelgrv;        /* acceleration of gravity at Earth's surface
+                               in m s^{-2}
+                             */
+    double e_flat;          /* Earth's flattening factor, unitless.
+                               This is the square of the eccentricity
+                               of the ellipsoid which approximates the shape
+                               of the Earth.
+                             */
+    double earthrad;        /* Earth's equatorial radius, in m
+                             */
+    double mmsems;          /* ratio of the mass of the Moon to the mass
+                               of the Earth
+                            */
+    double ephepoc;         /* coordinate equinox (usually 2000.0)
+                             */
+    double gauss;           /* Gaussian gravitational constant (unitless?)
+                             */
+    double u_grv_cn;        /* constant of gravitation, in
+                               m^3 kg^{-1} s^{-2}
+                            */
+    double gmsun;           /* Heliocentric gravitational constant,
+                               mass of the Sun times the Newtonian graviational
+                               constant, in m^3 s^{-2}
+                            */
+    double gmmercury;       /* Mass of Mercury times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmvenus;         /* Mass of Venus times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmearth;         /* Mass of Earth times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmmoon;          /* Lunar-centric gravitational constant,
+                               mass of the Moon times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmmars;          /* Mass of Mars times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmjupiter;       /* Mass of Jupiter times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmsaturn;        /* Mass of Saturn times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmuranus;        /* Mass of Uranus times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double gmneptune;       /* Mass of Neptune times the Newtonian graviational
+                               constant, in m^3 s^{-3}
+                            */
+    double etidelag;        /* lag angle of Earth tides, in radians
+                             */
+    double love_h;          /* Earth tides: global Love Number H
+                             */
+    double love_l;          /* Earth tides: global Love Number L
+                             */
+    double pre_data;        /* general precession in longitude at standard
+                               equinox J2000, in arcseconds per Julian century
+                            */
+    double rel_data;        /* Post-Newtonian expansion parameter
+                             */
+    double tidalut1;        /* ???
+                             */
+    double au;              /* size of an astronomical unit, in m
+                             */
+    double tsecau;          /* light travel time for 1 astronomical unit, in s
+                             */
+    double vlight;          /* speed of light, in m s^{-1}
+                             */
+};
+
+
 union getDIFX_DELAY_SERVER_1_res switch (int this_error) {
 case 0:
     struct DIFX_DELAY_SERVER_1_res response;
+case 1:
+    char *errmsg;
+default:
+    void; /* error ocurred */
+};
+union getDIFX_DELAY_SERVER_PARAMETERS_1_res switch (int this_error) {
+case 0:
+    struct DIFX_DELAY_SERVER_PARAMETERS_1_res response;
 case 1:
     char *errmsg;
 default:
@@ -790,6 +952,7 @@ default:
 program DIFX_DELAY_SERVER_PROG {
     version DIFX_DELAY_SERVER_VERS_1 {
         getDIFX_DELAY_SERVER_1_res GETDIFX_DELAY_SERVER(getDIFX_DELAY_SERVER_1_arg) = 1;
+        getDIFX_DELAY_SERVER_PARAMETERS_1_res GETDIFX_DELAY_SERVER_PARAMETERS(getDIFX_DELAY_SERVER_PARAMETERS_1_arg) = 2;
     } = 1;
     /*
     version DIFX_DELAY_SERVER_VERS_2 {

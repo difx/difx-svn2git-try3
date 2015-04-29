@@ -1,3 +1,31 @@
+/***************************************************************************
+ *   Copyright (C) 2015 by James M Anderson                                *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+//===========================================================================
+// SVN properties (DO NOT CHANGE)
+//
+// $Id: fitsCT.c 6619 2015-04-22 14:26:47Z JamesAnderson $
+// $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/branches/radioastron20140201/src/fitsCT.c $
+// $LastChangedRevision: 6619 $
+// $Author: JamesAnderson $
+// $LastChangedDate: 2015-04-22 16:26:47 +0200 (Wed, 22 Apr 2015) $
+//
+//============================================================================
 /*#include "STDDEFS.H"*/
 #include <rpc/rpc.h>
 #include <rpc/pmap_clnt.h>
@@ -14,6 +42,7 @@
 #include "CALCServer.h"
 #include "CALC_9_1_RA_Server.h"     /* RPCGEN creates this from CALC_9_1_RA_Server.x */
 #include "DiFX_Delay_Server.h"
+#include "DiFX_Delay_Server_Params.h"
 
 
 
@@ -286,6 +315,7 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
             }
             res_0->request_id = res_1->getCALC_res_u.record.request_id;
             res_0->delay_server = CALCPROG;
+            res_0->server_version = 0x90100;
             res_0->date = res_1->getCALC_res_u.record.date;
             res_0->time = res_1->getCALC_res_u.record.time;
             /* station data */
@@ -684,6 +714,9 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
         return;
     case GETDIFX_DELAY_SERVER:
         break;
+    case GETDIFX_DELAY_SERVER_PARAMETERS:
+        my_error_code = process_DiFX_Delay_Server_Parameters_1(flog, count, pRequest, pTransport);
+        return;
     default:
         /* handle unimplemented procedure number */
         fprintf(flog, "Unimplemented procedure %d --- returning\n", (int)pRequest->rq_proc);
@@ -695,7 +728,7 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
     memset(&argument, 0, sizeof(argument));    /* see "The Art of DA" p193 */
     if (!svc_getargs (pTransport, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_arg, (caddr_t) &argument))
 	{
-        fprintf(flog, "Decode failure --- returning\n");
+        fprintf(flog, "Decode failure for xdr_getDIFX_DELAY_SERVER_1_arg --- returning\n");
         svcerr_decode (pTransport);
         return;
 	}
@@ -729,7 +762,7 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
 
     if(argument.verbosity >= 2) {
         unsigned int s, e;
-        fprintf(flog, "Processing RPC message %u\n", count);
+        fprintf(flog, "Processing RPC message %u: GETDIFX_DELAY_SERVER\n", count);
         fprintf(flog, "request arg: request_id=0x%lX delay_server=0x%lX server_struct_setup_code=0x%lX\n", argument.request_id, argument.delay_server, argument.server_struct_setup_code);
         fprintf(flog, "request arg: date=%ld time=%16.12f ref_frame=%ld verbosity=%d\n", argument.date, argument.time, argument.ref_frame, argument.verbosity);
         if(argument.verbosity >= 3) {

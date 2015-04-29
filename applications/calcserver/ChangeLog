@@ -1,3 +1,14 @@
+2015-04-29  James Anderson  <anderson@gfz-potsdam>
+
+	* src/CALC5Server_Params.c:
+	* src/CALC_9_1_RA_Server_Params.c:
+	* src/DiFX_Delay_Server.x:
+	* src/DiFX_Delay_Server_Params.h:
+	* src/DiFX_Delay_Server.c:
+	* src/DiFX_Delay_Server_Params.c:
+	* src/checkDiFX_Delay_Server.c: Updates for passing delay server
+	parameters for FITS CT table
+
 2015-04-13  James Anderson  <anderson@gfz-potsdam>
 
 	* src/DiFX_Delay_Server.c:

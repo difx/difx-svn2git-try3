@@ -1,3 +1,31 @@
+/***************************************************************************
+ *   Copyright (C) 2015 by James M Anderson                                *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+//===========================================================================
+// SVN properties (DO NOT CHANGE)
+//
+// $Id: fitsCT.c 6619 2015-04-22 14:26:47Z JamesAnderson $
+// $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/branches/radioastron20140201/src/fitsCT.c $
+// $LastChangedRevision: 6619 $
+// $Author: JamesAnderson $
+// $LastChangedDate: 2015-04-22 16:26:47 +0200 (Wed, 22 Apr 2015) $
+//
+//============================================================================
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,6 +74,31 @@ CLIENT *clnt;
     if (clnt_stat != RPC_SUCCESS)
     {
         fprintf (stderr, "clnt_call failed in getdifx_delay_server_1\n");
+        return NULL;
+    }
+
+	return (&clnt_res);
+}
+
+
+getDIFX_DELAY_SERVER_PARAMETERS_1_res *
+getdifx_delay_server_parameters_1(argp, clnt)
+struct getDIFX_DELAY_SERVER_PARAMETERS_1_arg *argp;
+CLIENT *clnt;
+{
+	static getDIFX_DELAY_SERVER_PARAMETERS_1_res clnt_res;
+    enum clnt_stat clnt_stat;
+
+	memset((char *)&clnt_res, 0, sizeof (clnt_res));
+	clnt_stat = clnt_call(clnt, GETDIFX_DELAY_SERVER_PARAMETERS,
+                          (xdrproc_t) xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_arg, (caddr_t) argp,
+                          (xdrproc_t) xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res, (caddr_t) &clnt_res,
+                          TIMEOUT);
+
+    fprintf(stderr, "Return from clnt_call\n");
+    if (clnt_stat != RPC_SUCCESS)
+    {
+        fprintf (stderr, "clnt_call failed in getdifx_delay_server_parameters_1\n");
         return NULL;
     }
 
@@ -314,7 +367,7 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
            || ((p_result->getDIFX_DELAY_SERVER_1_res_u.response.model_error))
             )
         {
-            printf ("ERROR : CALCServer with version 0x%lX input is returning BAD DATA.\n", (long)(CALC_9_1_RA_SERVER_STRUCT_CODE_5_0_0));
+            printf ("ERROR : CALCServer is returning BAD DATA.\n");
             printf ("        Restart the CALCServer.\n");
             mode_failures++;
         }
@@ -324,7 +377,7 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
         }
     }
     else {
-        printf ("ERROR : CALCServer with version 0x%lX input is returning BAD DATA.\n", (long)(CALC_9_1_RA_SERVER_STRUCT_CODE_5_0_0));
+        printf ("ERROR : CALCServer is returning BAD DATA.\n");
         printf ("        Restart the CALCServer.\n");
         mode_failures++;
     }
@@ -339,6 +392,109 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     free(source_mem);
     free(EOP_mem);
     
+    return mode_failures;
+};
+
+
+int test_CALCServer_Parameters_mode(CLIENT *cl, const char *host)
+{
+    getDIFX_DELAY_SERVER_PARAMETERS_1_arg request_args, *p_request;
+    getDIFX_DELAY_SERVER_PARAMETERS_1_res* p_result;
+    struct DIFX_DELAY_SERVER_PARAMETERS_1_res* res;
+
+    int    v, mode_failures;
+
+    printf("Checking CALCServer for Parameters\n");
+    mode_failures = 0;
+    p_request = &request_args;
+    memset(p_request, 0, sizeof(getDIFX_DELAY_SERVER_PARAMETERS_1_arg));
+    p_request->verbosity = 5;
+    p_request->delay_server = CALCPROG;
+    p_request->server_struct_setup_code = 0;
+    p_request->request_id = 150;
+
+    v = system ("date -u \"+\%FT\%T.\%NZ\"");
+    if(v == -1)
+    {
+        fprintf(stderr, "Warning -- system() failed\n");
+    }
+
+    p_result = getdifx_delay_server_parameters_1(p_request, cl);
+
+    /**/
+    printf ("return from RPC call\n");
+    v = system ("date -u \"+\%FT\%T.\%NZ\"");
+    if(v == -1)
+    {
+        fprintf(stderr, "Warning -- system() failed\n");
+    }
+    if(!p_result)
+    {
+        fprintf(stderr, "NULL pointer returned from RPC call\n");
+        return 100;
+    }
+
+    printf ("result: this_error = %d\n", p_result->this_error);
+    if(!p_result->this_error)
+    {
+        res = &(p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.response);
+        printf("results: delay_server_error=%d server_error=%d model_error=%d\n", res->delay_server_error, res->server_error, res->model_error);
+        printf("results: request_id=%ld delay_server=0x%lX\n", res->request_id, res->delay_server);
+        printf("results: server_struct_setup_code=0x%lX server_version=0x%lX\n", res->server_struct_setup_code, res->server_version);
+        printf("results: accelgrv=%25.16E\n", res->accelgrv);
+        printf("results: e_flat=%25.16E\n", res->e_flat);
+        printf("results: earthrad=%25.16E\n", res->earthrad);
+        printf("results: mmsems=%25.16E\n", res->mmsems);
+        printf("results: ephepoc=%25.16E\n", res->ephepoc);
+        printf("results: gauss=%25.16E\n", res->gauss);
+        printf("results: u_grv_cn=%25.16E\n", res->u_grv_cn);
+        printf("results: gmsun=%25.16E\n", res->gmsun);
+        printf("results: gmmercury=%25.16E\n", res->gmmercury);
+        printf("results: gmvenus=%25.16E\n", res->gmvenus);
+        printf("results: gmearth=%25.16E\n", res->gmearth);
+        printf("results: gmmoon=%25.16E\n", res->gmmoon);
+        printf("results: gmmars=%25.16E\n", res->gmmars);
+        printf("results: gmjupiter=%25.16E\n", res->gmjupiter);
+        printf("results: gmsaturn=%25.16E\n", res->gmsaturn);
+        printf("results: gmuranus=%25.16E\n", res->gmuranus);
+        printf("results: gmneptune=%25.16E\n", res->gmneptune);
+        printf("results: etidelag=%25.16E\n", res->etidelag);
+        printf("results: love_h=%25.16E\n", res->love_h);
+        printf("results: love_l=%25.16E\n", res->love_l);
+        printf("results: pre_data=%25.16E\n", res->pre_data);
+        printf("results: rel_data=%25.16E\n", res->rel_data);
+        printf("results: tidalut1=%25.16E\n", res->tidalut1);
+        printf("results: au=%25.16E\n", res->au);
+        printf("results: tsecau=%25.16E\n", res->tsecau);
+        printf("results: vlight=%25.16E\n", res->vlight);
+
+        if((fabs(res->vlight - 299792458.0) > 1E-3)
+           || ((res->delay_server_error))
+           || ((res->server_error))
+           || ((res->model_error))
+            )
+        {
+            printf ("ERROR : CALCServer is returning BAD PARAMETER DATA.\n");
+            printf ("        Restart the CALCServer.\n");
+            mode_failures++;
+        }
+        else
+        {
+            printf ("CALCServer is running normally.\n");
+        }
+    }
+    else {
+        printf ("ERROR : CALCServer is returning BAD PARAMETER DATA.\n");
+        printf ("        Restart the CALCServer.\n");
+        mode_failures++;
+    }
+        
+    if(clnt_freeres(cl, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res, (caddr_t) p_result) != 1)
+    {
+        fprintf(stderr, "Failed to free results buffer\n");
+        exit(EXIT_FAILURE);
+    }
+
     return mode_failures;
 };
 
@@ -812,6 +968,110 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
 
 
 
+int test_CALC_9_1_RA_Server_Parameters_mode(CLIENT *cl, const char *host)
+{
+    getDIFX_DELAY_SERVER_PARAMETERS_1_arg request_args, *p_request;
+    getDIFX_DELAY_SERVER_PARAMETERS_1_res* p_result;
+    struct DIFX_DELAY_SERVER_PARAMETERS_1_res* res;
+
+    int    v, mode_failures;
+
+    printf("Checking CALC_9_1_RA_Server for Parameters\n");
+    mode_failures = 0;
+    p_request = &request_args;
+    memset(p_request, 0, sizeof(getDIFX_DELAY_SERVER_PARAMETERS_1_arg));
+    p_request->verbosity = 5;
+    p_request->delay_server = CALC_9_1_RAPROG;
+    p_request->server_struct_setup_code = CALC_9_1_RA_SERVER_STRUCT_CODE_5_0_0;
+    p_request->request_id = 150;
+
+    v = system ("date -u \"+\%FT\%T.\%NZ\"");
+    if(v == -1)
+    {
+        fprintf(stderr, "Warning -- system() failed\n");
+    }
+
+    p_result = getdifx_delay_server_parameters_1(p_request, cl);
+
+    /**/
+    printf ("return from RPC call\n");
+    v = system ("date -u \"+\%FT\%T.\%NZ\"");
+    if(v == -1)
+    {
+        fprintf(stderr, "Warning -- system() failed\n");
+    }
+    if(!p_result)
+    {
+        fprintf(stderr, "NULL pointer returned from RPC call\n");
+        return 100;
+    }
+
+    printf ("result: this_error = %d\n", p_result->this_error);
+    if(!p_result->this_error)
+    {
+        res = &(p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.response);
+        printf("results: delay_server_error=%d server_error=%d model_error=%d\n", res->delay_server_error, res->server_error, res->model_error);
+        printf("results: request_id=%ld delay_server=0x%lX\n", res->request_id, res->delay_server);
+        printf("results: server_struct_setup_code=0x%lX server_version=0x%lX\n", res->server_struct_setup_code, res->server_version);
+        printf("results: accelgrv=%25.16E\n", res->accelgrv);
+        printf("results: e_flat=%25.16E\n", res->e_flat);
+        printf("results: earthrad=%25.16E\n", res->earthrad);
+        printf("results: mmsems=%25.16E\n", res->mmsems);
+        printf("results: ephepoc=%25.16E\n", res->ephepoc);
+        printf("results: gauss=%25.16E\n", res->gauss);
+        printf("results: u_grv_cn=%25.16E\n", res->u_grv_cn);
+        printf("results: gmsun=%25.16E\n", res->gmsun);
+        printf("results: gmmercury=%25.16E\n", res->gmmercury);
+        printf("results: gmvenus=%25.16E\n", res->gmvenus);
+        printf("results: gmearth=%25.16E\n", res->gmearth);
+        printf("results: gmmoon=%25.16E\n", res->gmmoon);
+        printf("results: gmmars=%25.16E\n", res->gmmars);
+        printf("results: gmjupiter=%25.16E\n", res->gmjupiter);
+        printf("results: gmsaturn=%25.16E\n", res->gmsaturn);
+        printf("results: gmuranus=%25.16E\n", res->gmuranus);
+        printf("results: gmneptune=%25.16E\n", res->gmneptune);
+        printf("results: etidelag=%25.16E\n", res->etidelag);
+        printf("results: love_h=%25.16E\n", res->love_h);
+        printf("results: love_l=%25.16E\n", res->love_l);
+        printf("results: pre_data=%25.16E\n", res->pre_data);
+        printf("results: rel_data=%25.16E\n", res->rel_data);
+        printf("results: tidalut1=%25.16E\n", res->tidalut1);
+        printf("results: au=%25.16E\n", res->au);
+        printf("results: tsecau=%25.16E\n", res->tsecau);
+        printf("results: vlight=%25.16E\n", res->vlight);
+
+        if((fabs(res->vlight - 299792458.0) > 1E-3)
+           || ((res->delay_server_error))
+           || ((res->server_error))
+           || ((res->model_error))
+            )
+        {
+            printf ("ERROR : CALC_9_1_RA_Server is returning BAD PARAMETER DATA.\n");
+            printf ("        Restart the CALC_9_1_RA_Server.\n");
+            mode_failures++;
+        }
+        else
+        {
+            printf ("CALC_9_1_RA_Server is running normally.\n");
+        }
+    }
+    else {
+        printf ("ERROR : CALC_9_1_RA_Server is returning BAD PARAMETER DATA.\n");
+        printf ("        Restart the CALC_9_1_RA_Server.\n");
+        mode_failures++;
+    }
+        
+    if(clnt_freeres(cl, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res, (caddr_t) p_result) != 1)
+    {
+        fprintf(stderr, "Failed to free results buffer\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return mode_failures;
+};
+
+
+
 
 
 
@@ -851,8 +1111,10 @@ int main (int argc, char *argv[])
     }
 
     CALCServer = test_CALCServer_mode(cl, host);
+    CALCServer += test_CALCServer_Parameters_mode(cl, host);
     failures += CALCServer;
     CALC_9_1_RA_Server = test_CALC_9_1_RA_Server_mode(cl, host);
+    CALC_9_1_RA_Server += test_CALC_9_1_RA_Server_Parameters_mode(cl, host);
     failures += CALC_9_1_RA_Server;
     
     clnt_destroy (cl);

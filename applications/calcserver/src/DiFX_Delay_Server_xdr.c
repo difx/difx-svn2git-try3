@@ -502,6 +502,298 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 }
 
 bool_t
+xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_arg (XDR *xdrs, getDIFX_DELAY_SERVER_PARAMETERS_1_arg *objp)
+{
+	register int32_t *buf;
+
+
+	if (xdrs->x_op == XDR_ENCODE) {
+		buf = XDR_INLINE (xdrs, 4 * BYTES_PER_XDR_UNIT);
+		if (buf == NULL) {
+			 if (!xdr_long (xdrs, &objp->request_id))
+				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->delay_server))
+				 return FALSE;
+			 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
+				 return FALSE;
+			 if (!xdr_int (xdrs, &objp->verbosity))
+				 return FALSE;
+		} else {
+			IXDR_PUT_LONG(buf, objp->request_id);
+			IXDR_PUT_U_LONG(buf, objp->delay_server);
+			IXDR_PUT_LONG(buf, objp->server_struct_setup_code);
+			IXDR_PUT_LONG(buf, objp->verbosity);
+		}
+		return TRUE;
+	} else if (xdrs->x_op == XDR_DECODE) {
+		buf = XDR_INLINE (xdrs, 4 * BYTES_PER_XDR_UNIT);
+		if (buf == NULL) {
+			 if (!xdr_long (xdrs, &objp->request_id))
+				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->delay_server))
+				 return FALSE;
+			 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
+				 return FALSE;
+			 if (!xdr_int (xdrs, &objp->verbosity))
+				 return FALSE;
+		} else {
+			objp->request_id = IXDR_GET_LONG(buf);
+			objp->delay_server = IXDR_GET_U_LONG(buf);
+			objp->server_struct_setup_code = IXDR_GET_LONG(buf);
+			objp->verbosity = IXDR_GET_LONG(buf);
+		}
+	 return TRUE;
+	}
+
+	 if (!xdr_long (xdrs, &objp->request_id))
+		 return FALSE;
+	 if (!xdr_u_long (xdrs, &objp->delay_server))
+		 return FALSE;
+	 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
+		 return FALSE;
+	 if (!xdr_int (xdrs, &objp->verbosity))
+		 return FALSE;
+	return TRUE;
+}
+
+bool_t
+xdr_DIFX_DELAY_SERVER_PARAMETERS_1_res (XDR *xdrs, DIFX_DELAY_SERVER_PARAMETERS_1_res *objp)
+{
+	register int32_t *buf;
+
+
+	if (xdrs->x_op == XDR_ENCODE) {
+		buf = XDR_INLINE (xdrs, 7 * BYTES_PER_XDR_UNIT);
+		if (buf == NULL) {
+			 if (!xdr_int (xdrs, &objp->delay_server_error))
+				 return FALSE;
+			 if (!xdr_int (xdrs, &objp->server_error))
+				 return FALSE;
+			 if (!xdr_int (xdrs, &objp->model_error))
+				 return FALSE;
+			 if (!xdr_long (xdrs, &objp->request_id))
+				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->delay_server))
+				 return FALSE;
+			 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
+				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->server_version))
+				 return FALSE;
+
+		} else {
+		IXDR_PUT_LONG(buf, objp->delay_server_error);
+		IXDR_PUT_LONG(buf, objp->server_error);
+		IXDR_PUT_LONG(buf, objp->model_error);
+		IXDR_PUT_LONG(buf, objp->request_id);
+		IXDR_PUT_U_LONG(buf, objp->delay_server);
+		IXDR_PUT_LONG(buf, objp->server_struct_setup_code);
+		IXDR_PUT_U_LONG(buf, objp->server_version);
+		}
+		 if (!xdr_double (xdrs, &objp->accelgrv))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->e_flat))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->earthrad))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->mmsems))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->ephepoc))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gauss))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->u_grv_cn))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmsun))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmmercury))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmvenus))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmearth))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmmoon))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmmars))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmjupiter))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmsaturn))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmuranus))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmneptune))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->etidelag))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->love_h))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->love_l))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->pre_data))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->rel_data))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->tidalut1))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->au))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->tsecau))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->vlight))
+			 return FALSE;
+		return TRUE;
+	} else if (xdrs->x_op == XDR_DECODE) {
+		buf = XDR_INLINE (xdrs, 7 * BYTES_PER_XDR_UNIT);
+		if (buf == NULL) {
+			 if (!xdr_int (xdrs, &objp->delay_server_error))
+				 return FALSE;
+			 if (!xdr_int (xdrs, &objp->server_error))
+				 return FALSE;
+			 if (!xdr_int (xdrs, &objp->model_error))
+				 return FALSE;
+			 if (!xdr_long (xdrs, &objp->request_id))
+				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->delay_server))
+				 return FALSE;
+			 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
+				 return FALSE;
+			 if (!xdr_u_long (xdrs, &objp->server_version))
+				 return FALSE;
+
+		} else {
+		objp->delay_server_error = IXDR_GET_LONG(buf);
+		objp->server_error = IXDR_GET_LONG(buf);
+		objp->model_error = IXDR_GET_LONG(buf);
+		objp->request_id = IXDR_GET_LONG(buf);
+		objp->delay_server = IXDR_GET_U_LONG(buf);
+		objp->server_struct_setup_code = IXDR_GET_LONG(buf);
+		objp->server_version = IXDR_GET_U_LONG(buf);
+		}
+		 if (!xdr_double (xdrs, &objp->accelgrv))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->e_flat))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->earthrad))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->mmsems))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->ephepoc))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gauss))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->u_grv_cn))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmsun))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmmercury))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmvenus))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmearth))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmmoon))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmmars))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmjupiter))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmsaturn))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmuranus))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->gmneptune))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->etidelag))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->love_h))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->love_l))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->pre_data))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->rel_data))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->tidalut1))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->au))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->tsecau))
+			 return FALSE;
+		 if (!xdr_double (xdrs, &objp->vlight))
+			 return FALSE;
+	 return TRUE;
+	}
+
+	 if (!xdr_int (xdrs, &objp->delay_server_error))
+		 return FALSE;
+	 if (!xdr_int (xdrs, &objp->server_error))
+		 return FALSE;
+	 if (!xdr_int (xdrs, &objp->model_error))
+		 return FALSE;
+	 if (!xdr_long (xdrs, &objp->request_id))
+		 return FALSE;
+	 if (!xdr_u_long (xdrs, &objp->delay_server))
+		 return FALSE;
+	 if (!xdr_long (xdrs, &objp->server_struct_setup_code))
+		 return FALSE;
+	 if (!xdr_u_long (xdrs, &objp->server_version))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->accelgrv))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->e_flat))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->earthrad))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->mmsems))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->ephepoc))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gauss))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->u_grv_cn))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmsun))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmmercury))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmvenus))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmearth))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmmoon))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmmars))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmjupiter))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmsaturn))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmuranus))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->gmneptune))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->etidelag))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->love_h))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->love_l))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->pre_data))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->rel_data))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->tidalut1))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->au))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->tsecau))
+		 return FALSE;
+	 if (!xdr_double (xdrs, &objp->vlight))
+		 return FALSE;
+	return TRUE;
+}
+
+bool_t
 xdr_getDIFX_DELAY_SERVER_1_res (XDR *xdrs, getDIFX_DELAY_SERVER_1_res *objp)
 {
 	register int32_t *buf;
@@ -515,6 +807,28 @@ xdr_getDIFX_DELAY_SERVER_1_res (XDR *xdrs, getDIFX_DELAY_SERVER_1_res *objp)
 		break;
 	case 1:
 		 if (!xdr_pointer (xdrs, (char **)&objp->getDIFX_DELAY_SERVER_1_res_u.errmsg, sizeof (char), (xdrproc_t) xdr_char))
+			 return FALSE;
+		break;
+	default:
+		break;
+	}
+	return TRUE;
+}
+
+bool_t
+xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res (XDR *xdrs, getDIFX_DELAY_SERVER_PARAMETERS_1_res *objp)
+{
+	register int32_t *buf;
+
+	 if (!xdr_int (xdrs, &objp->this_error))
+		 return FALSE;
+	switch (objp->this_error) {
+	case 0:
+		 if (!xdr_DIFX_DELAY_SERVER_PARAMETERS_1_res (xdrs, &objp->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.response))
+			 return FALSE;
+		break;
+	case 1:
+		 if (!xdr_pointer (xdrs, (char **)&objp->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.errmsg, sizeof (char), (xdrproc_t) xdr_char))
 			 return FALSE;
 		break;
 	default:
