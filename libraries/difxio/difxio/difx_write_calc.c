@@ -126,8 +126,36 @@ int writeDifxCalc(const DifxInput *D)
 	writeDifxLineDouble(out, "JOB DELTA LMN", "%24.16e",  D->job->delta_lmn);
 	writeDifxLineDouble(out, "JOB DELTA XYZ", "%24.16e",  D->job->delta_xyz);
 	writeDifxLine(out,       "JOB ABER CORR",  aberCorrStrings[D->job->aberCorr]);
-	writeDifxLineBoolean(out,"JOB CALC_OWN_RETARDED_POSITION", D->job->calculate_own_retarded_position);
-	writeDifxLineInt(out,    "DELAY POLY INTERVAL", D->job->polyInterval);
+	writeDifxLineBoolean(out,"JOB CALC_RETARDED_POSITION", D->job->calculate_own_retarded_position);
+	if((D->job->calcParamTable))
+	{
+		writeDifxLineDouble(out,"JOB CALCPARAM ACCELGRV", D->job->calcParamTable->accelgrv);
+		writeDifxLineDouble(out,"JOB CALCPARAM E-FLAT", D->job->calcParamTable->e_flat);
+		writeDifxLineDouble(out,"JOB CALCPARAM EARTHRAD", D->job->calcParamTable->earthrad);
+		writeDifxLineDouble(out,"JOB CALCPARAM MMSEMS", D->job->calcParamTable->mmsems);
+		writeDifxLineDouble(out,"JOB CALCPARAM EPHEPOC", D->job->calcParamTable->ephepoc);
+		writeDifxLineDouble(out,"JOB CALCPARAM GAUSS", D->job->calcParamTable->gauss);
+		writeDifxLineDouble(out,"JOB CALCPARAM U-GRV-CN", D->job->calcParamTable->u_grv_cn);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMSUN", D->job->calcParamTable->gmsun);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMMERCURY", D->job->calcParamTable->gmmercury);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMVENUS", D->job->calcParamTable->gmvenus);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMEARTH", D->job->calcParamTable->gmearth);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMMOON", D->job->calcParamTable->gmmoon);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMMARS", D->job->calcParamTable->gmmars);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMJUPITER", D->job->calcParamTable->gmjupiter);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMSATURN", D->job->calcParamTable->gmsaturn);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMURANUS", D->job->calcParamTable->gmuranus);
+		writeDifxLineDouble(out,"JOB CALCPARAM GMNEPTUNE", D->job->calcParamTable->gmneptune);
+		writeDifxLineDouble(out,"JOB CALCPARAM ETIDELAG", D->job->calcParamTable->etidelag);
+		writeDifxLineDouble(out,"JOB CALCPARAM LOVE_H", D->job->calcParamTable->love_h);
+		writeDifxLineDouble(out,"JOB CALCPARAM LOVE_L", D->job->calcParamTable->love_l);
+		writeDifxLineDouble(out,"JOB CALCPARAM PRE_DATA", D->job->calcParamTable->pre_data);
+		writeDifxLineDouble(out,"JOB CALCPARAM REL_DATA", D->job->calcParamTable->rel_data);
+		writeDifxLineDouble(out,"JOB CALCPARAM TIDALUT1", D->job->calcParamTable->tidalut1);
+		writeDifxLineDouble(out,"JOB CALCPARAM AU", D->job->calcParamTable->au);
+		writeDifxLineDouble(out,"JOB CALCPARAM TSECAU", D->job->calcParamTable->tsecau);
+		writeDifxLineDouble(out,"JOB CALCPARAM VLIGHT", D->job->calcParamTable->vlight);
+	}
 	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1, 1);
 	writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 1);
 	writeDifxScanArray(out, D->nScan, D->scan, D->config);

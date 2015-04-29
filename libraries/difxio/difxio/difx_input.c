@@ -2055,6 +2055,64 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 			D->job->calculate_own_retarded_position = 1;
 		}
 	}
+	row = DifxParametersfind_limited(cp, 0, 100, "JOB CALCPARAM ACCELGRV");
+	if(row > 0)
+	{
+		int row_start = row;
+		free(calcParamTable);
+		D->job->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
+		D->job->calcParamTable->accelgrv = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM E-FLAT");
+		D->job->calcParamTable->e_flat = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM EARTHRAD");
+		D->job->calcParamTable->earthrad = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM MMSEMS");
+		D->job->calcParamTable->mmsems = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM EPHEPOC");
+		D->job->calcParamTable->ephepoc = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GAUSS");
+		D->job->calcParamTable->gauss = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM U-GRV-CN");
+		D->job->calcParamTable->u_grv_cn = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMSUN");
+		D->job->calcParamTable->gmsun = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMMERCURY");
+		D->job->calcParamTable->gmmercury = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMVENUS");
+		D->job->calcParamTable->gmvenus = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMEARTH");
+		D->job->calcParamTable->gmearth = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMMOON");
+		D->job->calcParamTable->gmmoon = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMMARS");
+		D->job->calcParamTable->gmmars = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMJUPITER");
+		D->job->calcParamTable->gmjupiter = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMSATURN");
+		D->job->calcParamTable->gmsaturn = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMURANUS");
+		D->job->calcParamTable->gmuranus = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM GMNEPTUNE");
+		D->job->calcParamTable->gmneptune = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM ETIDELAG");
+		D->job->calcParamTable->etidelag = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM LOVE_H");
+		D->job->calcParamTable->love_h = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM LOVE_L");
+		D->job->calcParamTable->love_l = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM PRE_DATA");
+		D->job->calcParamTable->pre_data = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM REL_DATA");
+		D->job->calcParamTable->rel_data = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM TIDALUT1");
+		D->job->calcParamTable->tidalut1 = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM AU");
+		D->job->calcParamTable->au = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM TSECAU");
+		D->job->calcParamTable->tsecau = atof(DifxParametersvalue(cp, row));
+		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM VLIGHT");
+		D->job->calcParamTable->vlight = atof(DifxParametersvalue(cp, row));
+	}
 	row = DifxParametersfind(cp, 0, "VEX FILE");
 	if(row > 0)
 	{

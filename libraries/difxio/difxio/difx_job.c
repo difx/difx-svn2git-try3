@@ -156,6 +156,8 @@ static void deleteDifxJobInternals(DifxJob *dj)
 {
 	deleteDifxAntennaFlagArray(dj->flag);
 	dj->flag = 0;
+	free(dj->calcParamTable);
+	dj->calcParamTable = 0;
 	deleteRemap(dj->jobIdRemap);
 	dj->jobIdRemap = 0;
 	deleteRemap(dj->freqIdRemap);
@@ -256,6 +258,11 @@ void copyDifxJob(DifxJob *dest, const DifxJob *src, int *antennaIdRemap)
 			copyDifxAntennaFlag(dest->flag + f,
 				src->flag + f, antennaIdRemap);
 		}
+	}
+	if((src->calcParamTable))
+	{
+		dest->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
+		dest->calcParamTable = src->calcParamTable;
 	}
 
 	dest->jobIdRemap = dupRemap(src->jobIdRemap);
