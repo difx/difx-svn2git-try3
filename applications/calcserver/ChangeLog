@@ -1,3 +1,8 @@
+2015-05-04  James Anderson  <anderson@gfz-potsdam.de>
+
+	* configure.ac:
+	* src/Makefile.am: Bugfixes to make things compile
+
 2015-04-29  James Anderson  <anderson@gfz-potsdam>
 
 	* src/CALC5Server_Params.c:
@@ -14,7 +19,7 @@
 	* src/DiFX_Delay_Server.c:
 	* src/checkDiFX_Delay_Server.c:
 	* src/DiFX_Delay_Server.x:
-	* src/MATHCNST.H: updates for changes to calcif2 to support 
+	* src/MATHCNST.H: updates for changes to calcif2 to support
 	DiFX_Delay_Server
 
 2015-03-23  James Anderson  <anderson@gfz-potsdam>
@@ -22,21 +27,21 @@
 	different delay srevers to be implemented and called
 	through a common RPC call to a server that then farms out
 	the work to the appropriate server
-	* src/CALC5Server.c: 
-	* src/CALCServer.h: 
-	* src/CALC_9_1_RA_Server.c: 
-	* src/CALC_9_1_RA_Server.h: 
-	* src/CALC_9_1_RA_Server_test.x: 
-	* src/CALC_9_1_RA_xdr.c: 
-	* src/CALC_xdr.c: 
-	* src/DiFX_Delay_Server.c: 
-	* src/DiFX_Delay_Server.h: 
-	* src/DiFX_Delay_Server.x: 
-	* src/DiFX_Delay_Server_xdr.c: 
-	* src/Makefile.am: 
-	* src/checkCALC_9_1_RA_Server.c: 
-	* src/checkDiFX_Delay_Server.c: 
-	* src/checkcalc.c: 
+	* src/CALC5Server.c:
+	* src/CALCServer.h:
+	* src/CALC_9_1_RA_Server.c:
+	* src/CALC_9_1_RA_Server.h:
+	* src/CALC_9_1_RA_Server_test.x:
+	* src/CALC_9_1_RA_xdr.c:
+	* src/CALC_xdr.c:
+	* src/DiFX_Delay_Server.c:
+	* src/DiFX_Delay_Server.h:
+	* src/DiFX_Delay_Server.x:
+	* src/DiFX_Delay_Server_xdr.c:
+	* src/Makefile.am:
+	* src/checkCALC_9_1_RA_Server.c:
+	* src/checkDiFX_Delay_Server.c:
+	* src/checkcalc.c:
 
 
 Version 1.7

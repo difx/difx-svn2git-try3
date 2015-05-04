@@ -868,7 +868,8 @@ struct DIFX_DELAY_SERVER_PARAMETERS_1_res {
                             */
     double ephepoc;         /* coordinate equinox (usually 2000.0)
                              */
-    double gauss;           /* Gaussian gravitational constant (unitless?)
+    double gauss;           /* Gaussian gravitational constant in
+                               AU^{3/2} day^{-1} M_\Sun^{-1/2}
                              */
     double u_grv_cn;        /* constant of gravitation, in
                                m^3 kg^{-1} s^{-2}

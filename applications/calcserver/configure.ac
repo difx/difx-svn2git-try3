@@ -1,6 +1,6 @@
 AC_INIT()
 
-AM_INIT_AUTOMAKE(CalcServer, 1.6, no-define)
+AM_INIT_AUTOMAKE(CalcServer, 2.0, no-define)
 
 AC_PROG_CC
 AM_SANITY_CHECK
@@ -16,6 +16,7 @@ AC_OUTPUT(Makefile \
 	startCalcServer \
 	src/Makefile \
 	calc9.1/Makefile \
+	calc9.1.RA/Makefile \
 	init.d/calcserver \
 	data/Makefile
 )
