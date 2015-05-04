@@ -58,12 +58,12 @@ typedef struct
 	enum PerformDirectionDerivativeType perform_uvw_deriv;
 	enum PerformDirectionDerivativeType perform_lmn_deriv;
 	enum PerformDirectionDerivativeType perform_xyz_deriv;
-	double lmn_delta; /* (rad) step size for calculating d\tau/dl, d\tau/dm,
+	double delta_lmn; /* (rad) step size for calculating d\tau/dl, d\tau/dm,
 						 and d\tau/dn for the LMN polynomial model
 						 and (u,v) from the delay derivatives for the UVW
 						 polynomial model
 					  */
-	double xyz_delta; /* step size for calculating d\tau/dx, d\tau/dy, and
+	double delta_xyz; /* step size for calculating d\tau/dx, d\tau/dy, and
 						 d\tau/dz for the Cartesian (x,y,z) coordinate
 						 system of the source.  If positive, this variable
 						 has units of meters (\Delta x = xyz_delta).
@@ -90,12 +90,11 @@ typedef struct
 	int warnSpacecraftPointingSource;
 	char *files[MAX_FILES];
 	int overrideVersion;
-	enum AberCorr aberCorr;
 } CommandLineOptions;
 
 static void usage()
 {
-	int DelayServerType ds;
+	enum DelayServerType ds;
 	fprintf(stderr, "%s ver. %s  %s  %s\n\n", program, version, author, verdate);
 	fprintf(stderr, "A program to calculate a model for DiFX using a calc server.\n\n");
 	fprintf(stderr, "Usage : %s [options] { <calc file> | -a }\n\n", program);
@@ -232,7 +231,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 	opts->polyOversamp = 1;
 	opts->polyInterval = 0; /* default to value in the .calc file */
 	opts->interpol = 0;	/* usual solve */
-	ops->warnSpacecraftPointingSource = 1;
+	opts->warnSpacecraftPointingSource = 1;
 	opts->aberCorr = AberCorrExact;
 
 	for(i = 1; i < argc; ++i)
@@ -346,7 +345,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			}
 			else if(strcmp(argv[i], "--perform_delta_lmn_2") == 0)
 			{
-				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondderivative;
+				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondDerivative;
 				if(opts->delta_lmn == 0.0)
 				{
 					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
@@ -354,7 +353,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			}
 			else if(strcmp(argv[i], "--perform_delta_lmn_22") == 0)
 			{
-				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondderivative2;
+				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondDerivative2;
 				if(opts->delta_lmn == 0.0)
 				{
 					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
@@ -382,7 +381,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			}
 			else if(strcmp(argv[i], "--perform_delta_xyz_2") == 0)
 			{
-				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondderivative;
+				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondDerivative;
 				if(opts->delta_xyz == 0.0)
 				{
 					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
@@ -390,7 +389,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			}
 			else if(strcmp(argv[i], "--perform_delta_xyz_22") == 0)
 			{
-				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondderivative2;
+				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondDerivative2;
 				if(opts->delta_xyz == 0.0)
 				{
 					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
@@ -448,16 +447,16 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 					opts->polyInterval = atoi(argv[i]);
 				}
 				else if(strcmp(argv[i], "--delta") == 0 ||
-						strcmp(argv[i], "--delta_lmn") == 0
-						strcmp(argv[i], "-d") == 0 ||
+						strcmp(argv[i], "--delta_lmn") == 0 ||
+						strcmp(argv[i], "-d") == 0
 						)
 				{
 					++i;
 					opts->delta_lmn = atof(argv[i]);
 					if(opts->delta_lmn == 0.0)
 					{
-						perform_uvw_deriv = PerformDirectionDerivativeNone;
-						perform_lmn_deriv = PerformDirectionDerivativeNone;
+						opts->perform_uvw_deriv = PerformDirectionDerivativeNone;
+						opts->perform_lmn_deriv = PerformDirectionDerivativeNone;
 					}
 				}
 				else if(strcmp(argv[i], "--delta_xyz") == 0)
@@ -466,7 +465,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 					opts->delta_xyz = atof(argv[i]);
 					if(opts->delta_xyz == 0.0)
 					{
-						perform_xyz_deriv = PerformDirectionDerivativeNone;
+						opts->perform_xyz_deriv = PerformDirectionDerivativeNone;
 					}
 				}
 				else if(argv[i][0] == '-')
@@ -563,17 +562,17 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 		}
 	}
 
-	if((opts->delta_lmn == 0.0) && ((perform_uvw_deriv)))
+	if((opts->delta_lmn == 0.0) && ((opts->perform_uvw_deriv)))
 	{
 		fprintf(stderr, "Error: calcif2: delta_lmn is zero, but perform_uvw_deriv is not None\n");
 		++die;
 	}
-	if((opts->delta_lmn == 0.0) && ((perform_lmn_deriv)))
+	if((opts->delta_lmn == 0.0) && ((opts->perform_lmn_deriv)))
 	{
 		fprintf(stderr, "Error: calcif2: delta_lmn is zero, but perform_lmn_deriv is not None\n");
 		++die;
 	}
-	if((opts->delta_xyz == 0.0) && ((perform_xyz_deriv)))
+	if((opts->delta_xyz == 0.0) && ((opts->perform_xyz_deriv)))
 	{
 		fprintf(stderr, "Error: calcif2: delta_xyz is zero, but perform_xyz_deriv is not None\n");
 		++die;
@@ -687,7 +686,7 @@ static void tweakDelays(DifxInput *D, const char *tweakFile, int verbose)
 					for(j = 0; j < D->scan[s].nPoly; ++j)
 					{
 						model = im[a][i] + j;
-						if(fabs(model->mjd + model->sec/SEC_DAY_DBLE - mjd) < 0.5/SEC_DAY_DBLE)	/* a match! */
+						if(fabs(model->mjd + model->sec/SEC_DAY_DBL - mjd) < 0.5/SEC_DAY_DBL)	/* a match! */
 						{
 							++nModified;
 							if(verbose > 1)
@@ -892,34 +891,34 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 	if(p->perform_uvw_deriv != PerformDirectionDerivativeDefault)
 	{
 		D->job->perform_uvw_deriv = p->perform_uvw_deriv;
-		D->job->delay_lmn = p->delay_lmn;
+		D->job->delta_lmn = p->delta_lmn;
 	}
 	if(p->perform_lmn_deriv != PerformDirectionDerivativeDefault)
 	{
 		D->job->perform_lmn_deriv = p->perform_lmn_deriv;
-		D->job->delay_lmn = p->delay_lmn;
+		D->job->delta_lmn = p->delta_lmn;
 	}
-	if(p->delay_lmn != DIFXIO_DEFAULT_DELTA_LMN)
+	if(p->delta_lmn != DIFXIO_DEFAULT_DELTA_LMN)
 	{
-		D->job->delay_lmn = p->delay_lmn;
+		D->job->delta_lmn = p->delta_lmn;
 	}
 	if(p->perform_xyz_deriv != PerformDirectionDerivativeDefault)
 	{
 		D->job->perform_xyz_deriv = p->perform_xyz_deriv;
-		D->job->delay_xyz = p->delay_xyz;
+		D->job->delta_xyz = p->delta_xyz;
 	}
-	if(p->delay_xyz != DIFXIO_DEFAULT_DELTA_XYZ)
+	if(p->delta_xyz != DIFXIO_DEFAULT_DELTA_XYZ)
 	{
-		D->job->delay_xyz = p->delay_xyz;
+		D->job->delta_xyz = p->delta_xyz;
 	}
-	if(p->delay_lmn != 0.0)
+	if(p->delta_lmn != 0.0)
 	{
-		D->job->delay_lmn = p->delay_lmn;
+		D->job->delta_lmn = p->delta_lmn;
 		D->job->perform_lmn_deriv = p->perform_lmn_deriv;
 	}
-	if(p->delay_xyz != 0.0)
+	if(p->delta_xyz != 0.0)
 	{
-		D->job->delay_xyz = p->delay_xyz;
+		D->job->delta_xyz = p->delta_xyz;
 		D->job->perform_xyz_deriv = p->perform_xyz_deriv;
 	}
 	
@@ -946,10 +945,10 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 		printf("Warning: calcif2: working on unversioned job\n");
 	}
 
-	/* we know opts->delayServerHost is no more than DIFXIO_HOSTNAME_LENGTH-1 chars long */
-	if((opts->delayServerHost[]))
+	if((opts->delayServerHost[0]))
 	{
-		strcpy(D->job->delayServerHost, opts->delayServerHost);
+		strncpy(D->job->delayServerHost, opts->delayServerHost, DIFXIO_HOSTNAME_LENGTH);
+		D->job->delayServerHost[DIFXIO_HOSTNAME_LENGTH-1] = 0;
 	}
 	if(opts->delayServerType != NumDelayServerTypes)
 	{
@@ -1046,8 +1045,8 @@ CalcParams *newCalcParams(const CommandLineOptions *opts)
 	p->clnt = clnt_create(p->delayServerHost, p->delayHandler, p->delayVersion, "tcp");
 	if(!p->clnt)
 	{
-		clnt_pcreateerror(p->calcServer);
-		fprintf(stderr, "Error: calcif2: RPC clnt_create fails for host : %-s program id 0x%lX version %ul\n", p->delayServerHost, p->delayHandler, p->delayVersion);
+		clnt_pcreateerror(p->delayServerHost);
+		fprintf(stderr, "Error: calcif2: RPC clnt_create fails for host : %-s program id 0x%lX version %lu\n", p->delayServerHost, p->delayHandler, p->delayVersion);
 		deleteCalcParams(p);
 
 		return 0;

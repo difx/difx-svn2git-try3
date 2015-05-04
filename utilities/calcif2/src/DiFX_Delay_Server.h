@@ -157,6 +157,51 @@ struct DIFX_DELAY_SERVER_1_res {
 };
 typedef struct DIFX_DELAY_SERVER_1_res DIFX_DELAY_SERVER_1_res;
 
+struct getDIFX_DELAY_SERVER_PARAMETERS_1_arg {
+	long request_id;
+	u_long delay_server;
+	long server_struct_setup_code;
+	int verbosity;
+};
+typedef struct getDIFX_DELAY_SERVER_PARAMETERS_1_arg getDIFX_DELAY_SERVER_PARAMETERS_1_arg;
+
+struct DIFX_DELAY_SERVER_PARAMETERS_1_res {
+	int delay_server_error;
+	int server_error;
+	int model_error;
+	long request_id;
+	u_long delay_server;
+	long server_struct_setup_code;
+	u_long server_version;
+	double accelgrv;
+	double e_flat;
+	double earthrad;
+	double mmsems;
+	double ephepoc;
+	double gauss;
+	double u_grv_cn;
+	double gmsun;
+	double gmmercury;
+	double gmvenus;
+	double gmearth;
+	double gmmoon;
+	double gmmars;
+	double gmjupiter;
+	double gmsaturn;
+	double gmuranus;
+	double gmneptune;
+	double etidelag;
+	double love_h;
+	double love_l;
+	double pre_data;
+	double rel_data;
+	double tidalut1;
+	double au;
+	double tsecau;
+	double vlight;
+};
+typedef struct DIFX_DELAY_SERVER_PARAMETERS_1_res DIFX_DELAY_SERVER_PARAMETERS_1_res;
+
 struct getDIFX_DELAY_SERVER_1_res {
 	int this_error;
 	union {
@@ -166,6 +211,15 @@ struct getDIFX_DELAY_SERVER_1_res {
 };
 typedef struct getDIFX_DELAY_SERVER_1_res getDIFX_DELAY_SERVER_1_res;
 
+struct getDIFX_DELAY_SERVER_PARAMETERS_1_res {
+	int this_error;
+	union {
+		struct DIFX_DELAY_SERVER_PARAMETERS_1_res response;
+		char *errmsg;
+	} getDIFX_DELAY_SERVER_PARAMETERS_1_res_u;
+};
+typedef struct getDIFX_DELAY_SERVER_PARAMETERS_1_res getDIFX_DELAY_SERVER_PARAMETERS_1_res;
+
 #define DIFX_DELAY_SERVER_PROG 0x20000342
 #define DIFX_DELAY_SERVER_VERS_1 1
 
@@ -173,12 +227,18 @@ typedef struct getDIFX_DELAY_SERVER_1_res getDIFX_DELAY_SERVER_1_res;
 #define GETDIFX_DELAY_SERVER 1
 extern  getDIFX_DELAY_SERVER_1_res * getdifx_delay_server_1(getDIFX_DELAY_SERVER_1_arg *, CLIENT *);
 extern  getDIFX_DELAY_SERVER_1_res * getdifx_delay_server_1_svc(getDIFX_DELAY_SERVER_1_arg *, struct svc_req *);
+#define GETDIFX_DELAY_SERVER_PARAMETERS 2
+extern  getDIFX_DELAY_SERVER_PARAMETERS_1_res * getdifx_delay_server_parameters_1(getDIFX_DELAY_SERVER_PARAMETERS_1_arg *, CLIENT *);
+extern  getDIFX_DELAY_SERVER_PARAMETERS_1_res * getdifx_delay_server_parameters_1_svc(getDIFX_DELAY_SERVER_PARAMETERS_1_arg *, struct svc_req *);
 extern int difx_delay_server_prog_1_freeresult (SVCXPRT *, xdrproc_t, caddr_t);
 
 #else /* K&R C */
 #define GETDIFX_DELAY_SERVER 1
 extern  getDIFX_DELAY_SERVER_1_res * getdifx_delay_server_1();
 extern  getDIFX_DELAY_SERVER_1_res * getdifx_delay_server_1_svc();
+#define GETDIFX_DELAY_SERVER_PARAMETERS 2
+extern  getDIFX_DELAY_SERVER_PARAMETERS_1_res * getdifx_delay_server_parameters_1();
+extern  getDIFX_DELAY_SERVER_PARAMETERS_1_res * getdifx_delay_server_parameters_1_svc();
 extern int difx_delay_server_prog_1_freeresult ();
 #endif /* K&R C */
 
@@ -192,7 +252,10 @@ extern  bool_t xdr_DIFX_DELAY_SERVER_1_EOP (XDR *, DIFX_DELAY_SERVER_1_EOP*);
 extern  bool_t xdr_DIFX_DELAY_SERVER_1_RESULTS (XDR *, DIFX_DELAY_SERVER_1_RESULTS*);
 extern  bool_t xdr_getDIFX_DELAY_SERVER_1_arg (XDR *, getDIFX_DELAY_SERVER_1_arg*);
 extern  bool_t xdr_DIFX_DELAY_SERVER_1_res (XDR *, DIFX_DELAY_SERVER_1_res*);
+extern  bool_t xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_arg (XDR *, getDIFX_DELAY_SERVER_PARAMETERS_1_arg*);
+extern  bool_t xdr_DIFX_DELAY_SERVER_PARAMETERS_1_res (XDR *, DIFX_DELAY_SERVER_PARAMETERS_1_res*);
 extern  bool_t xdr_getDIFX_DELAY_SERVER_1_res (XDR *, getDIFX_DELAY_SERVER_1_res*);
+extern  bool_t xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res (XDR *, getDIFX_DELAY_SERVER_PARAMETERS_1_res*);
 
 #else /* K&R C */
 extern bool_t xdr_DIFX_DELAY_SERVER_vec ();
@@ -202,7 +265,10 @@ extern bool_t xdr_DIFX_DELAY_SERVER_1_EOP ();
 extern bool_t xdr_DIFX_DELAY_SERVER_1_RESULTS ();
 extern bool_t xdr_getDIFX_DELAY_SERVER_1_arg ();
 extern bool_t xdr_DIFX_DELAY_SERVER_1_res ();
+extern bool_t xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_arg ();
+extern bool_t xdr_DIFX_DELAY_SERVER_PARAMETERS_1_res ();
 extern bool_t xdr_getDIFX_DELAY_SERVER_1_res ();
+extern bool_t xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res ();
 
 #endif /* K&R C */
 

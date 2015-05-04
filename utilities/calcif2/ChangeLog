@@ -1,3 +1,13 @@
+2015-05-04  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/CALC_xdr.c: Revert to prior version
+
+	* src/calcif2.c:
+	* src/difxcalc.c:
+	* src/Makefile.am: Bugfixes to make things compile
+
+	* src/DiFX_Delay_Server_xdr.c: Update to new version
+
 2015-04-29  James Anderson  <anderson@gfz-potsdam.de>
 
 	* src/calcif2.c:

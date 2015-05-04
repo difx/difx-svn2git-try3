@@ -38,6 +38,7 @@
 #include "externaldelay.h"
 #include "poly.h"
 #include "difxcalcrotation.h"
+#include "DiFX_Delay_Server.h"
 
 #define MIN_NUM_EOPS 5
 
@@ -678,14 +679,15 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
 
 static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* const p, const int verbose)
 {
-    getDIFX_DELAY_SERVER_PARAMETERS_1_arg request_args, *p_request;
-    getDIFX_DELAY_SERVER_PARAMETERS_1_res request_res,  *p_result;
+    struct getDIFX_DELAY_SERVER_PARAMETERS_1_arg request_args, *p_request;
+    struct getDIFX_DELAY_SERVER_PARAMETERS_1_res request_res,  *p_result;
     struct DIFX_DELAY_SERVER_PARAMETERS_1_res* res;
     int mode_failures;
+    enum clnt_stat clnt_stat;
 
     mode_failures = 0;
     p_request = &request_args;
-    memset(p_request, 0, sizeof(getDIFX_DELAY_SERVER_PARAMETERS_1_arg));
+    memset(p_request, 0, sizeof(struct getDIFX_DELAY_SERVER_PARAMETERS_1_arg));
     p_request->verbosity = verbose;
     p_request->delay_server = delayServerTypeIds[p->delayServerType];
     if(p->delayServerType == CALC_9_1_RA_Server)
@@ -714,10 +716,20 @@ static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* con
     {
         printf("Return from clnt_call\n");
     }
+    if(clnt_stat != RPC_SUCCESS)
+    {
+        fprintf(stderr, "clnt_call failed!\n");
+        return -1;
+    }
+    if(p_result->this_error)
+    {
+        fprintf(stderr,"Error: callCalc: %s\n", p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.errmsg);
+        return -2;
+    }
 
-    printf ("result: this_error = %d\n", p_result->this_error);
     if(!p_result->this_error)
     {
+        printf ("result: this_error = %d\n", p_result->this_error);
         res = &(p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.response);
         if(verbose >= 3)
         {
@@ -800,7 +812,7 @@ static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* con
         mode_failures++;
     }
         
-    if(clnt_freeres(cl, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res, (caddr_t) p_result) != 1)
+    if(clnt_freeres(p->clnt, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_PARAMETERS_1_res, (caddr_t) p_result) != 1)
     {
         fprintf(stderr, "Failed to free results buffer\n");
         exit(EXIT_FAILURE);
