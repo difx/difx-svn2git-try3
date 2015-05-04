@@ -2059,7 +2059,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	if(row > 0)
 	{
 		int row_start = row;
-		free(calcParamTable);
+		free(D->job->calcParamTable);
 		D->job->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
 		D->job->calcParamTable->accelgrv = atof(DifxParametersvalue(cp, row));
 		row = DifxParametersfind_limited(cp, row_start, 100, "JOB CALCPARAM E-FLAT");

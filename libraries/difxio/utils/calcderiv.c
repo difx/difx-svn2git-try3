@@ -30,17 +30,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <math.h>
 #include <complex.h>
 #include <time.h>
 #include "difx_input.h"
 
-#define C_LIGHT	299792458.0
+#define C_LIGHT	SPEED_LIGHT
 
 const char program[] = "calcderiv";
 const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
-const int version = 1;	/* for this program, must be an integer */
-const char verdate[] = "20150115";
+const int version = 2;	/* for this program, must be an integer */
+const char verdate[] = "20150430";
 
 void usage()
 {
@@ -54,7 +55,7 @@ void usage()
 	printf("<inputfilebaseN> is the base name of a difx fileset.\n\n");
 }
 
-int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, int verbose)
+int computeLMNDerivatives(DifxInput *D, double deltaLMN, const char *calcProgram, int verbose)
 {
 	const int CommandLength = 1024;
 	const int NumCalcRuns = 9;
@@ -70,6 +71,12 @@ int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, 
 		{ -1,  1 },
 		{ -1, -1 }
 	};
+	static const union
+	{
+		uint64_t u64;
+		double d;
+		float f;
+	} fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
 
 	DifxScan *scan;
 	int scanId;
@@ -87,8 +94,8 @@ int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, 
 			DifxSource *source;
 
 			source = D->source + s;
-			source->ra += ops[i][0]*deltaLM*cos(source->dec);
-			source->dec += ops[i][1]*deltaLM;
+			source->ra += ops[i][0]*deltaLMN*cos(source->dec);
+			source->dec += ops[i][1]*deltaLMN;
 		}
 
 		/* write new .calc file */
@@ -97,12 +104,12 @@ int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, 
 		/* run calc11 */
 		snprintf(command, CommandLength, "rm %s", D->job->imFile);
 		system(command);
-		snprintf(command, CommandLength, "%s %s", calcProgram, D->job->calcFile);
+		snprintf(command, CommandLength, "%s --not-perform_delta --not-perform_delta_xyz %s", calcProgram, D->job->calcFile);
 		system(command);
 		/* FIXME: vex2difx should put calc version info in .calc file */
 		/* FIXME: option for calc 9 */
 
-		/* make copes for inspection */
+		/* make copies for inspection */
 		snprintf(command, CommandLength, "cp %s %s.%02d\n", D->job->calcFile, D->job->calcFile, i);
 		system(command);
 		snprintf(command, CommandLength, "cp %s %s.%02d\n", D->job->imFile, D->job->imFile, i);
@@ -130,8 +137,8 @@ int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, 
 			DifxSource *source;
 
 			source = D->source + s;
-			source->dec -= ops[i][1]*deltaLM;
-			source->ra -= ops[i][0]*deltaLM*cos(source->dec);
+			source->dec -= ops[i][1]*deltaLMN;
+			source->ra -= ops[i][0]*deltaLMN*cos(source->dec);
 		}
 	}
 
@@ -141,7 +148,7 @@ int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, 
 		int a, c, p;
 
 		scan = D->scan + scanId;
-		scan->imLM = newDifxPolyModelLMExtensionArray(scan->nAntenna, scan->nPhaseCentres + 1, scan->nPoly);
+		scan->imLMN = newDifxPolyModelLMNExtensionArray(scan->nAntenna, scan->nPhaseCentres + 1, scan->nPoly);
 
 		for(a = 0; a < scan->nAntenna; ++a)
 		{
@@ -151,7 +158,7 @@ int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, 
 				{
 					double *d[NumCalcRuns];
 
-					scan->imLM[a][c][p].delta = deltaLM;
+					scan->imLMN[a][c][p].delta = deltaLMN;
 
 					for(i = 0; i < NumCalcRuns; ++i)
 					{
@@ -159,13 +166,17 @@ int computeLMDerivatives(DifxInput *D, double deltaLM, const char *calcProgram, 
 					}
 					for(i = 0; i <= D->job->polyOrder; ++i)
 					{
-						scan->imLM[a][c][p].dDelay_dl[i] = (d[1][i]-d[2][i])/(2.0*deltaLM);
-						scan->imLM[a][c][p].dDelay_dm[i] = (d[3][i]-d[4][i])/(2.0*deltaLM);
+						scan->imLMN[a][c][p].dDelay_dl[i] = (d[1][i]-d[2][i])/(2.0*deltaLMN);
+						scan->imLMN[a][c][p].dDelay_dm[i] = (d[3][i]-d[4][i])/(2.0*deltaLMN);
+						scan->imLMN[a][c][p].dDelay_dn[i] = fitsnan.d;
 
-						scan->imLM[a][c][p].d2Delay_dldl[i] = (d[1][i]+d[2][i]-2.0*d[0][i])/(deltaLM*deltaLM);
-						scan->imLM[a][c][p].d2Delay_dmdm[i] = (d[3][i]+d[4][i]-2.0*d[0][i])/(deltaLM*deltaLM);
+						scan->imLMN[a][c][p].d2Delay_dldl[i] = (d[1][i]+d[2][i]-2.0*d[0][i])/(deltaLMN*deltaLMN);
+						scan->imLMN[a][c][p].d2Delay_dmdm[i] = (d[3][i]+d[4][i]-2.0*d[0][i])/(deltaLMN*deltaLMN);
+						scan->imLMN[a][c][p].d2Delay_dndn[i] = fitsnan.d;
 
-						scan->imLM[a][c][p].d2Delay_dldm[i] = (d[5][i]-d[6][i]-d[7][i]+d[8][i])/(4.0*deltaLM*deltaLM);
+						scan->imLMN[a][c][p].d2Delay_dldm[i] = (d[5][i]-d[6][i]-d[7][i]+d[8][i])/(4.0*deltaLMN*deltaLMN);
+						scan->imLMN[a][c][p].d2Delay_dldn[i] = fitsnan.d;
+						scan->imLMN[a][c][p].d2Delay_dmdn[i] = fitsnan.d;
 					}
 				}
 			}
@@ -243,7 +254,7 @@ int computeXYZDerivatives(DifxInput *D, double deltaXYZ, const char *calcProgram
 		/* run calc11 */
 		snprintf(command, CommandLength, "rm %s", D->job->imFile);
 		system(command);
-		snprintf(command, CommandLength, "%s %s", calcProgram, D->job->calcFile);
+		snprintf(command, CommandLength, "%s --not-perform_delta --not-perform_delta_xyz %s", calcProgram, D->job->calcFile);
 		system(command);
 		/* FIXME: vex2difx should put calc version info in .calc file */
 		/* FIXME: option for calc 9 */
@@ -341,14 +352,14 @@ int computeXYZDerivatives(DifxInput *D, double deltaXYZ, const char *calcProgram
 	return 0;
 }
 
-int run(const char *fileBase, int verbose, double deltaLM, double deltaXYZ)
+int run(const char *fileBase, int verbose, double deltaLMN, double deltaXYZ)
 {
 	const int CommandLength = 1024;
 	DifxInput *D;
 	DifxSource *source;
 	DifxScan *scan;
 	int sourceId, scanId, pc;
-	int nLM = 0;
+	int nLMN = 0;
 	int nXYZ = 0;
 	char command[CommandLength];
 	int rv;
@@ -388,7 +399,7 @@ int run(const char *fileBase, int verbose, double deltaLM, double deltaXYZ)
 		return -2;
 	}
 
-	/* 2. Test for type.  Spacecraft table implies XYZ, otherwise LM */
+	/* 2. Test for type.  Spacecraft table implies XYZ, otherwise LMN */
 	for(scanId = 0; scanId < D->nScan; ++scanId)
 	{
 		scan = D->scan + scanId;
@@ -409,20 +420,20 @@ int run(const char *fileBase, int verbose, double deltaLM, double deltaXYZ)
 			}
 			else
 			{
-				++nLM;
+				++nLMN;
 			}
 		}
 	}
-	if(nXYZ == 0 && nLM == 0)
+	if(nXYZ == 0 && nLMN == 0)
 	{
 		fprintf(stderr, "No sources found for fileset named %s\n", fileBase);
 		deleteDifxInput(D);
 
 		return -4;
 	}
-	if(nXYZ > 0 && nLM > 0)
+	if(nXYZ > 0 && nLMN > 0)
 	{
-		fprintf(stderr, "Error: both XYZ and LM sources found in fileset named %s.  Cannot cope.\n", fileBase);
+		fprintf(stderr, "Error: both XYZ and LMN sources found in fileset named %s.  Cannot cope.\n", fileBase);
 		deleteDifxInput(D);
 
 		return -5;
@@ -435,9 +446,9 @@ int run(const char *fileBase, int verbose, double deltaLM, double deltaXYZ)
 	system(command);
 
 	/* 4. Do the calculations */
-	if(nLM > 0)
+	if(nLMN > 0)
 	{
-		rv = computeLMDerivatives(D, deltaLM, calcProgram, verbose);
+		rv = computeLMNDerivatives(D, deltaLMN, calcProgram, verbose);
 	}
 	else
 	{
@@ -451,9 +462,10 @@ int run(const char *fileBase, int verbose, double deltaLM, double deltaXYZ)
 	/* 6. Write the updated model file */
 	if(rv == 0)
 	{
-		snprintf(D->job->calcServer, DIFXIO_HOSTNAME_LENGTH, program);
-		D->job->calcVersion = version;
-		D->job->calcProgram = 0;
+		D->job->delayServerType = CALCDERIV;
+		D->job->delayVersion = version;
+		D->job->delayProgram = delayServerTypeIds[CALCDERIV];
+		D->job->delayProgramDetailedVersion = version;
 		writeDifxIM(D);
 	}
 
@@ -468,7 +480,7 @@ int main(int argc, char **argv)
 {
 	int a;
 	int verbose = 0;
-	double deltaLM = 10.0/206265.0;		/* (rad) about 10 arcseconds */
+	double deltaLMN = 10.0/206265.0;		/* (rad) about 10 arcseconds */
 	double deltaXYZ = 100.0;		/* (m) */
 
 	for(a = 1; a < argc; ++a)
@@ -498,7 +510,7 @@ int main(int argc, char **argv)
 		else
 		{
 			printf("Running on file %s\n", argv[a]);
-			run(argv[a], verbose, deltaLM, deltaXYZ);
+			run(argv[a], verbose, deltaLMN, deltaXYZ);
 		}
 	}
 

@@ -43,7 +43,7 @@
 #define MAX_DATA_SOURCE_NAME_LENGTH               16
 #define MAX_ANTENNA_MOUNT_NAME_LENGTH              8
 #define MAX_ANTENNA_SITE_NAME_LENGTH              16
-#define MAX_SPACECRAFT_TIME_NAME_LENGTH           16
+#define MAX_SPACECRAFT_TIME_NAME_LENGTH           32
 #define MAX_SAMPLING_NAME_LENGTH                  16
 #define MAX_DELAY_SERVER_NAME_LENGTH              32
 #define MAX_TONE_SELECTION_STRING_LENGTH          12
@@ -274,6 +274,7 @@ enum DelayServerType
 {
     CALCServer = 0,     /* CALC 9.1, original delay server */
     CALC_9_1_RA_Server, /* CALC 9.1 hacked for space VLBI */
+    CALCDERIV,          /* Alternative derivative computation program */
     NumDelayServerTypes /* must remain as last entry */
 };
 extern const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH];
@@ -316,7 +317,8 @@ typedef struct
     double mmsems;          /* ratio of the mass of the Moon to the mass
                                of the Earth */
     double ephepoc;         /* coordinate equinox (usually 2000.0) */
-    double gauss;           /* Gaussian gravitational constant (unitless?) */
+    double gauss;           /* Gaussian gravitational constant in
+                               AU^{3/2} day^{-1} M_\Sun^{-1/2} */
     double u_grv_cn;        /* constant of gravitation, in
                                m^3 kg^{-1} s^{-2} */
     double gmsun;           /* Heliocentric gravitational constant,

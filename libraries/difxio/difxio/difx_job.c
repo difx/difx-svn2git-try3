@@ -99,12 +99,14 @@ const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
 {
 	"CALCServer",
 	"CALC_9_1_RA_Server",
+	"calcderiv",
 	"unknown"
 };
 const unsigned long delayServerTypeIds[] =
 {
 	0x20000340,   /* CALCServer                  */
 	0x20000341,   /* CALC_9_1_RA_Server          */
+	2,            /* CALCDERIV                   */
 	0
 };
 
