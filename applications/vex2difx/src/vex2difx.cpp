@@ -38,7 +38,7 @@
 #include <algorithm>
 #include <sys/time.h>
 #include <sys/stat.h>
-#include <cstdint>
+#include <stdint.h>             // using <cstdint> requires C++11 support
 #include <difxio/difx_input.h>
 #include <difxmessage.h>
 #include "vextables.h"

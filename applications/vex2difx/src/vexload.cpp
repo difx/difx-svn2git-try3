@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012, 2014 by Walter Brisken                             *
+ *   Copyright (C) 2009-2012, 2014, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -37,6 +37,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <unistd.h>
+#include <limits>
 #include "util.h"
 #include "corrparams.h"
 #include "vextables.h"
@@ -154,7 +155,7 @@ static int getRecordChannel(const std::string &antName, const std::string &chanN
                         {
                             cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the magnitude bit (bit " << mtrack-2 << ") is not 1 higher than the sign bit (" << track-2 << ").  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
                         }
-                        else if(track&0x1 == 0x1)
+                        else if((track&0x1) == 0x1)
                         {
                             cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the sign bit (" << track-2 << ") is not at an even bit number.  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
                         }
@@ -785,7 +786,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 		Llist *lowls = L;
 		lowls=find_lowl(lowls,T_COMMENT);
 		while(lowls != NULL) {
-			int pos;
+			std::string::size_type pos;
 			// assume our comments are clustered together at beginning of scan definition
 	        if(((Lowl *)lowls->ptr)->statement != T_COMMENT) {
             	break;
@@ -1210,8 +1211,8 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 				{
 				  if (setup.formatName.substr(0, 4) == "VDIF" || setup.formatName.substr(0, 5) == "VDIFL")
 					{
-						// non-interlaced:  VDIF/size/bits, use all recorded channels, find 7777 below
-						setup.nRecordChan = 7777;
+						// non-interlaced:  VDIF/size/bits, use all recorded channels, find std::numeric_limits<unsigned int>::max() below
+						setup.nRecordChan = std::numeric_limits<unsigned int>::max();
 						setup.nBit = atoi(setup.formatName.substr(setup.formatName.find_last_of('/') + 1).c_str());
 						setup.formatName = setup.formatName.substr(0, setup.formatName.find_last_of('/'));
 					}
@@ -1302,7 +1303,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 				size_t lpos = setup.formatName.find_first_of(':');
 				if(lpos == std::string::npos)
 				{
-					setup.nRecordChan = 7777;	// use all channels of vex file, see below
+					setup.nRecordChan = std::numeric_limits<unsigned int>::max();	// use all channels of vex file, see below
 				}
 				while(lpos != std::string::npos)	// else
 				{
@@ -1549,7 +1550,7 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 				++nRecordChan;
 			}
 
-			if(setup.nRecordChan == 7777)     // then use the number of that we just counted out
+			if(setup.nRecordChan == std::numeric_limits<unsigned int>::max())     // then use the number of that we just counted out
 			{
 				setup.nRecordChan = nRecordChan;
 				std::cout << "FYI: Antenna=" << antName << " will use the full number of recorded channels, " << setup.nRecordChan << std::endl;
@@ -1562,9 +1563,9 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 
 			// Sort channels by name and then assign sequential thread Id
 			std::sort(setup.channels.begin(), setup.channels.end());
-			for(int threadId = 0; threadId < setup.channels.size(); ++threadId)
+			for(std::vector<VexChannel>::size_type threadId = 0; threadId < setup.channels.size(); ++threadId)
 			{
-				setup.channels[threadId].threadId = threadId;
+				setup.channels[threadId].threadId = int(threadId);
 			}
 		} // End of antenna loop
 
