@@ -251,7 +251,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 			{"DDDTAUDZDZ", "1D", "dbl derivative of delay wrt z and z rate", "SEC/M/MSEC"},
 		};
 	static const size_t XYZ_columns_size = NELEMENTS(XYZ_columns);
-	static const size_t total_columns_size = base_columns_size + pol1_columns_size + pol2_columns_size + extra_columns_size + spacecraft_columns_size + LMN_columns_size + XYZ_columns_size;
+	// static const size_t total_columns_size = base_columns_size + pol1_columns_size + pol2_columns_size + extra_columns_size + spacecraft_columns_size + LMN_columns_size + XYZ_columns_size;
+	static const size_t total_columns_size =  NELEMENTS(base_columns) + NELEMENTS(pol1_columns) + NELEMENTS(pol2_columns) + NELEMENTS(extra_columns) + NELEMENTS(spacecraft_columns) + NELEMENTS(LMN_columns) + NELEMENTS(XYZ_columns);
 
 	struct fitsBinTableColumn columns[total_columns_size];
 	size_t nCol;

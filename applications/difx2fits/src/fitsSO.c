@@ -80,7 +80,7 @@ const DifxInput *DifxInput2FitsSO(const DifxInput *D, struct fits_keywords *p_fi
 		return D;
 	}
 
-	subarray = D->job.subarrayId;
+	subarray = D->job->subarrayId;
 	sunAngle[0] = sunAngle[1] = sunAngle[2] = fitsnan.f;
 	eclipse[0] = eclipse[1] = eclipse[2] = eclipse[3] = fitsnan.f;
 

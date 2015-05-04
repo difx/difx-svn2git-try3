@@ -33,7 +33,12 @@
 #include "difx2fits.h"
 
 
-#error "Check whether or not these values need to be revised when usign other delay servers"
+/* 2015 May 04   James M Anderson  --- the following constants from the CALC 9.1
+ *               server are left in as default values to put in when the
+ *               delay server does not provide the values to calcif2.  The
+ *               new Difx_Delay_Server structure should be used for future
+ *               work to provide delay model information for FITS files.
+ */
 /*
 * IAU (1976) System of Astronomical Constants
 * SOURCE:  USNO Circular # 163 (1981dec10)
