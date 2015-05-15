@@ -193,7 +193,7 @@ C
          CALL PUTA ('KSITC      :  ', cval(KSITC), 1, 1, 1) 
          CALL PUTA ('KSTRC      :  ', cval(KSTRC), 1, 1, 1) 
          CALL PUTA ('KUT1C      :  ', cval(KUT1C), 1, 1, 1) 
-         CALL PUTA ('KWOBC      :  ', cval(KWOBC), 1, 1, 1) 
+g         CALL PUTA ('KWOBC      :  ', cval(KWOBC), 1, 1, 1) 
          CALL PUTA ('KUTCC      :  ', cval(KUTCC), 1, 1, 1) 
          CALL PUTA ('KATIC      :  ', cval(KATIC), 1, 1, 1) 
          CALL PUTA ('KCTIC      :  ', cval(KCTIC), 1, 1, 1) 

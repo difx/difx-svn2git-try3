@@ -31,7 +31,6 @@
 
 const DIFX_DELAY_SERVER_STATION_STRING_SIZE=32;
 const NUM_DIFX_DELAY_SERVER_1_KFLAGS=64;
-const DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA=-999;
 struct DIFX_DELAY_SERVER_vec {
     double x;
     double y;
@@ -302,10 +301,10 @@ struct DIFX_DELAY_SERVER_1_station {
                              * enter 0.0 for none availiable */
     double temperature;     /* station atmospheric temperature at reference
                                time in Kelvin.  Enter 0.0 for none available. */
-    double wind_speed;      /* The wind speed (m/s).  Provide -999.0 if no
+    double wind_speed;      /* The wind speed (m/s).  Provide NAN if no
                                data are available. */
     double wind_direction;  /* The wind direction in radians from North through
-                               East.  Specify -999.0 when no data are available
+                               East.  Specify NAN when no data are available
                             */
     double antenna_phys_temperature;
                             /* station physical temperature of the antenna
@@ -564,7 +563,7 @@ struct DIFX_DELAY_SERVER_1_RESULTS {
                                for the geometric direction of the source
                                (uncorrected for refraction)
                              */
-    double primary_axis_angle;/* stations azimuth angle in radians */
+    double primary_axis_angle;/* station azimuth angle in radians */
     double secondary_axis_angle;/* station elevation angle in radians */
     double mount_source_angle; /* mount-source angle (parallactic
                                angle for altaz mounted telescopes)

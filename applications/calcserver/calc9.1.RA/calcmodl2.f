@@ -85,23 +85,23 @@ C----------------------------------------------------------------------
 C
       PRINT*, 'JMA in calcmodl2 before DRIVR'
       CALL DRIVR (BSLN,SRC,EARTH,SRCELEV)
+      PRINT*, "JMA in calcmodl2  IRET is ", IRET
       IF (IRET.EQ.1) THEN
+         PRINT*, 'JMA in calcmodl2  DEBUG returning'
          IRETURN = IRET
          RETURN
       END IF
       PRINT*, 'JMA in calcmodl2 after DRIVR'
-      print *, 'JMA DEBUG: RETURN'
-      RETURN
 C
 C     Retrieve CALC delay and rate from COMMON variables
       XDELAY = PUTDLY(1) + PUTDLY(2)
       XRATE  = PUTRAT
       DELAY  = XDELAY
       RATE   = XRATE
-      PRINT*, 'JMA in calcmodl2 ', PUTDLY
-      PRINT*, 'JMA in calcmodl2 ', XDELAY
-      PRINT*, 'JMA in calcmodl2 ', XRATE
-      PRINT*, 'JMA in calcmodl2 ', DELAY
+      PRINT*, 'JMA in calcmodl2 PUTDLY ', PUTDLY
+      PRINT*, 'JMA in calcmodl2 XDELAY ', XDELAY
+      PRINT*, 'JMA in calcmodl2 XRATE  ', XRATE
+      PRINT*, 'JMA in calcmodl2 DELAY  ', DELAY
 C
 C     Get the Calc atmos delay and rate from common in CALCIO.INC
 C     Pass the dry and wet delays and rates. First index is station a

@@ -34,6 +34,7 @@
 #include <rpc/rpc.h>
 #include <rpc/pmap_clnt.h>
 #include <inttypes.h>
+#include <stdint.h>
 #include "MATHCNST.H"
 #include "CALCServer.h"
 #include "CALC_9_1_RA_Server.h"
@@ -130,6 +131,16 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     size_t station_size, source_size, EOP_size;
     void *station_mem, *source_mem, *EOP_mem;
 
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+
+
     printf("Checking CALCServer\n");
     mode_failures = 0;
     p_request = &request_args;
@@ -205,8 +216,8 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[0].pressure = 0.0;
     p_request->station.station_val[0].antenna_pressure = 0.0;
     p_request->station.station_val[0].temperature = 0.0;
-    p_request->station.station_val[0].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    p_request->station.station_val[0].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    p_request->station.station_val[0].wind_speed = fitsnan.d;
+    p_request->station.station_val[0].wind_direction = fitsnan.d;
     p_request->station.station_val[0].antenna_phys_temperature = 0.0;
     /*
       strcpy (stnnameb, "FD");
@@ -248,8 +259,8 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[1].pressure = 0.0;
     p_request->station.station_val[1].antenna_pressure = 0.0;
     p_request->station.station_val[1].temperature = 0.0;
-    p_request->station.station_val[1].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    p_request->station.station_val[1].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    p_request->station.station_val[1].wind_speed = fitsnan.d;
+    p_request->station.station_val[1].wind_direction = fitsnan.d;
     p_request->station.station_val[1].antenna_phys_temperature = 0.0;
 
 
@@ -315,41 +326,41 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
         return 100;
     }
 
-    printf ("result: this_error = %d\n", p_result->this_error);
+    printf (    "result: this_error         = %d\n", p_result->this_error);
     if(!p_result->this_error)
     {
         printf ("result: delay_server_error = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error);
         printf ("result: server_error       = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_error);
         printf ("result: model_error        = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
-        printf ("result: request_id = %ld\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.request_id);
-        printf ("result: delay_server = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
+        printf ("result: request_id         = %ld\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.request_id);
+        printf ("result: delay_server       = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
         printf ("result: server_struct_setup_code = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
-        printf ("result: date  = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
-        printf ("result: time  = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
-        printf ("result: Num_Stations = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
-        printf ("result: Num_Sources  = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
-        printf ("result: result_len   = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
+        printf ("result: date               = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
+        printf ("result: time               = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
+        printf ("result: Num_Stations       = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
+        printf ("result: Num_Sources        = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
+        printf ("result: result_len         = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
         for(i=0; i < 2; ++i)
         {
             DIFX_DELAY_SERVER_vec V;
-            printf ("result: station %d delay  = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
+            printf ("result: station %d delay         = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
             printf ("result: station %d dry_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
             printf ("result: station %d wet_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
             printf ("result: station %d iono_atmos    = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].iono_atmos);
-            printf ("result: station %d elev_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
-            printf ("result: station %d azim_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
-            printf ("result: station %d elev_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
-            printf ("result: station %d azim_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
-            printf ("result: station %d paa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
-            printf ("result: station %d saa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
-            printf ("result: station %d msa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
-            printf ("result: station %d stt   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_theta*57.296);
-            printf ("result: station %d stp   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_phi*57.296);
-            printf ("result: station %d sot   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_theta*57.296);
-            printf ("result: station %d sop   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_phi*57.296);
+            printf ("result: station %d elev_corr  = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
+            printf ("result: station %d azim_corr  = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
+            printf ("result: station %d elev_geom  = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
+            printf ("result: station %d azim_geom  = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
+            printf ("result: station %d paa        = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
+            printf ("result: station %d saa        = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
+            printf ("result: station %d msa        = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
+            printf ("result: station %d stt        = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_theta*57.296);
+            printf ("result: station %d stp        = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_phi*57.296);
+            printf ("result: station %d sot        = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_theta*57.296);
+            printf ("result: station %d sop        = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_phi*57.296);
 
             V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].UVW;
-            printf ("result: station %d UVW = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
+            printf ("result: station %d UVW           = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
             V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineP2000;
             printf ("result: station %d baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
             V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineV2000;
@@ -434,39 +445,39 @@ int test_CALCServer_Parameters_mode(CLIENT *cl, const char *host)
         return 100;
     }
 
-    printf ("result: this_error = %d\n", p_result->this_error);
+    printf ("results: this_error = %d\n", p_result->this_error);
     if(!p_result->this_error)
     {
         res = &(p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.response);
         printf("results: delay_server_error=%d server_error=%d model_error=%d\n", res->delay_server_error, res->server_error, res->model_error);
         printf("results: request_id=%ld delay_server=0x%lX\n", res->request_id, res->delay_server);
         printf("results: server_struct_setup_code=0x%lX server_version=0x%lX\n", res->server_struct_setup_code, res->server_version);
-        printf("results: accelgrv=%25.16E\n", res->accelgrv);
-        printf("results: e_flat=%25.16E\n", res->e_flat);
-        printf("results: earthrad=%25.16E\n", res->earthrad);
-        printf("results: mmsems=%25.16E\n", res->mmsems);
-        printf("results: ephepoc=%25.16E\n", res->ephepoc);
-        printf("results: gauss=%25.16E\n", res->gauss);
-        printf("results: u_grv_cn=%25.16E\n", res->u_grv_cn);
-        printf("results: gmsun=%25.16E\n", res->gmsun);
+        printf("results: accelgrv =%25.16E\n", res->accelgrv);
+        printf("results: e_flat   =%25.16E\n", res->e_flat);
+        printf("results: earthrad =%25.16E\n", res->earthrad);
+        printf("results: mmsems   =%25.16E\n", res->mmsems);
+        printf("results: ephepoc  =%25.16E\n", res->ephepoc);
+        printf("results: gauss    =%25.16E\n", res->gauss);
+        printf("results: u_grv_cn =%25.16E\n", res->u_grv_cn);
+        printf("results: gmsun    =%25.16E\n", res->gmsun);
         printf("results: gmmercury=%25.16E\n", res->gmmercury);
-        printf("results: gmvenus=%25.16E\n", res->gmvenus);
-        printf("results: gmearth=%25.16E\n", res->gmearth);
-        printf("results: gmmoon=%25.16E\n", res->gmmoon);
-        printf("results: gmmars=%25.16E\n", res->gmmars);
+        printf("results: gmvenus  =%25.16E\n", res->gmvenus);
+        printf("results: gmearth  =%25.16E\n", res->gmearth);
+        printf("results: gmmoon   =%25.16E\n", res->gmmoon);
+        printf("results: gmmars   =%25.16E\n", res->gmmars);
         printf("results: gmjupiter=%25.16E\n", res->gmjupiter);
-        printf("results: gmsaturn=%25.16E\n", res->gmsaturn);
-        printf("results: gmuranus=%25.16E\n", res->gmuranus);
+        printf("results: gmsaturn =%25.16E\n", res->gmsaturn);
+        printf("results: gmuranus =%25.16E\n", res->gmuranus);
         printf("results: gmneptune=%25.16E\n", res->gmneptune);
-        printf("results: etidelag=%25.16E\n", res->etidelag);
-        printf("results: love_h=%25.16E\n", res->love_h);
-        printf("results: love_l=%25.16E\n", res->love_l);
-        printf("results: pre_data=%25.16E\n", res->pre_data);
-        printf("results: rel_data=%25.16E\n", res->rel_data);
-        printf("results: tidalut1=%25.16E\n", res->tidalut1);
-        printf("results: au=%25.16E\n", res->au);
-        printf("results: tsecau=%25.16E\n", res->tsecau);
-        printf("results: vlight=%25.16E\n", res->vlight);
+        printf("results: etidelag =%25.16E\n", res->etidelag);
+        printf("results: love_h   =%25.16E\n", res->love_h);
+        printf("results: love_l   =%25.16E\n", res->love_l);
+        printf("results: pre_data =%25.16E\n", res->pre_data);
+        printf("results: rel_data =%25.16E\n", res->rel_data);
+        printf("results: tidalut1 =%25.16E\n", res->tidalut1);
+        printf("results: au       =%25.16E\n", res->au);
+        printf("results: tsecau   =%25.16E\n", res->tsecau);
+        printf("results: vlight   =%25.16E\n", res->vlight);
 
         if((fabs(res->vlight - 299792458.0) > 1E-3)
            || ((res->delay_server_error))
@@ -512,6 +523,15 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     long calcserver_version;
     size_t station_size, source_size, EOP_size;
     void *station_mem, *source_mem, *EOP_mem;
+    
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
 
     printf("Checking CALC_9_1_RA_Server\n");
     mode_failures = 0;
@@ -588,8 +608,8 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[0].pressure = 0.0;
     p_request->station.station_val[0].antenna_pressure = 0.0;
     p_request->station.station_val[0].temperature = 0.0;
-    p_request->station.station_val[0].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    p_request->station.station_val[0].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    p_request->station.station_val[0].wind_speed = fitsnan.d;
+    p_request->station.station_val[0].wind_direction = fitsnan.d;
     p_request->station.station_val[0].antenna_phys_temperature = 0.0;
     /*
       strcpy (stnnameb, "FD");
@@ -631,8 +651,8 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     p_request->station.station_val[1].pressure = 0.0;
     p_request->station.station_val[1].antenna_pressure = 0.0;
     p_request->station.station_val[1].temperature = 0.0;
-    p_request->station.station_val[1].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    p_request->station.station_val[1].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    p_request->station.station_val[1].wind_speed = fitsnan.d;
+    p_request->station.station_val[1].wind_direction = fitsnan.d;
     p_request->station.station_val[1].antenna_phys_temperature = 0.0;
 
 
@@ -750,41 +770,41 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
             return 100;
         }
 
-        printf ("result: this_error = %d\n", p_result->this_error);
+        printf (    "result: this_error         = %d\n", p_result->this_error);
         if(!p_result->this_error)
         {
             printf ("result: delay_server_error = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error);
             printf ("result: server_error       = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_error);
             printf ("result: model_error        = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
-            printf ("result: request_id = %ld\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.request_id);
-            printf ("result: delay_server = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
+            printf ("result: request_id         = %ld\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.request_id);
+            printf ("result: delay_server       = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
             printf ("result: server_struct_setup_code = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
-            printf ("result: date  = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
-            printf ("result: time  = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
-            printf ("result: Num_Stations = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
-            printf ("result: Num_Sources  = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
-            printf ("result: result_len   = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
+            printf ("result: date               = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
+            printf ("result: time               = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
+            printf ("result: Num_Stations       = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
+            printf ("result: Num_Sources        = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
+            printf ("result: result_len         = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
             for(i=0; i < 2; ++i)
             {
                 DIFX_DELAY_SERVER_vec V;
-                printf ("result: station %d delay  = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
+                printf ("result: station %d delay         = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
                 printf ("result: station %d dry_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
                 printf ("result: station %d wet_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
                 printf ("result: station %d iono_atmos    = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].iono_atmos);
-                printf ("result: station %d elev_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
-                printf ("result: station %d azim_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
-                printf ("result: station %d elev_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
-                printf ("result: station %d azim_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
-                printf ("result: station %d paa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
-                printf ("result: station %d saa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
-                printf ("result: station %d msa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
-                printf ("result: station %d stt   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_theta*57.296);
-                printf ("result: station %d stp   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_phi*57.296);
-                printf ("result: station %d sot   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_theta*57.296);
-                printf ("result: station %d sop   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_phi*57.296);
+                printf ("result: station %d elev_corr     = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
+                printf ("result: station %d azim_corr     = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
+                printf ("result: station %d elev_geom     = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
+                printf ("result: station %d azim_geom     = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
+                printf ("result: station %d paa           = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
+                printf ("result: station %d saa           = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
+                printf ("result: station %d msa           = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
+                printf ("result: station %d stt           = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_theta*57.296);
+                printf ("result: station %d stp           = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_phi*57.296);
+                printf ("result: station %d sot           = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_theta*57.296);
+                printf ("result: station %d sop           = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_phi*57.296);
 
                 V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].UVW;
-                printf ("result: station %d UVW = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
+                printf ("result: station %d UVW           = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
                 V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineP2000;
                 printf ("result: station %d baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
                 V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineV2000;
@@ -854,8 +874,8 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
         p_request->station.station_val[1].pressure = 0.0;
         p_request->station.station_val[1].antenna_pressure = 0.0;
         p_request->station.station_val[1].temperature = 0.0;
-        p_request->station.station_val[1].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-        p_request->station.station_val[1].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+        p_request->station.station_val[1].wind_speed = fitsnan.d;
+        p_request->station.station_val[1].wind_direction = fitsnan.d;
         p_request->station.station_val[1].antenna_phys_temperature = 0.0;
 
         printf("Checking %s CALC_9_1_RA_SERVER version 0x%lX call:\n", host, (long)(CALC_9_1_RA_SERVER_STRUCT_CODE_5_1_0));
@@ -884,41 +904,41 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
             fprintf(stderr, "Warning -- system() failed\n");
         }
 
-        printf ("result: this_error = %d\n", p_result->this_error);
+        printf (    "result: this_error         = %d\n", p_result->this_error);
         if(!p_result->this_error)
         {
             printf ("result: delay_server_error = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error);
             printf ("result: server_error       = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_error);
             printf ("result: model_error        = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
-            printf ("result: request_id = %ld\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.request_id);
-            printf ("result: delay_server = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
+            printf ("result: request_id         = %ld\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.request_id);
+            printf ("result: delay_server       = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
             printf ("result: server_struct_setup_code = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
-            printf ("result: date  = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
-            printf ("result: time  = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
-            printf ("result: Num_Stations = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
-            printf ("result: Num_Sources  = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
-            printf ("result: result_len   = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
+            printf ("result: date               = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
+            printf ("result: time               = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
+            printf ("result: Num_Stations       = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
+            printf ("result: Num_Sources        = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
+            printf ("result: result_len         = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
             for(i=0; i < 2; ++i)
             {
                 DIFX_DELAY_SERVER_vec V;
-                printf ("result: station %d delay  = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
-                printf ("result: station %d dry_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
-                printf ("result: station %d wet_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
+                printf ("result: station %d delay          = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
+                printf ("result: station %d dry_atmos      = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
+                printf ("result: station %d wet_atmos      = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
                 printf ("result: station %d iono_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].iono_atmos);
-                printf ("result: station %d elev_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
-                printf ("result: station %d azim_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
-                printf ("result: station %d elev_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
-                printf ("result: station %d azim_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
-                printf ("result: station %d paa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
-                printf ("result: station %d saa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
-                printf ("result: station %d msa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
-                printf ("result: station %d stt   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_theta*57.296);
-                printf ("result: station %d stp   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_phi*57.296);
-                printf ("result: station %d sot   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_theta*57.296);
-                printf ("result: station %d sop   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_phi*57.296);
+                printf ("result: station %d elev_corr      = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
+                printf ("result: station %d azim_corr      = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
+                printf ("result: station %d elev_geom      = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
+                printf ("result: station %d azim_geom      = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
+                printf ("result: station %d paa            = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
+                printf ("result: station %d saa            = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
+                printf ("result: station %d msa            = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
+                printf ("result: station %d stt            = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_theta*57.296);
+                printf ("result: station %d stp            = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_phi*57.296);
+                printf ("result: station %d sot            = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_theta*57.296);
+                printf ("result: station %d sop            = %24.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_phi*57.296);
 
                 V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].UVW;
-                printf ("result: station %d UVW = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
+                printf ("result: station %d UVW           = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
                 V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineP2000;
                 printf ("result: station %d baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
                 V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineV2000;
@@ -1006,39 +1026,39 @@ int test_CALC_9_1_RA_Server_Parameters_mode(CLIENT *cl, const char *host)
         return 100;
     }
 
-    printf ("result: this_error = %d\n", p_result->this_error);
+    printf ("results: this_error = %d\n", p_result->this_error);
     if(!p_result->this_error)
     {
         res = &(p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.response);
         printf("results: delay_server_error=%d server_error=%d model_error=%d\n", res->delay_server_error, res->server_error, res->model_error);
         printf("results: request_id=%ld delay_server=0x%lX\n", res->request_id, res->delay_server);
         printf("results: server_struct_setup_code=0x%lX server_version=0x%lX\n", res->server_struct_setup_code, res->server_version);
-        printf("results: accelgrv=%25.16E\n", res->accelgrv);
-        printf("results: e_flat=%25.16E\n", res->e_flat);
-        printf("results: earthrad=%25.16E\n", res->earthrad);
-        printf("results: mmsems=%25.16E\n", res->mmsems);
-        printf("results: ephepoc=%25.16E\n", res->ephepoc);
-        printf("results: gauss=%25.16E\n", res->gauss);
-        printf("results: u_grv_cn=%25.16E\n", res->u_grv_cn);
-        printf("results: gmsun=%25.16E\n", res->gmsun);
+        printf("results: accelgrv =%25.16E\n", res->accelgrv);
+        printf("results: e_flat   =%25.16E\n", res->e_flat);
+        printf("results: earthrad =%25.16E\n", res->earthrad);
+        printf("results: mmsems   =%25.16E\n", res->mmsems);
+        printf("results: ephepoc  =%25.16E\n", res->ephepoc);
+        printf("results: gauss    =%25.16E\n", res->gauss);
+        printf("results: u_grv_cn =%25.16E\n", res->u_grv_cn);
+        printf("results: gmsun    =%25.16E\n", res->gmsun);
         printf("results: gmmercury=%25.16E\n", res->gmmercury);
-        printf("results: gmvenus=%25.16E\n", res->gmvenus);
-        printf("results: gmearth=%25.16E\n", res->gmearth);
-        printf("results: gmmoon=%25.16E\n", res->gmmoon);
-        printf("results: gmmars=%25.16E\n", res->gmmars);
+        printf("results: gmvenus  =%25.16E\n", res->gmvenus);
+        printf("results: gmearth  =%25.16E\n", res->gmearth);
+        printf("results: gmmoon   =%25.16E\n", res->gmmoon);
+        printf("results: gmmars   =%25.16E\n", res->gmmars);
         printf("results: gmjupiter=%25.16E\n", res->gmjupiter);
-        printf("results: gmsaturn=%25.16E\n", res->gmsaturn);
-        printf("results: gmuranus=%25.16E\n", res->gmuranus);
+        printf("results: gmsaturn =%25.16E\n", res->gmsaturn);
+        printf("results: gmuranus =%25.16E\n", res->gmuranus);
         printf("results: gmneptune=%25.16E\n", res->gmneptune);
-        printf("results: etidelag=%25.16E\n", res->etidelag);
-        printf("results: love_h=%25.16E\n", res->love_h);
-        printf("results: love_l=%25.16E\n", res->love_l);
-        printf("results: pre_data=%25.16E\n", res->pre_data);
-        printf("results: rel_data=%25.16E\n", res->rel_data);
-        printf("results: tidalut1=%25.16E\n", res->tidalut1);
-        printf("results: au=%25.16E\n", res->au);
-        printf("results: tsecau=%25.16E\n", res->tsecau);
-        printf("results: vlight=%25.16E\n", res->vlight);
+        printf("results: etidelag =%25.16E\n", res->etidelag);
+        printf("results: love_h   =%25.16E\n", res->love_h);
+        printf("results: love_l   =%25.16E\n", res->love_l);
+        printf("results: pre_data =%25.16E\n", res->pre_data);
+        printf("results: rel_data =%25.16E\n", res->rel_data);
+        printf("results: tidalut1 =%25.16E\n", res->tidalut1);
+        printf("results: au       =%25.16E\n", res->au);
+        printf("results: tsecau   =%25.16E\n", res->tsecau);
+        printf("results: vlight   =%25.16E\n", res->vlight);
 
         if((fabs(res->vlight - 299792458.0) > 1E-3)
            || ((res->delay_server_error))

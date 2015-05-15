@@ -21,11 +21,12 @@ pushd /tmp
 
 for server in $serverlist
 do
-    echo "terminate ${server} that is currently running on ${myhostname}"
+    echo -e "\n\nterminating the ${server} that is currently running on ${myhostname}"
     killall "${server}"
+    sleep 1
 
     echo "starting new ${server} on ${myhostname}"
-    if (( $# == 2 )) ; then
+    if [ "$#" -ne 0 ] ; then
 	@prefix@/bin/"${server}" >| "$1"."${server}" 2>&1 &
     else
 	@prefix@/bin/"${server}" > /dev/null 2>&1 &
