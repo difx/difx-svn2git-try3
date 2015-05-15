@@ -2162,6 +2162,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	double globalBandwidth;
 	vector<set <int> > blockedfreqids;
 
+
 	// Initialize toneSets with the trivial case, which is used for all zoom bands
 	vector<int> noTones;
 	toneSets.push_back(noTones);
@@ -2193,7 +2194,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	// make set of unique config names
 	for(vector<string>::const_iterator si = J.scans.begin(); si != J.scans.end(); ++si)
 	{
-		string configName;
+		std::string configName;
 
 		S = V->getScanByDefName(*si);
 		if(!S)
@@ -2202,7 +2203,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 			exit(EXIT_FAILURE);
 		}
-		configName = S->modeDefName + string("_") + S->corrSetupName;
+		configName = S->modeDefName + '_' + S->corrSetupName;
 		configSet.insert(configName);
 	}
 

@@ -1071,7 +1071,7 @@ void PhaseCentre::initialise(double r, double d, std::string name)
 	source_coordinate_frame = sourceCoordinateFrameTypeNames[DIFXIO_DEFAULT_SOURCE_COORDINATE_FRAME];
 	perform_uvw_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeDefault];
 	perform_lmn_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeDefault];
-	perform_lmn_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeDefault];
+	perform_xyz_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeDefault];
 	delta_lmn = 0.0;
 	delta_xyz = 0.0;
 	ephemDeltaT = 24.0;	// seconds; 24 seconds is perfectly matched to the default behavior of calcif2
@@ -2693,7 +2693,7 @@ void CorrParams::defaults()
 	delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
 	perform_uvw_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeFirstDerivative];
 	perform_lmn_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeNone];
-	perform_lmn_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeNone];
+	perform_xyz_deriv = performDirectionDerivativeTypeNames[PerformDirectionDerivativeNone];
 	delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
 	delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
 	calculate_own_retarded_position = false;
