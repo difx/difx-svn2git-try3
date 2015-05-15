@@ -226,7 +226,7 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 	opts->perform_xyz_deriv = PerformDirectionDerivativeDefault;
 	opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
 	opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
-	opts->delayServerType = NumDelayServerTypes; /* default to value in the .calc file */
+	opts->delayServerType = UnknownServer; /* default to value in the .calc file */
 	opts->polyOrder = 0;    /* default to value in the .calc file */
 	opts->polyOversamp = 1;
 	opts->polyInterval = 0; /* default to value in the .calc file */
@@ -950,7 +950,7 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 		strncpy(D->job->delayServerHost, opts->delayServerHost, DIFXIO_HOSTNAME_LENGTH);
 		D->job->delayServerHost[DIFXIO_HOSTNAME_LENGTH-1] = 0;
 	}
-	if(opts->delayServerType != NumDelayServerTypes)
+	if(opts->delayServerType != UnknownServer)
 	{
 		D->job->delayServerType = opts->delayServerType;
 	}
@@ -1041,20 +1041,6 @@ CalcParams *newCalcParams(const CommandLineOptions *opts)
 	p->delayProgramDetailedVersion = 0;
 	p->Num_Allocated_Stations = 0;
 	p->Num_Allocated_Sources = 0;
-
-	p->clnt = clnt_create(p->delayServerHost, p->delayHandler, p->delayVersion, "tcp");
-	if(!p->clnt)
-	{
-		clnt_pcreateerror(p->delayServerHost);
-		fprintf(stderr, "Error: calcif2: RPC clnt_create fails for host : %-s program id 0x%lX version %lu\n", p->delayServerHost, p->delayHandler, p->delayVersion);
-		deleteCalcParams(p);
-
-		return 0;
-	}
-	if(opts->verbose > 1)
-	{
-		printf("RPC client created\n");
-	}
 
 	return p;
 }

@@ -33,6 +33,7 @@
 #include <math.h>
 #include <float.h>
 #include <inttypes.h>
+#include <stdint.h>
 #include "MATHCNST.H"
 #include "difxcalc.h"
 #include "externaldelay.h"
@@ -367,7 +368,222 @@ static int convert_vector_to_RA_Dec_PM(const double* const restrict pos, const d
 
 
 
-static int check_delayserver_operation(const DifxInput* const D, const CalcParams* const p, const int verbose)
+
+
+static int freeCalcResults(struct getDIFX_DELAY_SERVER_1_res* const results, const CalcParams* const p, const int verbose)
+{
+    if((verbose>=3))
+    {
+        printf("Calling clnt_freeres\n");
+    }
+    if(clnt_freeres(p->clnt, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_res, (caddr_t) results) != 1)
+    {
+        fprintf(stderr, "Failed to free results buffer\n");
+        return -1;
+    }
+    if((verbose>=3))
+    {
+        printf("Return from clnt_freeres\n");
+    }
+    return 0;
+}
+
+
+
+static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct getDIFX_DELAY_SERVER_1_res* const results, CalcParams* const p, const int verbose)
+{
+    static long request_id = -1;
+    enum clnt_stat clnt_stat;
+    request->request_id = ++request_id;
+    if(verbose >= 3)
+    {
+        unsigned int s, e;
+        printf("CALCIF2_REQUEST: request arg: request_id=0x%lX delay_server=0x%lX server_struct_setup_code=0x%lX\n", request->request_id, request->delay_server, request->server_struct_setup_code);
+        printf("CALCIF2_REQUEST: request arg: date=%ld time=%16.12f ref_frame=%ld verbosity=%d\n", request->date, request->time, request->ref_frame, request->verbosity);
+        if(verbose >= 4) {
+            unsigned int k;
+            for(k=0; k < NUM_DIFX_DELAY_SERVER_1_KFLAGS; k++) {
+                printf("CALCIF2_REQUEST: request arg: kflag[%02u]=%hd\n", k, request->kflags[k]);
+            }
+        }
+        printf("CALCIF2_REQUEST: request arg: sky_frequency = %E\n", request->sky_frequency);
+        printf("CALCIF2_REQUEST: Station information\n");
+        printf("CALCIF2_REQUEST: request arg: Use_Server_Station_Table=%d Num_Stations=%u (%u)\n", request->Use_Server_Station_Table, request->Num_Stations, request->station.station_len);
+        for(s=0; s < request->Num_Stations; s++) {
+            char ID0, ID1;
+            struct DIFX_DELAY_SERVER_vec v;
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_name='%s'\n", s, request->station.station_val[s].station_name);
+            printf("CALCIF2_REQUEST: request arg: station=%02u antenna_name='%s'\n", s, request->station.station_val[s].antenna_name);
+            printf("CALCIF2_REQUEST: request arg: station=%02u site_name=   '%s'\n", s, request->station.station_val[s].site_name);
+            ID0 = (char)(request->station.station_val[s].site_ID&0xFF);
+            ID1 = (char)(request->station.station_val[s].site_ID>>8);
+            printf("CALCIF2_REQUEST: request arg: station=%02u site_ID=     '%c%c' 0x%04hX\n", s, ID0, ID1, request->station.station_val[s].site_ID);
+            printf("CALCIF2_REQUEST: request arg: station=%02u site_type=   '%s'\n", s, request->station.station_val[s].site_type);
+            printf("CALCIF2_REQUEST: request arg: station=%02u axis_type=   '%s'\n", s, request->station.station_val[s].axis_type);
+            v = request->station.station_val[s].station_pos;
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_pos= [%14.4f, %14.4f, %14.4f]\n", s, v.x, v.y, v.z);
+            v = request->station.station_val[s].station_vel;
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_vel= [%14.9E, %14.9E, %14.9E]\n", s, v.x, v.y, v.z);
+            v = request->station.station_val[s].station_acc;
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_acc= [%14.9E, %14.9E, %14.9E]\n", s, v.x, v.y, v.z);
+            v = request->station.station_val[s].station_pointing_dir;
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_pointing_dir=  [%14.9E, %14.9E, %14.9E]\n", s, v.x, v.y, v.z);
+            v = request->station.station_val[s].station_reference_dir;
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_reference_dir= [%14.9E, %14.9E, %14.9E]\n", s, v.x, v.y, v.z);
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_coord_frame='%s'\n", s, request->station.station_val[s].station_coord_frame);
+            printf("CALCIF2_REQUEST: request arg: station=%02u pointing_coord_frame='%s'\n", s, request->station.station_val[s].pointing_coord_frame);
+            printf("CALCIF2_REQUEST: request arg: station=%02u pointing_corrections_applied=%d\n", s, request->station.station_val[s].pointing_corrections_applied);
+            printf("CALCIF2_REQUEST: request arg: station=%02u station_position_delay_offset=%E\n", s, request->station.station_val[s].station_position_delay_offset);
+            printf("CALCIF2_REQUEST: request arg: station=%02u axis_off=%7.4f primary_axis_wrap=%2d secondary_axis_wrap=%2d\n", s, request->station.station_val[s].axis_off, request->station.station_val[s].primary_axis_wrap, request->station.station_val[s].secondary_axis_wrap);
+            printf("CALCIF2_REQUEST: request arg: station=%02u receiver_name='%s'\n", s, request->station.station_val[s].receiver_name);
+            printf("CALCIF2_REQUEST: request arg: station=%02u pressure=%12.3E antenna_pressure=%12.3E temperature=%6.1f\n", s, request->station.station_val[s].pressure, request->station.station_val[s].antenna_pressure, request->station.station_val[s].temperature);
+            printf("CALCIF2_REQUEST: request arg: station=%02u wind_speed=%6.1f wind_direction=%7.2f antenna_phys_temperature=%6.1f\n", s, request->station.station_val[s].wind_speed, request->station.station_val[s].wind_direction, request->station.station_val[s].antenna_phys_temperature);
+        }
+        printf("CALCIF2_REQUEST: Source information\n");
+        printf("CALCIF2_REQUEST: request arg: Use_Server_Source_Table=%d Num_Sources=%u (%u)\n", request->Use_Server_Source_Table, request->Num_Sources, request->source.source_len);
+        for(s=0; s < request->Num_Sources; s++) {
+            struct DIFX_DELAY_SERVER_vec v;
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_name='%s'\n", s, request->source.source_val[s].source_name);
+            printf("CALCIF2_REQUEST: request arg: source=%02u IAU_name=   '%s'\n", s, request->source.source_val[s].IAU_name);
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_type='%s'\n", s, request->source.source_val[s].source_type);
+            printf("CALCIF2_REQUEST: request arg: source=%02u ra=           %20.16f\n", s, request->source.source_val[s].ra);
+            printf("CALCIF2_REQUEST: request arg: source=%02u dec=          %20.16f\n", s, request->source.source_val[s].dec);
+            printf("CALCIF2_REQUEST: request arg: source=%02u dra=          %20.10f\n", s, request->source.source_val[s].dra);
+            printf("CALCIF2_REQUEST: request arg: source=%02u ddec=         %20.10f\n", s, request->source.source_val[s].ddec);
+            printf("CALCIF2_REQUEST: request arg: source=%02u depoch=       %20.16f\n", s, request->source.source_val[s].depoch);
+            printf("CALCIF2_REQUEST: request arg: source=%02u parallax=     %20.3f\n", s, request->source.source_val[s].parallax);
+            printf("CALCIF2_REQUEST: request arg: source=%02u coord_frame= '%s'\n", s, request->source.source_val[s].coord_frame);
+            v = request->source.source_val[s].source_pos;
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_pos= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
+            v = request->source.source_val[s].source_vel;
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_vel= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
+            v = request->source.source_val[s].source_acc;
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_acc= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
+            v = request->source.source_val[s].source_pointing_dir;
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_dir=           [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
+            v = request->source.source_val[s].source_pointing_reference_dir;
+            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_reference_dir= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
+        }
+        printf("CALCIF2_REQUEST: EOP information\n");
+        printf("CALCIF2_REQUEST: request arg: Use_Server_EOP_Table=%d Num_EOPs=%u (%u)\n", request->Use_Server_EOP_Table, request->Num_EOPs, request->EOP.EOP_len);
+        for(e=0; e < request->Num_EOPs; e++) {
+            printf("CALCIF2_REQUEST: request arg: EOP=%02u EOP_time=  %20.11f\n", e, request->EOP.EOP_val[e].EOP_time);
+            printf("CALCIF2_REQUEST: request arg: EOP=%02u tai_utc=   %20.12f\n", e, request->EOP.EOP_val[e].tai_utc);
+            printf("CALCIF2_REQUEST: request arg: EOP=%02u ut1_utc=   %20.12f\n", e, request->EOP.EOP_val[e].ut1_utc);
+            printf("CALCIF2_REQUEST: request arg: EOP=%02u xpole=     %10.6f\n", e, request->EOP.EOP_val[e].xpole);
+            printf("CALCIF2_REQUEST: request arg: EOP=%02u ypole=     %10.6f\n", e, request->EOP.EOP_val[e].ypole);
+        }
+    } /* if verbose >= 3 */
+
+
+    memset(results, 0, sizeof(struct getDIFX_DELAY_SERVER_1_res));
+    if((verbose>=2))
+    {
+        printf("Calling clnt_call\n");
+    }
+    clnt_stat = clnt_call(p->clnt, GETDIFX_DELAY_SERVER,
+                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_1_arg, 
+                          (caddr_t)request,
+                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_1_res, 
+                          (caddr_t)(results),
+                          TIMEOUT);
+    if((verbose>=2))
+    {
+        printf("Return from clnt_call\n");
+    }
+    if(clnt_stat != RPC_SUCCESS)
+    {
+        fprintf(stderr, "clnt_call failed!\n");
+        return -1;
+    }
+    if(results->this_error)
+    {
+        fprintf(stderr,"Error: callCalc: %s\n", results->getDIFX_DELAY_SERVER_1_res_u.errmsg);
+        return -2;
+    }
+    /* Sanity check */
+    if((results->getDIFX_DELAY_SERVER_1_res_u.response.date != request->date)
+      || (results->getDIFX_DELAY_SERVER_1_res_u.response.time != request->time))
+    {
+        fprintf(stderr, "Error: callCalc: response date does not match request\n");
+        return -3;
+    }
+    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations != request->Num_Stations)
+      || (results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources != request->Num_Sources))
+    {
+        fprintf(stderr, "Error: callCalc: response number stations/sources does not match request\n");
+        return -4;
+    }
+    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len != request->Num_Stations*request->Num_Sources)
+    {
+        fprintf(stderr, "Error: callCalc: response number stations/sources does not match data allocation\n");
+        return -5;
+    }
+    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.request_id != request_id)
+    {
+        fprintf(stderr, "Error: callCalc: response request_id (%ld) does not match expected value (%ld)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.request_id, request_id);
+        return -6;
+    }
+    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error < 0)
+           || (results->getDIFX_DELAY_SERVER_1_res_u.response.server_error < 0)
+           || (results->getDIFX_DELAY_SERVER_1_res_u.response.model_error < 0)
+            )
+    {
+            fprintf(stderr, "Error: callCalc: fatal error from delay server (%d %d %d)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
+        return -7;
+    }
+    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server != request->delay_server)
+    {
+        fprintf(stderr, "Error: callCalc: Unknown delay server actually called, wanted 0x%lX got 0x%lX\n", request->delay_server, results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
+        return -8;
+    }
+    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code != request->server_struct_setup_code)
+    {
+        fprintf(stderr, "Error: callCalc: Unknown server_struct_setup_code, wanted 0x%lX got 0x%lX\n", request->server_struct_setup_code, results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
+        return -9;
+    }
+    p->delayProgramDetailedVersion = results->getDIFX_DELAY_SERVER_1_res_u.response.server_version;
+    if((verbose >= 3))
+    {
+        unsigned int st, so;
+        printf("CALCIF2_RESULTS:Results\n");
+        printf("CALCIF2_RESULTS:request res: delay_server_error=%d server_error=%d model_error=%d\n", results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
+        printf("CALCIF2_RESULTS:request res: request_id=%ld delay_server=0x%lX server_struct_setup_code=0x%lX\n", results->getDIFX_DELAY_SERVER_1_res_u.response.request_id, results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server, results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
+        printf("CALCIF2_RESULTS:request res: server_version=0x%lX\n", results->getDIFX_DELAY_SERVER_1_res_u.response.server_version);
+        printf("CALCIF2_RESULTS:request res: date=%ld time=%.16f\n", results->getDIFX_DELAY_SERVER_1_res_u.response.date, results->getDIFX_DELAY_SERVER_1_res_u.response.time);
+        for(st=0; st < results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations; ++st)
+        {
+            for(so=0; so < results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources; ++so)
+            {
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u delay=                %24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].delay);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u dry_atmos=            %24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].dry_atmos);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u wet_atmos=            %24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].wet_atmos);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u iono_atmos=           %24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].iono_atmos);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u az_corr=              %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_corr);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u el_corr=              %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_corr);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u az_geom=              %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_geom);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u el_geom=              %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_geom);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u primary_axis_angle=   %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].primary_axis_angle);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u secondary_axis_angle= %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].secondary_axis_angle);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u mount_source_angle=   %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].mount_source_angle);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u station_antenna_theta=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].station_antenna_theta);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u station_antenna_phi=  %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].station_antenna_phi);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u source_antenna_theta= %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_theta);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u source_antenna_phi=   %10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_phi);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u UVW =           [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.z);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.z);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineV2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.z);
+                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineA2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.z);
+            }
+        }
+    } /* if verbose >= 3 */
+    return 0;
+}
+
+
+
+
+static int check_delayserver_operation(DifxInput* const D, CalcParams* const p, const int verbose)
 {
 
     struct getDIFX_DELAY_SERVER_1_arg request_args, *p_request;
@@ -378,15 +594,85 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
     char   stnnameb[8];
     unsigned short station_ID;
     int    i, mode_failures;
+    int r;
     size_t station_size, source_size, EOP_size;
     void *station_mem, *source_mem, *EOP_mem;
     unsigned long calcserver_version;
-    enum clnt_stat clnt_stat;
+    const char *delayServerHost;
+    const char *localhost = "localhost";
+    unsigned long delayServerType;
+    unsigned long delayVersion;
+    unsigned long delayHandler;
+
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+
+    fprintDifxJob(stderr, D->job);
+    delayServerHost = p->delayServerHost;
+    if(delayServerHost[0] == 0)
+    {
+	    delayServerHost = D->job->delayServerHost;
+    }
+    if(delayServerHost[0] == 0)
+    {
+	    if((delayServerHost = getenv("DIFX_DELAY_SERVER")) != NULL)
+	    {
+	    }
+	    else {
+		    delayServerHost = localhost;
+	    }
+    }
+    snprintf(D->job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", delayServerHost);
+    snprintf(p->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", delayServerHost);
+    fprintf(stderr, "delay server types %d %d verbosity %d\n", (int)p->delayServerType, (int)D->job->delayServerType, verbose);
+    delayServerType = p->delayServerType;
+    if(delayServerType == UnknownServer)
+    {
+	    delayServerType = D->job->delayServerType;
+    }
+    D->job->delayServerType = delayServerType;
+    p->delayServerType = delayServerType;
+    delayVersion = p->delayVersion;
+    if(delayVersion == 0)
+    {
+	    delayVersion = D->job->delayVersion;
+    }
+    D->job->delayVersion = delayVersion;
+    p->delayVersion = delayVersion;
+    delayHandler = p->delayHandler;
+    if(delayHandler == 0)
+    {
+	    delayHandler = D->job->delayHandler;
+    }
+    D->job->delayHandler = delayHandler;
+    p->delayHandler = delayHandler;
+	if(verbose > 1)
+	{
+		printf("Attempting to create RPC client with host='%s' handler=0x%lX version=0x%lX\n", delayServerHost, delayHandler, delayVersion);
+	}
+	p->clnt = clnt_create(delayServerHost, delayHandler, delayVersion, "tcp");
+	if(!p->clnt)
+	{
+		clnt_pcreateerror(delayServerHost);
+		fprintf(stderr, "Error: calcif2: RPC clnt_create fails for host : '%-s' program id 0x%lX version %lu\n", delayServerHost, delayHandler, delayVersion);
+		return -3;
+	}
+	if(verbose > 1)
+	{
+		printf("RPC client created\n");
+	}
 
     if((verbose))
     {
-        printf("Checking delay server program %s\n", delayServerTypeNames[p->delayServerType]);
+        printf("Checking delay server program %s\n", delayServerTypeNames[delayServerType]);
     }
+
     mode_failures = 0;
     p_request = &request_args;
     memset(p_request, 0, sizeof(struct getDIFX_DELAY_SERVER_1_arg));
@@ -424,8 +710,8 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
     p_request->date = 50774;
     p_request->time = 22.0/24.0 + 2.0/(24.0*60.0);
     p_request->verbosity = verbose;
-    p_request->delay_server = delayServerTypeIds[p->delayServerType];
-    if(p->delayServerType == CALC_9_1_RA_Server)
+    p_request->delay_server = delayServerTypeIds[D->job->delayServerType];
+    if(D->job->delayServerType == CALC_9_1_RA_Server)
     {
         p_request->server_struct_setup_code = 0x0510;
     }
@@ -468,8 +754,8 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
     p_request->station.station_val[0].pressure = 0.0;
     p_request->station.station_val[0].antenna_pressure = 0.0;
     p_request->station.station_val[0].temperature = 0.0;
-    p_request->station.station_val[0].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    p_request->station.station_val[0].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    p_request->station.station_val[0].wind_speed = fitsnan.d;
+    p_request->station.station_val[0].wind_direction = fitsnan.d;
     p_request->station.station_val[0].antenna_phys_temperature = 0.0;
     /*
       strcpy (stnnameb, "FD");
@@ -511,8 +797,8 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
     p_request->station.station_val[1].pressure = 0.0;
     p_request->station.station_val[1].antenna_pressure = 0.0;
     p_request->station.station_val[1].temperature = 0.0;
-    p_request->station.station_val[1].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    p_request->station.station_val[1].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    p_request->station.station_val[1].wind_speed = fitsnan.d;
+    p_request->station.station_val[1].wind_direction = fitsnan.d;
     p_request->station.station_val[1].antenna_phys_temperature = 0.0;
 
 
@@ -555,85 +841,25 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
 
     if((verbose))
     {
-        printf("Checking delay server at host %s type %s handler version %lu\n", p->delayServerHost, delayServerTypeNames[p->delayServerType], p->delayVersion);
+        printf("Checking delay server at host '%s' type %s handler version %lu\n", delayServerHost, delayServerTypeNames[delayServerType], delayVersion);
     }
     p_result = &request_res;
-    memset(p_result, 0, sizeof(struct getDIFX_DELAY_SERVER_1_res));
-    clnt_stat = clnt_call(p->clnt, GETDIFX_DELAY_SERVER,
-                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_1_arg, 
-                          (caddr_t)p_request,
-                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_1_res, 
-                          (caddr_t)(p_result),
-                          TIMEOUT);
-    if((verbose))
+    r = callCalc(p_request, p_result, p, verbose);
+    if(r < 0)
     {
-        printf("Return from clnt_call\n");
-    }
-    if(clnt_stat != RPC_SUCCESS)
-    {
-        fprintf(stderr, "clnt_call failed!\n");
+	    fprintf(stderr,"Error: callCalc failed in check_delayserver_operation with code %d\n", r);
         free(station_mem);
         free(source_mem);
         free(EOP_mem);
         return -1;
     }
-    if(p_result->this_error)
-    {
-        fprintf(stderr,"Error: callCalc: %s\n", p_result->getDIFX_DELAY_SERVER_1_res_u.errmsg);
-        free(station_mem);
-        free(source_mem);
-        free(EOP_mem);
-        return -2;
-    }
 
     calcserver_version = p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_version;
     if(verbose >= 1) {
-        printf("Delay Server version 0x%lX detected for type %s\n", calcserver_version, delayServerTypeNames[p->delayServerType]);
+        printf("Delay Server version 0x%lX detected for type %s\n", calcserver_version, delayServerTypeNames[delayServerType]);
     }
+    D->job->delayProgramDetailedVersion = calcserver_version;
 
-    if(verbose >= 2) {
-        printf ("result: delay_server_error = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error);
-        printf ("result: server_error       = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_error);
-        printf ("result: model_error        = %d\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
-        printf ("result: request_id = %ld\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.request_id);
-        printf ("result: delay_server = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
-        printf ("result: server_struct_setup_code = 0x%lX\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
-        printf ("result: date  = %ld\n",        p_result->getDIFX_DELAY_SERVER_1_res_u.response.date);
-        printf ("result: time  = %20.16f\n",         p_result->getDIFX_DELAY_SERVER_1_res_u.response.time);
-        printf ("result: Num_Stations = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations);
-        printf ("result: Num_Sources  = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources);
-        printf ("result: result_len   = %u\n",   p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len);
-        for(i=0; i < 2; ++i)
-        {
-            struct DIFX_DELAY_SERVER_vec V;
-            printf ("result: station %d delay  = %24.16E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].delay);
-            printf ("result: station %d dry_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].dry_atmos);
-            printf ("result: station %d wet_atmos     = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].wet_atmos);
-            printf ("result: station %d iono_atmos    = %E\n", i, p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].iono_atmos);
-            printf ("result: station %d elev_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_corr*57.296);
-            printf ("result: station %d azim_corr  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_corr*57.296);
-            printf ("result: station %d elev_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].el_geom*57.296);
-            printf ("result: station %d azim_geom  = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].az_geom*57.296);
-            printf ("result: station %d paa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].primary_axis_angle*57.296);
-            printf ("result: station %d saa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].secondary_axis_angle*57.296);
-            printf ("result: station %d msa   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].mount_source_angle*57.296);
-            printf ("result: station %d stt   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_theta*57.296);
-            printf ("result: station %d stp   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].station_antenna_phi*57.296);
-            printf ("result: station %d sot   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_theta*57.296);
-            printf ("result: station %d sop   = %20.16f\n", i,      p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].source_antenna_phi*57.296);
-
-            V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].UVW;
-            printf ("result: station %d UVW = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
-            V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineP2000;
-            printf ("result: station %d baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
-            V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineV2000;
-            printf ("result: station %d baselineV2000 = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
-            V = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[i].baselineA2000;
-            printf ("result: station %d baselineA2000 = [%24.16E, %24.16E, %24.16E]\n", i, V.x, V.y, V.z);
-            /**/
-        }
-    }
-    /**/
     delta_dly = p_result->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[1].delay;
     delta_dly = fabs(delta_dly - (-2.04212341289221e-02));
 
@@ -643,14 +869,14 @@ static int check_delayserver_operation(const DifxInput* const D, const CalcParam
        || ((p_result->getDIFX_DELAY_SERVER_1_res_u.response.model_error))
         )
     {
-        fprintf(stderr, "ERROR : delay server on host %s with type %s with handler version 0x%lX is returning BAD DATA.\n", p->delayServerHost, delayServerTypeNames[p->delayServerType], p->delayVersion);
+        fprintf(stderr, "ERROR : delay server on host '%s' with type '%s' with handler version 0x%lX is returning BAD DATA.\n", delayServerHost, delayServerTypeNames[delayServerType], delayVersion);
         fprintf(stderr, "        Restart the delay servers.\n");
         mode_failures++;
     }
     else
     {
         if(verbose >= 2) {
-            printf ("Delay server on host %s with type %s with handler version 0x%lX is running normally.\n", p->delayServerHost, delayServerTypeNames[p->delayServerType], p->delayVersion);
+            printf ("Delay server on host '%s' with type '%s' with handler version 0x%lX is running normally.\n", delayServerHost, delayServerTypeNames[delayServerType], delayVersion);
         }
     }
 
@@ -684,13 +910,14 @@ static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* con
     struct DIFX_DELAY_SERVER_PARAMETERS_1_res* res;
     int mode_failures;
     enum clnt_stat clnt_stat;
+    static long request_id = -1;
 
     mode_failures = 0;
     p_request = &request_args;
     memset(p_request, 0, sizeof(struct getDIFX_DELAY_SERVER_PARAMETERS_1_arg));
     p_request->verbosity = verbose;
-    p_request->delay_server = delayServerTypeIds[p->delayServerType];
-    if(p->delayServerType == CALC_9_1_RA_Server)
+    p_request->delay_server = delayServerTypeIds[D->job->delayServerType];
+    if(D->job->delayServerType == CALC_9_1_RA_Server)
     {
         p_request->server_struct_setup_code = 0x0510;
     }
@@ -698,11 +925,11 @@ static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* con
     {
         p_request->server_struct_setup_code = 0;
     }
-    p_request->request_id = 0;
+    p_request->request_id = ++request_id;
 
     if((verbose))
     {
-        printf("getting delay server parameters from host %s type %s handler version %lu\n", p->delayServerHost, delayServerTypeNames[p->delayServerType], p->delayVersion);
+        printf("getting delay server parameters from host %s type %s handler version %lu\n", D->job->delayServerHost, delayServerTypeNames[D->job->delayServerType], D->job->delayVersion);
     }
     p_result = &request_res;
     memset(p_result, 0, sizeof(struct getDIFX_DELAY_SERVER_PARAMETERS_1_res));
@@ -723,7 +950,7 @@ static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* con
     }
     if(p_result->this_error)
     {
-        fprintf(stderr,"Error: callCalc: %s\n", p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.errmsg);
+        fprintf(stderr,"Error: get_Delay_Server_Parameters: %s\n", p_result->getDIFX_DELAY_SERVER_PARAMETERS_1_res_u.errmsg);
         return -2;
     }
 
@@ -736,32 +963,32 @@ static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* con
             printf("results: delay_server_error=%d server_error=%d model_error=%d\n", res->delay_server_error, res->server_error, res->model_error);
             printf("results: request_id=%ld delay_server=0x%lX\n", res->request_id, res->delay_server);
             printf("results: server_struct_setup_code=0x%lX server_version=0x%lX\n", res->server_struct_setup_code, res->server_version);
-            printf("results: accelgrv=%25.16E\n", res->accelgrv);
-            printf("results: e_flat=%25.16E\n", res->e_flat);
-            printf("results: earthrad=%25.16E\n", res->earthrad);
-            printf("results: mmsems=%25.16E\n", res->mmsems);
-            printf("results: ephepoc=%25.16E\n", res->ephepoc);
-            printf("results: gauss=%25.16E\n", res->gauss);
-            printf("results: u_grv_cn=%25.16E\n", res->u_grv_cn);
-            printf("results: gmsun=%25.16E\n", res->gmsun);
+            printf("results: accelgrv= %25.16E\n", res->accelgrv);
+            printf("results: e_flat=   %25.16E\n", res->e_flat);
+            printf("results: earthrad= %25.16E\n", res->earthrad);
+            printf("results: mmsems=   %25.16E\n", res->mmsems);
+            printf("results: ephepoc=  %25.16E\n", res->ephepoc);
+            printf("results: gauss=    %25.16E\n", res->gauss);
+            printf("results: u_grv_cn= %25.16E\n", res->u_grv_cn);
+            printf("results: gmsun=    %25.16E\n", res->gmsun);
             printf("results: gmmercury=%25.16E\n", res->gmmercury);
-            printf("results: gmvenus=%25.16E\n", res->gmvenus);
-            printf("results: gmearth=%25.16E\n", res->gmearth);
-            printf("results: gmmoon=%25.16E\n", res->gmmoon);
-            printf("results: gmmars=%25.16E\n", res->gmmars);
+            printf("results: gmvenus=  %25.16E\n", res->gmvenus);
+            printf("results: gmearth=  %25.16E\n", res->gmearth);
+            printf("results: gmmoon=   %25.16E\n", res->gmmoon);
+            printf("results: gmmars=   %25.16E\n", res->gmmars);
             printf("results: gmjupiter=%25.16E\n", res->gmjupiter);
-            printf("results: gmsaturn=%25.16E\n", res->gmsaturn);
-            printf("results: gmuranus=%25.16E\n", res->gmuranus);
+            printf("results: gmsaturn= %25.16E\n", res->gmsaturn);
+            printf("results: gmuranus= %25.16E\n", res->gmuranus);
             printf("results: gmneptune=%25.16E\n", res->gmneptune);
-            printf("results: etidelag=%25.16E\n", res->etidelag);
-            printf("results: love_h=%25.16E\n", res->love_h);
-            printf("results: love_l=%25.16E\n", res->love_l);
-            printf("results: pre_data=%25.16E\n", res->pre_data);
-            printf("results: rel_data=%25.16E\n", res->rel_data);
-            printf("results: tidalut1=%25.16E\n", res->tidalut1);
-            printf("results: au=%25.16E\n", res->au);
-            printf("results: tsecau=%25.16E\n", res->tsecau);
-            printf("results: vlight=%25.16E\n", res->vlight);
+            printf("results: etidelag= %25.16E\n", res->etidelag);
+            printf("results: love_h=   %25.16E\n", res->love_h);
+            printf("results: love_l=   %25.16E\n", res->love_l);
+            printf("results: pre_data= %25.16E\n", res->pre_data);
+            printf("results: rel_data= %25.16E\n", res->rel_data);
+            printf("results: tidalut1= %25.16E\n", res->tidalut1);
+            printf("results: au=       %25.16E\n", res->au);
+            printf("results: tsecau=   %25.16E\n", res->tsecau);
+            printf("results: vlight=   %25.16E\n", res->vlight);
         }
         if((fabs(res->vlight - 299792458.0) > 1E-3)
            || ((res->delay_server_error))
@@ -835,6 +1062,16 @@ int difxCalcInit(DifxInput* const D, CalcParams* const p, const int verbose)
     size_t station_size, source_size, EOP_size;
     void *station_mem, *source_mem, *EOP_mem;
 
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+
+
     i = check_delayserver_operation(D, p, verbose);
     if(i < 0)
     {
@@ -885,8 +1122,8 @@ int difxCalcInit(DifxInput* const D, CalcParams* const p, const int verbose)
     p_request->EOP.EOP_val = EOP_mem;
 
     p_request->verbosity = verbose;
-    p_request->delay_server = delayServerTypeIds[p->delayServerType];
-    if(p->delayServerType == CALC_9_1_RA_Server)
+    p_request->delay_server = delayServerTypeIds[D->job->delayServerType];
+    if(D->job->delayServerType == CALC_9_1_RA_Server)
     {
         p_request->server_struct_setup_code = 0x0510;
     }
@@ -928,8 +1165,8 @@ int difxCalcInit(DifxInput* const D, CalcParams* const p, const int verbose)
     p_request->station.station_val[0].pressure = 0.0;
     p_request->station.station_val[0].antenna_pressure = 0.0;
     p_request->station.station_val[0].temperature = 0.0;
-    p_request->station.station_val[0].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    p_request->station.station_val[0].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    p_request->station.station_val[0].wind_speed = fitsnan.d;
+    p_request->station.station_val[0].wind_direction = fitsnan.d;
     p_request->station.station_val[0].antenna_phys_temperature = 0.0;
 
     if(D->nEOP >= MIN_NUM_EOPS)
@@ -1272,222 +1509,6 @@ static int calcSpacecraftAntennaPosition(const DifxInput* const D, struct getDIF
 
 
 
-static int freeCalcResults(struct getDIFX_DELAY_SERVER_1_res* const results, const CalcParams* const p, const int verbose)
-{
-    if((verbose>=3))
-    {
-        printf("Calling clnt_freeres\n");
-    }
-    if(clnt_freeres(p->clnt, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_res, (caddr_t) results) != 1)
-    {
-        fprintf(stderr, "Failed to free results buffer\n");
-        return -1;
-    }
-    if((verbose>=3))
-    {
-        printf("Return from clnt_freeres\n");
-    }
-    return 0;
-}
-
-
-
-static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct getDIFX_DELAY_SERVER_1_res* const results, CalcParams* const p, const int verbose)
-{
-    static long request_id = 0;
-    enum clnt_stat clnt_stat;
-    request->request_id = request_id;
-    if(verbose >= 3)
-    {
-        unsigned int s, e;
-        printf("CALCIF2_REQUEST: request arg: request_id=0x%lX delay_server=0x%lX server_struct_setup_code=0x%lX\n", request->request_id, request->delay_server, request->server_struct_setup_code);
-        printf("CALCIF2_REQUEST: request arg: date=%ld time=%16.12f ref_frame=%ld verbosity=%d\n", request->date, request->time, request->ref_frame, request->verbosity);
-        if(verbose >= 4) {
-            unsigned int k;
-            for(k=0; k < NUM_DIFX_DELAY_SERVER_1_KFLAGS; k++) {
-                printf("CALCIF2_REQUEST: request arg: kflag[%02u]=%hd\n", k, request->kflags[k]);
-            }
-        }
-        printf("CALCIF2_REQUEST: request arg: sky_frequency = %E\n", request->sky_frequency);
-        printf("CALCIF2_REQUEST: Station information\n");
-        printf("CALCIF2_REQUEST: request arg: Use_Server_Station_Table=%d Num_Stations=%d\n", request->Use_Server_Station_Table, request->Num_Stations);
-        for(s=0; s < request->Num_Stations; s++) {
-            char ID0, ID1;
-            struct DIFX_DELAY_SERVER_vec v;
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_name='%s'\n", s, request->station.station_val[s].station_name);
-            printf("CALCIF2_REQUEST: request arg: station=%02u antenna_name='%s'\n", s, request->station.station_val[s].antenna_name);
-            printf("CALCIF2_REQUEST: request arg: station=%02u site_name=   '%s'\n", s, request->station.station_val[s].site_name);
-            ID0 = (char)(request->station.station_val[s].site_ID&0xFF);
-            ID1 = (char)(request->station.station_val[s].site_ID>>8);
-            printf("CALCIF2_REQUEST: request arg: station=%02u site_ID=     '%c%c' 0x%04hX\n", s, ID0, ID1, request->station.station_val[s].site_ID);
-            printf("CALCIF2_REQUEST: request arg: station=%02u site_type=   '%s'\n", s, request->station.station_val[s].site_type);
-            printf("CALCIF2_REQUEST: request arg: station=%02u axis_type=   '%s'\n", s, request->station.station_val[s].axis_type);
-            v = request->station.station_val[s].station_pos;
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_pos= [%14.4f, %14.4f, %14.4f]\n", s, v.x, v.y, v.z);
-            v = request->station.station_val[s].station_vel;
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_vel= [%14.3E, %14.3E, %14.3E]\n", s, v.x, v.y, v.z);
-            v = request->station.station_val[s].station_acc;
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_acc= [%14.3E, %14.3E, %14.3E]\n", s, v.x, v.y, v.z);
-            v = request->station.station_val[s].station_pointing_dir;
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_pointing_dir= [%14.9f, %14.9f, %14.9f]\n", s, v.x, v.y, v.z);
-            v = request->station.station_val[s].station_reference_dir;
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_reference_dir= [%14.9f, %14.9f, %14.9f]\n", s, v.x, v.y, v.z);
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_coord_frame='%s'\n", s, request->station.station_val[s].station_coord_frame);
-            printf("CALCIF2_REQUEST: request arg: station=%02u pointing_coord_frame='%s'\n", s, request->station.station_val[s].pointing_coord_frame);
-            printf("CALCIF2_REQUEST: request arg: station=%02u pointing_corrections_applied=%d\n", s, request->station.station_val[s].pointing_corrections_applied);
-            printf("CALCIF2_REQUEST: request arg: station=%02u station_position_delay_offset=%E\n", s, request->station.station_val[s].station_position_delay_offset);
-            printf("CALCIF2_REQUEST: request arg: station=%02u axis_off=%7.4f primary_axis_wrap=%2d secondary_axis_wrap=%2d\n", s, request->station.station_val[s].axis_off, request->station.station_val[s].primary_axis_wrap, request->station.station_val[s].secondary_axis_wrap);
-            printf("CALCIF2_REQUEST: request arg: station=%02u receiver_name='%s'\n", s, request->station.station_val[s].receiver_name);
-            printf("CALCIF2_REQUEST: request arg: station=%02u pressure=%12.3E antenna_pressure=%12.3E temperature=%6.1f\n", s, request->station.station_val[s].pressure, request->station.station_val[s].antenna_pressure, request->station.station_val[s].temperature);
-            printf("CALCIF2_REQUEST: request arg: station=%02u wind_speed=%6.1f wind_direction=%7.2f antenna_phys_temperature=%6.1f\n", s, request->station.station_val[s].wind_speed, request->station.station_val[s].wind_direction, request->station.station_val[s].antenna_phys_temperature);
-        }
-        printf("CALCIF2_REQUEST: Source information\n");
-        printf("CALCIF2_REQUEST: request arg: Use_Server_Source_Table=%d Num_Sources=%d\n", request->Use_Server_Source_Table, request->Num_Sources);
-        for(s=0; s < request->Num_Sources; s++) {
-            struct DIFX_DELAY_SERVER_vec v;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_name='%s'\n", s, request->source.source_val[s].source_name);
-            printf("CALCIF2_REQUEST: request arg: source=%02u IAU_name=   '%s'\n", s, request->source.source_val[s].IAU_name);
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_type='%s'\n", s, request->source.source_val[s].source_type);
-            printf("CALCIF2_REQUEST: request arg: source=%02u ra=           %20.16f\n", s, request->source.source_val[s].ra);
-            printf("CALCIF2_REQUEST: request arg: source=%02u dec=          %20.16f\n", s, request->source.source_val[s].dec);
-            printf("CALCIF2_REQUEST: request arg: source=%02u dra=          %20.10f\n", s, request->source.source_val[s].dra);
-            printf("CALCIF2_REQUEST: request arg: source=%02u ddec=         %20.10f\n", s, request->source.source_val[s].ddec);
-            printf("CALCIF2_REQUEST: request arg: source=%02u depoch=       %20.16f\n", s, request->source.source_val[s].depoch);
-            printf("CALCIF2_REQUEST: request arg: source=%02u parallax=     %20.3f\n", s, request->source.source_val[s].parallax);
-            printf("CALCIF2_REQUEST: request arg: source=%02u coord_frame= '%s'\n", s, request->source.source_val[s].coord_frame);
-            v = request->source.source_val[s].source_pos;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_pos= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
-            v = request->source.source_val[s].source_vel;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_vel= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
-            v = request->source.source_val[s].source_acc;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_acc= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
-            v = request->source.source_val[s].source_pointing_dir;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_dir= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
-            v = request->source.source_val[s].source_pointing_reference_dir;
-            printf("CALCIF2_REQUEST: request arg: source=%02u source_pointing_reference_dir= [%24.16E, %24.16E, %24.16E]\n", s, v.x, v.y, v.z);
-        }
-        printf("CALCIF2_REQUEST: EOP information\n");
-        printf("CALCIF2_REQUEST: request arg: Use_Server_EOP_Table=%d Num_EOPs=%d\n", request->Use_Server_EOP_Table, request->Num_EOPs);
-        for(e=0; e < request->Num_EOPs; e++) {
-            printf("CALCIF2_REQUEST: request arg: EOP=%02u EOP_time=  %20.11f\n", e, request->EOP.EOP_val[e].EOP_time);
-            printf("CALCIF2_REQUEST: request arg: EOP=%02u tai_utc=   %20.12f\n", e, request->EOP.EOP_val[e].tai_utc);
-            printf("CALCIF2_REQUEST: request arg: EOP=%02u ut1_utc=   %20.12f\n", e, request->EOP.EOP_val[e].ut1_utc);
-            printf("CALCIF2_REQUEST: request arg: EOP=%02u xpole=     %10.6f\n", e, request->EOP.EOP_val[e].xpole);
-            printf("CALCIF2_REQUEST: request arg: EOP=%02u ypole=     %10.6f\n", e, request->EOP.EOP_val[e].ypole);
-        }
-    } /* if verbose >= 3 */
-
-
-    memset(results, 0, sizeof(struct getDIFX_DELAY_SERVER_1_res));
-    if((verbose>=2))
-    {
-        printf("Calling clnt_call\n");
-    }
-    clnt_stat = clnt_call(p->clnt, GETDIFX_DELAY_SERVER,
-                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_1_arg, 
-                          (caddr_t)request,
-                          (xdrproc_t)xdr_getDIFX_DELAY_SERVER_1_res, 
-                          (caddr_t)(results),
-                          TIMEOUT);
-    if((verbose>=2))
-    {
-        printf("Return from clnt_call\n");
-    }
-    if(clnt_stat != RPC_SUCCESS)
-    {
-        fprintf(stderr, "clnt_call failed!\n");
-        return -1;
-    }
-    if(results->this_error)
-    {
-        fprintf(stderr,"Error: callCalc: %s\n", results->getDIFX_DELAY_SERVER_1_res_u.errmsg);
-        return -2;
-    }
-    /* Sanity check */
-    if((results->getDIFX_DELAY_SERVER_1_res_u.response.date != request->date)
-      || (results->getDIFX_DELAY_SERVER_1_res_u.response.time != request->time))
-    {
-        fprintf(stderr, "Error: callCalc: response date does not match request\n");
-        return -3;
-    }
-    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations != request->Num_Stations)
-      || (results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources != request->Num_Sources))
-    {
-        fprintf(stderr, "Error: callCalc: response number stations/sources does not match request\n");
-        return -4;
-    }
-    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len != request->Num_Stations*request->Num_Sources)
-    {
-        fprintf(stderr, "Error: callCalc: response number stations/sources does not match data allocation\n");
-        return -5;
-    }
-    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.request_id != request_id)
-    {
-        fprintf(stderr, "Error: callCalc: response request_id (%ld) does not match expected value (%ld)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.request_id, request_id);
-        return -6;
-    }
-    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error < 0)
-           || (results->getDIFX_DELAY_SERVER_1_res_u.response.server_error < 0)
-           || (results->getDIFX_DELAY_SERVER_1_res_u.response.model_error < 0)
-            )
-    {
-            fprintf(stderr, "Error: callCalc: fatal error from delay server (%d %d %d)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
-        return -7;
-    }
-    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server != request->delay_server)
-    {
-        fprintf(stderr, "Error: callCalc: Unknown delay server actually called, wanted 0x%lX got 0x%lX\n", request->delay_server, results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server);
-        return -8;
-    }
-    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code != request->server_struct_setup_code)
-    {
-        fprintf(stderr, "Error: callCalc: Unknown server_struct_setup_code, wanted 0x%lX got 0x%lX\n", request->server_struct_setup_code, results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
-        return -9;
-    }
-    p->delayProgramDetailedVersion = results->getDIFX_DELAY_SERVER_1_res_u.response.server_version;
-    if((verbose >= 3))
-    {
-        unsigned int st, so;
-        printf("CALCIF2_RESULTS:Results\n");
-        printf("CALCIF2_RESULTS:request res: delay_server_error=%d server_error=%d model_error=%d\n", results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
-        printf("CALCIF2_RESULTS:request res: request_id=%ld delay_server=0x%lX server_struct_setup_code=0x%lX\n", results->getDIFX_DELAY_SERVER_1_res_u.response.request_id, results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server, results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
-        printf("CALCIF2_RESULTS:request res: server_version=0x%lX\n", results->getDIFX_DELAY_SERVER_1_res_u.response.server_version);
-        printf("CALCIF2_RESULTS:request res: date=%ld time=%.16f\n", results->getDIFX_DELAY_SERVER_1_res_u.response.date, results->getDIFX_DELAY_SERVER_1_res_u.response.time);
-        for(st=0; st < results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations; ++st)
-        {
-            for(so=0; so < results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources; ++so)
-            {
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u delay=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].delay);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u dry_atmos=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].dry_atmos);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u wet_atmos=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].wet_atmos);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u iono_atmos=%24.16E\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].iono_atmos);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u az_corr=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_corr);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u el_corr=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_corr);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u az_geom=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].az_geom);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u el_geom=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].el_geom);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u primary_axis_angle=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].primary_axis_angle);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u secondary_axis_angle=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].secondary_axis_angle);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u mount_source_angle=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].mount_source_angle);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u station_antenna_theta=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].station_antenna_theta);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u station_antenna_phi=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].station_antenna_phi);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u source_antenna_theta=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_theta);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u source_antenna_phi=%10.6f\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].source_antenna_phi);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u UVW = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].UVW.z);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineP2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineP2000.z);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineV2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineV2000.z);
-                printf("CALCIF2_RESULTS:request res: station=%02u source=%02u baselineA2000 = [%24.16E, %24.16E, %24.16E]\n", st, so, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.x, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.y, results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_val[st*results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources+so].baselineA2000.z);
-            }
-        }
-    } /* if verbose >= 3 */
-    ++request_id;
-    return 0;
-}
-
-
-
-
-
-
 
 static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn, const double delta_xyz, const enum PerformDirectionDerivativeType perform_uvw, const enum PerformDirectionDerivativeType perform_lmn, const enum PerformDirectionDerivativeType perform_xyz, const int* const lmn_indices, const int* const num_xyz, const double* const restrict dlmn, const double* const restrict dxyz, const unsigned int index, struct modelTemp* model, struct modelTempLMN* modelLMN, struct modelTempXYZ* modelXYZ, const int verbose)
 {
@@ -1496,6 +1517,15 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
     double xyz_mult = C_LIGHT/delta_xyz;
     double lmn_mult2 = lmn_mult / delta_lmn;
     double xyz_mult2 = xyz_mult / delta_xyz;
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+
     switch(perform_uvw) {
         /* Remeber that u points in the opposite direction to l */
     case PerformDirectionDerivativeFirstDerivative2:
@@ -1566,12 +1596,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelLMN->dDelay_dl[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lm]) * 0.5;
             modelLMN->dDelay_dm[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mm]) * 0.5;
             modelLMN->dDelay_dn[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Np] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Nm]) * 0.5 / DIFXIO_DELTA_LMN_N_FACTOR;
-            modelLMN->d2Delay_dldl[index] = NAN;
-            modelLMN->d2Delay_dldm[index] = NAN;
-            modelLMN->d2Delay_dldn[index] = NAN;
-            modelLMN->d2Delay_dmdm[index] = NAN;
-            modelLMN->d2Delay_dmdn[index] = NAN;
-            modelLMN->d2Delay_dndn[index] = NAN;
+            modelLMN->d2Delay_dldl[index] = fitsnan.d;
+            modelLMN->d2Delay_dldm[index] = fitsnan.d;
+            modelLMN->d2Delay_dldn[index] = fitsnan.d;
+            modelLMN->d2Delay_dmdm[index] = fitsnan.d;
+            modelLMN->d2Delay_dmdn[index] = fitsnan.d;
+            modelLMN->d2Delay_dndn[index] = fitsnan.d;
         }
         break;
     case PerformDirectionDerivativeFirstDerivative:
@@ -1579,12 +1609,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelLMN->dDelay_dl[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelLMN->dDelay_dm[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelLMN->dDelay_dn[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Np] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]) / DIFXIO_DELTA_LMN_N_FACTOR;
-            modelLMN->d2Delay_dldl[index] = NAN;
-            modelLMN->d2Delay_dldm[index] = NAN;
-            modelLMN->d2Delay_dldn[index] = NAN;
-            modelLMN->d2Delay_dmdm[index] = NAN;
-            modelLMN->d2Delay_dmdn[index] = NAN;
-            modelLMN->d2Delay_dndn[index] = NAN;
+            modelLMN->d2Delay_dldl[index] = fitsnan.d;
+            modelLMN->d2Delay_dldm[index] = fitsnan.d;
+            modelLMN->d2Delay_dldn[index] = fitsnan.d;
+            modelLMN->d2Delay_dmdm[index] = fitsnan.d;
+            modelLMN->d2Delay_dmdn[index] = fitsnan.d;
+            modelLMN->d2Delay_dndn[index] = fitsnan.d;
         }
         break;
     default:;
@@ -1623,12 +1653,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelXYZ->dDelay_dX[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Xp] - dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Xm]) * 0.5;
             modelXYZ->dDelay_dY[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Yp] - dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Ym]) * 0.5;
             modelXYZ->dDelay_dZ[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Zp] - dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Zm]) * 0.5;
-            modelXYZ->d2Delay_dXdX[index] = NAN;
-            modelXYZ->d2Delay_dXdY[index] = NAN;
-            modelXYZ->d2Delay_dXdZ[index] = NAN;
-            modelXYZ->d2Delay_dYdY[index] = NAN;
-            modelXYZ->d2Delay_dYdZ[index] = NAN;
-            modelXYZ->d2Delay_dZdZ[index] = NAN;
+            modelXYZ->d2Delay_dXdX[index] = fitsnan.d;
+            modelXYZ->d2Delay_dXdY[index] = fitsnan.d;
+            modelXYZ->d2Delay_dXdZ[index] = fitsnan.d;
+            modelXYZ->d2Delay_dYdY[index] = fitsnan.d;
+            modelXYZ->d2Delay_dYdZ[index] = fitsnan.d;
+            modelXYZ->d2Delay_dZdZ[index] = fitsnan.d;
         }
         break;
     case PerformDirectionDerivativeFirstDerivative:
@@ -1636,12 +1666,12 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             modelXYZ->dDelay_dX[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Xp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelXYZ->dDelay_dY[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Yp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             modelXYZ->dDelay_dZ[index] = xyz_mult * (dxyz[SELECT_XYZ_DERIVATIVE_INDICES_Zp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
-            modelXYZ->d2Delay_dXdX[index] = NAN;
-            modelXYZ->d2Delay_dXdY[index] = NAN;
-            modelXYZ->d2Delay_dXdZ[index] = NAN;
-            modelXYZ->d2Delay_dYdY[index] = NAN;
-            modelXYZ->d2Delay_dYdZ[index] = NAN;
-            modelXYZ->d2Delay_dZdZ[index] = NAN;
+            modelXYZ->d2Delay_dXdX[index] = fitsnan.d;
+            modelXYZ->d2Delay_dXdY[index] = fitsnan.d;
+            modelXYZ->d2Delay_dXdZ[index] = fitsnan.d;
+            modelXYZ->d2Delay_dYdY[index] = fitsnan.d;
+            modelXYZ->d2Delay_dYdZ[index] = fitsnan.d;
+            modelXYZ->d2Delay_dZdZ[index] = fitsnan.d;
         }
         break;
     default:;
@@ -2453,6 +2483,16 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
     int loop_count;
     static const int MAX_LOOP_COUNT = 10;
 
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+
+
     /* verify proper time type */
     if(sc->spacecraft_time_type != SpacecraftTimeGroundReception)
     {
@@ -2532,8 +2572,8 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
     sc_request->station.station_val[1].pressure = 0.0;
     sc_request->station.station_val[1].antenna_pressure = 0.0;
     sc_request->station.station_val[1].temperature = 0.0;
-    sc_request->station.station_val[1].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    sc_request->station.station_val[1].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    sc_request->station.station_val[1].wind_speed = fitsnan.d;
+    sc_request->station.station_val[1].wind_direction = fitsnan.d;
     sc_request->station.station_val[1].antenna_phys_temperature = 0.0;
 
     /* Antenna 2 is the ground station */
@@ -2599,8 +2639,8 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
     sc_request->station.station_val[2].pressure = 0.0;
     sc_request->station.station_val[2].antenna_pressure = 0.0;
     sc_request->station.station_val[2].temperature = 0.0;
-    sc_request->station.station_val[2].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-    sc_request->station.station_val[2].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+    sc_request->station.station_val[2].wind_speed = fitsnan.d;
+    sc_request->station.station_val[2].wind_direction = fitsnan.d;
     sc_request->station.station_val[2].antenna_phys_temperature = 0.0;
 
 
@@ -3900,7 +3940,7 @@ static int scanCalcSetupSources(const DifxScan* const scan, const DifxInput* con
         request->source.source_val = source_mem;
     }
     request->Num_Sources = Num_Request_Sources;
-    request->station.station_len = request->Num_Sources;
+    request->source.source_len = request->Num_Sources;
 
 
     s_index = 0;
@@ -3993,6 +4033,16 @@ static int scanCalcSetupStations(const DifxScan* const scan, double scan_MJD_mid
     void* station_mem;
     /* source direction, velocity, and reference direction */
     double ps_pos[DIFXCALC_3D_VEC_SIZE], ps_vel[DIFXCALC_3D_VEC_SIZE], ps_ref[DIFXCALC_3D_VEC_SIZE];
+    
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+
             
 
     request = &(p->request);
@@ -4093,8 +4143,8 @@ static int scanCalcSetupStations(const DifxScan* const scan, double scan_MJD_mid
         request->station.station_val[1+antId].pressure = 0.0;
         request->station.station_val[1+antId].antenna_pressure = 0.0;
         request->station.station_val[1+antId].temperature = 0.0;
-        request->station.station_val[1+antId].wind_speed = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
-        request->station.station_val[1+antId].wind_direction = DIFX_DELAY_SERVER_1_MISSING_GENERAL_DATA;
+        request->station.station_val[1+antId].wind_speed = fitsnan.d;
+        request->station.station_val[1+antId].wind_direction = fitsnan.d;
         request->station.station_val[1+antId].antenna_phys_temperature = 0.0;
     } /* for antId over antennas */
         
@@ -4840,5 +4890,6 @@ int difxCalc(DifxInput* const D, CalcParams* const p, const char *prefix, const 
         }
     }
 
+    
     return 0;
 }
