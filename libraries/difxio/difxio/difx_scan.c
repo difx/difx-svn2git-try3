@@ -54,20 +54,23 @@ DifxScan *newDifxScanArray(int nScan)
 
 void deleteDifxScanInternals(DifxScan *ds)
 {
-	if(ds->im)
+	if(ds)
 	{
-		deleteDifxPolyModelArray(ds->im, ds->nAntenna, ds->nPhaseCentres+1);
-		ds->im = 0;
-	}
-	if(ds->imLMN)
-	{
-		deleteDifxPolyModelLMNExtensionArray(ds->imLMN, ds->nAntenna, ds->nPhaseCentres+1);
-		ds->imLMN = 0;
-	}
-	if(ds->imXYZ)
-	{
-		deleteDifxPolyModelXYZExtensionArray(ds->imXYZ, ds->nAntenna, ds->nPhaseCentres+1);
-		ds->imXYZ = 0;
+		if(ds->im)
+		{
+			deleteDifxPolyModelArray(ds->im, ds->nAntenna, ds->nPhaseCentres+1);
+			ds->im = 0;
+		}
+		if(ds->imLMN)
+		{
+			deleteDifxPolyModelLMNExtensionArray(ds->imLMN, ds->nAntenna, ds->nPhaseCentres+1);
+			ds->imLMN = 0;
+		}
+		if(ds->imXYZ)
+		{
+			deleteDifxPolyModelXYZExtensionArray(ds->imXYZ, ds->nAntenna, ds->nPhaseCentres+1);
+			ds->imXYZ = 0;
+		}
 	}
 }
 
@@ -167,64 +170,138 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 {
 	int i, j, srcAntenna, destAntenna;
 
-	deleteDifxPolyModelArray(dest->im, dest->nAntenna, dest->nPhaseCentres+1);
-	deleteDifxPolyModelLMNExtensionArray(dest->imLMN, dest->nAntenna, dest->nPhaseCentres+1);
-	deleteDifxPolyModelXYZExtensionArray(dest->imXYZ, dest->nAntenna, dest->nPhaseCentres+1);
-	*dest = *src;
+	if(dest != src)
+	{
+		deleteDifxScanInternals(dest);
+		*dest = *src;
 
-	/* dest->mjdStart	   = src->mjdStart; */
-	/* dest->mjdEnd	   = src->mjdEnd; */
-	/* dest->startSeconds = src->startSeconds; */
-	/* dest->durSeconds   = src->durSeconds; */
-	/* dest->maxNSBetweenUVShifts = src->maxNSBetweenUVShifts; */
-	/* dest->maxNSBetweenACAvg = src->maxNSBetweenACAvg; */
-	/* snprintf(dest->identifier, DIFXIO_NAME_LENGTH, "%s", src->identifier); */
-	/* snprintf(dest->obsModeName, DIFXIO_NAME_LENGTH, "%s", src->obsModeName); */
-	/* dest->nPhaseCentres = src->nPhaseCentres; */
+		/* dest->mjdStart	   = src->mjdStart; */
+		/* dest->mjdEnd	   = src->mjdEnd; */
+		/* dest->startSeconds = src->startSeconds; */
+		/* dest->durSeconds   = src->durSeconds; */
+		/* dest->maxNSBetweenUVShifts = src->maxNSBetweenUVShifts; */
+		/* dest->maxNSBetweenACAvg = src->maxNSBetweenACAvg; */
+		/* snprintf(dest->identifier, DIFXIO_NAME_LENGTH, "%s", src->identifier); */
+		/* snprintf(dest->obsModeName, DIFXIO_NAME_LENGTH, "%s", src->obsModeName); */
+		/* dest->nPhaseCentres = src->nPhaseCentres; */
+		/* dest->startSeconds = src->startSeconds; */
+		/* dest->durSeconds   = src->durSeconds; */
+		/* dest->nPoly		   = src->nPoly; */
+
+		/* figure out how many antennas needed in this scan */
+		/* dest->nAntenna = src->nAntenna; */
+		if(src->im)
+		{
+			dest->im = (DifxPolyModel ***)calloc(dest->nAntenna, sizeof(DifxPolyModel **));
+			for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
+			{
+				if(src->im[srcAntenna] == 0)
+				{
+					continue; //must have had a change of num antennas at some stage
+				}
+				if(antennaIdRemap)
+				{
+					destAntenna = antennaIdRemap[srcAntenna];
+				}
+				else
+				{
+					destAntenna = srcAntenna;
+				}
+				dest->im[destAntenna] = (DifxPolyModel **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModel *));
+				if(dest->im[destAntenna] == 0)
+				{
+					fprintf(stderr, "Error allocating space for IM table! Aborting");
+
+					exit(EXIT_FAILURE);
+				}
+				for(j = 0; j < src->nPhaseCentres+1; j++)
+				{
+					dest->im[destAntenna][j] = dupDifxPolyModelColumn(src->im[srcAntenna][j], dest->nPoly);
+				}
+			}
+		}
+
+		if(src->imLMN)
+		{
+			dest->imLMN = (DifxPolyModelLMNExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelLMNExtension **));
+			for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
+			{
+				if(src->imLMN[srcAntenna] == 0)
+				{
+					continue; 
+				}
+				if(antennaIdRemap)
+				{
+					destAntenna = antennaIdRemap[srcAntenna];
+				}
+				else
+				{
+					destAntenna = srcAntenna;
+				}
+				dest->imLMN[destAntenna] = (DifxPolyModelLMNExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelLMNExtension *));
+				if(dest->imLMN[destAntenna] == 0)
+				{
+					fprintf(stderr, "Error allocating space for LM Extension table! Aborting");
+
+					exit(EXIT_FAILURE);
+				}
+				for(j = 0; j < src->nPhaseCentres+1; j++)
+				{
+					dest->imLMN[destAntenna][j] = dupDifxPolyModelLMNExtensionColumn(src->imLMN[srcAntenna][j], dest->nPoly);
+				}
+			}
+		}
+
+		if(src->imXYZ)
+		{
+			dest->imXYZ = (DifxPolyModelXYZExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelXYZExtension **));
+			for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
+			{
+				if(src->imXYZ[srcAntenna] == 0)
+				{
+					continue; 
+				}
+				if(antennaIdRemap)
+				{
+					destAntenna = antennaIdRemap[srcAntenna];
+				}
+				else
+				{
+					destAntenna = srcAntenna;
+				}
+				dest->imXYZ[destAntenna] = (DifxPolyModelXYZExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelXYZExtension *));
+				if(dest->imXYZ[destAntenna] == 0)
+				{
+					fprintf(stderr, "Error allocating space for XYZ Extension table! Aborting");
+
+					exit(EXIT_FAILURE);
+				}
+				for(j = 0; j < src->nPhaseCentres+1; j++)
+				{
+					dest->imXYZ[destAntenna][j] = dupDifxPolyModelXYZExtensionColumn(src->imXYZ[srcAntenna][j], dest->nPoly);
+				}
+			}
+		}
+	}
 	if(sourceIdRemap)
 	{
 //		printf("About to do the source re-mapping\n");
 //		printf("Source pointing centre was %d\n", src->pointingCentreSrc);
 //		printf("This will be re-mapped to %d\n", sourceIdRemap[src->pointingCentreSrc]);
-		dest->pointingCentreSrc = sourceIdRemap[src->pointingCentreSrc];
 		for(i=0;i<src->nPhaseCentres;i++)
 		{
 			dest->phsCentreSrcs[i] = sourceIdRemap[src->phsCentreSrcs[i]];
-			dest->orgjobPhsCentreSrcs[i] = src->orgjobPhsCentreSrcs[i];
 		}
 //		printf("Done with source re-mapping\n");
-	}
-	else
-	{
-		dest->pointingCentreSrc = src->pointingCentreSrc;
-		for(i = 0; i < src->nPhaseCentres; i++)
-		{
-			dest->phsCentreSrcs[i] = src->phsCentreSrcs[i];
-			dest->orgjobPhsCentreSrcs[i] = src->orgjobPhsCentreSrcs[i];
-		}
 	}
 	if(jobIdRemap)
 	{
 		dest->jobId = jobIdRemap[src->jobId];
 	}
-	else
-	{
-		dest->jobId = src->jobId;
-	}
 	if(configIdRemap && src->configId >= 0)
 	{
 		dest->configId = configIdRemap[src->configId];
 	}
-	else
-	{
-		dest->configId = src->configId;
-	}
-	/* dest->startSeconds = src->startSeconds; */
-	/* dest->durSeconds   = src->durSeconds; */
-	/* dest->nPoly		   = src->nPoly; */
-
-	/* figure out how many antennas needed in this scan */
-	/* dest->nAntenna = src->nAntenna; */
 	if(antennaIdRemap)
 	{
 		for(i = 0; i < src->nAntenna; i++)
@@ -235,129 +312,6 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src,
 				dest->nAntenna = destAntenna+1;
 			}
 		}
-	}
-
-	if(src->im)
-	{
-		dest->im = (DifxPolyModel ***)calloc(dest->nAntenna, sizeof(DifxPolyModel **));
-		for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
-		{
-			if(src->im[srcAntenna] == 0)
-			{
-				continue; //must have had a change of num antennas at some stage
-			}
-			if(antennaIdRemap)
-			{
-				destAntenna = antennaIdRemap[srcAntenna];
-			}
-			else
-			{
-				destAntenna = srcAntenna;
-			}
-			dest->im[destAntenna] = (DifxPolyModel **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModel *));
-			if(dest->im[destAntenna] == 0)
-			{
-				fprintf(stderr, "Error allocating space for IM table! Aborting");
-
-				exit(EXIT_FAILURE);
-			}
-			for(j = 0; j < src->nPhaseCentres+1; j++)
-			{
-				dest->im[destAntenna][j] = dupDifxPolyModelColumn(src->im[srcAntenna][j], dest->nPoly);
-				if(dest->im[destAntenna][j] == 0)
-				{
-					fprintf(stderr, "Error allocating space for IM table! Aborting");
-
-					exit(EXIT_FAILURE);
-				}
-			}
-		}
-	}
-	else
-	{
-		dest->im = 0;
-	}
-
-	if(src->imLMN)
-	{
-		dest->imLMN = (DifxPolyModelLMNExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelLMNExtension **));
-		for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
-		{
-			if(src->imLMN[srcAntenna] == 0)
-			{
-				continue; 
-			}
-			if(antennaIdRemap)
-			{
-				destAntenna = antennaIdRemap[srcAntenna];
-			}
-			else
-			{
-				destAntenna = srcAntenna;
-			}
-			dest->imLMN[destAntenna] = (DifxPolyModelLMNExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelLMNExtension *));
-			if(dest->imLMN[destAntenna] == 0)
-			{
-				fprintf(stderr, "Error allocating space for LM Extension table! Aborting");
-
-				exit(EXIT_FAILURE);
-			}
-			for(j = 0; j < src->nPhaseCentres+1; j++)
-			{
-				dest->imLMN[destAntenna][j] = dupDifxPolyModelLMNExtensionColumn(src->imLMN[srcAntenna][j], dest->nPoly);
-				if(dest->imLMN[destAntenna][j] == 0)
-				{
-					fprintf(stderr, "Error allocating space for LM Extension table! Aborting");
-
-					exit(EXIT_FAILURE);
-				}
-			}
-		}
-	}
-	else
-	{
-		dest->imLMN = 0;
-	}
-
-	if(src->imXYZ)
-	{
-		dest->imXYZ = (DifxPolyModelXYZExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelXYZExtension **));
-		for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
-		{
-			if(src->imXYZ[srcAntenna] == 0)
-			{
-				continue; 
-			}
-			if(antennaIdRemap)
-			{
-				destAntenna = antennaIdRemap[srcAntenna];
-			}
-			else
-			{
-				destAntenna = srcAntenna;
-			}
-			dest->imXYZ[destAntenna] = (DifxPolyModelXYZExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelXYZExtension *));
-			if(dest->imXYZ[destAntenna] == 0)
-			{
-				fprintf(stderr, "Error allocating space for XYZ Extension table! Aborting");
-
-				exit(EXIT_FAILURE);
-			}
-			for(j = 0; j < src->nPhaseCentres+1; j++)
-			{
-				dest->imXYZ[destAntenna][j] = dupDifxPolyModelXYZExtensionColumn(src->imXYZ[srcAntenna][j], dest->nPoly);
-				if(dest->imXYZ[destAntenna][j] == 0)
-				{
-					fprintf(stderr, "Error allocating space for XYZ Extension table! Aborting");
-
-					exit(EXIT_FAILURE);
-				}
-			}
-		}
-	}
-	else
-	{
-		dest->imXYZ = 0;
 	}
 }
 

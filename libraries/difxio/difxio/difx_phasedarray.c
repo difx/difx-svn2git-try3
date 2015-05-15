@@ -53,10 +53,6 @@ DifxPhasedArray *growDifxPhasedarrayArray(DifxPhasedArray *dpa, int origSize)
 
 void deleteDifxPhasedarrayArray(DifxPhasedArray *dpa, int nPhasedArray)
 {
-	if(!dpa)
-	{
-		return;
-	}
 	free(dpa);
 }
 
@@ -93,13 +89,16 @@ int isSameDifxPhasedArray(const DifxPhasedArray *dpa1, const DifxPhasedArray *dp
 
 void copyDifxPhasedArray(DifxPhasedArray *dest, const DifxPhasedArray *src)
 {
-	*dest = *src;
-	/* snprintf(dest->fileName, DIFXIO_NAME_LENGTH, "%s", src->fileName); */
-	/* snprintf(dest->outputType, DIFXIO_NAME_LENGTH, "%s", src->outputType); */
-	/* snprintf(dest->outputFormat, DIFXIO_NAME_LENGTH, "%s", src->outputFormat); */
-	/* dest->accTime = src->accTime; */
-	/* dest->complexOutput = src->complexOutput; */
-	/* dest->quantBits = src->quantBits; */
+	if(dest != src)
+	{
+		*dest = *src;
+		/* snprintf(dest->fileName, DIFXIO_NAME_LENGTH, "%s", src->fileName); */
+		/* snprintf(dest->outputType, DIFXIO_NAME_LENGTH, "%s", src->outputType); */
+		/* snprintf(dest->outputFormat, DIFXIO_NAME_LENGTH, "%s", src->outputFormat); */
+		/* dest->accTime = src->accTime; */
+		/* dest->complexOutput = src->complexOutput; */
+		/* dest->quantBits = src->quantBits; */
+	}
 }
 
 DifxPhasedArray *dupDifxPhasedarrayArray(const DifxPhasedArray *src, int nPhasedArray)

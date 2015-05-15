@@ -85,8 +85,11 @@ void printDifxEOPSummary(const DifxEOP *de)
 
 void copyDifxEOP(DifxEOP *dest, const DifxEOP *src)
 {
-	*dest = *src;
-	/* memcpy(dest, src, sizeof(DifxEOP)); */
+	if(dest != src)
+	{
+		*dest = *src;
+		/* memcpy(dest, src, sizeof(DifxEOP)); */
+	}
 }
 
 /* Note this function returns the number of merged EOP entries on the call 

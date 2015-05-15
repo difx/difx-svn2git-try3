@@ -157,7 +157,7 @@ void fprintDifxSourceSummary(FILE *fp, const DifxSource *ds)
 	if(ds->spacecraftId >= 0)
 	{
 		fprintf(fp, "	 SpacecraftId = %d\n", ds->spacecraftId);
-		fprintf(fp, "    SC_Name = %s\n", ds->sc_name);
+		fprintf(fp, "	 SC_Name = %s\n", ds->sc_name);
 		fprintf(fp, "	 SC_Epoch = %11.7f\n", ds->sc_epoch);
 	}
 }
@@ -219,28 +219,31 @@ int isSameDifxSource(const DifxSource *ds1, const DifxSource *ds2)
 void copyDifxSource(DifxSource *dest, const DifxSource *src)
 {
 	int i;
-	free(dest->fitsSourceIds);
-	*dest = *src;
-	/* dest->ra		   = src->ra; */
-	/* dest->dec		   = src->dec; */
-	/* dest->qual		   = src->qual; */
-	/* dest->spacecraftId = src->spacecraftId; */
-	/* dest->sc_epoch	   = src->sc_epoch; */
-	/* dest->numFitsSourceIds = src->numFitsSourceIds; */
-	/* dest->pmRA		   = src->pmRA; */
-	/* dest->pmDec		   = src->pmDec; */
-	/* dest->parallax	   = src->parallax; */
-	/* dest->pmEpoch	   = src->pmEpoch; */
-	if(src->numFitsSourceIds > 0)
+	if(dest != src)
 	{
-		dest->fitsSourceIds = (int*)malloc(src->numFitsSourceIds * sizeof(int));
-		for(i=0;i<src->numFitsSourceIds;i++)
+		free(dest->fitsSourceIds);
+		*dest = *src;
+		/* dest->ra		   = src->ra; */
+		/* dest->dec		   = src->dec; */
+		/* dest->qual		   = src->qual; */
+		/* dest->spacecraftId = src->spacecraftId; */
+		/* dest->sc_epoch	   = src->sc_epoch; */
+		/* dest->numFitsSourceIds = src->numFitsSourceIds; */
+		/* dest->pmRA		   = src->pmRA; */
+		/* dest->pmDec		   = src->pmDec; */
+		/* dest->parallax	   = src->parallax; */
+		/* dest->pmEpoch	   = src->pmEpoch; */
+		if(src->fitsSourceIds)
 		{
-			dest->fitsSourceIds[i] = src->fitsSourceIds[i];
+			dest->fitsSourceIds = (int*)malloc(src->numFitsSourceIds * sizeof(int));
+			for(i=0;i<src->numFitsSourceIds;i++)
+			{
+				dest->fitsSourceIds[i] = src->fitsSourceIds[i];
+			}
 		}
+		/* snprintf(dest->calCode, DIFXIO_CALCODE_LENGTH, "%s", src->calCode); */
+		/* snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name); */
 	}
-	/* snprintf(dest->calCode, DIFXIO_CALCODE_LENGTH, "%s", src->calCode); */
-	/* snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name); */
 }
 
 /* merge two DifxSource tables into an new one.	 sourceIdRemap will contain the

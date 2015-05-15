@@ -53,10 +53,7 @@ void deleteDifxCalculator(DifxCalculator *C)
 {
 	if(C)
 	{
-		if(C->config)
-		{
-			deleteDifxCalculatorConfigArray(C->config, C->nConfig);
-		}
+		deleteDifxCalculatorConfigArray(C->config, C->nConfig);
 		free(C);
 	}
 }
@@ -72,10 +69,7 @@ DifxCalculatorConfig *newDifxCalculatorConfigArray(int n)
 
 void deleteDifxCalculatorConfigArray(DifxCalculatorConfig *c, int n)
 {
-	if(c)
-	{
-		free(c);
-	}
+	free(c);
 }
 
 int populateDifxCalculator(DifxCalculator *C, const DifxInput *D)
@@ -89,10 +83,7 @@ int populateDifxCalculator(DifxCalculator *C, const DifxInput *D)
 		return -1;
 	}
 	
-	if(C->config)
-	{
-		deleteDifxCalculatorConfigArray(C->config, C->nConfig);
-	}
+	deleteDifxCalculatorConfigArray(C->config, C->nConfig);
 
 	C->nConfig = D->nConfig;
 	C->config = newDifxCalculatorConfigArray(C->nConfig);

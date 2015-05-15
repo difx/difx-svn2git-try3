@@ -30,7 +30,218 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+
+static const void** jma_malloc_malloc_area = NULL;
+static size_t* jma_malloc_malloc_size_area = NULL;
+static const void** jma_malloc_free_area = NULL;
+static size_t jma_malloc_malloc_size = 0;
+static size_t jma_malloc_malloc_num = 0;
+static size_t jma_malloc_free_size = 0;
+static size_t jma_malloc_free_num = 0;
+static const size_t jma_malloc_edge_size = 256;
+static void jma_malloc_add_malloc(void* p, const size_t s)
+{
+	if(p == NULL)
+	{
+		return;
+	}
+	if(jma_malloc_malloc_num == jma_malloc_malloc_size)
+	{
+		if(jma_malloc_malloc_size == 0)
+		{
+			jma_malloc_malloc_size = 1024*1024;
+			jma_malloc_malloc_area = (const void**)malloc(sizeof(void*)*jma_malloc_malloc_size);
+			jma_malloc_malloc_size_area = (const size_t*)malloc(sizeof(size_t)*jma_malloc_malloc_size);
+		}
+		else {
+			jma_malloc_malloc_size *= 2;
+			jma_malloc_malloc_area = (const void**)realloc(jma_malloc_malloc_area, sizeof(void*)*jma_malloc_malloc_size);
+			jma_malloc_malloc_size_area = (size_t*)realloc(jma_malloc_malloc_size_area, sizeof(size_t)*jma_malloc_malloc_size);
+		}
+	}
+	jma_malloc_malloc_area[jma_malloc_malloc_num] = p;
+	jma_malloc_malloc_size_area[jma_malloc_malloc_num] = s;
+	++jma_malloc_malloc_num;
+	if(s > 2*jma_malloc_edge_size)
+	{
+		unsigned char* u = p;
+		size_t i;
+		for(i=0; i < jma_malloc_edge_size; ++i)
+		{
+			u[i] = u[s-jma_malloc_edge_size+i] = 0x5A;
+		}
+	}
+	if(jma_malloc_free_num)
+	{
+		size_t i;
+		for(i=jma_malloc_free_num; i > 0;)
+		{
+			--i;
+			if(jma_malloc_free_area[i] == p)
+			{
+				jma_malloc_free_area[i] = NULL;
+			}
+		}
+	}
+	return;
+}
+static void jma_malloc_add_free(const void* p, const char* file, int line)
+{
+	size_t i;
+	int flag = 1;
+	if(p == NULL)
+	{
+		return;
+	}
+	if(jma_malloc_free_num)
+	{
+		for(i=jma_malloc_free_num; i > 0;)
+		{
+			--i;
+			if(jma_malloc_free_area[i] == p)
+			{
+				fprintf(stderr, "Trying to free already freed memory in %s:%d\n", file, line);
+				raise(SIGSEGV);
+			}
+		}
+	}
+	for(i=jma_malloc_malloc_num; i > 0;)
+	{
+		--i;
+		if(jma_malloc_malloc_area[i] == p)
+		{
+			jma_malloc_malloc_area[i] = NULL;
+			flag = 0;
+			/* check for writing outside of allocated area */
+			if(jma_malloc_malloc_size_area[i] > 2*jma_malloc_edge_size)
+			{
+				const unsigned char* u = p;
+				size_t s = jma_malloc_malloc_size_area[i];
+				size_t j;
+				for(j=0; j < jma_malloc_edge_size; ++j)
+				{
+					if((u[j] != 0x5A) || (u[s-jma_malloc_edge_size+j] != 0x5A))
+					{
+						fprintf(stderr, "Memory overrun in %s:%d\n", file, line);
+						raise(SIGSEGV);
+					}
+				}
+			}
+			break;
+		}
+	}
+	if((flag))
+	{
+		fprintf(stderr, "Trying to free memory that was not allocated here in %s:%d\n", file, line);
+		raise(SIGSEGV);
+	}
+	if(jma_malloc_free_num == jma_malloc_free_size)
+	{
+		if(jma_malloc_free_size == 0)
+		{
+			jma_malloc_free_size = 1024*1024;
+			jma_malloc_free_area = (const void**)malloc(sizeof(void*)*jma_malloc_free_size);
+		}
+		else {
+			jma_malloc_free_size *= 2;
+			jma_malloc_free_area = (const void**)realloc(jma_malloc_free_area, sizeof(void*)*jma_malloc_free_size);
+		}
+	}
+	jma_malloc_free_area[jma_malloc_free_num++] = p;
+	return;
+}
+void* jma_malloc_malloc(size_t size)
+{
+	unsigned char* u;
+	if(size == 0)
+	{
+		return NULL;
+	}
+	size += 2*jma_malloc_edge_size;
+	u=malloc(size);
+	jma_malloc_add_malloc(u, size);
+	return u + jma_malloc_edge_size;
+}
+void jma_malloc_free(void *ptr, const char* file, int line)
+{
+	unsigned char* u = ptr;
+	if(ptr == NULL)
+	{
+		return;
+	}
+	u -= jma_malloc_edge_size;
+	jma_malloc_add_free(u, file, line);
+	free(u);
+	return;
+}
+void *jma_malloc_calloc(size_t nmemb, size_t size)
+{
+	unsigned char* u;
+	size = nmemb*size;
+	if(size == 0)
+	{
+		return NULL;
+	}
+	size +=  2*jma_malloc_edge_size;
+	u= calloc(1, size);
+	jma_malloc_add_malloc(u, size);
+	return u + jma_malloc_edge_size;
+}
+void *jma_malloc_realloc(void *ptr, size_t size, const char* file, int line)
+{
+	unsigned char* u = ptr;
+	size_t newsize = size + 2*jma_malloc_edge_size;
+	if(ptr == NULL)
+	{
+		return jma_malloc_malloc(size);
+	}
+	u -= jma_malloc_edge_size;
+	if((size == 0) && (u!=NULL))
+	{
+		jma_malloc_add_free(u, file, line);
+		free(u);
+		return NULL;
+	}
+	u = realloc(u, newsize);
+	jma_malloc_add_malloc(u, newsize);
+	return u + jma_malloc_edge_size;
+}
+char *jma_malloc_strdup(const char *s)
+{
+	size_t len = strlen(s);
+	char* p;
+	len += 1;
+	p = jma_malloc_malloc(len);
+	memcpy(p, s, len);
+	return p;
+}
+char *jma_malloc_strndup(const char *s, size_t n)
+{
+	size_t len = strlen(s);
+	char* p;
+	if(len > n)
+	{
+		len = n;
+	}
+	len += 1;
+	p = jma_malloc_malloc(len);
+	memcpy(p, s, len);
+	p[len-1] = 0;
+	return p;
+}
+	    
+
+
+
+
+
+
+
+
+#include <string.h>
 #include <float.h>
+#include <stdint.h>
 #include "difxio/difx_input.h"
 #include "difxio/parsedifx.h"
 
@@ -78,50 +289,17 @@ void deleteDifxInput(DifxInput *D)
 {
 	if(D)
 	{
-		if(D->config)
-		{
-			deleteDifxConfigArray(D->config, D->nConfig);
-		}
-		if(D->datastream)
-		{
-			deleteDifxDatastreamArray(D->datastream, D->nDatastream);
-		}
-		if(D->baseline)
-		{
-			deleteDifxBaselineArray(D->baseline, D->nBaseline);
-		}
-		if(D->freq)
-		{
-			deleteDifxFreqArray(D->freq, D->nFreq);
-		}
-		if(D->antenna)
-		{
-			deleteDifxAntennaArray(D->antenna, D->nAntenna);
-		}
-		if(D->scan)
-		{
-			deleteDifxScanArray(D->scan, D->nScan);
-		}
-		if(D->source)
-		{
-			deleteDifxSourceArray(D->source, D->nSource);
-		}
-		if(D->eop)
-		{
-			deleteDifxEOPArray(D->eop);
-		}
-		if(D->job)
-		{
-			deleteDifxJobArray(D->job, D->nJob);
-		}
-		if(D->rule)
-		{
-			deleteDifxRuleArray(D->rule, D->nRule);
-		}
-		if(D->nThread)
-		{
-			DifxInputAllocThreads(D, 0);
-		}
+		deleteDifxConfigArray(D->config, D->nConfig);
+		deleteDifxDatastreamArray(D->datastream, D->nDatastream);
+		deleteDifxBaselineArray(D->baseline, D->nBaseline);
+		deleteDifxFreqArray(D->freq, D->nFreq);
+		deleteDifxAntennaArray(D->antenna, D->nAntenna);
+		deleteDifxScanArray(D->scan, D->nScan);
+		deleteDifxSourceArray(D->source, D->nSource);
+		deleteDifxEOPArray(D->eop);
+		deleteDifxJobArray(D->job, D->nJob);
+		deleteDifxRuleArray(D->rule, D->nRule);
+		DifxInputAllocThreads(D, 0);
 		free(D);
 	}
 }
@@ -129,11 +307,6 @@ void deleteDifxInput(DifxInput *D)
 void DifxConfigMapAntennas(DifxConfig *dc, const DifxDatastream *ds)
 {
 	int a, maxa = 0, d;
-
-	if(dc->ant2dsId)
-	{
-		free(dc->ant2dsId);
-	}
 
 	for(d = 0; d < dc->nDatastream; ++d)
 	{
@@ -145,6 +318,7 @@ void DifxConfigMapAntennas(DifxConfig *dc, const DifxDatastream *ds)
 	}
 
 	dc->nAntenna = maxa+1;
+	free(dc->ant2dsId);
 	dc->ant2dsId = (int *)malloc((maxa+2)*sizeof(int));
 	for(a = 0; a < maxa; ++a)
 	{
@@ -441,24 +615,15 @@ static int generateAipsIFs(DifxInput *D, int configId)
 
 
 	/* Prepare some arrays */
-	if(dc->freqIdUsed)
-	{
-		free(dc->freqIdUsed);
-	}
+	free(dc->freqIdUsed);
 	dc->freqIdUsed = (int *)calloc(D->nFreq+1, sizeof(int));
 	dc->freqIdUsed[D->nFreq] = -1;
 
-	if(dc->IF)
-	{
-		deleteDifxIFArray(dc->IF);
-		dc->IF = 0;
-	}
+	deleteDifxIFArray(dc->IF);
+	dc->IF = 0;
 	D->nIF = 0;
 
-	if(dc->freqId2IF)
-	{
-		free(dc->freqId2IF);
-	}
+	free(dc->freqId2IF);
 	dc->freqId2IF = (int *)malloc((D->nFreq+2)*sizeof(int));
 	for(f = 0; f < D->nFreq; ++f)
 	{
@@ -922,6 +1087,7 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 
 		return 0;
 	}
+	deleteDifxConfigArray(D->config, D->nConfig);
 	D->nConfig	= atoi(DifxParametersvalue(ip, r));
 	D->config	= newDifxConfigArray(D->nConfig);
 	rows[N_CONFIG_ROWS-1] = 0;	/* initialize start */
@@ -1066,6 +1232,7 @@ static DifxInput *parseDifxInputRuleTable(DifxInput *D, const DifxParameters *ip
 
 		return 0;
 	}
+	deleteDifxRuleArray(D->rule, D->nRule);
 	D->nRule = atoi(DifxParametersvalue(ip, r));
 	D->rule	 = newDifxRuleArray(D->nRule);
 	for(rule = 0; rule < D->nRule; ++rule)
@@ -1143,6 +1310,7 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 
 		return 0;
 	}
+	deleteDifxFreqArray(D->freq, D->nFreq);
 	D->nFreq	= atoi(DifxParametersvalue(ip, r));
 	D->freq		= newDifxFreqArray(D->nFreq);
 	rows[N_FREQ_ROWS-1] = 0;	/* initialize start */
@@ -1229,6 +1397,7 @@ static DifxInput *parseDifxInputTelescopeTable(DifxInput *D, const DifxParameter
 
 		return 0;
 	}
+	deleteDifxAntennaArray(D->antenna, D->nAntenna);
 	D->nAntenna = atoi(DifxParametersvalue(ip, r));
 	D->antenna	= newDifxAntennaArray(D->nAntenna);
 
@@ -1276,6 +1445,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 
 		return 0;
 	}
+	deleteDifxDatastreamArray(D->datastream, D->nDatastream);
 	D->nDatastream = atoi(DifxParametersvalue(ip, r));
 	D->datastream = newDifxDatastreamArray(D->nDatastream);
 
@@ -1559,6 +1729,7 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 
 		return 0;
 	}
+	deleteDifxBaselineArray(D->baseline, D->nBaseline);
 	D->nBaseline = atoi(DifxParametersvalue(ip, r));
 	D->baseline = newDifxBaselineArray(D->nBaseline);
 
@@ -1897,6 +2068,10 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		return 0;
 	}
 
+	deleteDifxSourceArray(D->source, D->nSource);
+	deleteDifxScanArray(D->scan, D->nScan);
+	deleteDifxEOPArray(D->eop);
+
 	D->job->jobId	 = atoi(DifxParametersvalue(cp, rows[0]));
 	snprintf(D->job->obsCode, DIFXIO_OBSCODE_LENGTH, "%s", DifxParametersvalue(cp, rows[1]));
 	nTel			 = atoi(DifxParametersvalue(cp, rows[2]));
@@ -1919,11 +2094,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 
 	D->source = newDifxSourceArray(D->nSource);
 	D->scan = newDifxScanArray(D->nScan);
-
-	if(D->nEOP > 0)
-	{
-		D->eop = newDifxEOPArray(D->nEOP);
-	}
+	D->eop = newDifxEOPArray(D->nEOP);
 
 	row = DifxParametersfind_limited(cp, 0, 100, "DIFX VERSION");
 	if(row > 0)
@@ -1971,9 +2142,11 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	if(row > 0)
 	{
 		D->job->delayServerType = stringToDelayServerType(DifxParametersvalue(cp, row));
+		fprintf(stderr, "JMA got '%s' %d\n", DifxParametersvalue(cp, row), (int)D->job->delayServerType);
 	}
 	else
 	{
+		fprintf(stderr, "No server type --- default in job is %d\n", (int)D->job->delayServerType);
 		row=0;
 	}
 	row = DifxParametersfind_limited(cp, row, 10, "DELAY VERSION");
@@ -2479,6 +2652,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	row = DifxParametersfind(cp, 0, "NUM SPACECRAFT");
 	if(row >= 0)
 	{
+		deleteDifxSpacecraftArray(D->spacecraft, D->nSpacecraft);
 		D->nSpacecraft = atoi(DifxParametersvalue(cp, row));
 		D->spacecraft  = newDifxSpacecraftArray(D->nSpacecraft);
 	}
@@ -2878,6 +3052,15 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 	int r, s, nScan, nTel;
 	int order, interval;
 	int *antennaMap;
+    /* Note: This is a particular NaN variant the FITS-IDI format/convention 
+     * wants, namely 0xFFFFFFFFFFFFFFFF */
+    static const union
+    {
+	    uint64_t u64;
+	    double d;
+	    float f;
+    } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+
 
 	if(!D)
 	{
@@ -2975,6 +3158,12 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 			return 0;
 		}
 
+		deleteDifxPolyModelArray(scan->im, scan->nAntenna, scan->nPhaseCentres + 1);
+		scan->im = NULL;
+		deleteDifxPolyModelLMNExtensionArray(scan->imLMN, scan->nAntenna, scan->nPhaseCentres + 1);
+		scan->imLMN = NULL;
+		deleteDifxPolyModelXYZExtensionArray(scan->imXYZ, scan->nAntenna, scan->nPhaseCentres + 1);
+		scan->imXYZ = NULL;
 		scan->nPoly = atoi(DifxParametersvalue(mp, r));
 		scan->im = newDifxPolyModelArray(scan->nAntenna, scan->nPhaseCentres + 1, scan->nPoly);
 
@@ -3166,12 +3355,12 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 									int o;
 									for(o=0; o < order+1; ++o)
 									{
-										scan->imLMN[a][src][p].d2Delay_dldl[o] = NAN;
-										scan->imLMN[a][src][p].d2Delay_dldm[o] = NAN;
-										scan->imLMN[a][src][p].d2Delay_dldn[o] = NAN;
-										scan->imLMN[a][src][p].d2Delay_dmdm[o] = NAN;
-										scan->imLMN[a][src][p].d2Delay_dmdn[o] = NAN;
-										scan->imLMN[a][src][p].d2Delay_dndn[o] = NAN;
+										scan->imLMN[a][src][p].d2Delay_dldl[o] = fitsnan.d;
+										scan->imLMN[a][src][p].d2Delay_dldm[o] = fitsnan.d;
+										scan->imLMN[a][src][p].d2Delay_dldn[o] = fitsnan.d;
+										scan->imLMN[a][src][p].d2Delay_dmdm[o] = fitsnan.d;
+										scan->imLMN[a][src][p].d2Delay_dmdn[o] = fitsnan.d;
+										scan->imLMN[a][src][p].d2Delay_dndn[o] = fitsnan.d;
 									}
 								}
 							}
@@ -3247,12 +3436,12 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 									int o;
 									for(o=0; o < order+1; ++o)
 									{
-										scan->imXYZ[a][src][p].d2Delay_dXdX[o] = NAN;
-										scan->imXYZ[a][src][p].d2Delay_dXdY[o] = NAN;
-										scan->imXYZ[a][src][p].d2Delay_dXdZ[o] = NAN;
-										scan->imXYZ[a][src][p].d2Delay_dYdY[o] = NAN;
-										scan->imXYZ[a][src][p].d2Delay_dYdZ[o] = NAN;
-										scan->imXYZ[a][src][p].d2Delay_dZdZ[o] = NAN;
+										scan->imXYZ[a][src][p].d2Delay_dXdX[o] = fitsnan.d;
+										scan->imXYZ[a][src][p].d2Delay_dXdY[o] = fitsnan.d;
+										scan->imXYZ[a][src][p].d2Delay_dXdZ[o] = fitsnan.d;
+										scan->imXYZ[a][src][p].d2Delay_dYdY[o] = fitsnan.d;
+										scan->imXYZ[a][src][p].d2Delay_dYdZ[o] = fitsnan.d;
+										scan->imXYZ[a][src][p].d2Delay_dZdZ[o] = fitsnan.d;
 									}
 								}
 							}
@@ -3315,6 +3504,7 @@ static int populateFlags(DifxInput *D)
 	{
 		int i;
 
+		deleteDifxAntennaFlagArray(J->flag);
 		J->nFlag = n;
 		J->flag = newDifxAntennaFlagArray(J->nFlag);
 		for(i = 0; i < n; ++i)
@@ -3395,13 +3585,12 @@ int isAntennaFlagged(const DifxJob *J, double mjd, int antennaId)
 
 DifxInput *allocateSourceTable(DifxInput *D, int length)
 {
-	if(!D)
+	if(D)
 	{
-		return 0;
+		deleteDifxSourceArray(D->source, D->nSource);
+		D->source = newDifxSourceArray(length);
+		D->nSource = 0;
 	}
-	D->source = newDifxSourceArray(length);
-	D->nSource = 0;
-
 	return D;
 }
 
@@ -3432,6 +3621,7 @@ static DifxInput *deriveFitsSourceIds(DifxInput *D)
 		int configId;
 
 		D->source[i].numFitsSourceIds = D->nConfig;
+		free(D->source[i].fitsSourceIds);
 		D->source[i].fitsSourceIds = (int*)malloc(D->nConfig * sizeof(int));
 		for(configId = 0; configId < D->nConfig; ++configId)
 		{
@@ -4290,8 +4480,18 @@ int DifxInputSortAntennas(DifxInput *D, int verbose)
 		if(D->scan[scanId].im)
 		{
 			DifxPolyModel ***p2;
+			DifxPolyModelLMNExtension*** p2LMN = NULL;
+			DifxPolyModelXYZExtension*** p2XYZ = NULL;
 			
-			p2 = (DifxPolyModel ***)calloc(D->nAntenna*(D->scan[scanId].nPhaseCentres+1), sizeof(DifxPolyModel *));
+			p2 = (DifxPolyModel ***)calloc(D->nAntenna*(D->scan[scanId].nPhaseCentres+1), sizeof(DifxPolyModel **));
+			if(D->scan[scanId].imLMN)
+			{
+				p2LMN = (DifxPolyModelLMNExtension ***)calloc(D->nAntenna*(D->scan[scanId].nPhaseCentres+1), sizeof(DifxPolyModelLMNExtension **));
+			}
+			if(D->scan[scanId].imXYZ)
+			{
+				p2XYZ = (DifxPolyModelXYZExtension ***)calloc(D->nAntenna*(D->scan[scanId].nPhaseCentres+1), sizeof(DifxPolyModelXYZExtension **));
+			}
 			for(antennaId = 0; antennaId < D->scan[scanId].nAntenna; antennaId++)
 			{
 				if(D->scan[scanId].im[antennaId])
@@ -4307,11 +4507,29 @@ int DifxInputSortAntennas(DifxInput *D, int verbose)
 					}
 								
 					p2[antennaId2] = D->scan[scanId].im[antennaId];
+					if(p2LMN)
+					{
+						if(D->scan[scanId].imLMN[antennaId])
+						{
+							p2LMN[antennaId2] = D->scan[scanId].imLMN[antennaId];
+						}
+					}
+					if(p2XYZ)
+					{
+						if(D->scan[scanId].imXYZ[antennaId])
+						{
+							p2XYZ[antennaId2] = D->scan[scanId].imXYZ[antennaId];
+						}
+					}
 				}
 			}
 
 			free(D->scan[scanId].im);
 			D->scan[scanId].im = p2;
+			free(D->scan[scanId].imLMN);
+			D->scan[scanId].imLMN = p2LMN;
+			free(D->scan[scanId].imXYZ);
+			D->scan[scanId].imXYZ = p2XYZ;
 		}
 	
 		D->scan[scanId].nAntenna = D->nAntenna;

@@ -30,11 +30,35 @@
 #ifndef __DIFX_INPUT_H__
 #define __DIFX_INPUT_H__
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
 #include <inttypes.h>
+#include <string.h>
 #include "parsedifx.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+// #define malloc jma_malloc_malloc
+// #define free(p) jma_malloc_free((p), __FILE__, __LINE__)
+// #define calloc jma_malloc_calloc
+// #define realloc(nmemb,size) jma_malloc_realloc((nmemb),(size), __FILE__, __LINE__)
+// #define strdup(s) jma_malloc_strdup((s))
+// #define strndup(s,n) jma_malloc_strndup((s),(n))
+extern void* jma_malloc_malloc(size_t size);
+extern void jma_malloc_free(void *ptr, const char* file, int line);
+extern void *jma_malloc_calloc(size_t nmemb, size_t size);
+extern void *jma_malloc_realloc(void *ptr, size_t size, const char* file, int line);
+extern char *jma_malloc_strdup(const char *s);
+
+extern char *jma_malloc_strndup(const char *s, size_t n);
+
+
+
 
 #define MAX_MODEL_ORDER                            5
 #define MAX_PHS_CENTRES                         1000
@@ -105,15 +129,9 @@
 #    define MJD_AT_J2000 51544.5         /* The MJD value at 2000-01-01T12:00:00 */
 #    define JD_AT_J2000 2451545          /* The JD value at 2000-01-01T12:00:00 */
 #endif
-#ifndef NAN
-#    define NAN (0.0/0.0)
-#endif
 
                                                   
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 
 
@@ -272,7 +290,8 @@ extern const char toneSelectionNames[][MAX_TONE_SELECTION_STRING_LENGTH];
 /* keep this current with delayServerTypeNames in difx_job.c */
 enum DelayServerType
 {
-    CALCServer = 0,     /* CALC 9.1, original delay server */
+	UnknownServer = 0,  /* Default to not knowning anything */
+	CALCServer,         /* CALC 9.1, original delay server */
     CALC_9_1_RA_Server, /* CALC 9.1 hacked for space VLBI */
     CALCDERIV,          /* Alternative derivative computation program */
     NumDelayServerTypes /* must remain as last entry */

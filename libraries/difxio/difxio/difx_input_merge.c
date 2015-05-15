@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2012, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -219,6 +219,22 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, int verbose
 	D->spacecraft = mergeDifxSpacecraft(D1->spacecraft, D1->nSpacecraft,
 		D2->spacecraft, D2->nSpacecraft,
 		spacecraftIdRemap, &(D->nSpacecraft));
+
+	/* concatenate DifxRule tables */
+	/* FIXME: write a merge function */
+	D->nRule = D1->nRule + D2->nRule;
+	D->rule = newDifxRuleArray(D->nRule);
+	{
+		int r;
+		for(r=0; r < D1->nRule; ++r)
+		{
+			copyDifxRule(D->rule+r, D1->rule+r);
+		}
+		for(r=0; r < D1->nRule; ++r)
+		{
+			copyDifxRule(D->rule+D1->nRule+r, D2->rule+r);
+		}
+	}
 
 	/* store the remappings of the added job in case it is useful later */
 	job = D->job + D1->nJob;	/* points to first (probably only) job from D2 */

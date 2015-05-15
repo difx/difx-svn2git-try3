@@ -58,10 +58,6 @@ void DifxFreqAllocTones(DifxFreq *df, int nTone)
 		df->tone = (int *)calloc(nTone, sizeof(int) );
 		df->nTone = nTone;
 	}
-	else
-	{
-		df->nTone = 0;
-	}
 }
 
 void deleteDifxFreqInternals(DifxFreq *df)
@@ -207,24 +203,28 @@ int isDifxIFInsideDifxFreq(const DifxIF *di, const DifxFreq *df)
 
 void copyDifxFreq(DifxFreq *dest, const DifxFreq *src)
 {
-	deleteDifxFreqInternals(dest);
-	*dest = *src;
-	/* dest->freq       = src->freq; */
-	/* dest->bw         = src->bw; */
-	/* dest->sideband   = src->sideband; */
-	/* dest->nChan      = src->nChan; */
-	/* dest->specAvg    = src->specAvg; */
-	/* dest->overSamp   = src->overSamp; */
-	/* dest->decimation = src->decimation; */
-
-	DifxFreqAllocTones(dest, src->nTone);
-	if(src->nTone > 0)
+	if(dest != src)
 	{
-		int t;
+		deleteDifxFreqInternals(dest);
+		*dest = *src;
+		/* dest->freq       = src->freq; */
+		/* dest->bw         = src->bw; */
+		/* dest->sideband   = src->sideband; */
+		/* dest->nChan      = src->nChan; */
+		/* dest->specAvg    = src->specAvg; */
+		/* dest->overSamp   = src->overSamp; */
+		/* dest->decimation = src->decimation; */
 
-		for(t = 0; t < src->nTone; ++t)
+		dest->tone = 0;
+		DifxFreqAllocTones(dest, src->nTone);
+		if(src->nTone > 0)
 		{
-			dest->tone[t] = src->tone[t];
+			int t;
+
+			for(t = 0; t < src->nTone; ++t)
+			{
+				dest->tone[t] = src->tone[t];
+			}
 		}
 	}
 }
@@ -357,7 +357,7 @@ int reorderDifxFreqs(DifxInput *D)
 
 	if(o < n)	/* failure! */
 	{
-		free(newOrder);
+	free(newOrder);
 		fprintf(stderr, "Error: reorderDifxFreqs: No ordering of FREQ table will satisfy mpifxcorr\n");
 		fprintf(stderr, "Files will be written but mpifxcorr will not cope with them!\n");
 
@@ -373,7 +373,7 @@ int reorderDifxFreqs(DifxInput *D)
 	{
 		copyDifxFreq(D->freq+newOrder[i], oldFreq+i);
 	}
-
+	
 	for(d = 0; d < D->nDatastream; ++d)
 	{
 		for(i = 0; i < D->datastream[d].nRecFreq; ++i)

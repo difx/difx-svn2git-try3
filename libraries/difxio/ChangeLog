@@ -1,3 +1,40 @@
+2015-05-15  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_tcal.h:
+	* difxio/difx_input.h:
+	* difxio/difx_model.c:
+	* difxio/difx_calculator.c:
+	* difxio/difx_flag.c:
+	* difxio/difx_if.c:
+	* difxio/difx_input_merge.c:
+	* difxio/difx_phasedarray.c:
+	* difxio/difx_poly_model.c:
+	* difxio/difx_polyco.c:
+	* difxio/difx_pulsar.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_tcal.c:
+	* difxio/difx_datastream.c:
+	* difxio/difx_baseline.c:
+	* difxio/difx_antenna.c:
+	* difxio/difx_eop.c:
+	* difxio/difx_rule.c:
+	* difxio/difx_threads.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_freq.c:
+	* difxio/difx_write.c:
+	* difxio/difx_write_input.c:
+	* difxio/difx_write_im.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_config.c:
+	* difxio/difx_source.c:
+	* difxio/difx_input.c:
+	* difxio/difx_job.c: bugfixes
+
+2015-05-06  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_input.h:
+	* difxio/difx_input.c: bugfixes
+
 2015-05-04  James Anderson  <anderson@gfz-potsdam.de>
 
 	* difxio/difx_input.h:

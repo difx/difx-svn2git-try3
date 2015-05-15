@@ -123,16 +123,18 @@ DifxSpacecraft *dupDifxSpacecraftArray(const DifxSpacecraft *src, int n)
 		/* Take care of the regular member variables */
 		dest[s] = src[s];
 		/* Now deal with the pointers */
-		dest[s].pos = (sixVector *)calloc(dest[s].nPoint, sizeof(sixVector));
+		dest[s].pos = (sixVector *)malloc(dest[s].nPoint* sizeof(sixVector));
 		memcpy(dest[s].pos, src[s].pos, dest[s].nPoint*sizeof(sixVector));
-		dest[s].TFrameOffset = (spacecraftTimeFrameOffset *)calloc(dest[s].nPoint,
-																   sizeof(spacecraftTimeFrameOffset));
-		memcpy(dest[s].TFrameOffset, src[s].TFrameOffset, 
-			   dest[s].nPoint*sizeof(spacecraftTimeFrameOffset));
-		dest[s].SCAxisVectors = (spacecraftAxisVectors *)calloc(dest[s].nPoint,
-																sizeof(spacecraftAxisVectors));
-		memcpy(dest[s].SCAxisVectors, src[s].SCAxisVectors, 
-			   dest[s].nPoint*sizeof(spacecraftAxisVectors));
+		if(src[s].TFrameOffset)
+		{
+			dest[s].TFrameOffset = (spacecraftTimeFrameOffset *)malloc(dest[s].nPoint* sizeof(spacecraftTimeFrameOffset));
+			memcpy(dest[s].TFrameOffset, src[s].TFrameOffset, dest[s].nPoint*sizeof(spacecraftTimeFrameOffset));
+		}
+		if(src[s].SCAxisVectors)
+		{
+			dest[s].SCAxisVectors = (spacecraftAxisVectors *)malloc(dest[s].nPoint* sizeof(spacecraftAxisVectors));
+			memcpy(dest[s].SCAxisVectors, src[s].SCAxisVectors,  dest[s].nPoint*sizeof(spacecraftAxisVectors));
+		}
 	}
 
 	return dest;
@@ -1180,20 +1182,30 @@ int computeDifxSpacecraftEphemerisOffsets(DifxSpacecraft *ds)
 
 static void copySpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src)
 {
-	snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name);
-	dest->is_antenna = src->is_antenna;
-	dest->nPoint = src->nPoint;
-	dest->pos = (sixVector *)calloc(dest->nPoint, sizeof(sixVector));
-	memcpy(dest->pos, src->pos, dest->nPoint*sizeof(sixVector));
+	if(dest != src)
+	{
+		deleteDifxSpacecraftInternals(dest);
+		*dest = *src;
+		dest->pos = (sixVector *)malloc(dest->nPoint* sizeof(sixVector));
+		memcpy(dest->pos, src->pos, dest->nPoint*sizeof(sixVector));
+		if(src->TFrameOffset)
+		{
+			dest->TFrameOffset = (spacecraftTimeFrameOffset *)malloc(dest->nPoint* sizeof(spacecraftTimeFrameOffset));
+			memcpy(dest->TFrameOffset, src->TFrameOffset, dest->nPoint*sizeof(spacecraftTimeFrameOffset));
+		}
+		if(src->SCAxisVectors)
+		{
+			dest->SCAxisVectors = (spacecraftAxisVectors *)malloc(dest->nPoint* sizeof(spacecraftAxisVectors));
+			memcpy(dest->SCAxisVectors, src->SCAxisVectors, dest->nPoint*sizeof(spacecraftAxisVectors));
+		}
+	}
 }
 
 static void mergeSpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src1, const DifxSpacecraft *src2)
 {
 	double end1;
 	int j;
-	free(dest->pos);
-	free(dest->TFrameOffset);
-	free(dest->SCAxisVectors);
+	deleteDifxSpacecraftInternals(dest);
 	*dest = *src1;
 	/* snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src1->name); */
 	
@@ -1220,7 +1232,7 @@ static void mergeSpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src1, co
 		}
 	}
 	dest->nPoint = src1->nPoint + src2->nPoint - j;
-	dest->pos = (sixVector *)calloc(dest->nPoint, sizeof(sixVector));
+	dest->pos = (sixVector *)malloc(dest->nPoint* sizeof(sixVector));
 	memcpy(dest->pos, src1->pos, src1->nPoint*sizeof(sixVector));
 	if((src1->TFrameOffset))
 	{
@@ -1229,7 +1241,7 @@ static void mergeSpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src1, co
 			fprintf(stderr, "Error in mergeSpacecraft: spacecraft 1 (%s) has TFrameOffset, but spacecraft 2 (%s) does not.", src1->name, src2->name);
 			exit(EXIT_FAILURE);
 		}
-		dest->TFrameOffset = (spacecraftTimeFrameOffset *)calloc(dest->nPoint, sizeof(spacecraftTimeFrameOffset));
+		dest->TFrameOffset = (spacecraftTimeFrameOffset *)malloc(dest->nPoint* sizeof(spacecraftTimeFrameOffset));
 		memcpy(dest->TFrameOffset, src1->TFrameOffset, src1->nPoint*sizeof(spacecraftTimeFrameOffset));
 	}
 	else if((src2->TFrameOffset))
@@ -1244,7 +1256,7 @@ static void mergeSpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src1, co
 			fprintf(stderr, "Error in mergeSpacecraft: spacecraft 1 (%s) has SCAxisVectors, but spacecraft 2 (%s) does not.", src1->name, src2->name);
 			exit(EXIT_FAILURE);
 		}
-		dest->SCAxisVectors = (spacecraftAxisVectors *)calloc(dest->nPoint, sizeof(sixVector));
+		dest->SCAxisVectors = (spacecraftAxisVectors *)malloc(dest->nPoint* sizeof(sixVector));
 		memcpy(dest->SCAxisVectors, src1->SCAxisVectors, src1->nPoint*sizeof(spacecraftAxisVectors));
 	}
 	else if((src2->SCAxisVectors))

@@ -73,8 +73,11 @@ void printDifxAntennaFlagArray(const DifxAntennaFlag *df, int nf)
 void copyDifxAntennaFlag(DifxAntennaFlag *dest, const DifxAntennaFlag *src,
 	const int *antennaIdRemap)
 {
-	*dest = *src;
-	/* memcpy(dest, src, sizeof(DifxAntennaFlag)); */
+	if(dest != src)
+	{
+		*dest = *src;
+		/* memcpy(dest, src, sizeof(DifxAntennaFlag)); */
+	}
 	if(antennaIdRemap)
 	{
 		dest->antennaId = antennaIdRemap[dest->antennaId];

@@ -51,15 +51,18 @@ DifxRule *newDifxRuleArray(int nRule)
 
 void copyDifxRule(DifxRule *dest, DifxRule *src)
 {
-	snprintf(dest->configName, DIFXIO_NAME_LENGTH,	  "%s", src->configName);
-	DifxStringArrayclear(&dest->sourceName);
-	DifxStringArrayappend(&dest->sourceName, &src->sourceName);
-	DifxStringArrayclear(&dest->scanId);
-	DifxStringArrayappend(&dest->scanId, &src->scanId);
-	snprintf(dest->calCode,	   DIFXIO_CALCODE_LENGTH, "%s", src->calCode);
-	dest->qual	   = src->qual;
-	dest->mjdStart = src->mjdStart;
-	dest->mjdStop  = src->mjdStop;
+	if(dest != src)
+	{
+		snprintf(dest->configName, DIFXIO_NAME_LENGTH,	  "%s", src->configName);
+		DifxStringArrayclear(&dest->sourceName);
+		DifxStringArrayappend(&dest->sourceName, &src->sourceName);
+		DifxStringArrayclear(&dest->scanId);
+		DifxStringArrayappend(&dest->scanId, &src->scanId);
+		snprintf(dest->calCode,	   DIFXIO_CALCODE_LENGTH, "%s", src->calCode);
+		dest->qual	   = src->qual;
+		dest->mjdStart = src->mjdStart;
+		dest->mjdStop  = src->mjdStop;
+	}
 }
 
 void deleteDifxRuleInternals(DifxRule *dr)
@@ -70,11 +73,14 @@ void deleteDifxRuleInternals(DifxRule *dr)
 void deleteDifxRuleArray(DifxRule *dr, int nRule)
 {
 	int r;
-	for(r = 0; r < nRule; ++r)
+	if(dr)
 	{
-		deleteDifxRuleInternals(dr+r);
+		for(r = 0; r < nRule; ++r)
+		{
+			deleteDifxRuleInternals(dr+r);
+		}
+		free(dr);
 	}
-	free(dr);
 }
 
 void fprintDifxRule(FILE *fp, const DifxRule *dr)

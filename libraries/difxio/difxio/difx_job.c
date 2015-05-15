@@ -97,6 +97,7 @@ enum PerformDirectionDerivativeType stringToPerformDirectionDerivativeType(const
 
 const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
 {
+	"UnknownServer",
 	"CALCServer",
 	"CALC_9_1_RA_Server",
 	"calcderiv",
@@ -104,6 +105,7 @@ const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
 };
 const unsigned long delayServerTypeIds[] =
 {
+	0,            /* Default to not knowning anything */
 	0x20000340,   /* CALCServer                  */
 	0x20000341,   /* CALC_9_1_RA_Server          */
 	2,            /* CALCDERIV                   */
@@ -145,10 +147,10 @@ DifxJob *newDifxJobArray(int nJob)
 		dj[j].delayProgram = delayServerTypeIds[DIFXIO_DEFAULT_DELAY_SERVER_TYPE];
 		dj[j].delayHandler = DIFXIO_DEFAULT_DELAY_SERVER_HANDLER;
 		dj[j].perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative;
-		dj[j].perform_uvw_deriv = PerformDirectionDerivativeNone;
-		dj[j].perform_uvw_deriv = PerformDirectionDerivativeNone;
+		dj[j].perform_lmn_deriv = PerformDirectionDerivativeNone;
+		dj[j].perform_xyz_deriv = PerformDirectionDerivativeNone;
 		dj[j].delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-		dj[j].delta_lmn = DIFXIO_DEFAULT_DELTA_XYZ;
+		dj[j].delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
 	}
 
 	return dj;
@@ -185,16 +187,15 @@ void deleteDifxJobArray(DifxJob *djarray, int nJob)
 	int j;
 	DifxJob *dj;
 
-	if(!djarray)
+	if(djarray)
 	{
-		return;
+		for(j = 0; j < nJob; j++)
+		{
+			dj = djarray + j;
+			deleteDifxJobInternals(dj);
+		}
+		free(djarray);
 	}
-	for(j = 0; j < nJob; j++)
-	{
-		dj = djarray + j;
-		deleteDifxJobInternals(dj);
-	}
-	free(djarray);
 }
 
 void fprintDifxJob(FILE *fp, const DifxJob *dj)
@@ -215,7 +216,7 @@ void fprintDifxJob(FILE *fp, const DifxJob *dj)
 	fprintf(fp, "    im (model) file = %s\n", dj->imFile);
 	fprintf(fp, "    flag file = %s\n", dj->flagFile);
 	fprintf(fp, "    output file = %s\n", dj->outputFile);
-	fprintf(fp, "    delay srever host = %s\n", dj->delayServerHost);
+	fprintf(fp, "    delay server host = %s\n", dj->delayServerHost);
 	fprintf(fp, "    delay server type = %s\n", delayServerTypeNames[dj->delayServerType]);
 	fprintf(fp, "    delay version = 0x%lX\n", dj->delayVersion);
 	fprintf(fp, "    delay program = 0x%lX\n", dj->delayProgram);
@@ -247,35 +248,48 @@ void copyDifxJob(DifxJob *dest, const DifxJob *src, int *antennaIdRemap)
 {
 	int f;
 
-	deleteDifxJobInternals(dest);
-	*dest = *src;
-	/* memcpy(dest, src, sizeof(DifxJob)); */
-
-	if(src->nFlag > 0)
+	if(dest != src)
 	{
-		dest->flag = newDifxAntennaFlagArray(src->nFlag);
-		dest->nFlag = src->nFlag;
-		for(f = 0; f < dest->nFlag; f++)
+		deleteDifxJobInternals(dest);
+		*dest = *src;
+		/* memcpy(dest, src, sizeof(DifxJob)); */
+
+		if(src->nFlag > 0)
 		{
-			copyDifxAntennaFlag(dest->flag + f,
-				src->flag + f, antennaIdRemap);
+			dest->flag = newDifxAntennaFlagArray(src->nFlag);
+			for(f = 0; f < dest->nFlag; f++)
+			{
+				copyDifxAntennaFlag(dest->flag + f,
+				                    src->flag + f, antennaIdRemap);
+			}
+		}
+		if((src->calcParamTable))
+		{
+			dest->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
+			*(dest->calcParamTable) = *(src->calcParamTable);
+		}
+
+		dest->jobIdRemap = dupRemap(src->jobIdRemap);
+		dest->freqIdRemap = dupRemap(src->freqIdRemap);
+		dest->antennaIdRemap = dupRemap(src->antennaIdRemap);
+		dest->datastreamIdRemap = dupRemap(src->datastreamIdRemap);
+		dest->baselineIdRemap = dupRemap(src->baselineIdRemap);
+		dest->pulsarIdRemap = dupRemap(src->pulsarIdRemap);
+		dest->configIdRemap = dupRemap(src->configIdRemap);
+		dest->sourceIdRemap = dupRemap(src->sourceIdRemap);
+		dest->spacecraftIdRemap = dupRemap(src->spacecraftIdRemap);
+	}
+	else if(antennaIdRemap)
+	{
+		if(src->nFlag > 0)
+		{
+			for(f = 0; f < dest->nFlag; f++)
+			{
+				copyDifxAntennaFlag(dest->flag + f,
+				                    src->flag + f, antennaIdRemap);
+			}
 		}
 	}
-	if((src->calcParamTable))
-	{
-		dest->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
-		dest->calcParamTable = src->calcParamTable;
-	}
-
-	dest->jobIdRemap = dupRemap(src->jobIdRemap);
-	dest->freqIdRemap = dupRemap(src->freqIdRemap);
-	dest->antennaIdRemap = dupRemap(src->antennaIdRemap);
-	dest->datastreamIdRemap = dupRemap(src->datastreamIdRemap);
-	dest->baselineIdRemap = dupRemap(src->baselineIdRemap);
-	dest->pulsarIdRemap = dupRemap(src->pulsarIdRemap);
-	dest->configIdRemap = dupRemap(src->configIdRemap);
-	dest->sourceIdRemap = dupRemap(src->sourceIdRemap);
-	dest->spacecraftIdRemap = dupRemap(src->spacecraftIdRemap);
 }
 
 /* simply append dj2 after dj1 return new size on call stack : ndj */

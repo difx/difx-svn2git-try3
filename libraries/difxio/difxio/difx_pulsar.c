@@ -131,14 +131,17 @@ int isSameDifxPulsar(const DifxPulsar *dp1, const DifxPulsar *dp2)
 
 void copyDifxPulsar(DifxPulsar *dest, const DifxPulsar *src)
 {
-	deleteDifxPulsarInternals(dest);
-	*dest = *src;
+	if(dest != src)
+	{
+		deleteDifxPulsarInternals(dest);
+		*dest = *src;
 	
-	dest->polyco = dupDifxPolycoArray(src->polyco, src->nPolyco);
-	dest->binEnd = (double *)malloc(dest->nBin*sizeof(double));
-	memcpy(dest->binEnd, src->binEnd, dest->nBin*sizeof(double));
-	dest->binWeight = (double *)malloc(dest->nBin*sizeof(double));
-	memcpy(dest->binWeight, src->binWeight, dest->nBin*sizeof(double));
+		dest->polyco = dupDifxPolycoArray(src->polyco, src->nPolyco);
+		dest->binEnd = (double *)malloc(dest->nBin*sizeof(double));
+		memcpy(dest->binEnd, src->binEnd, dest->nBin*sizeof(double));
+		dest->binWeight = (double *)malloc(dest->nBin*sizeof(double));
+		memcpy(dest->binWeight, src->binWeight, dest->nBin*sizeof(double));
+	}
 }
 
 DifxPulsar *dupDifxPulsarArray(const DifxPulsar *src, int nPulsar)

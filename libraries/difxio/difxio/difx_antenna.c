@@ -259,26 +259,29 @@ void copyDifxAntenna(DifxAntenna *dest, const DifxAntenna *src)
 {
 	/* int i; */
 
-	*dest = *src;
-	/* snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name); */
-	/* dest->clockrefmjd = src->clockrefmjd; */
-	/* dest->clockorder  = src->clockorder; */
-	/* for(i=0; i<MAX_MODEL_ORDER; i++) */
-	/* { */
-	/* 	dest->clockcoeff[i] = src->clockcoeff[i]; */
-	/* } */
-	/* dest->mount = src->mount; */
-	/* dest->sitetype = src->sitetype; */
-	/* for(i = 0; i < 3; i++) */
-	/* { */
-	/* 	dest->offset[i] = src->offset[i]; */
-	/* } */
-	/* dest->X	 = src->X; */
-	/* dest->Y	 = src->Y; */
-	/* dest->Z	 = src->Z; */
-	/* dest->dX = src->dX; */
-	/* dest->dY = src->dY; */
-	/* dest->dZ = src->dZ; */
+	if(dest != src)
+	{
+		*dest = *src;
+		/* snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name); */
+		/* dest->clockrefmjd = src->clockrefmjd; */
+		/* dest->clockorder  = src->clockorder; */
+		/* for(i=0; i<MAX_MODEL_ORDER; i++) */
+		/* { */
+		/* 	dest->clockcoeff[i] = src->clockcoeff[i]; */
+		/* } */
+		/* dest->mount = src->mount; */
+		/* dest->sitetype = src->sitetype; */
+		/* for(i = 0; i < 3; i++) */
+		/* { */
+		/* 	dest->offset[i] = src->offset[i]; */
+		/* } */
+		/* dest->X	 = src->X; */
+		/* dest->Y	 = src->Y; */
+		/* dest->Z	 = src->Z; */
+		/* dest->dX = src->dX; */
+		/* dest->dY = src->dY; */
+		/* dest->dZ = src->dZ; */
+	}
 }
 
 /* dt is in microseconds */

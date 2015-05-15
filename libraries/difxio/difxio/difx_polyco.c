@@ -115,24 +115,27 @@ int DifxPolycoArrayGetMaxPolyOrder(const DifxPolyco *dp, int nPolyco)
 
 void copyDifxPolyco(DifxPolyco *dest, const DifxPolyco *src)
 {
-	deleteDifxPolycoInternals(dest);
-	*dest = *src;
-	if(src->coef)
+	if(dest != src)
 	{
-		int c;
-
-		dest->coef = (double *)malloc(dest->nCoef*sizeof(double));
-		for(c = 0; c < dest->nCoef; ++c)
+		deleteDifxPolycoInternals(dest);
+		*dest = *src;
+		if(src->coef)
 		{
-			dest->coef[c] = src->coef[c];
+			int c;
+			
+			dest->coef = (double *)malloc(dest->nCoef*sizeof(double));
+			for(c = 0; c < dest->nCoef; ++c)
+			{
+				dest->coef[c] = src->coef[c];
+			}
 		}
+		/* dest->dm = src->dm; */
+		/* dest->refFreq = src->refFreq; */
+		/* dest->mjd = src->mjd; */
+		/* dest->nBlk = src->nBlk; */
+		/* dest->p0 = src->p0; */
+		/* dest->f0 = src->f0; */
 	}
-	/* dest->dm = src->dm; */
-	/* dest->refFreq = src->refFreq; */
-	/* dest->mjd = src->mjd; */
-	/* dest->nBlk = src->nBlk; */
-	/* dest->p0 = src->p0; */
-	/* dest->f0 = src->f0; */
 }
 
 DifxPolyco *dupDifxPolycoArray(const DifxPolyco *src, int nPolyco)

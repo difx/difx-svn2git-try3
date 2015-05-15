@@ -90,10 +90,10 @@ void deleteDifxConfigInternals(DifxConfig *dc)
 	dc->baselineId = 0;
 	free(dc->freqId2IF);
 	dc->freqId2IF = 0;
-	free(dc->ant2dsId);
-	dc->ant2dsId = 0;
 	free(dc->freqIdUsed);
 	dc->freqIdUsed = 0;
+	free(dc->ant2dsId);
+	dc->ant2dsId = 0;
 }
 
 void deleteDifxConfigArray(DifxConfig *dc, int nConfig)
@@ -417,12 +417,51 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 {
 	int i, n, a;
 
-	deleteDifxConfigInternals(dest);
-	*dest = *src;
-	/* dest->nAntenna = src->nAntenna; */
+	if(dest != src)
+	{
+		deleteDifxConfigInternals(dest);
+		*dest = *src;
+		dest->baselineId = (int *)calloc(dest->nBaseline+1, sizeof(int));
+		dest->datastreamId = (int *)calloc(dest->nDatastream+1, sizeof(int));
+		/* dest->nAntenna = src->nAntenna; */
+		if(src->ant2dsId)
+		{
+			dest->ant2dsId = (int *)malloc((src->nAntenna+1)*sizeof(int));
+		}
+		if(src->IF)
+		{
+			dest->IF = newDifxIFArray(dest->nIF);
+			for(i = 0; i < dest->nIF; ++i)
+			{
+				dest->IF[i] = src->IF[i];
+			}
+		}
+		i=0;
+		if(src->freqId2IF)
+		{
+			while(src->freqId2IF[i] != -2)
+			{
+				++i;
+			}
+			++i;
+			dest->freqId2IF = (int *)malloc(i*sizeof(int));
+			for(a = 0; a < i; ++a)
+			{
+				dest->freqId2IF[a] = src->freqId2IF[a];
+			}
+		}
+		--i;
+		if((src->freqIdUsed) && (i>0))
+		{
+			dest->freqIdUsed = (int *)malloc(i*sizeof(int));
+			for(a = 0; a < i; ++a)
+			{
+				dest->freqIdUsed[a] = src->freqIdUsed[a];
+			}
+		}
+	}
 	if(src->ant2dsId)
 	{
-		dest->ant2dsId = (int *)malloc((src->nAntenna+1)*sizeof(int));
 		for(a = 0; a < src->nAntenna; a++)
 		{
 			if(src->ant2dsId[a] < 0)
@@ -454,7 +493,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	{
 		dest->pulsarId = pulsarIdRemap[src->pulsarId];
 	}
-	else
+	else if(dest != src)
 	{
 		dest->pulsarId = src->pulsarId;
 	}
@@ -470,7 +509,6 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	/* dest->nDatastream = src->nDatastream; */
 
 	n = dest->nBaseline;
-	dest->baselineId = (int *)calloc(n+1, sizeof(int));
 	dest->baselineId[n] = -1;
 	if(baselineIdRemap)
 	{
@@ -480,7 +518,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 				baselineIdRemap[src->baselineId[i]];
 		}
 	}
-	else
+	else if(dest != src)
 	{
 		for(i = 0; i < n; i++)
 		{
@@ -489,7 +527,6 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	}
 	
 	n = dest->nDatastream;
-	dest->datastreamId = (int *)calloc(n+1, sizeof(int));
 	dest->datastreamId[n] = -1;
 	if(datastreamIdRemap)
 	{
@@ -499,58 +536,30 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 				datastreamIdRemap[src->datastreamId[i]];
 		}
 	}
-	else
+	else if(dest != src)
 	{
 		for(i = 0; i < n; i++)
 		{
 			dest->datastreamId[i] = src->datastreamId[i];
 		}
 	}
-	if(src->IF)
-	{
-		dest->IF = newDifxIFArray(dest->nIF);
-		for(i = 0; i < dest->nIF; ++i)
-		{
-			dest->IF[i] = src->IF[i];
-		}
-	}
-	i=0;
-	if(src->freqId2IF)
-	{
-		while(src->freqId2IF[i] != -2)
-		{
-			++i;
-		}
-		++i;
-		dest->freqId2IF = (int *)malloc(i*sizeof(int));
-		for(a = 0; a < i; ++a)
-		{
-			dest->freqId2IF[a] = src->freqId2IF[a];
-		}
-	}
-	--i;
-	if((src->freqIdUsed) && (i>0))
-	{
-		dest->freqIdUsed = (int *)malloc(i*sizeof(int));
-		for(a = 0; a < i; ++a)
-		{
-			dest->freqIdUsed[a] = src->freqIdUsed[a];
-		}
-	}
 }
 
 void moveDifxConfig(DifxConfig *dest, DifxConfig *src)
 {
-	*dest = *src;
-	/* memcpy(dest, src, sizeof(DifxConfig)); */
+	if(dest != src)
+	{
+		*dest = *src;
+		/* memcpy(dest, src, sizeof(DifxConfig)); */
 
-	/* unlink some pointers to prevent double freeing */
-	src->datastreamId = 0;
-	src->baselineId = 0;
-	src->IF = 0;
-	src->freqId2IF = 0;
-	src->freqIdUsed = 0;
-	src->ant2dsId = 0;
+		/* unlink pointers to prevent double freeing */
+		src->datastreamId = 0;
+		src->baselineId = 0;
+		src->IF = 0;
+		src->freqId2IF = 0;
+		src->freqIdUsed = 0;
+		src->ant2dsId = 0;
+	}
 }
 
 int simplifyDifxConfigs(DifxInput *D)
@@ -681,7 +690,7 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		config = dc + i;
 
 		writeDifxLine(out, "CONFIG NAME", config->name);
-		writeDifxLineDouble(out, "INT TIME (SEC)", "%15.12f", config->tInt);
+		writeDifxLineDouble(out, "INT TIME (SEC)", "%14.12f", config->tInt);
 		writeDifxLineInt(out, "SUBINT NANOSECONDS", config->subintNS);
 		writeDifxLineInt(out, "GUARD NANOSECONDS", config->guardNS);
 		writeDifxLineInt(out, "FRINGE ROTN ORDER", config->fringeRotOrder);
