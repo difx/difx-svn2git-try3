@@ -170,45 +170,45 @@ void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds)
 	{
 		return;
 	}
-	fprintf(fp, "	 Name = %s\n", ds->name);
-	fprintf(fp, "	 Is Antenna = %c\n", (ds->is_antenna) ? 'T' : 'F');
-	fprintf(fp, "	 Num points = %d\n", ds->nPoint);
-	fprintf(fp, "	 Has ground station = %c\n", (ds->GS_exists) ? 'T':'F');
-	fprintf(fp, "	 spacecraft_time_type = %s\n", spacecraftTimeTypeNames[ds->spacecraft_time_type]);
-	fprintf(fp, "	 position_coord_frame = %s\n", sourceCoordinateFrameTypeNames[ds->position_coord_frame]);
-	fprintf(fp, "	 pointing_coord_frame = %s\n", sourceCoordinateFrameTypeNames[ds->pointing_coord_frame]);
-	fprintf(fp, "	 SC_recording_delay			= %.16E\n", ds->SC_recording_delay);
-	fprintf(fp, "	 SC_Comm_Rec_to_Elec		= %.16E\n", ds->SC_Comm_Rec_to_Elec);
-	fprintf(fp, "	 SC_Elec_to_Comm			= %.16E\n", ds->SC_Elec_to_Comm);
-	fprintf(fp, "	 GS_recording_delay			= %.16E\n", ds->GS_recording_delay);
-	fprintf(fp, "	 GS_transmission_delay		= %.16E\n", ds->GS_transmission_delay);
-	fprintf(fp, "	 GS_transmission_delay_sync = %.16E\n", ds->GS_transmission_delay_sync);
-	fprintf(fp, "	 SC_elec_delay				= %.16E\n", ds->SC_elec_delay);
-	fprintf(fp, "	 GS_clock_delay				= %.16E\n", ds->GS_clock_delay);
-	fprintf(fp, "	 GS_clock_delay_sync		= %.16E\n", ds->GS_clock_delay_sync);
+	fprintf(fp, "    Name = %s\n", ds->name);
+	fprintf(fp, "    Is Antenna = %c\n", (ds->is_antenna) ? 'T' : 'F');
+	fprintf(fp, "    Num points = %d\n", ds->nPoint);
+	fprintf(fp, "    Has ground station = %c\n", (ds->GS_exists) ? 'T':'F');
+	fprintf(fp, "    spacecraft_time_type = %s\n", spacecraftTimeTypeNames[ds->spacecraft_time_type]);
+	fprintf(fp, "    position_coord_frame = %s\n", sourceCoordinateFrameTypeNames[ds->position_coord_frame]);
+	fprintf(fp, "    pointing_coord_frame = %s\n", sourceCoordinateFrameTypeNames[ds->pointing_coord_frame]);
+	fprintf(fp, "    SC_recording_delay           = %.16E\n", ds->SC_recording_delay);
+	fprintf(fp, "    SC_Comm_Rec_to_Elec          = %.16E\n", ds->SC_Comm_Rec_to_Elec);
+	fprintf(fp, "    SC_Elec_to_Comm              = %.16E\n", ds->SC_Elec_to_Comm);
+	fprintf(fp, "    GS_recording_delay           = %.16E\n", ds->GS_recording_delay);
+	fprintf(fp, "    GS_transmission_delay        = %.16E\n", ds->GS_transmission_delay);
+	fprintf(fp, "    GS_transmission_delay_sync   = %.16E\n", ds->GS_transmission_delay_sync);
+	fprintf(fp, "    SC_elec_delay                = %.16E\n", ds->SC_elec_delay);
+	fprintf(fp, "    GS_clock_delay               = %.16E\n", ds->GS_clock_delay);
+	fprintf(fp, "    GS_clock_delay_sync          = %.16E\n", ds->GS_clock_delay_sync);
 	if(ds->GS_exists) {
-		fprintf(fp, "	 GS_Name = %s\n", ds->GS_Name);
-		fprintf(fp, "	 GS_calcName = %s\n", ds->GS_calcName);
-		fprintf(fp, "	 GS_mjd_sync		   = %d\n", ds->GS_mjd_sync);
-		fprintf(fp, "	 GS_dayfraction_sync   = %.16f\n", ds->GS_dayfraction_sync);
-		fprintf(fp, "	 GS_clock_break_fudge_sec	= %.16E\n", ds->GS_clock_break_fudge_sec);
-		fprintf(fp, "	 GS_mount = %s\n", antennaMountTypeNames[ds->GS_mount]);
-		fprintf(fp, "	 GS_offfset[0] = %.6f\n", ds->GS_offset[0]);
-		fprintf(fp, "	 GS_offfset[1] = %.6f\n", ds->GS_offset[1]);
-		fprintf(fp, "	 GS_offfset[2] = %.6f\n", ds->GS_offset[2]);
-		fprintf(fp, "	 GS_X = %.5f\n", ds->GS_X);
-		fprintf(fp, "	 GS_Y = %.5f\n", ds->GS_Y);
-		fprintf(fp, "	 GS_Z = %.5f\n", ds->GS_Z);
-		fprintf(fp, "	 GS_clockrefmjd = %.16f\n", ds->GS_clockrefmjd);
-		fprintf(fp, "	 GS_clockorder = %d\n", ds->GS_clockorder);
+		fprintf(fp, "    GS_Name = %s\n", ds->GS_Name);
+		fprintf(fp, "    GS_calcName = %s\n", ds->GS_calcName);
+		fprintf(fp, "    GS_mjd_sync           = %d\n", ds->GS_mjd_sync);
+		fprintf(fp, "    GS_dayfraction_sync   = %.16f\n", ds->GS_dayfraction_sync);
+		fprintf(fp, "    GS_clock_break_fudge_sec    = %.16E\n", ds->GS_clock_break_fudge_sec);
+		fprintf(fp, "    GS_mount = %s\n", antennaMountTypeNames[ds->GS_mount]);
+		fprintf(fp, "    GS_offfset[0] = %.6f\n", ds->GS_offset[0]);
+		fprintf(fp, "    GS_offfset[1] = %.6f\n", ds->GS_offset[1]);
+		fprintf(fp, "    GS_offfset[2] = %.6f\n", ds->GS_offset[2]);
+		fprintf(fp, "    GS_X = %.5f\n", ds->GS_X);
+		fprintf(fp, "    GS_Y = %.5f\n", ds->GS_Y);
+		fprintf(fp, "    GS_Z = %.5f\n", ds->GS_Z);
+		fprintf(fp, "    GS_clockrefmjd = %.16f\n", ds->GS_clockrefmjd);
+		fprintf(fp, "    GS_clockorder = %d\n", ds->GS_clockorder);
 		for(i=0; i < ds->GS_clockorder+1; ++i) {
-			fprintf(fp, "	 GS_clockcoeff[%d] = %24.16E\n", i, ds->GS_clockcoeff[i]);
+			fprintf(fp, "    GS_clockcoeff[%d] = %24.16E\n", i, ds->GS_clockcoeff[i]);
 		}
 	}
-	fprintf(fp, "	 SC_pos_offset_refmjd = %d\n", ds->SC_pos_offset_refmjd);
-	fprintf(fp, "	 SC_pos_offset_reffracDay = %.16f\n", ds->SC_pos_offset_reffracDay);
-	fprintf(fp, "	 SC_pos_offsetorder = %d\n", ds->SC_pos_offsetorder);
-	fprintf(fp, "	 CalcOwnRetardation = %d\n", ds->calculate_own_retarded_position);
+	fprintf(fp, "    SC_pos_offset_refmjd = %d\n", ds->SC_pos_offset_refmjd);
+	fprintf(fp, "    SC_pos_offset_reffracDay = %.16f\n", ds->SC_pos_offset_reffracDay);
+	fprintf(fp, "    SC_pos_offsetorder = %d\n", ds->SC_pos_offsetorder);
+	fprintf(fp, "    CalcOwnRetardation = %d\n", ds->calculate_own_retarded_position);
 }
 
 void printDifxSpacecraft(const DifxSpacecraft *ds)

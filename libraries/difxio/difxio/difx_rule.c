@@ -86,7 +86,7 @@ void deleteDifxRuleArray(DifxRule *dr, int nRule)
 void fprintDifxRule(FILE *fp, const DifxRule *dr)
 {
 	fprintf(fp, "  Difx Rule for config %s : %p\n", dr->configName, dr);
-	fprintf(fp, "	 source	 = ");
+	fprintf(fp, "    source  = ");
 	if(dr->sourceName.n > 0)
 	{
 		int i;
@@ -101,7 +101,7 @@ void fprintDifxRule(FILE *fp, const DifxRule *dr)
 		}
 	}
 	fprintf(fp, "\n");
-	fprintf(fp, "	 scanId	 = ");
+	fprintf(fp, "    scanId	 = ");
 	if(dr->scanId.n > 0)
 	{
 		int i;
@@ -116,10 +116,10 @@ void fprintDifxRule(FILE *fp, const DifxRule *dr)
 		}
 	}
 	fprintf(fp, "\n");
-	fprintf(fp, "	 calCode = %s\n", dr->calCode);
-	fprintf(fp, "	 qual	 = %d\n", dr->qual);
-	fprintf(fp, "	 mjdStart= %f\n", dr->mjdStart);
-	fprintf(fp, "	 mjdStop = %f\n", dr->mjdStop);
+	fprintf(fp, "    calCode = %s\n", dr->calCode);
+	fprintf(fp, "    qual    = %d\n", dr->qual);
+	fprintf(fp, "    mjdStart= %f\n", dr->mjdStart);
+	fprintf(fp, "    mjdStop = %f\n", dr->mjdStop);
 }
 
 void printDifxRule(const DifxRule *dr)

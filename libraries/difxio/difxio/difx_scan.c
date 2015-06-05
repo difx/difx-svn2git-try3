@@ -93,23 +93,23 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 	int i, j, nModel;
 
 	fprintf(fp, "  DifxScan [%s] : %p\n", ds->identifier, ds);
-	fprintf(fp, "	 Start = MJD %12.6f\n", ds->mjdStart);
-	fprintf(fp, "	 End   = MJD %12.6f\n", ds->mjdEnd);
-	fprintf(fp, "	 Observing mode = %s\n", ds->obsModeName);
-	fprintf(fp, "	 Max NS between UV shifts = %d\n", ds->maxNSBetweenUVShifts);
-	fprintf(fp, "	 Max NS between AC averages = %d\n", ds->maxNSBetweenACAvg);
-	fprintf(fp, "	 Pointing centre source index = %d\n", ds->pointingCentreSrc);
-	fprintf(fp, "	 Number of phase centres = %d\n", ds->nPhaseCentres);
+	fprintf(fp, "    Start = MJD %12.6f\n", ds->mjdStart);
+	fprintf(fp, "    End   = MJD %12.6f\n", ds->mjdEnd);
+	fprintf(fp, "    Observing mode = %s\n", ds->obsModeName);
+	fprintf(fp, "    Max NS between UV shifts = %d\n", ds->maxNSBetweenUVShifts);
+	fprintf(fp, "    Max NS between AC averages = %d\n", ds->maxNSBetweenACAvg);
+	fprintf(fp, "    Pointing centre source index = %d\n", ds->pointingCentreSrc);
+	fprintf(fp, "    Number of phase centres = %d\n", ds->nPhaseCentres);
 	for(i = 0; i < ds->nPhaseCentres; i++) 
 	{
-		fprintf(fp, "	 Phase centre %d source index = %d\n", 
+		fprintf(fp, "    Phase centre %d source index = %d\n", 
 				i, ds->phsCentreSrcs[i]);
-		fprintf(fp, "	 Original job phase centre %d source index = %d\n",
+		fprintf(fp, "    Original job phase centre %d source index = %d\n",
 				i, ds->orgjobPhsCentreSrcs[i]);
 	}
-	fprintf(fp, "	 nAntenna %d\n", ds->nAntenna);
+	fprintf(fp, "    nAntenna %d\n", ds->nAntenna);
 
-	fprintf(fp, "	 ConfigId = %d\n", ds->configId);
+	fprintf(fp, "    ConfigId = %d\n", ds->configId);
 
 	if(ds->nPhaseCentres < 1 || ds->pointingCentreSrc == ds->phsCentreSrcs[0])
 	{
@@ -135,13 +135,13 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 				}
 				else
 				{
-					fprintf(fp, "	 No polymodel[%d]\n", i);
+					fprintf(fp, "    No polymodel[%d]\n", i);
 				}
 			}
 		}
 		else
 		{
-			fprintf(fp, "	 No polynomial model available\n");
+			fprintf(fp, "    No polynomial model available\n");
 		}
 	}
 }
@@ -155,8 +155,8 @@ void fprintDifxScanSummary(FILE *fp, const DifxScan *ds)
 {
 	fprintf(fp, "  Start=%12.6f end=%12.6f identifier=%s\n", 
 			ds->mjdStart, ds->mjdEnd, ds->identifier);
-	fprintf(fp, "	 PointingSourceIndex = %d\n", ds->pointingCentreSrc);
-	fprintf(fp, "	 ConfigId = %d\n", ds->configId);
+	fprintf(fp, "    PointingSourceIndex = %d\n", ds->pointingCentreSrc);
+	fprintf(fp, "    ConfigId = %d\n", ds->configId);
 }
 
 void printDifxScanSummary(const DifxScan *ds)

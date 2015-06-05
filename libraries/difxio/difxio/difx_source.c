@@ -47,7 +47,7 @@ const char sourceCoordinateFrameTypeNames[][MAX_SOURCE_COORDINATE_FRAME_STRING_L
 		"J2000_SSB",
 		"J2000_Earth",
 		"ITRF2008",
-		"OTHER"		/* don't expect the right parallactic angle or delay model! */
+		"OTHER" /* don't expect the right parallactic angle or delay model! */
 	};
 enum SourceCoordinateFrameType stringToSourceCoordinateFrameType(const char* str)
 {
@@ -115,31 +115,31 @@ void fprintDifxSource(FILE *fp, const DifxSource *ds)
 {
 	int i;
 	fprintf(fp, "  DifxSource [%s] : %p\n", ds->name, ds);
-	fprintf(fp, "	 RA	 =	%10.7f\n", ds->ra);
-	fprintf(fp, "	 Dec = %+11.7f\n", ds->dec);
-	fprintf(fp, "	 Calcode = %s\n", ds->calCode);
-	fprintf(fp, "	 coord_frame = %s\n", sourceCoordinateFrameTypeNames[ds->coord_frame]);
-	fprintf(fp, "	 perform_uvw_deriv = %s\n", performDirectionDerivativeTypeNames[ds->perform_uvw_deriv]);
-	fprintf(fp, "	 perform_lmn_deriv = %s\n", performDirectionDerivativeTypeNames[ds->perform_lmn_deriv]);
-	fprintf(fp, "	 perform_xyz_deriv = %s\n", performDirectionDerivativeTypeNames[ds->perform_xyz_deriv]);
-	fprintf(fp, "	 delta_lmn = %E\n", ds->delta_lmn);
-	fprintf(fp, "	 delta_xyz = %E\n", ds->delta_xyz);
-	fprintf(fp, "	 delta_xyz_used = %E\n", ds->delta_lmn_used);
-	fprintf(fp, "	 delta_xyz_used = %E\n", ds->delta_xyz_used);
-	fprintf(fp, "	 Qualifier = %d\n", ds->qual);
-	fprintf(fp, "	 SpacecraftId = %d\n", ds->spacecraftId);
+	fprintf(fp, "    RA = %10.7f\n", ds->ra);
+	fprintf(fp, "    Dec = %+11.7f\n", ds->dec);
+	fprintf(fp, "    Calcode = %s\n", ds->calCode);
+	fprintf(fp, "    coord_frame = %s\n", sourceCoordinateFrameTypeNames[ds->coord_frame]);
+	fprintf(fp, "    perform_uvw_deriv = %s\n", performDirectionDerivativeTypeNames[ds->perform_uvw_deriv]);
+	fprintf(fp, "    perform_lmn_deriv = %s\n", performDirectionDerivativeTypeNames[ds->perform_lmn_deriv]);
+	fprintf(fp, "    perform_xyz_deriv = %s\n", performDirectionDerivativeTypeNames[ds->perform_xyz_deriv]);
+	fprintf(fp, "    delta_lmn = %E\n", ds->delta_lmn);
+	fprintf(fp, "    delta_xyz = %E\n", ds->delta_xyz);
+	fprintf(fp, "    delta_xyz_used = %E\n", ds->delta_lmn_used);
+	fprintf(fp, "    delta_xyz_used = %E\n", ds->delta_xyz_used);
+	fprintf(fp, "    Qualifier = %d\n", ds->qual);
+	fprintf(fp, "    SpacecraftId = %d\n", ds->spacecraftId);
 	fprintf(fp, "    SC_Name = %s\n", ds->sc_name);
-	fprintf(fp, "	 SC_Epoch = %11.7f\n", ds->sc_epoch);
-	fprintf(fp, "	 Num FITS SourceIds = %d\n", ds->numFitsSourceIds);
+	fprintf(fp, "    SC_Epoch = %11.7f\n", ds->sc_epoch);
+	fprintf(fp, "    Num FITS SourceIds = %d\n", ds->numFitsSourceIds);
 	for(i=0;i<ds->numFitsSourceIds;i++)
 	{
-		fprintf(fp, "	 FITS SourceId[%d] = %d\n", i, ds->fitsSourceIds[i]);
+		fprintf(fp, "   FITS SourceId[%d] = %d\n", i, ds->fitsSourceIds[i]);
 	}
-	fprintf(fp, "	 pmRA = %E\n", ds->pmRA);
-	fprintf(fp, "	 pmDec = %E\n", ds->pmDec);
-	fprintf(fp, "	 parallax = %E\n", ds->parallax);
-	fprintf(fp, "	 pmEpoch = %f\n", ds->pmEpoch);
-	fprintf(fp, "	 station0PropDelay = %E\n", ds->station0PropDelay);
+	fprintf(fp, "    pmRA = %E\n", ds->pmRA);
+	fprintf(fp, "    pmDec = %E\n", ds->pmDec);
+	fprintf(fp, "    parallax = %E\n", ds->parallax);
+	fprintf(fp, "    pmEpoch = %f\n", ds->pmEpoch);
+	fprintf(fp, "    station0PropDelay = %E\n", ds->station0PropDelay);
 }
 
 void printDifxSource(const DifxSource *ds)
@@ -150,15 +150,15 @@ void printDifxSource(const DifxSource *ds)
 void fprintDifxSourceSummary(FILE *fp, const DifxSource *ds)
 {
 	fprintf(fp, "  %s\n", ds->name);
-	fprintf(fp, "	 RA	 =	%10.7f\n", ds->ra);
-	fprintf(fp, "	 Dec = %+11.7f\n", ds->dec);
-	fprintf(fp, "	 Calcode = %s\n", ds->calCode);
-	fprintf(fp, "	 Qualifier = %d\n", ds->qual);
+	fprintf(fp, "    RA  =  %10.7f\n", ds->ra);
+	fprintf(fp, "    Dec = %+11.7f\n", ds->dec);
+	fprintf(fp, "    Calcode = %s\n", ds->calCode);
+	fprintf(fp, "    Qualifier = %d\n", ds->qual);
 	if(ds->spacecraftId >= 0)
 	{
-		fprintf(fp, "	 SpacecraftId = %d\n", ds->spacecraftId);
-		fprintf(fp, "	 SC_Name = %s\n", ds->sc_name);
-		fprintf(fp, "	 SC_Epoch = %11.7f\n", ds->sc_epoch);
+		fprintf(fp, "    SpacecraftId = %d\n", ds->spacecraftId);
+		fprintf(fp, "    SC_Name = %s\n", ds->sc_name);
+		fprintf(fp, "    SC_Epoch = %11.7f\n", ds->sc_epoch);
 	}
 }
 

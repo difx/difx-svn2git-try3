@@ -158,6 +158,7 @@ enum AberCorr
 };
 
 extern const char aberCorrStrings[][MAX_ABER_CORR_STRING_LENGTH];
+#define DIFXIO_DEFAULT_ABER_CORR_TYPE AberCorrExact
 
 
 /* keep this current with performDirectionDerivativeTypeNames in difx_job.c */
@@ -449,7 +450,7 @@ typedef struct
     int numBufferedFFTs;/* The number of FFTs to do in a row before XMAC'ing */
     int pulsarId;       /* -1 if not pulsar */
     int phasedArrayId;  /* -1 if not phased array mode */
-    int nPol;       /* number of pols in datastreams (1 or 2) */
+    int nPol;           /* number of pols in datastreams (1 or 2) */
     char pol[2];        /* the polarizations */
     int polMask;        /* bit field using DIFX_POL_x from above */
     int doPolar;        /* >0 if cross hands to be correlated */

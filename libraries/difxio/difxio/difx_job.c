@@ -138,7 +138,6 @@ DifxJob *newDifxJobArray(int nJob)
 	{
 		snprintf(dj[j].obsCode,        DIFXIO_OBSCODE_LENGTH,  "%s", "DIFX");
 		snprintf(dj[j].taperFunction,  DIFXIO_TAPER_LENGTH,    "%s", "UNIFORM");
-		snprintf(dj[j].delayServerHost,DIFXIO_HOSTNAME_LENGTH, "%s", "UNKNOWN");
 		dj[j].polyOrder = DIFXIO_DEFAULT_POLY_ORDER;
 		dj[j].polyInterval = DIFXIO_DEFAULT_POLY_INTERVAL;
 		dj[j].delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
@@ -151,6 +150,7 @@ DifxJob *newDifxJobArray(int nJob)
 		dj[j].perform_xyz_deriv = PerformDirectionDerivativeNone;
 		dj[j].delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
 		dj[j].delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
+		dj[j].aberCorr = DIFXIO_DEFAULT_ABER_CORR_TYPE;
 	}
 
 	return dj;

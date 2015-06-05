@@ -44,7 +44,7 @@ const char antennaMountTypeNames[][MAX_ANTENNA_MOUNT_NAME_LENGTH] =
 		"NASR",		/* note: this will correctly fall back to AZEL in calcserver */
 		"NASL",		/* note: this will correctly fall back to AZEL in calcserver */
 		"XYNS",		/* note: no FITS-IDI support */
-		"OTHR"		/* don't expect the right parallactic angle or delay model! */
+		"OTHR"      /* don't expect the right parallactic angle or delay model! */
 	};
 
 /* These names must match what VEX expects */
@@ -151,21 +151,21 @@ void fprintDifxAntenna(FILE *fp, const DifxAntenna *da)
 	fprintf(fp, "  DifxAntenna [%s] : %p\n", da->name, da);
 	fprintf(fp, "    Calcname = %s\n", da->calcname);
 	fprintf(fp, "    OrigId = %d\n", da->origId);
-	fprintf(fp, "	 Clock reference MJD = %f\n", da->clockrefmjd);
+	fprintf(fp, "    Clock reference MJD = %f\n", da->clockrefmjd);
 	for(i=0;i<da->clockorder+1;i++)
 	{
-		fprintf(fp, "	 Clock coeff[%d] = %e us/s^%d\n", i, 
+		fprintf(fp, "    Clock coeff[%d] = %e us/s^%d\n", i, 
 				da->clockcoeff[i], i);
 	}
-	fprintf(fp, "	 Mount = %d = %s\n", da->mount, antennaMountTypeNames[da->mount]);
-	fprintf(fp, "	 SiteType = %d = %s\n", da->sitetype, antennaSiteTypeNames[da->sitetype]);
-	fprintf(fp, "	 Site Frame = %s\n", sourceCoordinateFrameTypeNames[da->site_coord_frame]);
-	fprintf(fp, "	 Offset = %f, %f, %f m\n", da->offset[0], da->offset[1], da->offset[2]);
-	fprintf(fp, "	 X, Y, Z = %f, %f, %f m\n", da->X, da->Y, da->Z);
-	fprintf(fp, "	 dX, dY, dZ = %f, %f, %f m/s\n", da->dX, da->dY, da->dZ);
-	fprintf(fp, "	 SpacecraftId = %d\n", da->spacecraftId);
-	fprintf(fp, "	 SC Name = %s\n", da->sc_name);
-	fprintf(fp, "	 Shelf = %s\n", da->shelf);
+	fprintf(fp, "    Mount = %d = %s\n", da->mount, antennaMountTypeNames[da->mount]);
+	fprintf(fp, "    SiteType = %d = %s\n", da->sitetype, antennaSiteTypeNames[da->sitetype]);
+	fprintf(fp, "    Site Frame = %s\n", sourceCoordinateFrameTypeNames[da->site_coord_frame]);
+	fprintf(fp, "    Offset = %f, %f, %f m\n", da->offset[0], da->offset[1], da->offset[2]);
+	fprintf(fp, "    X, Y, Z = %f, %f, %f m\n", da->X, da->Y, da->Z);
+	fprintf(fp, "    dX, dY, dZ = %f, %f, %f m/s\n", da->dX, da->dY, da->dZ);
+	fprintf(fp, "    SpacecraftId = %d\n", da->spacecraftId);
+	fprintf(fp, "    SC Name = %s\n", da->sc_name);
+	fprintf(fp, "    Shelf = %s\n", da->shelf);
 }
 
 void printDifxAntenna(const DifxAntenna *da)
@@ -176,19 +176,19 @@ void printDifxAntenna(const DifxAntenna *da)
 void fprintDifxAntennaSummary(FILE *fp, const DifxAntenna *da)
 {
 	fprintf(fp, "  %s\n", da->name);
-	fprintf(fp, "	 Clock: Ref time %f, Order = %d, linear approx %e us + %e us/s\n", 
+	fprintf(fp, "    Clock: Ref time %f, Order = %d, linear approx %e us + %e us/s\n", 
 			da->clockrefmjd, da->clockorder, da->clockcoeff[0], da->clockcoeff[1]);
-	fprintf(fp, "	 Mount = %s\n", antennaMountTypeNames[da->mount]);
-	fprintf(fp, "	 SiteType = %s\n", antennaSiteTypeNames[da->sitetype]);
-	fprintf(fp, "	 Site Frame = %s\n", sourceCoordinateFrameTypeNames[da->site_coord_frame]);
-	fprintf(fp, "	 Offset = %f, %f, %f m\n", 
+	fprintf(fp, "    Mount = %s\n", antennaMountTypeNames[da->mount]);
+	fprintf(fp, "    SiteType = %s\n", antennaSiteTypeNames[da->sitetype]);
+	fprintf(fp, "    Site Frame = %s\n", sourceCoordinateFrameTypeNames[da->site_coord_frame]);
+	fprintf(fp, "    Offset = %f, %f, %f m\n", 
 			da->offset[0], da->offset[1], da->offset[2]);
-	fprintf(fp, "	 X, Y, Z = %f, %f, %f m\n", da->X, da->Y, da->Z);
-	fprintf(fp, "	 dX, dY, dZ = %f, %f, %f m/s\n", da->dX, da->dY, da->dZ);
+	fprintf(fp, "    X, Y, Z = %f, %f, %f m\n", da->X, da->Y, da->Z);
+	fprintf(fp, "    dX, dY, dZ = %f, %f, %f m/s\n", da->dX, da->dY, da->dZ);
 	if(da->spacecraftId >= 0)
 	{
-		fprintf(fp, "	 SpacecraftId = %d\n", da->spacecraftId);
-		fprintf(fp, "	 SC Name = %s\n", da->sc_name);
+		fprintf(fp, "    SpacecraftId = %d\n", da->spacecraftId);
+		fprintf(fp, "    SC Name = %s\n", da->sc_name);
 	}
 }
 
