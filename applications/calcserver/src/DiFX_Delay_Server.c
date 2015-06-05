@@ -38,6 +38,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <signal.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include "CALCServer.h"
@@ -51,6 +52,7 @@
 
 /* GLOBALS */
 int verbosity = 0;
+static volatile sig_atomic_t sending_to_caller = 0;
 
 
 int  ifirst, ilogdate = 1;
@@ -62,6 +64,42 @@ const char Version[] = "DiFX_Delay_Server Version 0.0.0";
 static struct timeval TIMEOUT = {25, 0};
 #define SECONDS_PER_DAY INT64_C(86400)
 #define SECONDS_PER_DAY_DBL (86400.0)
+
+
+
+
+
+void DiFX_Delay_Server_Signal_Handler(int signum)
+{
+	if(signum == SIGPIPE)
+	{
+		if((sending_to_caller))
+		{
+			/* Caller died on us before we could return results --- ignore this */
+			signal(signum, DiFX_Delay_Server_Signal_Handler);
+			if((flog))
+			{
+				fprintf(flog, "DiFX_Delay_Server_Signal_Handler received SIGPIPE while returning results to caller\n");
+			}
+			return;
+		}
+		/* Something else happened.  Set the signal handling back to the
+		   default, and re-raise the signal to get the appropriate behavior.
+		*/
+		signal (signum, SIG_DFL);
+		if((flog))
+		{
+			fprintf(stderr, "DiFX_Delay_Server_Signal_Handler received SIGPIPE\n");
+		}
+		raise (signum);
+	}
+	if((flog))
+	{
+		fprintf(stderr, "DiFX_Delay_Server_Signal_Handler received unexpected signal %d\n", signum);
+	}
+	return;
+}
+
 
 
 
@@ -170,7 +208,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
     } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
 
 	
-	fprintf(flog, "DEBUG  CALCPROG stage 0\n");fflush(flog);
     if(!initialized)
     {
         char *host = getenv("CALC_SERVER");
@@ -179,15 +216,14 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
             fprintf(flog, "No CALC_SERVER environment variable --- using localhost\n");
             host = localhost;
         }
-		fprintf(flog, "DEBUG  CALCPROG stage 0.0 %s\n", host);fflush(flog);
         if (!(cl = clnt_create (host, CALCPROG, CALCVERS, "tcp")))
         {
             clnt_pcreateerror (host);
-            fprintf(flog, "ERROR: rpc clnt_create fails for host : '%s'\n", host);
+            fprintf(flog, "ERROR: CALC_SERVER rpc clnt_create fails for host : '%s'\n", host);
             return -1;
         }
+        initialized = 1;
     }
-	fprintf(flog, "DEBUG  CALCPROG stage 0.1\n");fflush(flog);
 
     /* sanity check */
 
@@ -225,10 +261,8 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
 
     
 
-	fprintf(flog, "DEBUG  CALCPROG stage 0.2\n");fflush(flog);
     /* clear memory */
     memset(arg_1, 0, sizeof(getCALC_arg));
-	fprintf(flog, "DEBUG  CALCPROG stage 0.3\n");fflush(flog);
 
     /* copy the general stuff */
     arg_1->date = arg_0->date;
@@ -274,7 +308,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
             arg_1->ypole[e-min_loc]    = arg_0->EOP.EOP_val[e].ypole;
         }
     }
-	fprintf(flog, "DEBUG  CALCPROG stage 1\n");fflush(flog);
 
     /* copy station 0 over to CALCPROG station a */
     /* also copy over constant stuff for station b */
@@ -288,7 +321,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
     station_a_code[2] = 0;
     arg_1->station_a = station_a_code;
     arg_1->axis_type_a = arg_0->station.station_val[0].axis_type;
-	fprintf(flog, "DEBUG  CALCPROG stage 2\n");fflush(flog);
 
 	/* Fixed respose values */
 	res_0->request_id = arg_0->request_id;
@@ -298,7 +330,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
     /* Loop over stations and sources */
     for(station = 1; station < arg_0->Num_Stations; ++station)
     {
-		fprintf(flog, "DEBUG  CALCPROG stage 3 %u\n", station);fflush(flog);
         /* fill in station b information */
         arg_1->b_x = arg_0->station.station_val[station].station_pos.x;
         arg_1->b_y = arg_0->station.station_val[station].station_pos.y;
@@ -314,7 +345,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
         /* Loop over sources */
         for(source = 0; source < arg_0->Num_Sources; ++source)
         {
-			fprintf(flog, "DEBUG  CALCPROG stage 4 %u %u\n", station, source);fflush(flog);
 			arg_1->request_id = ++request_id;			
             arg_1->ra = arg_0->source.source_val[source].ra;
             arg_1->dec = arg_0->source.source_val[source].dec;
@@ -325,7 +355,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
             arg_1->source = arg_0->source.source_val[source].source_name;
 
             /* call server */
-			fprintf(flog, "DEBUG  CALCPROG stage 5 %u %u\n", station, source);fflush(flog);
             res_1 = getcalc_1(arg_1, cl);
             if(res_1 == NULL)
             {
@@ -334,7 +363,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
                 return -8;
             }
 
-			fprintf(flog, "DEBUG  CALCPROG stage 6 %u %u\n", station, source);fflush(flog);
             /* copy server result into our large result table */
             res_0->server_error = res_1->error;
             res_0->model_error  = res_1->error;
@@ -397,7 +425,6 @@ static int difx_delay_server_prog_1_CALCPROG(struct getDIFX_DELAY_SERVER_1_arg *
             res_0->result.result_val[station*arg_0->Num_Sources+source].baselineA2000.z = fitsnan.d;
 
             /* free the results */
-			fprintf(flog, "DEBUG  CALCPROG stage 7 %u %u\n", station, source);fflush(flog);
             
             if(clnt_freeres(cl, (xdrproc_t) xdr_getCALC_res, (caddr_t) res_1) != 1)
             {
@@ -475,9 +502,10 @@ static int difx_delay_server_prog_1_CALC_9_1_RAPROG(struct getDIFX_DELAY_SERVER_
         if (!(cl = clnt_create (host, CALC_9_1_RAPROG, CALC_9_1_RAVERS, "tcp")))
         {
             clnt_pcreateerror (host);
-            fprintf(flog, "ERROR: rpc clnt_create fails for host : '%s'\n", host);
+            fprintf(flog, "ERROR: CALC_9_1_RA_SERVER rpc clnt_create fails for host : '%s'\n", host);
             return -1;
         }
+        initialized = 1;
     }
 
     /* sanity check */
@@ -957,7 +985,6 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
     resp->Num_Sources = NUM_SOURCES;
     resp->result.result_len = NUM_STATIONS*NUM_SOURCES;
     resp->result.result_val = memory;
-    fprintf(flog, "DEBUG  stage 0 %d\n", my_error_code);fflush(flog);
 
     /* Figure out which delay server to call */
     handler_error_code = 0;
@@ -980,11 +1007,10 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
         }
         if((handler_error_code))
         {
-            fprintf(flog, "Error code %d returned by handler\n", handler_error_code);
+	        fprintf(flog, "Error code %d returned by handler software for server 0x%lX\n", handler_error_code, argument.delay_server);
             my_error_code = 7;
         }
     }
-	fprintf(flog, "DEBUG  stage 1\n");fflush(flog);
     resp->delay_server_error = my_error_code;
     if((!handler_error_code) && (argument.verbosity >= 2))
     {
@@ -1023,22 +1049,17 @@ difx_delay_server_prog_1(struct svc_req *pRequest, SVCXPRT *pTransport)
         fflush(flog);
     }
 
-    if(((handler_error_code)) || ((my_error_code)))
-    {
-        result.this_error = 1;
-    }
-    else {
-        result.this_error = 0;
-    }
+    result.this_error = 0;
             
 
     /* return result to client */
-
+    sending_to_caller = 1;
     if (!svc_sendreply (pTransport, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_res, (char *)&result))
     {
 	    fprintf(flog, "Cound not send getDIFX_DELAY_SERVER_1_res results back\n");fflush(flog);
         svcerr_systemerr (pTransport);
     }
+    sending_to_caller = 0;
 
     /* free any memory allocated by xdr routines when argument was decoded */
     if (!svc_freeargs (pTransport, (xdrproc_t) xdr_getDIFX_DELAY_SERVER_1_arg, (char *)&argument))
@@ -1065,6 +1086,9 @@ int main (int argc, char *argv[])
     SVCXPRT *pTransport;    /* transport handle */
     time_t  timep, *tp;
     const char *filename;
+
+    /* Set up signal handling */
+    signal(SIGPIPE, DiFX_Delay_Server_Signal_Handler);
 
     /* Save the Server startup time and version number for the log file */
     tp = &timep;
