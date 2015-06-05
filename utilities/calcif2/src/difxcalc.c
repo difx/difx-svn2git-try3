@@ -130,20 +130,35 @@ static unsigned int select_lmn_derivative_indices(enum PerformDirectionDerivativ
     static const unsigned int num_lmn_2 = 13;
     static const int lmn_22[SELECT_LMN_DERIVATIVE_INDICES_MAX]   = {0,+1,+2,+3,+4,+5,+6,+7,+8,+9,10,11,12,13,14,15,16,17,18};
     static const unsigned int num_lmn_22 = 19;
+	if(  (perform_uvw == PerformDirectionDerivativeNone)
+	  || (perform_uvw == PerformDirectionDerivativeFirstDerivative)
+	  || (perform_uvw == PerformDirectionDerivativeFirstDerivative2)
+		 )
+	{
+		/* Correct */
+	}
+	else
+	{
+		fprintf(stderr, "Error in select_lmn_derivative_indices: unsupported perform_uvw value %s\n", performDirectionDerivativeTypeNames[perform_uvw]);
+		exit(EXIT_FAILURE);
+	}
     if(perform_lmn == PerformDirectionDerivativeNone)
     {
-        if(perform_uvw == PerformDirectionDerivativeFirstDerivative)
+        if(perform_uvw == PerformDirectionDerivativeNone)
+        {
+            *dp = none;
+            return num_none;
+        }
+        else if(perform_uvw == PerformDirectionDerivativeFirstDerivative)
         {
             *dp = uv;
             return num_uv;
         }
-        else if(perform_uvw == PerformDirectionDerivativeFirstDerivative2)
+        else
         {
             *dp = uv2;
             return num_uv2;
         }
-        *dp = none;
-        return num_none;
     }
     else if(perform_lmn == PerformDirectionDerivativeFirstDerivative)
     {
@@ -170,8 +185,9 @@ static unsigned int select_lmn_derivative_indices(enum PerformDirectionDerivativ
         *dp = lmn_22;
         return num_lmn_22;
     }
-    *dp = none;
-    return num_none;
+	fprintf(stderr, "Error in select_lmn_derivative_indices: unsupported perform_lmn value %s\n", performDirectionDerivativeTypeNames[perform_lmn]);
+	exit(EXIT_FAILURE);
+    return 0;
 }
 static unsigned int select_xyz_derivative_indices(enum PerformDirectionDerivativeType perform_xyz, const int * restrict * restrict dp)
 {
@@ -206,7 +222,12 @@ static unsigned int select_xyz_derivative_indices(enum PerformDirectionDerivativ
     static const unsigned int num_xyz_2 = 12;
     static const int xyz_22[SELECT_XYZ_DERIVATIVE_INDICES_MAX]   = {+0,+1,+2,+3,+4,+5,+6,+7,+8,+9,10,11,12,13,14,15,16,17};
     static const unsigned int num_xyz_22 = 18;
-    if(perform_xyz == PerformDirectionDerivativeFirstDerivative)
+    if(perform_xyz == PerformDirectionDerivativeNone)
+    {
+        *dp = none;
+        return num_none;
+    }
+    else if(perform_xyz == PerformDirectionDerivativeFirstDerivative)
     {
         *dp = xyz;
         return num_xyz;
@@ -226,8 +247,9 @@ static unsigned int select_xyz_derivative_indices(enum PerformDirectionDerivativ
         *dp = xyz_22;
         return num_xyz_22;
     }
-    *dp = none;
-    return num_none;
+	fprintf(stderr, "Error in select_xyz_derivative_indices: unsupported perform_xyz value %s\n", performDirectionDerivativeTypeNames[perform_xyz]);
+	exit(EXIT_FAILURE);
+    return 0;
 }
 
 
@@ -246,6 +268,7 @@ static unsigned int calculateSourceIndexOffset(const DifxJob* const job, const D
     
     count += select_lmn_derivative_indices(perform_uvw, perform_lmn, &junk);
     count += select_xyz_derivative_indices(perform_xyz, &junk);
+
     return count;
 }
 
@@ -502,34 +525,34 @@ static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct get
         return -2;
     }
     /* Sanity check */
-    if((results->getDIFX_DELAY_SERVER_1_res_u.response.date != request->date)
-      || (results->getDIFX_DELAY_SERVER_1_res_u.response.time != request->time))
-    {
-        fprintf(stderr, "Error: callCalc: response date does not match request\n");
-        return -3;
-    }
-    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations != request->Num_Stations)
-      || (results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources != request->Num_Sources))
-    {
-        fprintf(stderr, "Error: callCalc: response number stations/sources does not match request\n");
-        return -4;
-    }
-    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len != request->Num_Stations*request->Num_Sources)
-    {
-        fprintf(stderr, "Error: callCalc: response number stations/sources does not match data allocation\n");
-        return -5;
-    }
-    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.request_id != request_id)
-    {
-        fprintf(stderr, "Error: callCalc: response request_id (%ld) does not match expected value (%ld)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.request_id, request_id);
-        return -6;
-    }
-    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error < 0)
+    if((results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error < 0)
            || (results->getDIFX_DELAY_SERVER_1_res_u.response.server_error < 0)
            || (results->getDIFX_DELAY_SERVER_1_res_u.response.model_error < 0)
             )
     {
             fprintf(stderr, "Error: callCalc: fatal error from delay server (%d %d %d)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.server_error, results->getDIFX_DELAY_SERVER_1_res_u.response.model_error);
+        return -3;
+    }
+    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.date != request->date)
+      || (results->getDIFX_DELAY_SERVER_1_res_u.response.time != request->time))
+    {
+        fprintf(stderr, "Error: callCalc: response date does not match request (%d %.16E    %d %.16E)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.date, results->getDIFX_DELAY_SERVER_1_res_u.response.time, request->date, request->time);
+        return -4;
+    }
+    else if((results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations != request->Num_Stations)
+      || (results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Sources != request->Num_Sources))
+    {
+        fprintf(stderr, "Error: callCalc: response number stations/sources does not match request\n");
+        return -5;
+    }
+    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.result.result_len != request->Num_Stations*request->Num_Sources)
+    {
+        fprintf(stderr, "Error: callCalc: response number stations/sources does not match data allocation\n");
+        return -6;
+    }
+    else if(results->getDIFX_DELAY_SERVER_1_res_u.response.request_id != request_id)
+    {
+        fprintf(stderr, "Error: callCalc: response request_id (%ld) does not match expected value (%ld)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.request_id, request_id);
         return -7;
     }
     else if(results->getDIFX_DELAY_SERVER_1_res_u.response.delay_server != request->delay_server)
@@ -542,7 +565,6 @@ static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct get
         fprintf(stderr, "Error: callCalc: Unknown server_struct_setup_code, wanted 0x%lX got 0x%lX\n", request->server_struct_setup_code, results->getDIFX_DELAY_SERVER_1_res_u.response.server_struct_setup_code);
         return -9;
     }
-    p->delayProgramDetailedVersion = results->getDIFX_DELAY_SERVER_1_res_u.response.server_version;
     if((verbose >= 3))
     {
         unsigned int st, so;
@@ -613,12 +635,7 @@ static int check_delayserver_operation(DifxInput* const D, CalcParams* const p, 
 	    float f;
     } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
 
-    fprintDifxJob(stderr, D->job);
-    delayServerHost = p->delayServerHost;
-    if(delayServerHost[0] == 0)
-    {
-	    delayServerHost = D->job->delayServerHost;
-    }
+    delayServerHost = D->job->delayServerHost;
     if(delayServerHost[0] == 0)
     {
 	    if((delayServerHost = getenv("DIFX_DELAY_SERVER")) != NULL)
@@ -627,31 +644,15 @@ static int check_delayserver_operation(DifxInput* const D, CalcParams* const p, 
 	    else {
 		    delayServerHost = localhost;
 	    }
+		snprintf(D->job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", delayServerHost);
     }
-    snprintf(D->job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", delayServerHost);
-    snprintf(p->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", delayServerHost);
-    fprintf(stderr, "delay server types %d %d verbosity %d\n", (int)p->delayServerType, (int)D->job->delayServerType, verbose);
-    delayServerType = p->delayServerType;
-    if(delayServerType == UnknownServer)
-    {
-	    delayServerType = D->job->delayServerType;
-    }
-    D->job->delayServerType = delayServerType;
-    p->delayServerType = delayServerType;
-    delayVersion = p->delayVersion;
-    if(delayVersion == 0)
-    {
-	    delayVersion = D->job->delayVersion;
-    }
-    D->job->delayVersion = delayVersion;
-    p->delayVersion = delayVersion;
-    delayHandler = p->delayHandler;
-    if(delayHandler == 0)
-    {
-	    delayHandler = D->job->delayHandler;
-    }
-    D->job->delayHandler = delayHandler;
-    p->delayHandler = delayHandler;
+	if(verbose >= 2)
+	{
+		fprintf(stderr, "delay server types %d %s verbosity %d\n", (int)D->job->delayServerType, delayServerTypeNames[D->job->delayServerType], verbose);
+	}
+    delayServerType = D->job->delayServerType;
+    delayVersion = D->job->delayVersion;
+    delayHandler = D->job->delayHandler;
 	if(verbose > 1)
 	{
 		printf("Attempting to create RPC client with host='%s' handler=0x%lX version=0x%lX\n", delayServerHost, delayHandler, delayVersion);
@@ -1002,6 +1003,10 @@ static int get_Delay_Server_Parameters(DifxInput* const D, const CalcParams* con
         }
         else
         {
+			if(verbose)
+			{
+				printf ("Delay Server is returning normal parameter data.\n");
+			}
             free(D->job->calcParamTable);
             D->job->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
             
@@ -1210,6 +1215,11 @@ int difxCalcInit(DifxInput* const D, CalcParams* const p, const int verbose)
     p->sc_request.source.source_len = 1;
     p->sc_request.source.source_val = p->sc_source;
 
+	if(verbose >= 3)
+	{
+		fprintf(stderr, "difxCalcInit finishing successfully.\n");
+	}
+	
     return 0;
 }
 
@@ -1526,22 +1536,32 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
 	    float f;
     } fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
 
+
     switch(perform_uvw) {
         /* Remeber that u points in the opposite direction to l */
     case PerformDirectionDerivativeFirstDerivative2:
         {
+            if(verbose >= 3)
+            {
+                printf("extractCalcResultsSingleSourceDerivs results\n");
+                printf("    original delay server  UVW = %14E %14E %14E\n", model->u[index], model->v[index], model->w[index]);
+            }
             model->u[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lm] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lp]) * 0.5;
             model->v[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mm]) * 0.5;
             model->w[index] = C_LIGHT * dlmn[SELECT_LMN_DERIVATIVE_INDICES_0];
             if(verbose >= 3)
             {
-                printf("extractCalcResultsSingleSourceDerivs results\n");
-                printf("    delay server UVW = %14E %14E %14E\n", model->u[index], model->v[index], model->w[index]);
+                printf("    numerical delay server UVW = %14E %14E %14E\n", model->u[index], model->v[index], model->w[index]);
             }
         }
         break;
     case PerformDirectionDerivativeFirstDerivative:
         {
+            if(verbose >= 3)
+            {
+                printf("extractCalcResultsSingleSourceDerivs results\n");
+                printf("    original delay server  UVW = %14E %14E %14E\n", model->u[index], model->v[index], model->w[index]);
+            }
             model->u[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_0] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_Lp]);
             model->v[index] = lmn_mult * (dlmn[SELECT_LMN_DERIVATIVE_INDICES_Mp] - dlmn[SELECT_LMN_DERIVATIVE_INDICES_0]);
             model->w[index] = C_LIGHT * dlmn[SELECT_LMN_DERIVATIVE_INDICES_0];
@@ -1550,8 +1570,7 @@ static unsigned int extractCalcResultsSingleSourceDerivs(const double delta_lmn,
             /* model->w[index] = C_LIGHT*d; */
             if(verbose >= 3)
             {
-                printf("extractCalcResultsSingleSourceDerivs results\n");
-                printf("    delay server UVW = %14E %14E %14E\n", model->u[index], model->v[index], model->w[index]);
+                printf("    numerical delay server UVW = %14E %14E %14E\n", model->u[index], model->v[index], model->w[index]);
             }
         }
         break;
@@ -1718,7 +1737,7 @@ static unsigned int extractCalcResultsSingleSource(const DifxInput* const D, con
     if(isinf(res[0].dry_atmos))  rv |=  0x8;
     if(isnan(res[0].wet_atmos))  rv |= 0x10;
     if(isinf(res[0].wet_atmos))  rv |= 0x20;
-    if(isnan(res[0].iono_atmos)) rv |= 0x40;
+    /* if(isnan(res[0].iono_atmos)) rv |= 0x40; */
     if(isinf(res[0].iono_atmos)) rv |= 0x80;
 
     model->delay[timeIndex]    = -res[0].delay*MICROSECONDS_PER_SECOND;
@@ -1746,7 +1765,6 @@ static unsigned int extractCalcResultsSingleSource(const DifxInput* const D, con
         model->gs_sc_delay[timeIndex]    = (sc->GS_transmission_delay + sc->GS_transmission_delay_sync)*MICROSECONDS_PER_SECOND;
         model->gs_clock_delay[timeIndex] = (-sc->GS_clock_delay - sc->GS_clock_delay_sync)*MICROSECONDS_PER_SECOND;
     }
-        
 
     if(verbose >= 3)
     {
@@ -1757,14 +1775,28 @@ static unsigned int extractCalcResultsSingleSource(const DifxInput* const D, con
 
     if(((perform_uvw)) || ((perform_lmn)) || ((perform_xyz)))
     {
-        switch(p->aberCorr) {
+        switch(D->job->aberCorr) {
         case AberCorrExact:
             {
                 for(i=0; i < SELECT_LMN_DERIVATIVE_INDICES_MAX; i++)
                 {
                     if(lmn_indices[i] >= 0)
                     {
-                        dlmn[i] = res[lmn_indices[i]].delay - res[lmn_indices[i]].wet_atmos - res[lmn_indices[i]].dry_atmos - res[lmn_indices[i]].iono_atmos;
+                        dlmn[i] = res[lmn_indices[i]].delay - res[lmn_indices[i]].wet_atmos - res[lmn_indices[i]].dry_atmos;
+						/* TODO: instead of blindly calculating an ionospheric
+						   delay correction at 1 GHz, the structure needs to be
+						   changed to output a polynomial correction depending
+						   on \nu^{-2} for all numerical derivative products.
+						*/
+						if(isnan(res[lmn_indices[i]].iono_atmos))
+						{
+							/* do nothing --- many models do not implement iono
+							 */
+						}
+						else
+						{
+							dlmn[i] -= res[lmn_indices[i]].iono_atmos;
+						}
                         if(isnan(dlmn[i]))     rv |= 0x100;
                         if(isinf(dlmn[i]))     rv |= 0x200;
     
@@ -1775,6 +1807,20 @@ static unsigned int extractCalcResultsSingleSource(const DifxInput* const D, con
                     if(xyz_indices[i] >= 0)
                     {
                         dxyz[i] = res[xyz_indices[i]].delay - res[xyz_indices[i]].wet_atmos - res[xyz_indices[i]].dry_atmos - res[xyz_indices[i]].iono_atmos;
+						/* TODO: instead of blindly calculating an ionospheric
+						   delay correction at 1 GHz, the structure needs to be
+						   changed to output a polynomial correction depending
+						   on \nu^{-2} for all numerical derivative products.
+						*/
+						if(isnan(res[xyz_indices[i]].iono_atmos))
+						{
+							/* do nothing --- many models do not implement iono
+							 */
+						}
+						else
+						{
+							dxyz[i] -= res[xyz_indices[i]].iono_atmos;
+						}
                         if(isnan(dlmn[i]))     rv |= 0x400;
                         if(isinf(dlmn[i]))     rv |= 0x800;
                     }
@@ -1830,10 +1876,14 @@ static int extractCalcResults(const DifxScan* const scan, const DifxInput* const
     
     for(antId=0; antId < scan->nAntenna; ++antId)
     {
+		struct modelTempLMN* modelLMN_1 = (modelLMN == NULL) ? NULL : modelLMN[antId];
+		struct modelTempXYZ* modelXYZ_1 = (modelXYZ == NULL) ? NULL : modelXYZ[antId];
         antenna = D->antenna + antId;
         s_index = 0;
         for(k = 0; k < scan->nPhaseCentres +1; ++k)
         {
+			struct modelTempLMN* modelLMN_0 = (modelLMN_1 == NULL) ? NULL : modelLMN_1 + k;
+			struct modelTempXYZ* modelXYZ_0 = (modelXYZ_1 == NULL) ? NULL : modelXYZ_1 + k;
             if(k == 0) // this is the pointing centre
             {
                 sourceId = scan->pointingCentreSrc;
@@ -1843,7 +1893,7 @@ static int extractCalcResults(const DifxScan* const scan, const DifxInput* const
                 sourceId = scan->phsCentreSrcs[k-1];
             }
             source = D->source + sourceId;
-            rv = extractCalcResultsSingleSource(D, p, antenna, source, antId+1, s_index, timeIndex, &(model[antId][k]), &(modelLMN[antId][k]), &(modelXYZ[antId][k]),  results, &num_source_entries, verbose);
+            rv = extractCalcResultsSingleSource(D, p, antenna, source, antId+1, s_index, timeIndex, &(model[antId][k]), modelLMN_0, modelXYZ_0, results, &num_source_entries, verbose);
             s_index += num_source_entries;
             if((rv))
             {
@@ -3497,6 +3547,26 @@ static unsigned int scanCalcSetupSingleSourceDerivs(unsigned int s_index, struct
         }
     }
 
+	/* Now convert the Cartesian coordinates into (Ra,Dec) for those
+	   delay servers that do not understand Cartesian coordinates
+	*/
+	for(i=1; i < num_lmn+num_xyz; ++i)
+	{
+        double pos[DIFXCALC_3D_VEC_SIZE];
+		double ra, dec, r, parallax;
+		pos[0] = request->source.source_val[s_index+i].source_pos.x;
+		pos[1] = request->source.source_val[s_index+i].source_pos.y;
+		pos[2] = request->source.source_val[s_index+i].source_pos.z;
+		difx_Cartesian_to_RADec(pos, &ra, &dec, &r);
+		request->source.source_val[s_index+i].ra = ra;
+		request->source.source_val[s_index+i].dec = dec;
+		if(request->source.source_val[s_index+i].parallax != 0.0)
+		{
+			parallax = ASTR_UNIT_IAU_2012 / (r*DIFX_PI) * 180.0*3600.0;
+			request->source.source_val[s_index+i].parallax = parallax;
+		}
+	}
+
     return num_lmn + num_xyz;
 }
 
@@ -3802,7 +3872,7 @@ static unsigned int scanCalcSetupSingleSource(unsigned int s_index, struct getDI
         {
             double ra, dec, r, parallax;
             difx_Cartesian_to_RADec(pos, &ra, &dec, &r);
-            parallax = atan(r/ASTR_UNIT_IAU_2012) / DIFX_PI * 180.0*3600.0;
+            parallax = ASTR_UNIT_IAU_2012 / (r*DIFX_PI) * 180.0*3600.0;
             request->source.source_val[s_index].ra = ra;
             request->source.source_val[s_index].dec = dec;
             request->source.source_val[s_index].dra = 0.0;
@@ -4324,8 +4394,9 @@ static int scanCalcGetDelays(const DifxScan* const scan, const int haveSpacecraf
     job = D->job;
     request = &(p->request);
     response = &(results.getDIFX_DELAY_SERVER_1_res_u.response);
-    subInc = p->increment/(double)(D->job->polyOrder*p->oversamp);
+    subInc = D->job->polyInterval/(double)(D->job->polyOrder*p->oversamp);
 
+	
     if((haveSpacecraftSource))
     {
         last_delay = (double*)malloc(sizeof(double)*request->Num_Stations*request->Num_Sources);
@@ -4722,6 +4793,8 @@ static int scanCalc(const int scanId, DifxInput* const D, const char *prefix, Ca
         {
             int sourceId;
             DifxSource *source;
+			enum PerformDirectionDerivativeType perform_lmn_deriv;
+			enum PerformDirectionDerivativeType perform_xyz_deriv;
             if(k == 0)
             {
                 sourceId = scan->pointingCentreSrc;
@@ -4737,11 +4810,13 @@ static int scanCalc(const int scanId, DifxInput* const D, const char *prefix, Ca
             }
             
             scan->im[antId][k] = (DifxPolyModel *)calloc(nInt, sizeof(DifxPolyModel));
-            if(((job->perform_lmn_deriv)) && (source->perform_lmn_deriv != PerformDirectionDerivativeNone))
+			perform_lmn_deriv = (source->perform_lmn_deriv == PerformDirectionDerivativeDefault) ? job->perform_lmn_deriv: source->perform_lmn_deriv;
+            if(perform_lmn_deriv >= PerformDirectionDerivativeFirstDerivative)
             {
                 scan->imLMN[antId][k] = (DifxPolyModelLMNExtension *)calloc(nInt, sizeof(DifxPolyModelLMNExtension));
             }
-            if(((job->perform_xyz_deriv)) && (source->perform_xyz_deriv != PerformDirectionDerivativeNone))
+			perform_xyz_deriv = (source->perform_xyz_deriv == PerformDirectionDerivativeDefault) ? job->perform_xyz_deriv: source->perform_xyz_deriv;
+            if(perform_xyz_deriv >= PerformDirectionDerivativeFirstDerivative)
             {
                 scan->imXYZ[antId][k] = (DifxPolyModelXYZExtension *)calloc(nInt, sizeof(DifxPolyModelXYZExtension));
             }
@@ -4761,7 +4836,7 @@ static int scanCalc(const int scanId, DifxInput* const D, const char *prefix, Ca
                 scan->im[antId][k][i].sec = sec;
                 scan->im[antId][k][i].order = D->job->polyOrder;
                 scan->im[antId][k][i].validDuration = D->job->polyInterval;
-                if((source->perform_uvw_deriv))
+                if(source->perform_uvw_deriv != PerformDirectionDerivativeDefault)
                 {
                     scan->im[antId][k][i].delta = source->delta_lmn;
                 }
@@ -4769,28 +4844,40 @@ static int scanCalc(const int scanId, DifxInput* const D, const char *prefix, Ca
                 {
                     scan->im[antId][k][i].delta = job->delta_lmn;
                 }
-                if((scan->imLMN[antId][k]))
-                {
-                    if((source->perform_lmn_deriv))
-                    {
-                        scan->imLMN[antId][k][i].delta = source->delta_lmn;
-                    }
-                    else
-                    {
-                        scan->imLMN[antId][k][i].delta = job->delta_lmn;
-                    }
+				if((scan->imLMN))
+				{
+					if((scan->imLMN[antId]))
+					{
+						if((scan->imLMN[antId][k]))
+						{
+							if(source->perform_lmn_deriv != PerformDirectionDerivativeDefault)
+							{
+								scan->imLMN[antId][k][i].delta = source->delta_lmn;
+							}
+							else
+							{
+								scan->imLMN[antId][k][i].delta = job->delta_lmn;
+							}
+						}
+					}
                 }
-                if((scan->imXYZ[antId][k]))
-                {
-                    if((source->perform_xyz_deriv))
-                    {
-                        scan->imXYZ[antId][k][i].delta = source->delta_xyz;
-                    }
-                    else
-                    {
-                        scan->imXYZ[antId][k][i].delta = job->delta_xyz;
-                    }
-                }
+				if((scan->imXYZ))
+				{
+					if((scan->imXYZ[antId]))
+					{
+						if((scan->imXYZ[antId][k]))
+						{
+							if(source->perform_xyz_deriv != PerformDirectionDerivativeDefault)
+							{
+								scan->imXYZ[antId][k][i].delta = source->delta_xyz;
+							}
+							else
+							{
+								scan->imXYZ[antId][k][i].delta = job->delta_xyz;
+							}
+						}
+					}
+				}
                 sec += D->job->polyInterval;
             }
         } /* for k over scan->nPhaseCentres + 1 */
@@ -4817,24 +4904,29 @@ static int scanCalc(const int scanId, DifxInput* const D, const char *prefix, Ca
     }
 
     /* deallocate memory */
-    if((model)) {
-        for(antId = 0; antId < scan->nAntenna; ++antId) {
+    if((model))
+	{
+        for(antId = 0; antId < scan->nAntenna; ++antId)
+		{
             free(model[antId]);
         }
     }
     free(model);
-    if((modelLMN)) {
-        for(antId = 0; antId < scan->nAntenna; ++antId) {
+    if((modelLMN))
+	{
+        for(antId = 0; antId < scan->nAntenna; ++antId)
+		{
             free(modelLMN[antId]);
         }
     }
     free(modelLMN);
-    if((modelXYZ)) {
-        for(antId = 0; antId < scan->nAntenna; ++antId) {
+    if((modelXYZ))
+	{
+        for(antId = 0; antId < scan->nAntenna; ++antId)
+		{
             free(modelXYZ[antId]);
         }
     }
-    free(model);
     return 0;
 }
 
@@ -4844,7 +4936,6 @@ int difxCalc(DifxInput* const D, CalcParams* const p, const char *prefix, const 
     int v;
     int isLast;
     DifxScan *scan;
-    DifxJob *job;
 
     if(!D)
     {
@@ -4854,9 +4945,7 @@ int difxCalc(DifxInput* const D, CalcParams* const p, const char *prefix, const 
     for(scanId = 0; scanId < D->nScan; ++scanId)
     {
         scan = D->scan + scanId;
-        job = D->job;
 
-        job->aberCorr = p->aberCorr;
         if(scan->im)
         {
             fprintf(stderr, "Error: difxCalc: scan %d: model already exists\n", scanId);
@@ -4883,6 +4972,11 @@ int difxCalc(DifxInput* const D, CalcParams* const p, const char *prefix, const 
         {
             isLast = 0;
         }
+
+		if(verbose >= 2)
+		{
+			fprintf(stderr, "difxCalc subroutine starting scanId=%d\n", scanId);
+		}
         v = scanCalc(scanId, D, prefix, p, isLast, verbose);
         if(v < 0)
         {

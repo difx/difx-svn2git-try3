@@ -224,15 +224,15 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 	opts->perform_uvw_deriv = PerformDirectionDerivativeDefault;
 	opts->perform_lmn_deriv = PerformDirectionDerivativeDefault;
 	opts->perform_xyz_deriv = PerformDirectionDerivativeDefault;
-	opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-	opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
+	opts->delta_lmn = 0.0;
+	opts->delta_xyz = 0.0;
 	opts->delayServerType = UnknownServer; /* default to value in the .calc file */
 	opts->polyOrder = 0;    /* default to value in the .calc file */
 	opts->polyOversamp = 1;
 	opts->polyInterval = 0; /* default to value in the .calc file */
 	opts->interpol = 0;	/* usual solve */
 	opts->warnSpacecraftPointingSource = 1;
-	opts->aberCorr = AberCorrExact;
+	opts->aberCorr = DIFXIO_DEFAULT_ABER_CORR_TYPE;
 
 	for(i = 1; i < argc; ++i)
 	{
@@ -310,18 +310,10 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			else if(strcmp(argv[i], "--perform_delta") == 0)
 			{
 				opts->perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative;
-				if(opts->delta_lmn == 0.0)
-				{
-					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-				}
 			}
 			else if(strcmp(argv[i], "--perform_delta2") == 0)
 			{
 				opts->perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative2;
-				if(opts->delta_lmn == 0.0)
-				{
-					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-				}
 			}
 			else if(strcmp(argv[i], "--not-perform_delta_lmn") == 0)
 			{
@@ -330,34 +322,18 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			else if(strcmp(argv[i], "--perform_delta_lmn_1") == 0)
 			{
 				opts->perform_lmn_deriv = PerformDirectionDerivativeFirstDerivative;
-				if(opts->delta_lmn == 0.0)
-				{
-					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-				}
 			}
 			else if(strcmp(argv[i], "--perform_delta_lmn_12") == 0)
 			{
 				opts->perform_lmn_deriv = PerformDirectionDerivativeFirstDerivative2;
-				if(opts->delta_lmn == 0.0)
-				{
-					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-				}
 			}
 			else if(strcmp(argv[i], "--perform_delta_lmn_2") == 0)
 			{
 				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondDerivative;
-				if(opts->delta_lmn == 0.0)
-				{
-					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-				}
 			}
 			else if(strcmp(argv[i], "--perform_delta_lmn_22") == 0)
 			{
 				opts->perform_lmn_deriv = PerformDirectionDerivativeSecondDerivative2;
-				if(opts->delta_lmn == 0.0)
-				{
-					opts->delta_lmn = DIFXIO_DEFAULT_DELTA_LMN;
-				}
 			}
 			else if(strcmp(argv[i], "--not-perform_delta_xyz") == 0)
 			{
@@ -366,34 +342,18 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			else if(strcmp(argv[i], "--perform_delta_xyz_1") == 0)
 			{
 				opts->perform_xyz_deriv = PerformDirectionDerivativeFirstDerivative;
-				if(opts->delta_xyz == 0.0)
-				{
-					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
-				}
 			}
 			else if(strcmp(argv[i], "--perform_delta_xyz_12") == 0)
 			{
 				opts->perform_xyz_deriv = PerformDirectionDerivativeFirstDerivative2;
-				if(opts->delta_xyz == 0.0)
-				{
-					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
-				}
 			}
 			else if(strcmp(argv[i], "--perform_delta_xyz_2") == 0)
 			{
 				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondDerivative;
-				if(opts->delta_xyz == 0.0)
-				{
-					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
-				}
 			}
 			else if(strcmp(argv[i], "--perform_delta_xyz_22") == 0)
 			{
 				opts->perform_xyz_deriv = PerformDirectionDerivativeSecondDerivative2;
-				if(opts->delta_xyz == 0.0)
-				{
-					opts->delta_xyz = DIFXIO_DEFAULT_DELTA_XYZ;
-				}
 			}
 			else if(strcmp(argv[i], "--sekido") == 0)
 			{
@@ -561,23 +521,6 @@ static CommandLineOptions *newCommandLineOptions(int argc, char **argv)
 			}
 		}
 	}
-
-	if((opts->delta_lmn == 0.0) && ((opts->perform_uvw_deriv)))
-	{
-		fprintf(stderr, "Error: calcif2: delta_lmn is zero, but perform_uvw_deriv is not None\n");
-		++die;
-	}
-	if((opts->delta_lmn == 0.0) && ((opts->perform_lmn_deriv)))
-	{
-		fprintf(stderr, "Error: calcif2: delta_lmn is zero, but perform_lmn_deriv is not None\n");
-		++die;
-	}
-	if((opts->delta_xyz == 0.0) && ((opts->perform_xyz_deriv)))
-	{
-		fprintf(stderr, "Error: calcif2: delta_xyz is zero, but perform_xyz_deriv is not None\n");
-		++die;
-	}
-	
 
 	if(opts->delayVersion == 0)
 	{
@@ -882,46 +825,53 @@ static int runfile(const char *prefix, const CommandLineOptions *opts, CalcParam
 	}
 
 	(void) CheckInputForSpacecraft(D, p);
-	if((p->order)) {
-		D->job->polyOrder = p->order;
+	if((opts->polyOrder)) {
+		D->job->polyOrder = opts->polyOrder;
 	}
-	if((p->increment)) {
-		D->job->polyInterval = p->increment;
+	if((opts->polyInterval)) {
+		D->job->polyInterval = opts->polyInterval;
 	}
-	if(p->perform_uvw_deriv != PerformDirectionDerivativeDefault)
+	if(opts->perform_uvw_deriv != PerformDirectionDerivativeDefault)
 	{
-		D->job->perform_uvw_deriv = p->perform_uvw_deriv;
-		D->job->delta_lmn = p->delta_lmn;
+		D->job->perform_uvw_deriv = opts->perform_uvw_deriv;
 	}
-	if(p->perform_lmn_deriv != PerformDirectionDerivativeDefault)
+	if(opts->perform_lmn_deriv != PerformDirectionDerivativeDefault)
 	{
-		D->job->perform_lmn_deriv = p->perform_lmn_deriv;
-		D->job->delta_lmn = p->delta_lmn;
+		D->job->perform_lmn_deriv = opts->perform_lmn_deriv;
 	}
-	if(p->delta_lmn != DIFXIO_DEFAULT_DELTA_LMN)
+	if(opts->delta_lmn != 0.0)
 	{
-		D->job->delta_lmn = p->delta_lmn;
+		D->job->delta_lmn = opts->delta_lmn;
 	}
-	if(p->perform_xyz_deriv != PerformDirectionDerivativeDefault)
+	if(opts->perform_xyz_deriv != PerformDirectionDerivativeDefault)
 	{
-		D->job->perform_xyz_deriv = p->perform_xyz_deriv;
-		D->job->delta_xyz = p->delta_xyz;
+		D->job->perform_xyz_deriv = opts->perform_xyz_deriv;
 	}
-	if(p->delta_xyz != DIFXIO_DEFAULT_DELTA_XYZ)
+	if(opts->delta_xyz != 0.0)
 	{
-		D->job->delta_xyz = p->delta_xyz;
+		D->job->delta_xyz = opts->delta_xyz;
 	}
-	if(p->delta_lmn != 0.0)
+	if((D->job->delta_lmn == 0.0) && ((D->job->perform_uvw_deriv)))
 	{
-		D->job->delta_lmn = p->delta_lmn;
-		D->job->perform_lmn_deriv = p->perform_lmn_deriv;
+		fprintf(stderr, "Error: calcif2: D->job->delta_lmn is zero, but D->job->perform_uvw_deriv is not None\n");
+		return -1;
 	}
-	if(p->delta_xyz != 0.0)
+	if((D->job->delta_lmn == 0.0) && ((D->job->perform_lmn_deriv)))
 	{
-		D->job->delta_xyz = p->delta_xyz;
-		D->job->perform_xyz_deriv = p->perform_xyz_deriv;
+		fprintf(stderr, "Error: calcif2: D->job->delta_lmn is zero, but D->job->perform_lmn_deriv is not None\n");
+		return -1;
+	}
+	if((D->job->delta_xyz == 0.0) && ((D->job->perform_xyz_deriv)))
+	{
+		fprintf(stderr, "Error: calcif2: D->job->delta_xyz is zero, but D->job->perform_xyz_deriv is not None\n");
+		return -1;
 	}
 	
+	if(opts->aberCorr != DIFXIO_DEFAULT_ABER_CORR_TYPE)
+	{
+		D->job->aberCorr = opts->aberCorr;
+	}
+
 	if(difxVersion && D->job->difxVersion[0])
 	{
 		if(strncmp(difxVersion, D->job->difxVersion, DIFXIO_VERSION_LENGTH-1))
@@ -1019,26 +969,12 @@ CalcParams *newCalcParams(const CommandLineOptions *opts)
 
 	p = (CalcParams *)calloc(1, sizeof(CalcParams));
 
-	p->increment = opts->polyInterval;
-	p->order = opts->polyOrder;
 	p->oversamp = opts->polyOversamp;
-	p->perform_uvw_deriv = opts->perform_uvw_deriv;
-	p->perform_lmn_deriv = opts->perform_lmn_deriv;
-	p->perform_xyz_deriv = opts->perform_xyz_deriv;
-	p->delta_lmn = opts->delta_lmn;
-	p->delta_xyz = opts->delta_xyz;
 	p->interpol = opts->interpol;
-	p->aberCorr = opts->aberCorr;
 
-	/* We know that opts->delayServerHost is no more than DIFXIO_HOSTNAME_LENGTH-1 chars long */
-	strcpy(p->delayServerHost, opts->delayServerHost);
-	p->delayServerType = opts->delayServerType;
-	p->delayVersion = opts->delayVersion;
-	p->delayHandler = opts->delayHandler;
 	p->allowNegDelay = opts->allowNegDelay;
 	p->warnSpacecraftPointingSource = opts->warnSpacecraftPointingSource;
 	p->useExtraExternalDelay = opts->useExtraExternalDelay;
-	p->delayProgramDetailedVersion = 0;
 	p->Num_Allocated_Stations = 0;
 	p->Num_Allocated_Sources = 0;
 
