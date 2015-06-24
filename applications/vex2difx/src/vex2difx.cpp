@@ -571,7 +571,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, const CorrParams 
 	job->perform_xyz_deriv = stringToPerformDirectionDerivativeType(P->perform_xyz_deriv.c_str());
 	job->delta_lmn = P->delta_lmn;
 	job->delta_xyz = P->delta_xyz;
-	job->aberCorr = AberCorrExact;
+	job->aberCorr = DIFXIO_DEFAULT_ABER_CORR_TYPE;
 	job->calculate_own_retarded_position = (P->calculate_own_retarded_position) ? 1:0;
 	job->dutyCycle = J.dutyCycle;
 
@@ -2304,7 +2304,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			}
 			decdiff = fabs(D->source[i].dec - srcdec);
 			if(radiff < MAX_POS_DIFF && decdiff < MAX_POS_DIFF &&
-			   (strcmp(D->source[i].sc_name, pointingCentre->sc_difxname.c_str())==0) &&
+			   (strncmp(D->source[i].sc_name, pointingCentre->sc_difxname.c_str(), DIFXIO_NAME_LENGTH-1)==0) &&
 			   D->source[i].sc_epoch == srcsc_epoch &&
 			   D->source[i].calCode[0] == src->calCode &&
 			   D->source[i].qual == src->qualifier)
@@ -2379,7 +2379,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			for(int i = 0; i < D->nSource; ++i)
 			{
 				if(D->source[i].ra == p->ra && D->source[i].dec == p->dec &&
-				   (strcmp(D->source[i].sc_name, p->sc_difxname.c_str())==0) &&
+				   (strncmp(D->source[i].sc_name, p->sc_difxname.c_str(), DIFXIO_NAME_LENGTH-1)==0) &&
 				   D->source[i].sc_epoch == p->sc_epoch &&
 				   D->source[i].calCode[0] == p->calCode &&
 				   D->source[i].qual == p->qualifier	 &&
@@ -2861,7 +2861,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					}
 					if(v != 0)
 					{
-						cerr << "Error: test source ephemeris calculation failed.  Must stop." << endl;
+						cerr << "Error: test source ephemeris calculation failed with code " << v << ".  Must stop." << endl;
 						
 						exit(EXIT_FAILURE);
 					}
@@ -2937,7 +2937,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 							
 					if(v != 0)
 					{
-						cerr << "Error: source ephemeris calculation failed.  Must stop." << endl;
+						cerr << "Error: source ephemeris calculation failed with code " << v << ".  Must stop." << endl;
 					
 						exit(EXIT_FAILURE);
 					}
@@ -2947,7 +2947,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 						v = computeDifxSpacecraftEphemerisOffsets(ds);
 						if((v))
 						{
-							cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
+							cerr << "Error: ephemeris offset calculation failed with code " << v << ".  Must stop." << endl;
 										
 							exit(EXIT_FAILURE);
 						}
@@ -2997,7 +2997,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					
 					if(v != 0)
 					{
-						cerr << "Error: source geostationary ephemeris calculation failed.  Must stop." << endl;
+						cerr << "Error: source geostationary ephemeris calculation failed with code " << v << ".  Must stop." << endl;
 					
 						exit(EXIT_FAILURE);
 					}
@@ -3013,7 +3013,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 						v = computeDifxSpacecraftEphemerisOffsets(ds);
 						if((v))
 						{
-							cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
+							cerr << "Error: ephemeris offset calculation failed with code " << v << ".  Must stop." << endl;
 										
 							exit(EXIT_FAILURE);
 						}
@@ -3165,29 +3165,45 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 						cerr << "No sync time provided for ground reception syncing of spacecraft clock for scan start at MJD " << ephem_mjd_start << endl;
 					}
 					else {
-						if(mjd_sync < ephem_mjd_start) {
-							ephem_mjd_start = mjd_sync;
+						if(mjd_sync < ephem_mjd_start + 1E-6) {
+							ephem_mjd_start = mjd_sync - 1E-6;
 						}
-						else if(mjd_sync > ephem_mjd_stop) {
-							ephem_mjd_stop = mjd_sync;
+						else if(mjd_sync > ephem_mjd_stop - 1E-6) {
+							ephem_mjd_stop = mjd_sync + 1E-6;
 						}
 					}
 				}
+				deltat = antennaSetup->ephemDeltaT/SEC_DAY_DBL;	// convert from seconds to days
 				{
 					// allow for light travel time issues which may require
 					// an extended ephemeris
 
-					v = computeDifxSpacecraftAntennaEphemeris(ds, (ephem_mjd_start+ephem_mjd_stop)*0.5, 0.0, 1, 
-															  antennaSetup->ephemObject.c_str(),
-															  antennaSetup->ephemType.c_str(),
-															  antennaSetup->naifFile.c_str(),
-															  antennaSetup->ephemFile.c_str(),
-															  antennaSetup->orientationFile.c_str(),
-															  antennaSetup->JPLplanetaryephem.c_str(),
-															  antennaSetup->ephemClockError);
+					if(ds->spacecraft_time_type == SpacecraftTimeGroundReception)
+					{
+						v = computeDifxSpacecraftAntennaEphemeris(ds, ds->GS_mjd_sync + ds->GS_dayfraction_sync-1E-6, DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER*deltat + 2E-6, DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER, 
+						                                          antennaSetup->ephemObject.c_str(),
+						                                          antennaSetup->ephemType.c_str(),
+						                                          antennaSetup->naifFile.c_str(),
+						                                          antennaSetup->ephemFile.c_str(),
+						                                          antennaSetup->orientationFile.c_str(),
+						                                          antennaSetup->JPLplanetaryephem.c_str(),
+						                                          antennaSetup->ephemClockError);
+					}
+					else
+					{
+						v = computeDifxSpacecraftAntennaEphemeris(ds, (ephem_mjd_start+ephem_mjd_stop)*0.5, 0.0, 1, 
+						                                          antennaSetup->ephemObject.c_str(),
+						                                          antennaSetup->ephemType.c_str(),
+						                                          antennaSetup->naifFile.c_str(),
+						                                          antennaSetup->ephemFile.c_str(),
+						                                          antennaSetup->orientationFile.c_str(),
+						                                          antennaSetup->JPLplanetaryephem.c_str(),
+						                                          antennaSetup->ephemClockError);
+					}
+
 					if(v != 0)
 					{
-						cerr << "Error: test spacecraft antenna ephemeris calculation failed.  Must stop." << endl;
+						cerr << "Error: test for light travel time issues spacecraft antenna ephemeris calculation failed with code " << v << ".  Must stop." << endl;
 						
 						exit(EXIT_FAILURE);
 					}
@@ -3206,7 +3222,6 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					ds->GS_dayfraction_sync = fracday0;
 				}
 									
-				deltat = antennaSetup->ephemDeltaT/SEC_DAY_DBL;	// convert from seconds to days
 				n0 = static_cast<int>(std::floor((fracday0-deltat_2min)/deltat - (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3.0)*0.5));	// start ephmemeris at least 2 minutes and some increments early
 				mjd0 = mjdint + n0*deltat;			// always start an integer number of increments into day
 				nPoint = static_cast<int>(std::ceil(((ephem_mjd_stop-ephem_mjd_start)+2.0*deltat_2min)/deltat) + (DIFXIO_SPACECRAFT_MAX_POLY_ORDER+3) +1); // make sure to extend beyond the end of the job
@@ -3216,7 +3231,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					cout << "Computing spacecraft antenna ephemeris:" << endl;
 					cout << "  antenna name = " << antennaSetup->vexName << endl;
 					cout << "  antenna difx name = " << antennaSetup->difxName << endl;
-					cout << "  difx spacecraft name = " << phaseCentre->sc_difxname << endl;
+					cout << "  difx spacecraft name = " << antennaSetup->sc_difxname << endl;
 					cout << "  ephem object name = " << antennaSetup->ephemObject << endl;
 					cout << "  mjdint = " << mjdint << "  deltat = " << deltat << endl;
 					cout << "  startPoint = " << n0 << "  nPoint = " << nPoint << endl;
@@ -3261,7 +3276,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 														  antennaSetup->ephemClockError);
 				if(v != 0)
 				{
-					cerr << "Error: ephemeris calculation failed.  Must stop." << endl;
+					cerr << "Error: ephemeris calculation failed with code " << v << ".  Must stop." << endl;
 				
 					exit(EXIT_FAILURE);
 				}
@@ -3271,7 +3286,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					v = computeDifxSpacecraftEphemerisOffsets(ds);
 					if((v))
 					{
-						cerr << "Error: ephemeris offset calculation failed.  Must stop." << endl;
+						cerr << "Error: ephemeris offset calculation failed with code " << v << ".  Must stop." << endl;
 				
 						exit(EXIT_FAILURE);
 					}
@@ -3279,7 +3294,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 							
 				// calculate the maximum speed of the spacecraft
-				for(int ii=0; ii < ds->nPoint; --ii) {
+				for(int ii=0; ii < ds->nPoint; ++ii) {
 					double s2(ds->pos[ii].dX*ds->pos[ii].dX
 							 + ds->pos[ii].dY*ds->pos[ii].dY
 							 + ds->pos[ii].dZ*ds->pos[ii].dZ);
@@ -3370,6 +3385,18 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					{
 						cerr << "Warning: No antenna match found for spacecraft antenna " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
 					}
+					if(spacecraft_found)
+					{
+						// check for name match among sources
+						for(int s = 0; s < D->nSource; ++s)
+						{
+							if(strcmp(D->spacecraft[sc].name, D->source[s].sc_name) == 0)
+							{
+								cerr << "Warning: spacecraft antenna with DiFX spacecraft name '" << D->spacecraft[sc].name << "' matches spacecraft source name of source '" << D->source[s].name << "'.  Because spacecraft sources and antennas usually have different locations and orientations on the same spacecraft, this is usually a bad idea.  Consider using a sc_DiFXName key in the .v2d file." << endl;
+								break;
+							}
+						}
+					}
 				}
 				else
 				{
@@ -3403,10 +3430,23 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					{
 						cerr << "Warning: No source match found for spacecraft source " << D->spacecraft[sc].name << " spacecraftId=" << sc << endl; 
 					}
+					if(spacecraft_found)
+					{
+						// check for name match among antennas
+						for(int a = 0; a < D->nAntenna; ++a)
+						{
+							if(strcmp(D->spacecraft[sc].name, D->antenna[a].sc_name) == 0)
+							{
+								cerr << "Warning: spacecraft source with DiFX spacecraft name '" << D->spacecraft[sc].name << "' matches spacecraft antenna name of source '" << D->antenna[a].name << "'.  Because spacecraft sources and antennas usually have different locations and orientations on the same spacecraft, this is usually a bad idea.  Consider using a sc_DiFXName key in the .v2d file." << endl;
+								break;
+							}
+						}
+					}
 				}
 			} 
 		}
 	}
+	
 
 	// Make frequency table
 	populateFreqTable(D, freqs, toneSets);

@@ -1077,7 +1077,7 @@ void PhaseCentre::initialise(double r, double d, std::string name)
 	ephemDeltaT = 24.0;	// seconds; 24 seconds is perfectly matched to the default behavior of calcif2
 	ephemStellarAber = 0.0;	// 0 = don't correct; 1 = correct.	Other values interpolate/extrapolate correction by factor provided
 	qualifier = 0;
-	sc_difxname = "";
+	sc_difxname = name;
 	ephemType = "";
 	ephemClockError = 0.0;	// sec
 	ephemObject = "";
@@ -1365,9 +1365,10 @@ void ZoomFreq::initialise(double freq, double bw, bool corrparent, int specavg)
 
 AntennaSetup::AntennaSetup(const std::string &name) :
 		vexName(name),
-		calcName(""),
+		difxName(name),
+		calcName(name),
 		site_coord_frame(sourceCoordinateFrameTypeNames[DIFXIO_DEFAULT_STATION_COORDINATE_FRAME]),
-		sc_difxname(""),
+		sc_difxname(name),
 		spacecraft_pointing_coord_frame(sourceCoordinateFrameTypeNames[SourceCoordinateFrameJ2000_Earth]),
 		SC_recording_delay(0.0),
 		SC_Comm_Rec_to_Elec(0.0),
