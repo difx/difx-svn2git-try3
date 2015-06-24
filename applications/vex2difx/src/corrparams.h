@@ -38,6 +38,7 @@
 #include <iostream>
 #include <difxio.h>
 
+#include "interval.h"
 #include "vextables.h"
 
 extern const double MJD_UNIX0;	// MJD at beginning of unix time
@@ -204,6 +205,7 @@ public:
 	int setkv(const std::string &key, const std::string &value, ZoomFreq * zoomFreq);
 	void copyGlobalZoom(const GlobalZoom &globalZoom);
 	bool isSpacecraft() const { return (!ephemFile.empty()); };
+	bool hasBasebandFile(const Interval &interval) const;	// Returns true if at least one baseband file exists over the provided interval
 
 	std::string vexName;	// Antenna name as it appears in vex file
 	std::string difxName;	// Antenna name (if different) to appear in difx
@@ -217,10 +219,10 @@ public:
 	double axisOffset;	    // [m]
 	int clockorder;		    // Order of clock poly (if overriding)
 	double clock2, clock3, clock4, clock5;	// Clock coefficients (if overriding)
-	std::vector<double> freqClockOffs; // clock offsets for the individual frequencies
-	std::vector<double> freqClockOffsDelta; // clock offsets between pols for the individual frequencies
-	std::vector<double> freqPhaseDelta; // Phase difference between pols for each frequency
-	std::vector<double> loOffsets; //LO offsets for each individual frequency
+	std::vector<double> freqClockOffs;	// Clock offsets for the individual frequencies
+	std::vector<double> freqClockOffsDelta; // Clock offsets between pols for the individual frequencies
+	std::vector<double> freqPhaseDelta;	// Phase difference between pols for each frequency
+	std::vector<double> loOffsets;		// LO offsets for each individual frequency
 	VexClock clock;
 	double deltaClock;	    // sec
 	double deltaClockRate;	// sec/sec
@@ -354,6 +356,8 @@ public:
 						   center of the Earth to calculate the retarded
 						   positions.
 						 */
+	
+	std::string machine;	// If set, use specified machine as datastream node for this antenna	FIXME: eventually make this a std::list<std::string> for multi-datastream support
 };
 
 class CorrSetup
@@ -415,7 +419,7 @@ public:
 	int maxNSBetweenACAvg;	// Mostly for sending STA dumps
 	int fringeRotOrder;	// 0, 1, or 2
 	int strideLength;	// The number of channels to do at a time
-	// when fringeRotOrder > 0
+	                    // when fringeRotOrder > 0
 	int xmacLength;		// Number of channels to do at a time when xmac'ing
 	int numBufferedFFTs;	// Number of FFTs to do in Mode before XMAC'ing
 	std::set<int> freqIds;	// which bands to correlate
@@ -450,7 +454,7 @@ public:
 	std::string corrSetupName;	/* pointer to CorrSetup */
 };
 
-class CorrParams : public VexInterval
+class CorrParams : public Interval
 {
 public:
 	CorrParams();
@@ -554,6 +558,7 @@ public:
 	int overSamp;		// A user supplied override to oversample factor
 	enum OutputFormatType outputFormat; // DIFX or ASCII
 	std::string v2dComment;
+	std::string outPath;	// If supplied, put the .difx/ output within the supplied directory rather in ./ .
 
 	std::list<std::string> antennaList;
 	std::list<std::pair<std::string,std::string> > baselineList;

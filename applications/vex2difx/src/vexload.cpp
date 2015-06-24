@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2012, 2014, 2015 by Walter Brisken                             *
+ *   Copyright (C) 2009-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -146,29 +146,29 @@ static int getRecordChannel(const std::string &antName, const std::string &chanN
 		const Tracks &T = it->second;
 		delta = T.sign.size() + T.mag.size();
 		track = T.sign[0];
-                if(T.sign.size() == 1)
-                {
-                    if(T.mag.size() == 1)
-                    {
-                        int mtrack = T.mag[0];
-                        if(mtrack-track != 1)
-                        {
-                            cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the magnitude bit (bit " << mtrack-2 << ") is not 1 higher than the sign bit (" << track-2 << ").  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
-                        }
-                        else if((track&0x1) == 0x1)
-                        {
-                            cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the sign bit (" << track-2 << ") is not at an even bit number.  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
-                        }
-                    }
-                    else if(T.mag.size() > 1)
-                    {
-                        cerr << "Warning: Does MARK5B recording really support " << T.sign.size() << " sign bits and " << T.mag.size() << " magnitude bits recording?  Check antenna " << antName << " for channel " << chanName << endl;
-                    }
-                }
-                else
-                {
-                    cerr << "Warning: Does MARK5B recording really support " << T.sign.size() << " sign bits?  Check antenna " << antName << " for channel " << chanName << endl;
-                }
+		if(T.sign.size() == 1)
+		{
+			if(T.mag.size() == 1)
+			{
+				int mtrack = T.mag[0];
+				if(mtrack-track != 1)
+				{
+					cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the magnitude bit (bit " << mtrack-2 << ") is not 1 higher than the sign bit (" << track-2 << ").  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
+				}
+				else if((track&0x1) == 0x1)
+				{
+					cerr << "Warning: antenna " << antName << " MARK5B formatting uses 2 bit sampling, but for channel " << chanName << " the sign bit (" << track-2 << ") is not at an even bit number.  DiFX is unable to deal with this, and you should have the problem fixed by swapping this bits around in a disk file." << endl;
+				}
+			}
+			else if(T.mag.size() > 1)
+			{
+				cerr << "Warning: Does MARK5B recording really support " << T.sign.size() << " sign bits and " << T.mag.size() << " magnitude bits recording?  Check antenna " << antName << " for channel " << chanName << endl;
+			}
+		}
+		else
+		{
+			cerr << "Warning: Does MARK5B recording really support " << T.sign.size() << " sign bits?  Check antenna " << antName << " for channel " << chanName << endl;
+		}
 
 		return (track-2)/delta;
 	}
@@ -306,7 +306,7 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 	struct dvalue *r;
 	llist *block;
 	int nWarn = 0;
-        char *cp;
+	char *cp;
 
 	block = find_block(B_CLOCK, v);
 
@@ -328,17 +328,17 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 		A->defName = stn;
 		Upper(A->name);
 
-                cp = (char *)get_station_lowl(stn, T_SITE_TYPE, B_SITE, v);
-                if(cp == 0)
-                {
-                    cerr << "Error: cannot find site type for antenna " << antName << " in the vex file." << endl;
+		cp = (char *)get_station_lowl(stn, T_SITE_TYPE, B_SITE, v);
+		if(cp == 0)
+		{
+			cerr << "Error: cannot find site type for antenna " << antName << " in the vex file." << endl;
 
 			exit(0);
 		}
-                A->sitetype = stringToSiteType(cp);
-                if(A->sitetype == AntennaSiteOther)
-                {
-                    cerr << "Error: unknown site type '" << cp << "' for antenna " << antName << " in the vex file." << endl;
+		A->sitetype = stringToSiteType(cp);
+		if(A->sitetype == AntennaSiteOther)
+		{
+			cerr << "Error: unknown site type '" << cp << "' for antenna " << antName << " in the vex file." << endl;
 
 			exit(0);
 		}
@@ -535,18 +535,18 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
                 
 		if(antennaSetup)
 		{
-                    // If there is a ground station associated with a spacecraft,
-                    // mark any ground station clock breaks.
-                    if(antennaSetup->GS_exists) {
-                        for(std::vector<SpacecraftGroundClockBreak>::const_iterator it = antennaSetup->spacecraft_ground_clock_recording_breaks.begin();
-                            it != antennaSetup->spacecraft_ground_clock_recording_breaks.end();
-                            ++it)
-                        {
-                            double mjd = it->mjd_start + it->day_fraction_start;
-                            V->addEvent(mjd, VexEvent::CLOCK_BREAK, antName);
-                        }
-                    }
-                }
+			// If there is a ground station associated with a spacecraft,
+			// mark any ground station clock breaks.
+			if(antennaSetup->GS_exists) {
+				for(std::vector<SpacecraftGroundClockBreak>::const_iterator it = antennaSetup->spacecraft_ground_clock_recording_breaks.begin();
+					it != antennaSetup->spacecraft_ground_clock_recording_breaks.end();
+					++it)
+				{
+					double mjd = it->mjd_start + it->day_fraction_start;
+					V->addEvent(mjd, VexEvent::CLOCK_BREAK, antName);
+				}
+			}
+		}
 
 		if(!antennaSetup || antennaSetup->dataSource == DataSourceNone)
 		{
@@ -590,7 +590,7 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 						break;
 					}
 
-					VexInterval vsnTimeRange(t1+0.001/86400.0, t2);
+					Interval vsnTimeRange(t1+0.001/86400.0, t2);
 
 					if(!vsnTimeRange.isCausal())
 					{
@@ -686,7 +686,7 @@ static int getSources(VexData *V, Vex *v, const CorrParams &params)
 	return nWarn;
 }
 
-static VexInterval adjustTimeRange(std::map<std::string, double> &antStart, std::map<std::string, double> &antStop, unsigned int minSubarraySize)
+static Interval adjustTimeRange(std::map<std::string, double> &antStart, std::map<std::string, double> &antStop, unsigned int minSubarraySize)
 {
 	std::list<double> start;
 	std::list<double> stop;
@@ -709,7 +709,7 @@ static VexInterval adjustTimeRange(std::map<std::string, double> &antStart, std:
 	if(antStart.size() < minSubarraySize)
 	{
 		// Return an acausal interval
-		return VexInterval(1, 0);
+		return Interval(1, 0);
 	}
 
 	for(std::map<std::string, double>::iterator it = antStart.begin(); it != antStart.end(); ++it)
@@ -755,7 +755,7 @@ static VexInterval adjustTimeRange(std::map<std::string, double> &antStart, std:
 		}
 	}
 
-	return VexInterval(mjdStart, mjdStop);
+	return Interval(mjdStart, mjdStop);
 }
 
 static int getScans(VexData *V, Vex *v, const CorrParams &params)
@@ -769,7 +769,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 		VexScan *S;
 		std::map<std::string,double> antStart, antStop;
 		std::map<std::string,bool> recordEnable;
-		std::map<std::string,VexInterval> stations;
+		std::map<std::string,Interval> stations;
 		double startScan, stopScan;
 		double mjd;
 		int link, name;
@@ -785,18 +785,21 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 
 		Llist *lowls = L;
 		lowls=find_lowl(lowls,T_COMMENT);
-		while(lowls != NULL) {
+		while(lowls != NULL)
+		{
 			std::string::size_type pos;
 			// assume our comments are clustered together at beginning of scan definition
-	        if(((Lowl *)lowls->ptr)->statement != T_COMMENT) {
-            	break;
-        	}
+			if(((Lowl *)lowls->ptr)->statement != T_COMMENT)
+			{
+				break;
+			}
 			// get comment content
 			vex_field(T_COMMENT, (void *)((Lowl *)lowls->ptr)->item, 1, &link, &name, &value, &units);
 
-			tmpIntent = (!value)?"":value;
+			tmpIntent = (!value) ? "" : value;
 			pos = tmpIntent.find("intent = \"", 0);
-			if( pos != string::npos ) {
+			if(pos != string::npos)
+			{
 				// +10 to skip the search string
 				pos += 10;
 				// trim everything except the actual tmpIntent string
@@ -845,7 +848,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 			vex_field(T_STATION, p, 7, &link, &name, &value, &units);
 			recordEnable[stationName] = (atoi(value) > 0);
 
-			stations[stationName] = VexInterval(startAnt, stopAnt);
+			stations[stationName] = Interval(startAnt, stopAnt);
 
 			antStart[stationName] = startAnt;
 			antStop[stationName] = stopAnt;
@@ -858,7 +861,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 
 		// Adjust start and stop times so that the minimum subarray size is
 		// always honored.  The return value becomes
-		VexInterval timeRange = adjustTimeRange(antStart, antStop, params.minSubarraySize);
+		Interval timeRange = adjustTimeRange(antStart, antStop, params.minSubarraySize);
 
 		// If the min subarray condition never occurs, then skip the scan
 		if(timeRange.duration_seconds() < 0.5)
@@ -1069,6 +1072,10 @@ static int getModes(VexData *V, Vex *v, const CorrParams &params)
 				else if(fabs(phaseCal-5000000.0) < 1.0)
 				{
 					vif.phaseCalIntervalMHz = 5;
+				}
+				else if(fabs(phaseCal-200000000.0) < 1.0)
+				{
+					vif.phaseCalIntervalMHz = 200;
 				}
 				else
 				{
@@ -1651,7 +1658,7 @@ static int getVSN(VexData *V, Vex *v, const char *station)
 		std::string vsn(p->label);
 		fixOhs(vsn);
 
-		VexInterval vsnTimeRange(vexDate(p->start)+0.001/86400.0, vexDate(p->stop));
+		Interval vsnTimeRange(vexDate(p->start)+0.001/86400.0, vexDate(p->stop));
 
 		if(!vsnTimeRange.isCausal())
 		{
@@ -1877,7 +1884,7 @@ static int getExper(VexData *V, Vex *v, const CorrParams &params)
 
 	Upper(experimentName);
 
-	V->setExper(experimentName, VexInterval(start, stop));
+	V->setExper(experimentName, Interval(start, stop));
 
 	return nWarn;
 }

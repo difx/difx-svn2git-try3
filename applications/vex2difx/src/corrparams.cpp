@@ -43,13 +43,8 @@
 #include <difxio.h>
 #include <cerrno>
 #include "util.h"
+#include "timeutils.h"
 #include "corrparams.h"
-
-const double MJD_UNIX0     = 40587.0;	// MJD at beginning of unix time
-const double SEC_DAY_DBL_  = 86400.0;
-const int	 MJD_UNIX0_INT = 40587;
-const int	 SEC_DAY_INT   = 86400;
-const double MUSEC_DAY     = 86400000000.0;
 
 const double PhaseCentre::DEFAULT_RA  = -999.9;
 const double PhaseCentre::DEFAULT_DEC = -999.9;
@@ -560,12 +555,6 @@ void split(const std::string &str, std::vector<std::string> &tokens, const std::
 		pos = str.find_first_of(delimiters, lastPos);
 	}
 }
-
-// FIXME: remove the following commented-out function entirely?
-// static bool sortStartMjdDescendingFunc(VexBasebandFile a, VexBasebandFile b)
-// {
-// 	return (a.mjdStart<b.mjdStart);
-// }
 
 int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandFile> &basebandFiles)
 {
@@ -1961,6 +1950,10 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 
 		format = s;
 	}
+	else if(key == "machine")
+	{
+		ss >> machine;	// FIXME: when multiple datastreams per antenna are supported, this should be a list append
+	}
 	else if(key == "file" || key == "files")
 	{
 		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
@@ -2570,6 +2563,19 @@ void AntennaSetup::copyGlobalZoom(const GlobalZoom &globalZoom)
 	}
 }
 
+bool AntennaSetup::hasBasebandFile(const Interval &interval) const
+{
+	for(std::vector<VexBasebandFile>::const_iterator it = basebandFiles.begin(); it != basebandFiles.end(); ++it)
+	{
+		if(it->overlap(interval) > 0.0)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int GlobalZoom::setkv(const std::string &key, const std::string &value, ZoomFreq *zoomFreq)
 {
 	int nWarn = 0;
@@ -2674,7 +2680,6 @@ CorrParams::CorrParams(const std::string &fileName)
 void CorrParams::defaults()
 {
 	jobSeries = "job";
-	threadsFile = "";
 	minSubarraySize = 2;
 	maxGap = 180.0/SEC_DAY_DBL_;		// 3 minutes
 	singleScan = false;
@@ -2965,6 +2970,10 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 			
 			exit(EXIT_FAILURE);
 		}
+	}
+	else if(key == "outPath")
+	{
+		ss >> outPath;
 	}
 	else if(key == "dataBufferFactor")
 	{
@@ -3533,12 +3542,13 @@ int CorrParams::checkSetupValidity()
 
 			if(c->explicitFFTSpecRes)
 			{
-				std::cerr << "Warning: number of channels and spectral resolutions provided!  Ignoring number of channels\n";
+				std::cerr << "Warning: number of channels and spectral resolutions provided!  Ignoring number of channels"  << std::endl;
 				++nWarn;
 			}
 			else if(minBW != maxBW)
 			{
-				std::cerr << "Warning: cannot specify number of channels when different sub-band bandwidths exist within one setup\n";
+				std::cerr << "Warning: cannot specify number of channels when different sub-band bandwidths exist within one setup." << std::endl;
+				std::cerr << "Note! If you get this message while performing zoom-banding the fix is probably to specify specRes instead of nChan." << std::endl;
 				++nWarn;
 			}
 			else
