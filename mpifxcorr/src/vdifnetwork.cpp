@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2014 by Walter Brisken and Adam Deller             *
+ *   Copyright (C) 2007-2015 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -35,7 +35,7 @@
 
 
 VDIFNetworkDataStream::VDIFNetworkDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
-	VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+		VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	int perr;
 
@@ -227,7 +227,7 @@ void VDIFNetworkDataStream::networkthreadfunction()
 			if(bytes == 0)
 			{
 				status = -1;
-		// Not sure what to do here
+				// Not sure what to do here
 			}
 			else if(bytes < readbufferslotsize)
 			{
@@ -301,7 +301,7 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
 	Configuration::dataformat format;
 	double bw;
 	int rv;
-	double startmjd;
+	// double startmjd;
 	int doUpdate = 0;
 
 	format = config->getDataFormat(configindex, streamnum);
@@ -310,7 +310,7 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
 	inputframebytes = config->getFrameBytes(configindex, streamnum);
 	framespersecond = config->getFramesPerSecond(configindex, streamnum)/config->getDNumMuxThreads(configindex, streamnum);
-        bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
+	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
 	if(nGap > 1024)
@@ -330,16 +330,16 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
 	}
 
 	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
-        if(fanout != 1)
-        {
+	if(fanout != 1)
+	{
 		cfatal << startl << "Fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
 
-                MPI_Abort(MPI_COMM_WORLD, 1);
-        }
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
 
 	cinfo << startl << "VDIFNetworkDataStream::initialiseFile format=" << formatname << endl;
 
-	startmjd = corrstartday + corrstartseconds/86400.0;
+	// startmjd = corrstartday + corrstartseconds/86400.0;
 
 	/* update all the configs to ensure that the nsincs and
 	 * headerbytes are correct
@@ -376,17 +376,20 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 	unsigned int muxend, bytesvisible;
 	int lockmod = readbufferslots - 1;
 	int muxReturn;
-	int muxBits;
+	// int muxBits;
 
-	if(samplingtype == Configuration::COMPLEX)
-	{
-		// muxing complex data is exactly the same as muxing real data, except the number of bits per sample needs to be doubled so we keep real and imaginary parts together
-		muxBits = 2*nbits;
-	}
-	else
-	{
-		muxBits = nbits;
-	}
+	// FIXME:
+	// 2015 Apr 30  JMA  The muxBits value below as never used anywhere, and
+	// so the code has been commented out
+	// if(samplingtype == Configuration::COMPLEX)
+	// {
+	// 	// muxing complex data is exactly the same as muxing real data, except the number of bits per sample needs to be doubled so we keep real and imaginary parts together
+	// 	muxBits = 2*nbits;
+	// }
+	// else
+	// {
+	// 	muxBits = nbits;
+	// }
 
 	if(lockstart < -1)
 	{
@@ -554,7 +557,7 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 
 	muxindex += vstats.srcUsed;
 
-	if(lastslot == n2 && (muxindex+minleftoverdata > endindex || bytesvisible < readbytes / 4) )
+	if(lastslot == n2 && (muxindex+minleftoverdata > endindex || bytesvisible < uint_fast32_t(readbytes / 4)) )
 	{
 		// end of useful data for this scan
 		dataremaining = false;
@@ -706,7 +709,7 @@ void VDIFNetworkDataStream::loopnetworkread()
 			diskToMemory(lastvalidsegment);
 			numread++;
 		}
-cverbose << startl << "Out of inner read loop: keepreading=" << keepreading << " dataremaining=" << dataremaining << endl;
+		cverbose << startl << "Out of inner read loop: keepreading=" << keepreading << " dataremaining=" << dataremaining << endl;
 		if(keepreading)
 		{
 			openfile(bufferinfo[0].configindex, 0);
@@ -746,50 +749,50 @@ cverbose << startl << "Out of inner read loop: keepreading=" << keepreading << "
 #ifdef __APPLE__
 int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count)
 {
-    if(count == 0)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-    if(pthread_mutex_init(&barrier->mutex, 0) < 0)
-    {
-        return -1;
-    }
-    if(pthread_cond_init(&barrier->cond, 0) < 0)
-    {
-        pthread_mutex_destroy(&barrier->mutex);
-        return -1;
-    }
-    barrier->tripCount = count;
-    barrier->count = 0;
+	if(count == 0)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if(pthread_mutex_init(&barrier->mutex, 0) < 0)
+	{
+		return -1;
+	}
+	if(pthread_cond_init(&barrier->cond, 0) < 0)
+	{
+		pthread_mutex_destroy(&barrier->mutex);
+		return -1;
+	}
+	barrier->tripCount = count;
+	barrier->count = 0;
 
-    return 0;
+	return 0;
 }
 
 int pthread_barrier_destroy(pthread_barrier_t *barrier)
 {
-    pthread_cond_destroy(&barrier->cond);
-    pthread_mutex_destroy(&barrier->mutex);
-    return 0;
+	pthread_cond_destroy(&barrier->cond);
+	pthread_mutex_destroy(&barrier->mutex);
+	return 0;
 }
 
 int pthread_barrier_wait(pthread_barrier_t *barrier)
 {
-    pthread_mutex_lock(&barrier->mutex);
-    ++(barrier->count);
-    if(barrier->count >= barrier->tripCount)
-    {
-        barrier->count = 0;
-        pthread_cond_broadcast(&barrier->cond);
-        pthread_mutex_unlock(&barrier->mutex);
-        return 1;
-    }
-    else
-    {
-        pthread_cond_wait(&barrier->cond, &(barrier->mutex));
-        pthread_mutex_unlock(&barrier->mutex);
-        return 0;
-    }
+	pthread_mutex_lock(&barrier->mutex);
+	++(barrier->count);
+	if(barrier->count >= barrier->tripCount)
+	{
+		barrier->count = 0;
+		pthread_cond_broadcast(&barrier->cond);
+		pthread_mutex_unlock(&barrier->mutex);
+		return 1;
+	}
+	else
+	{
+		pthread_cond_wait(&barrier->cond, &(barrier->mutex));
+		pthread_mutex_unlock(&barrier->mutex);
+		return 0;
+	}
 }
 
 #endif

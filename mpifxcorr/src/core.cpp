@@ -392,7 +392,9 @@ long long Core::getEstimatedBytes()
 
 void Core::loopprocess(int threadid)
 {
-	int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos, maxbins, maxchan, maxpolycos, stadumpchannels, strideplussteplen, maxrotatestrideplussteplength, maxxmaclength, slen;
+	int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos;
+	// int maxbins;
+	int maxchan, maxpolycos, stadumpchannels, strideplussteplen, maxrotatestrideplussteplength, maxxmaclength, slen;
 	double sec;
 	bool pulsarbin, somepulsarbin, somescrunch, dumpingsta, nowdumpingsta;
 	processslot * currentslot;
@@ -422,7 +424,7 @@ void Core::loopprocess(int threadid)
 	dumpingsta = false;
 	maxpolycos = 0;
 	maxchan = config->getMaxNumChannels();
-	maxbins = config->getMaxNumPulsarBins();	/* FIXME: This value is never used! */
+	// maxbins = config->getMaxNumPulsarBins();	/* FIXME: This value is never used! */
 	slen = config->getArrayStrideLength(0);
 	if(slen>config->getXmacStrideLength(0))
 		slen = config->getXmacStrideLength(0);
@@ -686,10 +688,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 	const Mode * m1, * m2;
 	const cf32 * vis1;
 	const cf32 * vis2;
-	uint64_t offsetsamples;
-	double sampletimens;
-	int starttimens;
-	int fftsize;
+	// uint64_t offsetsamples;
+	// double sampletimens;
+	// int starttimens;
+	// int fftsize;
 	int numBufferedFFTs;
 #endif
 	int perr;
@@ -720,16 +722,16 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 		if(config->getDPhaseCalIntervalMHz(procslots[index].configindex, j) > 0)
 		{
 			// Calculate the sample time. Every band has the same bandwidth.
-			sampletimens = 1.0/(2.0*config->getDRecordedBandwidth(procslots[index].configindex, j, 0))*1e+3;
+			// sampletimens = 1.0/(2.0*config->getDRecordedBandwidth(procslots[index].configindex, j, 0))*1e+3;
       
 			// Get the ns start time of the whole block.
-			starttimens = procslots[index].offsets[2];
+			// starttimens = procslots[index].offsets[2];
       
 			// Calculate the FFT size in number of samples.
-			fftsize = 2*config->getFNumChannels(config->getDRecordedFreqIndex(procslots[index].configindex, j, 0));
+			// fftsize = 2*config->getFNumChannels(config->getDRecordedFreqIndex(procslots[index].configindex, j, 0));
       
 			// Calculate the number of offset samples. The modulo PCal bins is done in the pcal object!
-			offsetsamples = static_cast<uint64_t>(starttimens/sampletimens) + startblock*fftsize;	/* FIXME: This value is never used! */
+			// offsetsamples = static_cast<uint64_t>(starttimens/sampletimens) + startblock*fftsize;	/* FIXME: This value is never used! */
 			modes[j]->resetpcal();
 		}
 	}
@@ -1142,7 +1144,9 @@ void Core::copyPCalTones(int index, int threadid, Mode ** modes)
 
 void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, double nswidth, Mode ** modes, threadscratchspace * scratchspace)
 {
-	int maxproducts, resultindex, perr, status, bytecount, recordsize;
+	int maxproducts, resultindex, perr, status;
+	size_t bytecount;
+	size_t recordsize;
 	int freqindex, localfreqindex, parentfreqindex, numrecordedbands, chans_to_avg, freqchannels;
 	double minimumweight, stasamples;
 	float renormvalue;
@@ -1172,7 +1176,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
 			starecord = scratchspace->starecordbuffer;
 			for (int j=0;j<config->getDNumRecordedBands(procslots[index].configindex, i);j++) {
 				if(bytecount + recordsize > config->getMTU()) {
-					difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
+					difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, int(bytecount));
 					bytecount = 0;
 				}
 				starecord = (DifxMessageSTARecord *)((char*)scratchspace->starecordbuffer + bytecount);
@@ -1229,7 +1233,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
 				//cout << "About to send the binary message" << endl;
 				bytecount += sizeof(DifxMessageSTARecord) + sizeof(f32)*starecord->nChan;
 			}
-			difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
+			difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, int(bytecount));
 		}
 		//cout << "Finished doing some STA stuff" << endl;
 	}
@@ -1354,7 +1358,8 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
 
 void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, double nswidth, int numblocks, Mode ** modes, threadscratchspace * scratchspace)
 {
-	int status, freqchannels, freqindex, recordsize, bytecount;
+	int status, freqchannels, freqindex;
+	size_t recordsize, bytecount;
 	bool * valid = new bool[numdatastreams];
 	DifxMessageSTARecord * starecord;
 
@@ -1370,7 +1375,7 @@ void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, doub
 		if(valid[i]) {
 			for (int j=0;j<config->getDNumRecordedBands(procslots[index].configindex, i);j++) {
 				if(bytecount + recordsize > config->getMTU()) {
-					difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
+					difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, int(bytecount));
 					bytecount = 0;
 				}
 				starecord = (DifxMessageSTARecord *)((char*)scratchspace->starecordbuffer + bytecount);
@@ -1398,7 +1403,7 @@ void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, doub
 					cerror << startl << "Problem copying kurtosis results from mode to sta record!" << endl;
 				bytecount += sizeof(DifxMessageSTARecord) + sizeof(f32)*starecord->nChan;
 			}
-			difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, bytecount);
+			difxMessageSendBinary((const char *)(scratchspace->starecordbuffer), BINARY_STA, int(bytecount));
 		}
 	}
 
@@ -1407,7 +1412,8 @@ void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, doub
 
 void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double nswidth, Polyco * currentpolyco, threadscratchspace * scratchspace)
 {
-	int status, startbaselinefreq, atbaselinefreq, startbaseline, startfreq, endbaseline, binloop;
+	int status, startbaselinefreq, atbaselinefreq, startbaseline, startfreq, endbaseline;
+	// int binloop;
 	int localfreqindex, baselinefreqs;
 	int numxmacstrides, xmaclen;
 
@@ -1468,9 +1474,9 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
 	startbaselinefreq = (threadid*baselinefreqs)/numprocessthreads;
 
 	/* FIXME: binloop calculated below is never used */
-	binloop = 1;
-	if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-		binloop = procslots[index].numpulsarbins;
+	// binloop = 1;
+	// if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
+	// 	binloop = procslots[index].numpulsarbins;
 
 	atbaselinefreq = 0;
 	startfreq = -1;
@@ -1574,7 +1580,8 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
 
 void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffset, double nswidth, threadscratchspace * scratchspace, int freqindex, int baseline)
 {
-	int status, perr, threadbinloop, threadindex, threadstart, numstrides, numaverages;
+	int status, perr, threadbinloop, threadindex, threadstart, numstrides;
+	// int numaverages;
 	int localfreqindex, freqchannels, coreindex, coreoffset, corebinloop, channelinc, rotatorlength, dest;
 	int antenna1index, antenna2index;
 	int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, stridestoaverage, averagesperstride, averagelength;
@@ -1647,7 +1654,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
 	channelinc = config->getFChannelsToAverage(freqindex);
 	bandwidth = config->getFreqTableBandwidth(freqindex);
 	lofrequency = config->getFreqTableFreq(freqindex);
-	numaverages = freqchannels/channelinc;	/* FIXME: This value is never used */
+	// numaverages = freqchannels/channelinc;	/* FIXME: This value is never used */
 	stridestoaverage = channelinc/xmacstridelen;
 	rotatesperstride = xmacstridelen/rotatestridelen;
 	if(stridestoaverage == 0)

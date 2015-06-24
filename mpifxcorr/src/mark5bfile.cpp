@@ -43,13 +43,13 @@
 /* TODO: 
    - make use of activesec and activescan
    - make FAKE mode work
- */
+*/
 
 
 /// Mark5BDataStream -------------------------------------------------------
 
 Mark5BDataStream::Mark5BDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
- : DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+		: DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	//each data buffer segment contains an integer number of frames, because thats the way config determines max bytes
 	lastconfig = -1;
@@ -222,11 +222,11 @@ int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offset
 	bufferindex = atsegment*readbytes + framesin*framebytes;
 
 	//if we are right at the end of the last segment, and there is a jump after this segment, bail out
-	if(bufferindex == bufferbytes)
+	if(uint_fast32_t(bufferindex) == bufferbytes)
 	{
 		if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
 		   ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000LL +
-		   bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
+		    bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
 		{
 			cwarn << startl << "bufferindex == bufferbytes --> Mode::INVALID_SUBINT" << endl;
 			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
@@ -239,7 +239,7 @@ int Mark5BDataStream::calculateControlParams(int scan, int offsetsec, int offset
 		}
 	}
 
-	if(bufferindex > bufferbytes) /* WFB: this was >= */
+	if(uint_fast32_t(bufferindex) > bufferbytes) /* WFB: this was >= */
 	{
 		cfatal << startl << "Mark5BDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
 		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
@@ -597,19 +597,19 @@ void Mark5BDataStream::diskToMemory(int buffersegment)
 
 		++nt;
 
-                // feed switched power detector
+		// feed switched power detector
 		if(nt % switchedpowerincrement == 0)
 		{
 			struct mark5_stream *m5stream = new_mark5_stream_absorb(
-				new_mark5_stream_memory(buf, bufferinfo[buffersegment].validbytes),
-				new_mark5_format_generic_from_string(formatname) );
+			                                                        new_mark5_stream_memory(buf, bufferinfo[buffersegment].validbytes),
+			                                                        new_mark5_format_generic_from_string(formatname) );
 			if(m5stream)
 			{
 				mark5_stream_fix_mjd(m5stream, config->getStartMJD());
 				switchedpower->feed(m5stream);
 				delete_mark5_stream(m5stream);
 			}
-                }
+		}
 	}
 }
 
@@ -630,7 +630,7 @@ void Mark5BDataStream::loopfileread()
 	keepreading = true;
 	while(!dataremaining && keepreading)
 	{
-cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] << endl;
+		cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] << endl;
 		openfile(bufferinfo[0].configindex, filesread[bufferinfo[0].configindex]++);
 		if(!dataremaining)
 		{
@@ -690,7 +690,7 @@ cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] <<
 		}
 		if(keepreading)
 		{
-cverbose << startl << "keepreading is true" << endl;
+			cverbose << startl << "keepreading is true" << endl;
 			input.close();
 
 			//if the datastreams for two or more configs are common, they'll all have the same 
@@ -699,7 +699,7 @@ cverbose << startl << "keepreading is true" << endl;
 			for(int i=config->getNumConfigs()-1;i>=0;i--)
 			{
 				if(config->getDDataFileNames(i, streamnum) == config->getDDataFileNames(lowestconfigindex, streamnum))
-				lowestconfigindex = i;
+					lowestconfigindex = i;
 			}
 			openfile(lowestconfigindex, filesread[lowestconfigindex]++);
 		}

@@ -42,7 +42,10 @@ Model::Model(Configuration * conf, string cfilename)
 	stationtable = 0;
 	sourcetable = 0;
 	eoptable = 0;
-	spacecrafttable = 0;
+	// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
+	// know about spacecraft.  Comment this out for now
+	// FIXME: In future, remove this from the code entirely?
+	// spacecrafttable = 0;
 	scantable = 0;
 	binomialcoeffs = 0;
 	maxrate = 0;
@@ -60,8 +63,11 @@ Model::Model(Configuration * conf, string cfilename)
 		opensuccess = readScanData(input);
 	if(opensuccess)
 		opensuccess = readEOPData(input);
-	if(opensuccess)
-		opensuccess = readSpacecraftData(input);
+	// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
+	// know about spacecraft.  Comment this out for now
+	// FIXME: In future, remove this from the code entirely?
+	// if(opensuccess)
+	// 	opensuccess = readSpacecraftData(input);
 	if(opensuccess)
 		opensuccess = readPolynomialSamples(input);
 
@@ -122,10 +128,10 @@ Model::~Model()
 						vectorFree(scantable[i].v[j][k][l]);
 						vectorFree(scantable[i].w[j][k][l]);
 						vectorFree(scantable[i].delay[j][k][l]);
-		// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
-		// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
-		// so comment them out for now.
-		// FIXME: In future, remove this from the code entirely?
+						// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
+						// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
+						// so comment them out for now.
+						// FIXME: In future, remove this from the code entirely?
 						// vectorFree(scantable[i].wet[j][k][l]);
 						// vectorFree(scantable[i].dry[j][k][l]);
 						// vectorFree(scantable[i].adj[j][k][l]);
@@ -141,10 +147,10 @@ Model::~Model()
 					delete [] scantable[i].v[j][k];
 					delete [] scantable[i].w[j][k];
 					delete [] scantable[i].delay[j][k];
-		// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
-		// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
-		// so comment them out for now.
-		// FIXME: In future, remove this from the code entirely?
+					// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
+					// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
+					// so comment them out for now.
+					// FIXME: In future, remove this from the code entirely?
 					// delete [] scantable[i].wet[j][k];
 					// delete [] scantable[i].dry[j][k];
 					// delete [] scantable[i].adj[j][k];
@@ -162,10 +168,10 @@ Model::~Model()
 				delete [] scantable[i].v[j];
 				delete [] scantable[i].w[j];
 				delete [] scantable[i].delay[j];
-		// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
-		// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
-		// so comment them out for now.
-		// FIXME: In future, remove this from the code entirely?
+				// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
+				// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
+				// so comment them out for now.
+				// FIXME: In future, remove this from the code entirely?
 				// delete [] scantable[i].wet[j];
 				// delete [] scantable[i].dry[j];
 				// delete [] scantable[i].adj[j];
@@ -182,10 +188,10 @@ Model::~Model()
 			delete [] scantable[i].v;
 			delete [] scantable[i].w;
 			delete [] scantable[i].delay;
-		// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
-		// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
-		// so comment them out for now.
-		// FIXME: In future, remove this from the code entirely?
+			// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
+			// know about wet, dry, ..., msa, sc_gs_delay, gs_clock_delay
+			// so comment them out for now.
+			// FIXME: In future, remove this from the code entirely?
 			// delete [] scantable[i].wet;
 			// delete [] scantable[i].dry;
 			// delete [] scantable[i].adj;
@@ -395,116 +401,117 @@ bool Model::addClockTerms(string antennaname, double refmjd, int order, double *
 
 bool Model::readInfoData(ifstream * input)
 {
-  string line = "";
-  string key = "";
-  //nothing here is worth saving, so just skip it all
-  config->getinputline(input, &line, "JOB ID");
-  config->getinputline(input, &line, "JOB START TIME");
-  config->getinputline(input, &line, "JOB STOP TIME");
-  config->getinputline(input, &line, "DUTY CYCLE");
-  config->getinputline(input, &line, "OBSCODE");
-  config->setObsCode(line);
-  config->getinputline(input, &line, "DIFX VERSION");
-  cinfo << startl << "DIFX VERSION = " << line << endl;
-  config->getinputkeyval(input, &key, &line);
-  if(key.find("DIFX LABEL") != string::npos) { //look for the VEX line, skip it if present
-    cinfo << startl << "DIFX LABEL = " << line << endl;
-    config->getinputline(input, &line, "SUBJOB ID");
-  }
-  else {
-    if(key.find("SUBJOB ID") == string::npos) {
-      cerror << startl << "Went looking for DIFX LABEL (or maybe SUBJOB ID), but got " << key << endl;
-    }
-  }
-  config->getinputline(input, &line, "SUBARRAY ID");
-  return true;
+	string line = "";
+	string key = "";
+	//nothing here is worth saving, so just skip it all
+	config->getinputline(input, &line, "JOB ID");
+	config->getinputline(input, &line, "JOB START TIME");
+	config->getinputline(input, &line, "JOB STOP TIME");
+	config->getinputline(input, &line, "DUTY CYCLE");
+	config->getinputline(input, &line, "OBSCODE");
+	config->setObsCode(line);
+	config->getinputline(input, &line, "DIFX VERSION");
+	cinfo << startl << "DIFX VERSION = " << line << endl;
+	config->getinputkeyval(input, &key, &line);
+	if(key.find("DIFX LABEL") != string::npos) { //look for the VEX line, skip it if present
+		cinfo << startl << "DIFX LABEL = " << line << endl;
+		config->getinputline(input, &line, "SUBJOB ID");
+	}
+	else {
+		if(key.find("SUBJOB ID") == string::npos) {
+			cerror << startl << "Went looking for DIFX LABEL (or maybe SUBJOB ID), but got " << key << endl;
+		}
+	}
+	config->getinputline(input, &line, "SUBARRAY ID");
+	return true;
 }
 
 bool Model::readCommonData(ifstream * input)
 {
-  int year, month, day, hour, minute, second;
-  double mjd;
-  string key = "";
-  string line = "";
+	int year, month, day, hour, minute, second;
+	double mjd;
+	string key = "";
+	string line = "";
 
-  //Get the start time
-  config->getinputkeyval(input, &key, &line);
-  if(key.find("VEX") != string::npos) { //look for the VEX line, skip it if present
-    config->getinputline(input, &line, "START MJD");
-  }
-  else {
-    if(key.find("START MJD") == string::npos) {
-      cerror << startl << "Went looking for START MJD (or maybe VEX FILE), but got " << key << endl;
-    }
-  }
-  mjd = atof(line.c_str());
-  config->getinputline(input, &line, "START YEAR");
-  year = atoi(line.c_str());
-  config->getinputline(input, &line, "START MONTH");
-  month = atoi(line.c_str());
-  config->getinputline(input, &line, "START DAY");
-  day = atoi(line.c_str());
-  config->getinputline(input, &line, "START HOUR");
-  hour = atoi(line.c_str());
-  config->getinputline(input, &line, "START MINUTE");
-  minute = atoi(line.c_str());
-  config->getinputline(input, &line, "START SECOND");
-  second = atoi(line.c_str());
-  config->getMJD(modelmjd, modelstartseconds, year, month, day, hour, minute, second);
-  if(fabs(mjd - ((double)modelmjd+(double)modelstartseconds/86400.0)) > 0.000001)
-    cwarn << startl << " START MJD does not seem to agree with START YEAR/MONTH/.../SECOND..?" << mjd-int(mjd) << ", " << (double)modelstartseconds/86400.0 << endl;
+	//Get the start time
+	config->getinputkeyval(input, &key, &line);
+	if(key.find("VEX") != string::npos) { //look for the VEX line, skip it if present
+		config->getinputline(input, &line, "START MJD");
+	}
+	else {
+		if(key.find("START MJD") == string::npos) {
+			cerror << startl << "Went looking for START MJD (or maybe VEX FILE), but got " << key << endl;
+		}
+	}
+	mjd = atof(line.c_str());
+	config->getinputline(input, &line, "START YEAR");
+	year = atoi(line.c_str());
+	config->getinputline(input, &line, "START MONTH");
+	month = atoi(line.c_str());
+	config->getinputline(input, &line, "START DAY");
+	day = atoi(line.c_str());
+	config->getinputline(input, &line, "START HOUR");
+	hour = atoi(line.c_str());
+	config->getinputline(input, &line, "START MINUTE");
+	minute = atoi(line.c_str());
+	config->getinputline(input, &line, "START SECOND");
+	second = atoi(line.c_str());
+	config->getMJD(modelmjd, modelstartseconds, year, month, day, hour, minute, second);
+	if(fabs(mjd - ((double)modelmjd+(double)modelstartseconds/86400.0)) > 0.000001)
+		cwarn << startl << " START MJD does not seem to agree with START YEAR/MONTH/.../SECOND..?" << mjd-int(mjd) << ", " << (double)modelstartseconds/86400.0 << endl;
 
-  //ignore the next two lines, not relevant to the correlator
-  config->getinputline(input, &line, "SPECTRAL AVG");
-  config->getinputline(input, &line, "TAPER FUNCTION");
-  //ignore the next two lines, the actual values used are in the .im file
-  config->getinputline(input, &line, "DELAY POLY ORDER");
-  config->getinputline(input, &line, "DELAY POLY INTERVAL");
-  return true;
+	//ignore the next two lines, not relevant to the correlator
+	config->getinputline(input, &line, "SPECTRAL AVG");
+	config->getinputline(input, &line, "TAPER FUNCTION");
+	//ignore the next two lines, the actual values used are in the .im file
+	config->getinputline(input, &line, "DELAY POLY ORDER");
+	config->getinputline(input, &line, "DELAY POLY INTERVAL");
+
+	return true;
 }
 
 bool Model::readStationData(ifstream * input)
 {
-  string line = "";
+	string line = "";
 
-  config->getinputline(input, &line, "NUM TELESCOPES");
-  numstations = atoi(line.c_str());
-  stationtable = new station[numstations];
-  for(int i=0;i<numstations;i++) {
-    config->getinputline(input, &(stationtable[i].name), "TELESCOPE ", i, " NAME", true, 0);
-    //trim the whitespace off the end
-    while((stationtable[i].name).at((stationtable[i].name).length()-1) == ' ')
-      stationtable[i].name = (stationtable[i].name).substr(0, (stationtable[i].name).length()-1);
-    config->getinputline(input, &line, "TELESCOPE ", i, " CALCNAME", false, 100); //ignore this, it's the CALC name
-    config->getinputline(input, &line, "TELESCOPE ", i, " MOUNT", true, 100);
-    stationtable[i].mount = getMount(line);
-    if(!config->getinputline(input, &line, "TELESCOPE ", i, " SITETYPE", false, 100))
-    {
-	    // if the SITETYPE key is not present, assume a regular fixed station
-	    line = "fixed";
-    }
-    stationtable[i].sitetype = getSiteType(line);
-    config->getinputline(input, &line, "TELESCOPE ", i, " OFFSET (m)", true, 100);
-    stationtable[i].axisoffset = atof(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i, " X (m)", true, 100);
-    stationtable[i].x = atof(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i, " Y (m)", true, 0);
-    stationtable[i].y = atof(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i, " Z (m)", true, 0);
-    stationtable[i].z = atof(line.c_str());
-    config->getinputline(input, &line, "TELESCOPE ", i, " SHELF", false, 100); //ignore this, it's the shelf
-    if(config->getinputline(input, &line, "TELESCOPE ", i, " S/CRAFT ID", false, 100))
-    {
-	    stationtable[i].spacecraft_id = atoi(line.c_str());
-    }
-    else {
-	    stationtable[i].spacecraft_id = -1;
-    }
-  }
-  maxrate = new double[numstations];
-  for(int i=0;i<numstations;i++)
-	  maxrate[i] = 0;
-  return true;
+	config->getinputline(input, &line, "NUM TELESCOPES");
+	numstations = atoi(line.c_str());
+	stationtable = new station[numstations];
+	for(int i=0;i<numstations;i++) {
+		config->getinputline(input, &(stationtable[i].name), "TELESCOPE ", i, " NAME", true, 100);
+		//trim the whitespace off the end
+		while((stationtable[i].name).at((stationtable[i].name).length()-1) == ' ')
+			stationtable[i].name = (stationtable[i].name).substr(0, (stationtable[i].name).length()-1);
+		config->getinputline(input, &line, "TELESCOPE ", i, " CALCNAME", false, 100); //ignore this, it's the CALC name
+		config->getinputline(input, &line, "TELESCOPE ", i, " MOUNT", true, 100);
+		stationtable[i].mount = getMount(line);
+		if(!config->getinputline(input, &line, "TELESCOPE ", i, " SITETYPE", false, 100))
+		{
+			// if the SITETYPE key is not present, assume a regular fixed station
+			line = "fixed";
+		}
+		stationtable[i].sitetype = getSiteType(line);
+		config->getinputline(input, &line, "TELESCOPE ", i, " OFFSET (m)", false, 100);
+		stationtable[i].axisoffset = atof(line.c_str());
+		config->getinputline(input, &line, "TELESCOPE ", i, " X (m)", true, 100);
+		stationtable[i].x = atof(line.c_str());
+		config->getinputline(input, &line, "TELESCOPE ", i, " Y (m)", true, 0);
+		stationtable[i].y = atof(line.c_str());
+		config->getinputline(input, &line, "TELESCOPE ", i, " Z (m)", true, 0);
+		stationtable[i].z = atof(line.c_str());
+		config->getinputline(input, &line, "TELESCOPE ", i, " SHELF", false, 100); //ignore this, it's the shelf
+		if(config->getinputline(input, &line, "TELESCOPE ", i, " S/CRAFT ID", false, 100))
+		{
+			stationtable[i].spacecraft_id = atoi(line.c_str());
+		}
+		else {
+			stationtable[i].spacecraft_id = -1;
+		}
+	}
+	maxrate = new double[numstations];
+	for(int i=0;i<numstations;i++)
+		maxrate[i] = 0;
+	return true;
 }
 bool Model::readSourceData(ifstream * input)
 {
@@ -515,18 +522,18 @@ bool Model::readSourceData(ifstream * input)
 	sourcetable = new source[numsources];
 	for(int i=0;i<numsources;i++) {
 		sourcetable[i].index = i;
-		config->getinputline(input, &(sourcetable[i].name), "SOURCE ", i, " NAME", true, 0);
+		config->getinputline(input, &(sourcetable[i].name), "SOURCE ", i, " NAME", true, 100);
 		//trim the whitespace off the end
 		while((sourcetable[i].name).at((sourcetable[i].name).length()-1) == ' ')
 			sourcetable[i].name = (sourcetable[i].name).substr(0, (sourcetable[i].name).length()-1);
-		config->getinputline(input, &line, "SOURCE ", i, " RA", true, 0);
+		config->getinputline(input, &line, "SOURCE ", i, " RA", true, 20);
 		sourcetable[i].ra = atof(line.c_str());
 		config->getinputline(input, &line, "SOURCE ", i, " DEC", true, 0);
 		sourcetable[i].dec = atof(line.c_str());
-		config->getinputline(input, &(sourcetable[i].calcode), " SOURCE ", i, "CALCODE", true, 0); //ignore this, it's the CALCODE
-		config->getinputline(input, &line, "SOURCE ", i, " QUAL", true, 0);
+		config->getinputline(input, &(sourcetable[i].calcode), "SOURCE ", i, " CALCODE", true, 0); //ignore this, it's the CALCODE
+		config->getinputline(input, &line, "SOURCE ", i, " QUAL", true, 20);
 		sourcetable[i].qual = atoi(line.c_str());
-		if(config->getinputline(input, &line, "SOURCE ", i, " S/CRAFT ID", false, 0))
+		if(config->getinputline(input, &line, "SOURCE ", i, " S/CRAFT ID", false, 100))
 		{
 			sourcetable[i].spacecraft_id = atoi(line.c_str());
 		}
@@ -546,7 +553,7 @@ bool Model::readScanData(ifstream * input)
 	scantable = new scan[numscans];
 	for(int i=0;i<numscans;i++) {
 		scantable[i].nummodelsamples = 0; //shows that IM info not yet read
-		config->getinputline(input, &scantable[i].identifier, "SCAN ", i " IDENTIFIER");
+		config->getinputline(input, &scantable[i].identifier, "SCAN ", i, " IDENTIFIER");
 		config->getinputline(input, &line, "SCAN ", i, " START (S)");
 		scantable[i].offsetseconds = atoi(line.c_str());
 		config->getinputline(input, &line, "SCAN ", i, " DUR (S)");
@@ -743,7 +750,7 @@ bool Model::readPolynomialSamples(ifstream * input)
 			cfatal << startl << "IM file and CALC file disagree on scan " << i << " pointing centre (" << line << " vs. " << (scantable[i].pointingcentre)->name << ") - aborting!!!" << endl;
 			return false;
 		}
-		config->getinputline(input, &line, "SCAN ", i, "NUM PHS CTRS");
+		config->getinputline(input, &line, "SCAN ", i, " NUM PHS CTRS");
 		if(scantable[i].numphasecentres != atoi(line.c_str())) {
 			cfatal << startl << "IM file and CALC file disagree on scan " << i << " number of phase centres (" << line << " vs. " << scantable[i].numphasecentres << ") - aborting!!!" << endl;
 			return false;
@@ -830,7 +837,7 @@ bool Model::readPolynomialSamples(ifstream * input)
 				// scantable[i].sc_gs_delay[j][k] = new f64*[numstations];
 				// scantable[i].gs_clock_delay[j][k] = new f64*[numstations];
 				for(int l=0;l<numstations;l++) {
-					bool retval;
+					// bool retval;
 					estimatedbytes += 14*8*(polyorder + 1);
 					scantable[i].u[j][k][l] = vectorAlloc_f64(polyorder+1);
 					scantable[i].v[j][k][l] = vectorAlloc_f64(polyorder+1);
@@ -851,10 +858,11 @@ bool Model::readPolynomialSamples(ifstream * input)
 					// scantable[i].sc_gs_delay[j][k][l] = vectorAlloc_f64(polyorder+1);
 					// scantable[i].gs_clock_delay[j][k][l] = vectorAlloc_f64(polyorder+1);
 					//look for required "DELAY" delay subcomponent
-					retval = config->getinputline(input, &line, "SRC ", k, " ANT ", l, " DELAY (us)", true, 20);
+					// retval =
+					config->getinputline(input, &line, "SRC ", k, " ANT ", l, " DELAY (us)", true, 20);
 					polyok = polyok && fillPolyRow(scantable[i].delay[j][k][l], line, polyorder+1);
 					if(fabs(scantable[i].delay[j][k][l][1]) > fabs(maxrate[l]) &&
-					   (scantable[i].delay[j][k][l][0] > 0.0 || stationtable[l].mount == ORB))
+					   (scantable[i].delay[j][k][l][0] > 0.0 || stationtable[l].spacecraft_id >= 0))
 						//ignore rates from Earth-based antennas when the delay is negative - they are junk
 						maxrate[l] = fabs(scantable[i].delay[j][k][l][1]);
 					// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
@@ -1009,15 +1017,16 @@ Model::axistype Model::getMount(string mount)
 	cerror << startl << "Warning - unknown mount type: Assuming Az-El" << endl;
 	return ALTAZ;
 }
-		, 2015Model::sitetypeenum Model::getSiteType(string sitetype_)
-		{
-			if(strcasecmp(sitetype_.c_str(), "fixed") == 0) 
-				return SITEFIXED;
-			if(strcasecmp(sitetype_.c_str(), "earth_orbit") == 0)
-				return SITEEARTHORBITING;
 
-			//otherwise unknown
-			cerror << startl << "Warning - unknown site type: Assuming OTHER" << endl;
-			return SITEOTHER;
-		}
+Model::sitetypeenum Model::getSiteType(string sitetype_)
+{
+	if(strcasecmp(sitetype_.c_str(), "fixed") == 0) 
+		return SITEFIXED;
+	if(strcasecmp(sitetype_.c_str(), "earth_orbit") == 0)
+		return SITEEARTHORBITING;
+
+	//otherwise unknown
+	cerror << startl << "Warning - unknown site type: Assuming OTHER" << endl;
+	return SITEOTHER;
+}
 // vim: shiftwidth=2:softtabstop=2:expandtab

@@ -47,7 +47,7 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
 	if(difxmtu == 0)
 		mtu = 1500;
 	else
-		mtu = atoi(difxmtu);
+		mtu = (unsigned int)(strtoul(difxmtu, 0, 0));
 	if (mtu > 9000) {
 		cerror << startl << "DIFX_MTU was set to " << mtu << " - resetting to 9000 bytes (max)" << endl;
 		mtu = 9000;
@@ -1141,7 +1141,8 @@ bool Configuration::processDatastreamTable(ifstream * input)
 {
 	datastreamdata * dsdata;
 	int configindex, freqindex, decimationfactor, tonefreq;
-	double lofreq, parentlowbandedge, parenthighbandedge, lowbandedge, highbandedge, recbandwidth;
+	double lofreq, parentlowbandedge, parenthighbandedge, lowbandedge, highbandedge;
+	// double recbandwidth;
 	string line = "";;
 	string key = "";
 	bool ok = true;
@@ -1360,7 +1361,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
 			datastreamtable[i].numrecordedbands += datastreamtable[i].recordedfreqpols[j];
 		}
 		decimationfactor = freqtable[datastreamtable[i].recordedfreqtableindices[0]].decimationfactor;
-		recbandwidth = freqtable[datastreamtable[i].recordedfreqtableindices[0]].bandwidth;
+		// recbandwidth = freqtable[datastreamtable[i].recordedfreqtableindices[0]].bandwidth;
 		int numsamplebits = datastreamtable[i].numbits;
 		/*int bytespersecond = numsamplebits*datastreamtable[i].numrecordedbands*decimationfactor*(((int)(1000000*recbandwidth*2))/8);
 		  switch(datastreamtable[i].format) {
@@ -3027,39 +3028,54 @@ bool Configuration::getinputline(ifstream * input, std::string * line, const std
 		cerror << startl << "Trying to read past the end of file!" << endl;
 	int startofheaderlength = startofheader.length();
 	std::streampos orig_pos = input->tellg();
-	getline(*input,*line);
-	int line_length = line->length();
-	while((line_length > 0 && line->at(0) == COMMENT_CHAR) || (line_length == 0)) { // a comment
-		//if(mpiid == 0) //only write one copy of this error message
-		//  cverbose << startl << "Skipping comment " << line << endl;
-		if(line_length == 0) {
-			cerror << startl << "blank line found in input while searching for " << startofheader << endl;
+	int keylength = 0;
+	int l;
+	for(l=-1; l < maxSkipLines; ++l)
+	{
+		getline(*input,*line);
+		int line_length = line->length();
+		while((line_length > 0 && line->at(0) == COMMENT_CHAR) || (line_length == 0)) { // a comment
+			//if(mpiid == 0) //only write one copy of this error message
+			//  cverbose << startl << "Skipping comment " << line << endl;
+			if(line_length == 0) {
+				cerror << startl << "blank line found in input while searching for " << startofheader << endl;
+			}
+			if(input->eof()) {
+				goto getinputline_error;
+			}
+			getline(*input, *line);
+			line_length = line->length();
 		}
-		getline(*input, *line);
-		line_length = line->length();
-	}
-	int keylength = line->find_first_of(':') + 1;
-	if(keylength < DEFAULT_KEY_LENGTH)
-		keylength = DEFAULT_KEY_LENGTH;
-	if((startofheaderlength > line_length) || (startofheader.compare((*line).substr(0, startofheader.length())) != 0)) {
-		//not what we expected
-		if(warnOnFailure) {
-			cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << *line << "'" << endl;
-			cout << "Input file read error: full information '" << startofheader << "' '" << (*line).substr(0, keylength) << "' " << endl;
+		if((startofheaderlength > line_length) || (startofheader.compare((*line).substr(0, startofheader.length())) != 0)) {
+			//not what we expected
+			if((warnOnFailure) && (maxSkipLines==0)) {
+				cerror << startl << "We thought we were reading something starting with '" << startofheader << "', when we actually got '" << *line << "'" << endl;
+				//cout << "Input file read error: full information '" << startofheader << "' '" << (*line).substr(0, keylength) << "' " << endl;
+			}
 		}
-		if(((maxSkipLines))&&(!input->eof())) {
-			return getinputline(input, line, startofheader, warnOnFailure, maxSkipLines-1);
+		else
+		{
+			keylength = line->find_first_of(':') + 1;
+			if(keylength < DEFAULT_KEY_LENGTH)
+				keylength = DEFAULT_KEY_LENGTH;
+			break;
 		}
-		*line = ERROR_MSG;
-		input->seekg(orig_pos, std::ios::beg);
-		if(warnOnFailure) {
-			cerror << startl  << "Could not find '" << startofheader << "'.  Seeking back to original point in file." << endl;
+		if(input->eof()) {
+			goto getinputline_error;
 		}
-		return false;
 	}
 	//cerr << "DEBUG PRINT LINE '" << *line << "' ### " << keylength << " ### Wanted '" << startofheader << '\'' << endl;
 	*line = line->substr(keylength);
 	return true;
+getinputline_error:
+	{
+		*line = ERROR_MSG;
+		input->seekg(orig_pos, std::ios::beg);
+		if(warnOnFailure) {
+			cerror << startl  << "Could not find '" << startofheader << "' within " << maxSkipLines << " skip lines.  Seeking back to original point in file." << endl;
+		}
+		return false;
+	}		
 }
 
 bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, bool warnOnFailure, int maxSkipLines) const

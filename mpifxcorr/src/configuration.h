@@ -264,7 +264,7 @@ public:
 	inline int getNumBaselines() const { return numbaselines; }
 	inline int getMaxNumChannels() const { return maxnumchannels; }
 	inline int getMaxNumPulsarBins() const { return maxnumpulsarbins; }
-	inline int getMTU() const { return mtu; }
+	inline unsigned int getMTU() const { return mtu; }
 	inline int getExecuteSeconds() const { return executeseconds; }
 	inline bool isRestart() const { return (restartseconds>0)?true:false; }
 	inline int getStartMJD() const { return startmjd; }
@@ -965,7 +965,8 @@ private:
 	int numdatastreams, numbaselines, numcoreconfs;
 	int executeseconds, startmjd, startseconds, startns;
 	double restartseconds;
-	int maxnumchannels, maxnumpulsarbins, maxthreadresultlength, maxcoreresultlength, maxnumbufferedffts, mtu;
+	int maxnumchannels, maxnumpulsarbins, maxthreadresultlength, maxcoreresultlength, maxnumbufferedffts;
+	unsigned int mtu;
 	int stadumpchannels, ltadumpchannels;
 	int numconfigs, numrules, baselinetablelength, telescopetablelength, datastreamtablelength, freqtablelength;
 	long long estimatedbytes;
