@@ -90,11 +90,13 @@ void deleteDifxScanArray(DifxScan *ds, int nScan)
 
 void fprintDifxScan(FILE *fp, const DifxScan *ds)
 {
-	int i, j, nModel;
+	int i, j, k, nModel;
 
 	fprintf(fp, "  DifxScan [%s] : %p\n", ds->identifier, ds);
 	fprintf(fp, "    Start = MJD %12.6f\n", ds->mjdStart);
 	fprintf(fp, "    End   = MJD %12.6f\n", ds->mjdEnd);
+	fprintf(fp, "    startSeconds = %6d since model reference\n", ds->startSeconds);
+	fprintf(fp, "    durSeconds   = %6d\n", ds->durSeconds);
 	fprintf(fp, "    Observing mode = %s\n", ds->obsModeName);
 	fprintf(fp, "    Max NS between UV shifts = %d\n", ds->maxNSBetweenUVShifts);
 	fprintf(fp, "    Max NS between AC averages = %d\n", ds->maxNSBetweenACAvg);
@@ -107,13 +109,15 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 		fprintf(fp, "    Original job phase centre %d source index = %d\n",
 				i, ds->orgjobPhsCentreSrcs[i]);
 	}
-	fprintf(fp, "    nAntenna %d\n", ds->nAntenna);
+	fprintf(fp, "    jobId    = %d\n", ds->jobId);
+	fprintf(fp, "    configId = %d\n", ds->configId);
+	fprintf(fp, "    nAntenna = %d\n", ds->nAntenna);
+	fprintf(fp, "    nPoly    = %d\n", ds->nPoly);
 
-	fprintf(fp, "    ConfigId = %d\n", ds->configId);
 
-	if(ds->nPhaseCentres < 1 || ds->pointingCentreSrc == ds->phsCentreSrcs[0])
+	if(ds->nPhaseCentres < 1)
 	{
-		nModel = ds->nPhaseCentres;
+		nModel = 1;
 	}
 	else
 	{
@@ -130,7 +134,10 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 				{
 					for(j = 0; j < nModel; j++)
 					{
-						fprintDifxPolyModel(fp, ds->im[i][j]);
+						for(k = 0; k < ds->nPoly; ++k)
+						{
+							fprintDifxPolyModel(fp, ds->im[i][j]+k, i, j, k);
+						}
 					}
 				}
 				else
@@ -407,7 +414,7 @@ int getDifxScanIMIndex(const DifxScan *ds, double mjd, double iat, double *dt)
 	}
 	if(!ds->im || ds->nPoly < 1)
 	{
-		return -1;
+		return -2;
 	}
 
 	/* be sure to find an antenna with im model data */
@@ -422,7 +429,7 @@ int getDifxScanIMIndex(const DifxScan *ds, double mjd, double iat, double *dt)
 
 	if(!im)
 	{
-		return -1;
+		return -3;
 	}
 #warning "Optimize this in the future to use a starting index guess"
 	for(i = 0; i < ds->nPoly; i++)
@@ -441,7 +448,7 @@ int getDifxScanIMIndex(const DifxScan *ds, double mjd, double iat, double *dt)
 	}
 
 	/* outside range */
-	return -1;
+	return -4;
 }
 
 /* dc must point to the base of a configuration array */

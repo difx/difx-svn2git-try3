@@ -343,7 +343,7 @@ void fprintDifxInput(FILE *fp, const DifxInput *D)
 	}
 
 	fprintf(fp, "  mjdStart = %14.8f\n", D->mjdStart);
-	fprintf(fp, "  mjdStop	= %14.8f\n", D->mjdStop);
+	fprintf(fp, "  mjdStop  = %14.8f\n", D->mjdStop);
 	fprintf(fp, "  vis buffer length = %d\n", D->visBufferLength);
 	fprintf(fp, "  input Channels = %d\n", D->nInChan);
 	fprintf(fp, "  start Channel = %d\n", D->startChan);
@@ -2228,64 +2228,6 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 			D->job->calculate_own_retarded_position = 1;
 		}
 	}
-	row = DifxParametersfind_limited(cp, 0, nMedSkip, "JOB CALCPARAM ACCELGRV");
-	if(row > 0)
-	{
-		int row_start = row;
-		free(D->job->calcParamTable);
-		D->job->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
-		D->job->calcParamTable->accelgrv = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM E-FLAT");
-		D->job->calcParamTable->e_flat = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM EARTHRAD");
-		D->job->calcParamTable->earthrad = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM MMSEMS");
-		D->job->calcParamTable->mmsems = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM EPHEPOC");
-		D->job->calcParamTable->ephepoc = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GAUSS");
-		D->job->calcParamTable->gauss = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM U-GRV-CN");
-		D->job->calcParamTable->u_grv_cn = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMSUN");
-		D->job->calcParamTable->gmsun = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMMERCURY");
-		D->job->calcParamTable->gmmercury = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMVENUS");
-		D->job->calcParamTable->gmvenus = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMEARTH");
-		D->job->calcParamTable->gmearth = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMMOON");
-		D->job->calcParamTable->gmmoon = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMMARS");
-		D->job->calcParamTable->gmmars = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMJUPITER");
-		D->job->calcParamTable->gmjupiter = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMSATURN");
-		D->job->calcParamTable->gmsaturn = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMURANUS");
-		D->job->calcParamTable->gmuranus = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM GMNEPTUNE");
-		D->job->calcParamTable->gmneptune = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM ETIDELAG");
-		D->job->calcParamTable->etidelag = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM LOVE_H");
-		D->job->calcParamTable->love_h = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM LOVE_L");
-		D->job->calcParamTable->love_l = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM PRE_DATA");
-		D->job->calcParamTable->pre_data = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM REL_DATA");
-		D->job->calcParamTable->rel_data = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM TIDALUT1");
-		D->job->calcParamTable->tidalut1 = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM AU");
-		D->job->calcParamTable->au = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM TSECAU");
-		D->job->calcParamTable->tsecau = atof(DifxParametersvalue(cp, row));
-		row = DifxParametersfind_limited(cp, row_start, nMedSkip, "JOB CALCPARAM VLIGHT");
-		D->job->calcParamTable->vlight = atof(DifxParametersvalue(cp, row));
-	}
 	row = DifxParametersfind(cp, 0, "VEX FILE");
 	if(row > 0)
 	{
@@ -2381,6 +2323,20 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		{
 			fprintf(stderr, "Warning: populateCalc: unknown antenna site type encountered for telescope table entry %d: %s.	 Changing to fixed\n", i, DifxParametersvalue(cp, row));
 			D->antenna[a].sitetype = AntennaSiteFixed;
+		}
+		row = DifxParametersfind1_limited(cp, rows[0], nSmallSkip, "TELESCOPE %d SITEFRAME", i);
+		if(row >= 0)
+		{
+			D->antenna[a].site_coord_frame = stringToSourceCoordinateFrameType(DifxParametersvalue(cp, row));
+		}
+		else
+		{
+			D->antenna[a].site_coord_frame = SourceCoordinateFrameUnknown;
+		}
+		if(D->antenna[a].site_coord_frame == SourceCoordinateFrameUnknown)
+		{
+			fprintf(stderr, "Warning: populateCalc: unknown antenna site frame encountered for telescope table entry %d: %s.	 Changing to SourceCoordinateFrameITRF2008\n", i, DifxParametersvalue(cp, row));
+			D->antenna[a].site_coord_frame = SourceCoordinateFrameITRF2008;
 		}
 		D->antenna[a].offset[0]= atof(DifxParametersvalue(cp, rows[2]));
 
@@ -3044,10 +3000,12 @@ static int parsePoly1_limited(DifxParameters *p, int r, int dr, char *key, int i
 	return r;
 }
 
+/*
 static int parsePoly1(DifxParameters *p, int r, char *key, int i1, int i2, double *array, int n, int zeroMissing)
 {
 	return parsePoly1_limited(p, r, p->num_rows, key, i1, i2, array, n, zeroMissing);
 }
+*/
 
 static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 {
@@ -3124,6 +3082,64 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 		{
 			D->job->calculate_own_retarded_position = 1;
 		}
+	}
+	r = DifxParametersfind_limited(mp, 0, nMedSkip, "CALCPARAM ACCELGRV");
+	if(r > 0)
+	{
+		int row_start = r;
+		free(D->job->calcParamTable);
+		D->job->calcParamTable = (DifxCalcParamTable*)malloc(sizeof(DifxCalcParamTable));
+		D->job->calcParamTable->accelgrv = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM E-FLAT");
+		D->job->calcParamTable->e_flat = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM EARTHRAD");
+		D->job->calcParamTable->earthrad = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM MMSEMS");
+		D->job->calcParamTable->mmsems = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM EPHEPOC");
+		D->job->calcParamTable->ephepoc = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GAUSS");
+		D->job->calcParamTable->gauss = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM U-GRV-CN");
+		D->job->calcParamTable->u_grv_cn = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMSUN");
+		D->job->calcParamTable->gmsun = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMMERCURY");
+		D->job->calcParamTable->gmmercury = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMVENUS");
+		D->job->calcParamTable->gmvenus = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMEARTH");
+		D->job->calcParamTable->gmearth = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMMOON");
+		D->job->calcParamTable->gmmoon = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMMARS");
+		D->job->calcParamTable->gmmars = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMJUPITER");
+		D->job->calcParamTable->gmjupiter = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMSATURN");
+		D->job->calcParamTable->gmsaturn = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMURANUS");
+		D->job->calcParamTable->gmuranus = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM GMNEPTUNE");
+		D->job->calcParamTable->gmneptune = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM ETIDELAG");
+		D->job->calcParamTable->etidelag = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM LOVE_H");
+		D->job->calcParamTable->love_h = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM LOVE_L");
+		D->job->calcParamTable->love_l = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM PRE_DATA");
+		D->job->calcParamTable->pre_data = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM REL_DATA");
+		D->job->calcParamTable->rel_data = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM TIDALUT1");
+		D->job->calcParamTable->tidalut1 = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM AU");
+		D->job->calcParamTable->au = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM TSECAU");
+		D->job->calcParamTable->tsecau = atof(DifxParametersvalue(mp, r));
+		r = DifxParametersfind_limited(mp, row_start, nMedSkip, "CALCPARAM VLIGHT");
+		D->job->calcParamTable->vlight = atof(DifxParametersvalue(mp, r));
 	}
 
 	/* Now get the models! */
@@ -3213,8 +3229,8 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 			int mjd, sec;
 			int src;
 
-			r2 = DifxParametersfind2(mp, r, "SCAN %d POLY %d MJD", s, p);
-			if(r2 < 0)
+			r = DifxParametersfind2_limited(mp, r, nSmallSkip, "SCAN %d POLY %d MJD", s, p);
+			if(r < 0)
 			{
 				fprintf(stderr, "Error: populateIM: Could not find SCAN %d POLY %d MJD", s, p);
 				free(antennaMap);
@@ -3254,13 +3270,14 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 					{
 						scan->im[a][src][p].delta = atof(DifxParametersvalue(mp, r2));
 					}
-					r2 = parsePoly1(mp, r, "SRC %d ANT %d DELAY (us)", src, t, scan->im[a][src][p].delay, order+1, 1);
+					r2 = parsePoly1_limited(mp, r, nSmallSkip, "SRC %d ANT %d DELAY (us)", src, t, scan->im[a][src][p].delay, order+1, 1);
 					if(r2 < 0)
 					{
 						fprintf(stderr, "Error: populateIM: Could not find SRC %d ANT %d DELAY (us)\n", src, t);
 						
 						return 0;
 					}
+					r = r2;
 					/* don't require the following 10 parameters, so don't adjust r when reading them */
 					parsePoly1_limited(mp, r, nSmallSkip, "SRC %d ANT %d DRY (us)", src, t, scan->im[a][src][p].dry, order+1, 1);
 					parsePoly1_limited(mp, r, nSmallSkip, "SRC %d ANT %d WET (us)", src, t, scan->im[a][src][p].wet, order+1, 1);
@@ -4228,7 +4245,7 @@ DifxInput *loadDifxCalc(const char *filePrefix)
 	return D;
 }
 
-/* return -1 if no suitable source found */
+/* return < 0 if no suitable source found */
 int DifxInputGetScanIdByJobId(const DifxInput *D, double mjd, int jobId)
 {
 	int scanId;
@@ -4240,21 +4257,48 @@ int DifxInputGetScanIdByJobId(const DifxInput *D, double mjd, int jobId)
 
 	if(mjd <= D->job[jobId].mjdStart) 
 	{
-		return -1;
+		return -2;
 	}
 
 	for(scanId = 0; scanId < D->nScan; ++scanId)
 	{
-		if(mjd <= D->scan[scanId].mjdEnd && D->scan[scanId].jobId == jobId)
+		if(mjd < D->scan[scanId].mjdEnd && D->scan[scanId].jobId == jobId)
 		{
 			return scanId;
 		}
 	}
 
-	return -1;
+	return -3;
 }
 
-/* return -1 if no suitable scan found */
+/* return < 0 if no suitable source found */
+int DifxInputGetScanIdByJobIdVis(const DifxInput *D, double mjd, int jobId)
+{
+	int scanId;
+
+	if(!D)
+	{
+		return -1;
+	}
+
+	if(mjd <= D->job[jobId].mjdStart) 
+	{
+		return -2;
+	}
+
+	for(scanId = 0; scanId < D->nScan; ++scanId)
+	{
+		double half_tInt = D->config[D->scan[scanId].configId].tInt * 0.5;
+		if(mjd < D->scan[scanId].mjdEnd + half_tInt && D->scan[scanId].jobId == jobId)
+		{
+			return scanId;
+		}
+	}
+
+	return -3;
+}
+
+/* return < 0 if no suitable scan found */
 int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd, int antennaId)
 {
 	int scanId;
@@ -4317,7 +4361,7 @@ int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd, int antennaId)
 		}
 	}
 
-	return -1;
+	return -2;
 }
 
 int DifxInputGetPointingSourceIdByJobId(const DifxInput *D, double mjd, int jobId)

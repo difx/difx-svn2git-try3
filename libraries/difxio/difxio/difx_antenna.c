@@ -448,7 +448,7 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 				n++;
 				if((da[i].sc_name[0]))
 				{
-					writeDifxLineInt1(out, "TELESCOPE %d S/", i, da[i].spacecraftId);
+					writeDifxLine1(out, "TELESCOPE %d S/CRAFT NAME", i, da[i].sc_name);
 					n++;
 				}
 			}

@@ -1,3 +1,17 @@
+2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_antenna.c:
+	* difxio/difx_write_input.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_source.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_write_im.c:
+	* difxio/difx_poly_model.c:
+	* difxio/difx_input.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_job.c:
+	* difxio/difx_input.h: bugfixes for RadioAstron compilation
+
 2015-05-15  James Anderson  <anderson@gfz-potsdam.de>
 
 	* difxio/difx_tcal.h:

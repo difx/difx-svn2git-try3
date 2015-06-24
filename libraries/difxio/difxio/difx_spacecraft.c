@@ -102,6 +102,9 @@ DifxSpacecraft *newDifxSpacecraftArray(int nSpacecraft)
 		ds[s].GS_recording_delay = NAN;
 		ds[s].GS_transmission_delay = NAN;
 		ds[s].GS_transmission_delay_sync = NAN;
+		ds[s].SC_elec_delay = NAN;
+		ds[s].GS_clock_delay = NAN;
+		ds[s].GS_clock_delay_sync = NAN;
 		ds[s].GS_mount = AntennaMountOther;
 		ds[s].GS_clockorder = -1;
 		ds[s].SC_pos_offsetorder = -1;
@@ -241,8 +244,6 @@ int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplan
 	const double max_absolute_error = 1E-15;   /* Keep absolute undertainty
 												  below 1E-15 s */
 	int return_code;
-
-	/*fprintf(stderr, "INFO: computeDifxSpacecraftTimeFrameOffset starting for spacecraft %s.\n", ds->name);*/
 
 	if(JPLplanetaryephem[0] != 0) {
 		fprintf(stderr, "Error: computeDifxSpacecraftTimeFrameOffset: DiFX software for JPL planetary ephemeris effects on spacecraft time frame not yet written.  Effects including the gravitational potential of the Moon and Sun will not be incorporated.\n");
@@ -384,7 +385,7 @@ int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplan
 		ds->TFrameOffset[i].Delta_t = last_blockpoint_delay + subblock_delay;
 		ds->TFrameOffset[i].dtdtau = rate;
 	}
-	/*fprintf(stderr, "INFO: computeDifxSpacecraftTimeFrameOffset done.\n");*/
+	/*fprintf(stderr, "INFO: computeDifxSpacecraftTimeFrameOffset done, returning code %d.\n", return_code);*/
 	return return_code;
 }
 
@@ -522,10 +523,13 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double s
 		ldpool_c(naifFile);
 		spklef_c(ephemFile, &spiceHandle);
 
-		p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
-		if(p >= DIFXIO_NAME_LENGTH)
+		if(ds->name[0] == 0)
 		{
-			fprintf(stderr, "Warning: computeDifxSpacecraftSourceEphemeris_bsp: spacecraft name %s is too long %d > %d\n", objectName, p, DIFXIO_NAME_LENGTH-1);
+			p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
+			if(p >= DIFXIO_NAME_LENGTH)
+			{
+				fprintf(stderr, "Warning: computeDifxSpacecraftSourceEphemeris_bsp: spacecraft name %s is too long %d > %d\n", objectName, p, DIFXIO_NAME_LENGTH-1);
+			}
 		}
 		ds->nPoint = nPoint;
 		ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
@@ -820,10 +824,13 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double s
 			return -1;
 		}
 
-		p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
-		if(p >= DIFXIO_NAME_LENGTH)
+		if(ds->name[0] == 0)
 		{
-			fprintf(stderr, "Warning: computeDifxSpacecraftSourceEphemeris_tle: spacecraft name %s is too long %d > %d\n", objectName, p, DIFXIO_NAME_LENGTH-1);
+			p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
+			if(p >= DIFXIO_NAME_LENGTH)
+			{
+				fprintf(stderr, "Warning: computeDifxSpacecraftSourceEphemeris_tle: spacecraft name %s is too long %d > %d\n", objectName, p, DIFXIO_NAME_LENGTH-1);
+			}
 		}
 		ds->nPoint = nPoint;
 		free(ds->pos);
@@ -1033,12 +1040,15 @@ int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, doubl
 				
 		ldpool_c(naifFile);
 		spklef_c(ephemFile, &spiceHandle);
-				
-		p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
-		if(p >= DIFXIO_NAME_LENGTH)
+
+		if(ds->name[0] == 0)
 		{
-			fprintf(stderr, "Warning: computeDifxSpacecraftAntennaEphemeris: spacecraft name %s is too long %d > %d\n",
-					objectName, p, DIFXIO_NAME_LENGTH-1);
+			p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
+			if(p >= DIFXIO_NAME_LENGTH)
+			{
+				fprintf(stderr, "Warning: computeDifxSpacecraftAntennaEphemeris: spacecraft name %s is too long %d > %d\n",
+				        objectName, p, DIFXIO_NAME_LENGTH-1);
+			}
 		}
 		ds->nPoint = nPoint;
 		free(ds->pos);
@@ -1101,18 +1111,21 @@ int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, doubl
 		/* Russian RadioAstron text format */
 		int p;
 		int retcode;
-		p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
-		if(p >= DIFXIO_NAME_LENGTH)
+		if(ds->name[0] == 0)
 		{
-			fprintf(stderr, "Warning: computeDifxSpacecraftAntennaEphemeris: spacecraft name %s is too long %d > %d\n",
-					objectName, p, DIFXIO_NAME_LENGTH-1);
+			p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
+			if(p >= DIFXIO_NAME_LENGTH)
+			{
+				fprintf(stderr, "Warning: computeDifxSpacecraftAntennaEphemeris: spacecraft name %s is too long %d > %d\n",
+				        objectName, p, DIFXIO_NAME_LENGTH-1);
+			}
 		}
 		p = read_Russian_scf_file(ephemFile, objectName,
 								  mjd0, mjd0+(nPoint-1)*deltat,
 								  deltat, ephemClockError, ds);
 		if((p)){
 			fprintf(stderr, "Error: computeDifxSpacecraftAntennaEphemeris: read_Russian_scf_file returned %d.\n", p);
-			return -1;
+			return -4;
 		}
 		/* read_Russian_scf_file computes it's own nPoint and
 		   mjd0, so make sure to use the correct values in subsequent
@@ -1128,7 +1141,7 @@ int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, doubl
 										   ephemClockError, ds);
 			if((p)) {
 				fprintf(stderr, "Error: computeDifxSpacecraftSourceEphemeris: read_Russian_scf_axes_file returned %d.\n", p);
-				return -4;
+				return -5;
 			}
 		}
 		else
@@ -1149,7 +1162,7 @@ int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, doubl
 		}
 
 		retcode =  computeDifxSpacecraftTimeFrameOffset(ds, JPLplanetaryephem);
-		return (retcode < 0) ? -2 : 0;
+		return (retcode < 0) ? -6 : 0;
 
 		return 0;
 	}
@@ -1157,7 +1170,7 @@ int computeDifxSpacecraftAntennaEphemeris(DifxSpacecraft *ds, double mjd0, doubl
 	{
 		fprintf(stderr, "Error: computeDifxSpacecraftAntennaEphemeris: Unknown ephemType '%s'.\n", ephemType);
 	}
-	return -1;
+	return -7;
 }
 int computeDifxSpacecraftEphemerisOffsets(DifxSpacecraft *ds)
 {
@@ -1518,6 +1531,7 @@ int evaluateDifxSpacecraftSource(const DifxSpacecraft *sc, int mjd, double fracM
 			r--;
 		}
 		else {
+			fprintf(stderr, "Error in evaluateDifxSpacecraftSource %s:%d: time request at %d %.6f is outside of ephemeris boundaries %d %.6f to %d %.6f\n", __FILE__, __LINE__, mjd, fracMjd, pos[0].mjd, pos[0].fracDay, pos[nRow-1].mjd, pos[nRow-1].fracDay);
 			return -1;
 		}
 	}
@@ -1615,6 +1629,7 @@ int evaluateDifxSpacecraftAntenna(const DifxSpacecraft *sc, int mjd,
 			--r;
 		}
 		else {
+			fprintf(stderr, "Requested time %d %.6f is outside of ephemeris range (%d %.6f to %d %.6f) in evaluateDifxSpacecraftAntenna\n", mjd, fracMjd, pos[0].mjd, pos[0].fracDay, pos[nRow-1].mjd, pos[nRow-1].fracDay);
 			return -1;
 		}
 	}
@@ -2045,36 +2060,36 @@ int read_Russian_scf_file(const char * const filename,
 	}
 	get_next_Russian_scf_line(line, MAX_LINE_SIZE, fp);
 	while(((line[0]) && strcmp(line,"META_STOP"))) {
-		if(!strncmp(line,"OBJECT_NAME	= ", 16)) {
+		if(!strncmp(line,"OBJECT_NAME   = ", 16)) {
 			if(strncmp(line+16, spacecraftname, strlen(spacecraftname))) {
 				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' has OBJECT_NAME '%s', but the requested spacecraftname was '%s'\n", filename, line+16, spacecraftname);
 				goto read_Russian_scf_file_fail;
 			}
 			check_flags |= 0x1;
 		}
-		else if(!strncmp(line,"OBJECT_ID	 = ", 16)) check_flags |= 0x2;
-		else if(!strncmp(line,"CENTER_NAME	 = ", 16)) {
+		else if(!strncmp(line,"OBJECT_ID     = ", 16)) check_flags |= 0x2;
+		else if(!strncmp(line,"CENTER_NAME   = ", 16)) {
 			if(strcmp(line, "CENTER_NAME   = Earth Barycenter")) {
 				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' has unknown CENTER_NAME '%s'\n", filename, line+16);
 				goto read_Russian_scf_file_fail;
 			}
 			check_flags |= 0x4;
 		}
-		else if(!strncmp(line,"REF_FRAME	 = ", 16)) {
-			if(strcmp(line, "REF_FRAME	   = EME2000")) {
+		else if(!strncmp(line,"REF_FRAME     = ", 16)) {
+			if(strcmp(line, "REF_FRAME     = EME2000")) {
 				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' has unknown REF_FRAME '%s'\n", filename, line+16);
 				goto read_Russian_scf_file_fail;
 			}
 			check_flags |= 0x8;
 		}
-		else if(!strncmp(line,"TIME_SYSTEM	 = ", 16)) {
+		else if(!strncmp(line,"TIME_SYSTEM   = ", 16)) {
 			if(strcmp(line, "TIME_SYSTEM   = UTC")) {
 				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' has unknown TIME_SYSTEM '%s'\n", filename, line+16);
 				goto read_Russian_scf_file_fail;
 			}
 			check_flags |= 0x10;
 		}
-		else if(!strncmp(line,"START_TIME	 = ", 16)) {
+		else if(!strncmp(line,"START_TIME    = ", 16)) {
 			if(sscanf(line+16,"%d-%d-%dT%d:%d:%lf",
 					 &year, &month, &day,
 					 &hour, &minute, &second) != 6) {
@@ -2092,7 +2107,7 @@ int read_Russian_scf_file(const char * const filename,
 			table_MJD_start = MJD;
 			check_flags |= 0x20;
 		}
-		else if(!strncmp(line,"STOP_TIME	 = ", 16)) {
+		else if(!strncmp(line,"STOP_TIME     = ", 16)) {
 			if(sscanf(line+16,"%d-%d-%dT%d:%d:%lf",
 					 &year, &month, &day,
 					 &hour, &minute, &second) != 6) {
@@ -2111,7 +2126,7 @@ int read_Russian_scf_file(const char * const filename,
 			check_flags |= 0x40;
 		}
 		else {
-			fprintf(stderr, "Warning: read_Russian_scf_file: RUSSCF file '%s' has unknown header keyword=value pair '%s'", filename, line);
+			fprintf(stderr, "Warning: read_Russian_scf_file: RUSSCF file '%s' has unknown header keyword=value pair '%s'\n", filename, line);
 		}
 		get_next_Russian_scf_line(line, MAX_LINE_SIZE, fp);
 	}
@@ -2150,7 +2165,7 @@ int read_Russian_scf_file(const char * const filename,
 			else {
 				table_interval = MJD-table_MJD_start;
 				if((table_interval - MJD_delta)/MJD_delta > 1E-5) {
-					fprintf(stderr, "Warning: read_Russian_scf_file: RUSSCF file '%s' tabulated interval %E days, wherease the requested tabulated interval was %E days (%E seconds)\n", filename, table_interval, MJD_delta, MJD_delta*SECONDS_PER_DAY);
+					fprintf(stderr, "Warning: read_Russian_scf_file: RUSSCF file '%s' tabulated interval %E days (%E seconds), whereas the requested tabulated interval was %E days (%E seconds)\n", filename, table_interval, table_interval*SECONDS_PER_DAY, MJD_delta, MJD_delta*SECONDS_PER_DAY);
 				}
 			}
 		}
@@ -2366,13 +2381,13 @@ int read_Russian_scf_axes_file(const char * const filename,
 		goto read_Russian_scf_axes_file_fail;
 	}
 	if(UTC_OFFSET_found == 0) {
-		fprintf(stderr, "Warning: read_Russian_scf_axes_file: RUSSCF axes file '%s', found no lines starting with '%s'.	 Is the default value of %.2f correct?\n", filename, UTC_OFFSET_str, UTC_OFFSET * 24.0);
+		fprintf(stderr, "Warning: read_Russian_scf_axes_file: RUSSCF axes file '%s', found no lines starting with '%s'.  Is the default value of %.2f correct?\n", filename, UTC_OFFSET_str, UTC_OFFSET * 24.0);
 	}
 	else if(UTC_OFFSET_found > 1) {
-		fprintf(stderr, "Warning: read_Russian_scf_axes_file: RUSSCF axes file '%s', found multiple (%d) lines starting with '%s' or '%s'.	Are the multiple clock offset commands correct?\n", filename, UTC_OFFSET_found, UTC_OFFSET_str, UTC_OFFSET_comment_str);
+		fprintf(stderr, "Warning: read_Russian_scf_axes_file: RUSSCF axes file '%s', found multiple (%d) lines starting with '%s' or '%s'.  Are the multiple clock offset commands correct?\n", filename, UTC_OFFSET_found, UTC_OFFSET_str, UTC_OFFSET_comment_str);
 	}
 	else if(UTC_OFFSET_comment_found > 1) {
-		fprintf(stderr, "Warning: read_Russian_scf_axes_file: RUSSCF axes file '%s', found multiple (%d) lines starting with '%s'.	Are the multiple clock offset commands correct?\n", filename, UTC_OFFSET_found, UTC_OFFSET_comment_str);
+		fprintf(stderr, "Warning: read_Russian_scf_axes_file: RUSSCF axes file '%s', found multiple (%d) lines starting with '%s'.  Are the multiple clock offset commands correct?\n", filename, UTC_OFFSET_found, UTC_OFFSET_comment_str);
 	}
 	UTC_OFFSET_found = 0;
 	UTC_OFFSET_comment_found = 0;
@@ -2793,7 +2808,7 @@ int DiFX_model_spacecraft_time_frame_delay_rate(const DifxSpacecraft* const spac
 														frac_TT,
 													   &sc_pos);
 		if(return_code < 0) {
-			retcode = -3;
+			retcode = -4;
 			return retcode;
 		}
 		pos[0] = sc_pos.X;
@@ -2900,7 +2915,7 @@ int DiFX_model_scpacecraft_time_delay_qromb(const DifxSpacecraft* const spacecra
 			return -1;
 		}
 		else if(check > 0) {
-			retcode = +1;
+			retcode |= 0x1;
 		}
 		*delta_delay = 0.0;
 		return retcode;
@@ -2920,19 +2935,19 @@ int DiFX_model_scpacecraft_time_delay_qromb(const DifxSpacecraft* const spacecra
 																	mjd0, frac0,
 																   &res0);
 				if(check < 0) {
-					return -1;
+					return -2;
 				}
 				else if(check > 0) {
-					retcode = +1;
+					retcode |= 0x2;
 				}
 				check = DiFX_model_spacecraft_time_frame_delay_rate(spacecraft,
 																	mjd1, frac1,
 																   &res1);
 				if(check < 0) {
-					return -1;
+					return -3;
 				}
 				else if(check > 0) {
-					retcode = +1;
+					retcode |= 0x4;
 				}
 				*t1_rate = res1;
 				trapzd_sum = 0.5 *delta_time*(res0+res1);
@@ -2953,10 +2968,10 @@ int DiFX_model_scpacecraft_time_delay_qromb(const DifxSpacecraft* const spacecra
 																		mjd_eval, frac_eval,
 																	   &res);
 					if(check < 0) {
-						return -1;
+						return -4;
 					}
 					else if(check > 0) {
-						retcode = +1;
+						retcode |= 0x8;
 					}
 					sum += res;
 					

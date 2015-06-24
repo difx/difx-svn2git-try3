@@ -127,35 +127,6 @@ int writeDifxCalc(const DifxInput *D)
 	writeDifxLineDouble(out, "JOB DELTA XYZ", "%24.16e",  D->job->delta_xyz);
 	writeDifxLine(out,       "JOB ABER CORR",  aberCorrStrings[D->job->aberCorr]);
 	writeDifxLineBoolean(out,"JOB CALC_RETARDED_POSITION", D->job->calculate_own_retarded_position);
-	if((D->job->calcParamTable))
-	{
-		writeDifxLineDouble(out,"JOB CALCPARAM ACCELGRV",  "%24.16e", D->job->calcParamTable->accelgrv);
-		writeDifxLineDouble(out,"JOB CALCPARAM E-FLAT",    "%24.16e", D->job->calcParamTable->e_flat);
-		writeDifxLineDouble(out,"JOB CALCPARAM EARTHRAD",  "%24.16e", D->job->calcParamTable->earthrad);
-		writeDifxLineDouble(out,"JOB CALCPARAM MMSEMS",    "%24.16e", D->job->calcParamTable->mmsems);
-		writeDifxLineDouble(out,"JOB CALCPARAM EPHEPOC",   "%24.16e", D->job->calcParamTable->ephepoc);
-		writeDifxLineDouble(out,"JOB CALCPARAM GAUSS",     "%24.16e", D->job->calcParamTable->gauss);
-		writeDifxLineDouble(out,"JOB CALCPARAM U-GRV-CN",  "%24.16e", D->job->calcParamTable->u_grv_cn);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMSUN",     "%24.16e", D->job->calcParamTable->gmsun);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMMERCURY", "%24.16e", D->job->calcParamTable->gmmercury);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMVENUS",   "%24.16e", D->job->calcParamTable->gmvenus);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMEARTH",   "%24.16e", D->job->calcParamTable->gmearth);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMMOON",    "%24.16e", D->job->calcParamTable->gmmoon);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMMARS",    "%24.16e", D->job->calcParamTable->gmmars);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMJUPITER", "%24.16e", D->job->calcParamTable->gmjupiter);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMSATURN",  "%24.16e", D->job->calcParamTable->gmsaturn);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMURANUS",  "%24.16e", D->job->calcParamTable->gmuranus);
-		writeDifxLineDouble(out,"JOB CALCPARAM GMNEPTUNE", "%24.16e", D->job->calcParamTable->gmneptune);
-		writeDifxLineDouble(out,"JOB CALCPARAM ETIDELAG",  "%24.16e", D->job->calcParamTable->etidelag);
-		writeDifxLineDouble(out,"JOB CALCPARAM LOVE_H",    "%24.16e", D->job->calcParamTable->love_h);
-		writeDifxLineDouble(out,"JOB CALCPARAM LOVE_L",    "%24.16e", D->job->calcParamTable->love_l);
-		writeDifxLineDouble(out,"JOB CALCPARAM PRE_DATA",  "%24.16e", D->job->calcParamTable->pre_data);
-		writeDifxLineDouble(out,"JOB CALCPARAM REL_DATA",  "%24.16e", D->job->calcParamTable->rel_data);
-		writeDifxLineDouble(out,"JOB CALCPARAM TIDALUT1",  "%24.16e", D->job->calcParamTable->tidalut1);
-		writeDifxLineDouble(out,"JOB CALCPARAM AU",        "%24.16e", D->job->calcParamTable->au);
-		writeDifxLineDouble(out,"JOB CALCPARAM TSECAU",    "%24.16e", D->job->calcParamTable->tsecau);
-		writeDifxLineDouble(out,"JOB CALCPARAM VLIGHT",    "%24.16e", D->job->calcParamTable->vlight);
-	}
 	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1, 1);
 	writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 1);
 	writeDifxScanArray(out, D->nScan, D->scan, D->config);

@@ -92,9 +92,9 @@ void deleteDifxPolyModelArray(DifxPolyModel ***dpm, int nAntenna, int nSrcs)
 	}
 }
 
-void fprintDifxPolyModel(FILE *fp, const DifxPolyModel *dpm)
+void fprintDifxPolyModel(FILE *fp, const DifxPolyModel *dpm, int antennaId, int sourceId, int polyId)
 {
-	fprintf(fp, "    DifxPolyModel : %p\n", dpm);
+	fprintf(fp, "    DifxPolyModel [antennaId = %2d sourceId = %2d polyId = %2d]: %p\n", antennaId, sourceId, polyId, dpm);
 	if(dpm)
 	{
 		fprintf(fp, "        mjd, sec = %d, %d\n", dpm->mjd, dpm->sec);
@@ -102,9 +102,9 @@ void fprintDifxPolyModel(FILE *fp, const DifxPolyModel *dpm)
 	}
 }
 
-void printDifxPolyModel(const DifxPolyModel *dpm)
+void printDifxPolyModel(const DifxPolyModel *dpm, int antennaId, int sourceId, int polyId)
 {
-	fprintDifxPolyModel(stdout, dpm);
+	fprintDifxPolyModel(stdout, dpm, antennaId, sourceId, polyId);
 }
 
 

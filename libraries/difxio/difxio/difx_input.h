@@ -1227,8 +1227,8 @@ int ruleAppliesToScanSource(const DifxRule * dr, const DifxScan * ds, const Difx
 DifxPolyModel ***newDifxPolyModelArray(int nAntenna, int nSrcs, int nPoly);
 DifxPolyModel *dupDifxPolyModelColumn(const DifxPolyModel *src, int nPoly);
 void deleteDifxPolyModelArray(DifxPolyModel ***dpm, int nAntenna, int nSrcs);
-void printDifxPolyModel(const DifxPolyModel *dpm);
-void fprintDifxPolyModel(FILE *fp, const DifxPolyModel *dpm);
+void printDifxPolyModel(const DifxPolyModel *dpm, int antennaId, int sourceId, int polyId);
+void fprintDifxPolyModel(FILE *fp, const DifxPolyModel *dpm, int antennaId, int sourceId, int polyId);
 
 DifxPolyModelLMNExtension ***newDifxPolyModelLMNExtensionArray(int nAntenna, int nSrcs, int nPoly);
 DifxPolyModelLMNExtension *dupDifxPolyModelLMNExtensionColumn(const DifxPolyModelLMNExtension *src, int nPoly);
@@ -1358,6 +1358,7 @@ int DifxInputGetPointingSourceIdByJobId(const DifxInput *D, double mjd, int jobI
 int DifxInputGetPointingSourceIdByAntennaId(const DifxInput *D, double mjd, int antennaId);
 const DifxSource *DifxInputGetSource(const DifxInput *D, const char *sourceName);
 int DifxInputGetScanIdByJobId(const DifxInput *D, double mjd, int jobId);
+int DifxInputGetScanIdByJobIdVis(const DifxInput *D, double mjd, int jobId);
 int DifxInputGetScanIdByAntennaId(const DifxInput *D, double mjd, int antennaId);
 int DifxInputGetAntennaId(const DifxInput *D, const char *antennaName);
 int DifxInputGetDatastreamIdsByAntennaId(int *dsIds, const DifxInput *D, int antennaId, int maxCount);
