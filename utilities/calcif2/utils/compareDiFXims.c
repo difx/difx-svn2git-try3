@@ -52,6 +52,14 @@ typedef struct
 	char *files[MAX_FILES];
 } CommandLineOptions;
 
+enum CompareObjectEnum
+	{
+		COEscan;
+		COEsource;
+		COEantenna;
+	};
+
+
 typedef struct
 {
 	DifxPolyModel sum;
@@ -367,7 +375,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -418,7 +426,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -469,7 +477,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -520,7 +528,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -571,7 +579,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -622,7 +630,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -673,7 +681,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -724,7 +732,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -775,7 +783,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -826,7 +834,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -877,7 +885,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -928,7 +936,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -979,7 +987,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -1030,7 +1038,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -1081,7 +1089,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 					if((!isnan(d0)) && (!isnan(d1)))
 					{
 						d = d0-d1;
-						f = d/(d0+d1)*0.5;
+						f = d/(d0+d1)*2.0;
 						c = 1.0;
 					}
 					else
@@ -1136,7 +1144,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1187,7 +1195,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1238,7 +1246,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1289,7 +1297,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1340,7 +1348,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1391,7 +1399,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1442,7 +1450,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1493,7 +1501,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1544,7 +1552,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1842,7 +1850,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1893,7 +1901,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1944,7 +1952,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -1995,7 +2003,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -2046,7 +2054,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -2097,7 +2105,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -2148,7 +2156,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -2199,7 +2207,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -2250,7 +2258,7 @@ static int process_scan(const DifxInput* const D0, const DifxInput* const D1, in
 						if((!isnan(d0)) && (!isnan(d1)))
 						{
 							d = d0-d1;
-							f = d/(d0+d1)*0.5;
+							f = d/(d0+d1)*2.0;
 							c = 1.0;
 						}
 						else
@@ -2596,6 +2604,38 @@ void process_stats_single(const double* const sum, const double* const sumsqr, c
 	}
 	return;
 }
+
+
+
+void process_stats_compare_object_item(double d0, double d1, const char* const object, const int Id, )
+{
+}
+
+
+void process_stats_compare_object(const DifxInput* const D0, const DifxInput* const D1, enum CompareObjectEnum object, int Id)
+{
+	switch(object)
+	{
+	case COEscan:
+		break;
+	case COEsource:
+		{
+			DifxSource S0 = D0->source+Id;
+			DifxSource S1 = D1->source+Id;
+			double d, f;
+			d = S0.ra - S1.ra;
+			f = d / (S0.ra + S1.ra) * 2.0;
+		break;
+	case COEantenna:
+		break;
+	default:
+		fprintf(stderr, "Error: unrecognized CompareObjectEnum value %d\n", (int)object);
+		return;
+	}
+	return;
+}
+
+
 
 
 

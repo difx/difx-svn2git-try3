@@ -1747,7 +1747,7 @@ static unsigned int extractCalcResultsSingleSource(const DifxInput* const D, con
     model->az[timeIndex]       =  res[0].az_geom*180.0/DIFX_PI;
     model->elgeom[timeIndex]   =  res[0].el_geom*180.0/DIFX_PI;
     model->msa[timeIndex]      =  res[0].mount_source_angle*180.0/DIFX_PI;
-    model->elcorr[timeIndex]   =  res[0].el_geom*180.0/DIFX_PI;
+    model->elcorr[timeIndex]   =  res[0].el_corr*180.0/DIFX_PI;
     model->parangle[timeIndex] =  res[0].mount_source_angle*180.0/DIFX_PI;
     model->u[timeIndex]        =  res[0].UVW.x;
     model->v[timeIndex]        =  res[0].UVW.y;
@@ -3061,10 +3061,12 @@ static int adjustSingleSpacecraftAntennaCalcResults(const DifxScan* const scan, 
             }
         }
         else {
+	        sc->GS_recording_delay = 0.0; /* initialize to a sane value */
             sc->GS_transmission_delay = 0.0;
             sc->GS_transmission_delay_sync = 0.0;
             sc->SC_elec_delay = sc->SC_recording_delay + sc->SC_Elec_to_Comm;
             sc->GS_clock_delay = 0.0;
+            sc->GS_clock_delay_sync = 0.0;
             original_date = sc->GS_mjd_sync;
             original_day_fraction = sc->GS_dayfraction_sync;
             /* This sets GS_recording_delay and GS_clock_delay_sync
@@ -3090,15 +3092,20 @@ static int adjustSingleSpacecraftAntennaCalcResults(const DifxScan* const scan, 
            for clock transfer? */
         if(!isnan(sc->GS_transmission_delay))
         {
-            sc->GS_recording_delay = 0.0;
-            sc->GS_transmission_delay_sync = 0.0;
-            sc->SC_elec_delay = sc->SC_recording_delay; /* ??? */
-            sc->GS_clock_delay_sync = 0.0;
             /* initialize using last delay offset calculated */
             if(verbose >= 3)
             {
-                fprintf(stderr, "CALCIF2_DEBUG: SpacecraftTimeGroundClock using exisiting GS_transmission_delay=%E s\n", sc->GS_transmission_delay);
+                fprintf(stderr, "CALCIF2_DEBUG: SpacecraftTimeGroundClock using exisiting GS_transmission_delay=%E s as starting value for iteration\n", sc->GS_transmission_delay);
             }
+        }
+        else
+        {
+            sc->GS_recording_delay = 0.0;
+            sc->GS_transmission_delay = 0.0; /* initialize to a sane value */
+            sc->GS_transmission_delay_sync = 0.0;
+            sc->SC_elec_delay = sc->SC_recording_delay; /* ??? */
+            sc->GS_clock_delay = 0.0;
+            sc->GS_clock_delay_sync = 0.0;
         }
         fprintf(stderr, "Error: SpacecraftTimeGroundClock not yet implemented\n");
         exit(EXIT_FAILURE);
@@ -3107,19 +3114,23 @@ static int adjustSingleSpacecraftAntennaCalcResults(const DifxScan* const scan, 
     {
         if(!isnan(sc->GS_recording_delay))
         {
-            sc->GS_transmission_delay = 0.0;
-            sc->GS_transmission_delay_sync = 0.0;
-            sc->SC_elec_delay = sc->SC_recording_delay; /* ??? */
-            sc->GS_clock_delay = 0.0;
             /* constant delay offset already calculated, so use it */
             if(verbose >= 3)
             {
-                fprintf(stderr, "CALCIF2_DEBUG: SpacecraftTimeGroundClockReception using exisiting GS_recording_delay=%E s\n", sc->GS_recording_delay);
+                fprintf(stderr, "CALCIF2_DEBUG: SpacecraftTimeGroundClockReception using exisiting GS_recording_delay=%E s to start iteration\n", sc->GS_recording_delay);
             }
         }
         else {
+	        sc->GS_recording_delay = 0.0; /* initialize to a sane value */
+            sc->GS_transmission_delay = 0.0; /* initialize to a sane value */
+            sc->GS_transmission_delay_sync = 0.0;
+            sc->SC_elec_delay = sc->SC_recording_delay; /* ??? */
+            sc->GS_clock_delay = 0.0;
+            sc->GS_clock_delay_sync = 0.0;
+            /* now calculate the delay at the start of reception */
             fprintf(stderr, "Error: SpacecraftTimeGroundClockReception not yet implemented\n");
             exit(EXIT_FAILURE);
+            
         }
         original_date = sc->GS_mjd_sync;
         original_day_fraction = sc->GS_dayfraction_sync;

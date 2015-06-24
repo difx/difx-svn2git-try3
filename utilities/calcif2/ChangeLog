@@ -1,3 +1,13 @@
+2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
+
+	* utils/compareDiFXims.c:
+	* utils/genmachines.py:
+	* src/calcif2.c:
+	* utils/startdifx:
+	* src/difxcalc.c:
+	* src/difxcalcrotation.h:
+	* src/difxcalc.h: bugfixes for RadioAstron
+
 2015-05-15  James Anderson  <anderson@gfz-potsdam.de>
 
 	* src/difxcalc.h:
