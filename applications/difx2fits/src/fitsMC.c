@@ -165,8 +165,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 			{"DCLOCK_1",   "1D", "electronic delay rate",        "SEC/SEC"},
 			{"LO_OFFSET_1", bandFormFloat, "station lo_offset for polar. 1", "HZ"},
 			{"DLO_OFFSET_1",bandFormFloat, "station lo_offset rate for polar. 1", "HZ/SEC"},
-			{"DISP_1",     "1E", "dispersive delay",             "SEC/M/M"},
-			{"DDISP_1",    "1E", "dispersive delay rate",        "SEC/M/M/SEC"}
+			{"DISP_1",     "1D", "dispersive delay",             "SEC/M/M"},
+			{"DDISP_1",    "1D", "dispersive delay rate",        "SEC/M/M/SEC"}
 		};
 	static const size_t pol1_columns_size = NELEMENTS(pol1_columns);
 	struct fitsBinTableColumn pol2_columns[] =
@@ -175,8 +175,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 			{"DCLOCK_2",   "1D", "electronic delay rate",        "SEC/SEC"},
 			{"LO_OFFSET_2", bandFormFloat, "station lo_offset for polar. 2", "HZ"},
 			{"DLO_OFFSET_2",bandFormFloat, "station lo_offset rate for polar. 2", "HZ/SEC"},
-			{"DISP_2",     "1E", "dispersive delay for polar 2", "SEC/M/M"},
-			{"DDISP_2",    "1E", "dispersive delay rate for polar 2", "SEC/M/M/SEC"}
+			{"DISP_2",     "1D", "dispersive delay for polar 2", "SEC/M/M"},
+			{"DDISP_2",    "1D", "dispersive delay rate for polar 2", "SEC/M/M/SEC"}
 		};
 	static const size_t pol2_columns_size = NELEMENTS(pol2_columns);
 	struct fitsBinTableColumn extra_columns[] =
@@ -520,6 +520,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 					double poly[MAX_MODEL_ORDER+1];
 					double v0, v1;
 					double c0, c1;
+					float f0, f1;
 					dsId = config->ant2dsId[a];
 					if(dsId < 0 || dsId >= D->nDatastream)
 					{

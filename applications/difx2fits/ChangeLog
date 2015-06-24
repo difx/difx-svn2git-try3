@@ -1,3 +1,12 @@
+2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/difx2fits.c:
+	* src/fitsAN.c:
+	* src/fitsMC.c:
+	* src/fitsSU.c:
+	* src/fitsUV.c:
+	* src/fits.h: bugfixes for RadioAstron compilation
+
 2015-05-04  James Anderson  <anderson@gfz-potsdam.de>
 
 	* src/fitsCT.c:

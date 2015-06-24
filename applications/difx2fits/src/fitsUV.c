@@ -625,12 +625,12 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int skipextraautocorrs)
 #warning "FIXME: look at configId in the record as a check"
 
 	/* scanId at middle of integration */
-	scanId = DifxInputGetScanIdByJobId(dv->D, mjd+utc, dv->jobId);
+	scanId = DifxInputGetScanIdByJobIdVis(dv->D, mjd+utc, dv->jobId);
 	if(scanId < 0)
 	{
 		if(verbose > 2)
 		{
-			printf("ScanID < 0 (= %d); skipping record\n", scanId);
+			printf("ScanId < 0 (= %d for mjd+utc=%.6f jobId=%d); skipping record\n", scanId, mjd+utc, dv->jobId);
 		}
 
 		return SKIPPED_RECORD;
@@ -779,7 +779,7 @@ int DifxVisNewUVData(DifxVis *dv, int verbose, int skipextraautocorrs)
 				}
 				else if(n < 0)
 				{
-					fprintf(stderr, "Error: interferometer model index out of range: scanId=%d mjd=%12.6f\n", scanId, mjd+utc);
+					fprintf(stderr, "Error: interferometer model index out of range: scanId=%d mjd=%12.6f code=%d\n", scanId, mjd+utc, n);
 				}
 				else
 				{
