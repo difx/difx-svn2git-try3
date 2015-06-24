@@ -734,6 +734,7 @@ static int difx_delay_server_prog_1_CALC_9_1_RAPROG(struct getDIFX_DELAY_SERVER_
             res_0->result.result_val[station*arg_0->Num_Sources+source].delay = res_1->getCALC_9_1_RA_res_u.record.delay[0];
             res_0->result.result_val[station*arg_0->Num_Sources+source].dry_atmos = res_1->getCALC_9_1_RA_res_u.record.dry_atmos[1];
             res_0->result.result_val[station*arg_0->Num_Sources+source].wet_atmos = res_1->getCALC_9_1_RA_res_u.record.wet_atmos[1];
+            res_0->result.result_val[station*arg_0->Num_Sources+source].iono_atmos = fitsnan.d;
             res_0->result.result_val[station*arg_0->Num_Sources+source].az_corr = fitsnan.d;
             res_0->result.result_val[station*arg_0->Num_Sources+source].el_corr = fitsnan.d;
             res_0->result.result_val[station*arg_0->Num_Sources+source].az_geom = res_1->getCALC_9_1_RA_res_u.record.az[1];
@@ -748,6 +749,7 @@ static int difx_delay_server_prog_1_CALC_9_1_RAPROG(struct getDIFX_DELAY_SERVER_
             /* station 0 data */
             res_0->result.result_val[source].dry_atmos = res_1->getCALC_9_1_RA_res_u.record.dry_atmos[0];
             res_0->result.result_val[source].wet_atmos = res_1->getCALC_9_1_RA_res_u.record.wet_atmos[0];
+            res_0->result.result_val[source].iono_atmos = fitsnan.d;
             res_0->result.result_val[source].az_corr = fitsnan.d;
             res_0->result.result_val[source].el_corr = fitsnan.d;
             res_0->result.result_val[source].az_geom = res_1->getCALC_9_1_RA_res_u.record.az[0];
