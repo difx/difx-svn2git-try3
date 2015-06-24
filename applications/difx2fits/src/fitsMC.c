@@ -452,7 +452,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	fitsWriteInteger(out, "OVERSAMP", 0, "");
 	fitsWriteInteger(out, "ZERO_PAD", 0, "");
 	fitsWriteInteger(out, "FFT_TWID", 1, "Version of FFT twiddle table used");
-	fitsWriteString(out,  "TAPER_FN", D->job->taperFunction, "");
+	fitsWriteString(out,  "TAPER_FN", taperFunctionNames[D->job->taperFunction], "");
 	fitsWriteFloat(out,   "DELTAT",   DELTAT/SEC_DAY_DBL, "DAYS");
 	fitsWriteInteger(out, "TABREV",   1, "");
 	
@@ -495,7 +495,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		}
 		else
 		{
-			fprintf(stderr, "No im table available for scan %d; aborting MC file creation\n", s);
+			fprintf(stderr, "No IM table available for scan %d; aborting MC file creation\n", s);
 			continue;
 		}
 

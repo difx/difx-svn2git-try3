@@ -1118,7 +1118,7 @@ static int readvisrecord(DifxVis *dv, int verbose, int skipextraautocorrs)
 	return 0;
 }
 
-const DifxInput *DifxInput2FitsUV(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out, struct CommandLineOptions *opts)
+const DifxInput *DifxInput2FitsUV(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out, const struct CommandLineOptions *opts)
 {
 	int i, l, v;
 	float visScale = 1.0;

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2013, 2015 by Walter Brisken & John Morgan               *
+ *   Copyright (C) 2008-2015 by Walter Brisken & John Morgan               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -573,8 +573,6 @@ static int parseDifxPulseCal(const char *line,
                              int refDay, const DifxInput *D, int *configId, 
                              int phaseCentre, int year)
 {
-	/* static int tooMany[2][array_MAX_BANDS] = { {0} };	/\* zeros the values *\/ */
-	/* static int tooFew[2][array_MAX_BANDS] = { {0} };	/\* zeros the values *\/ */
 	static int lastDsId = -1;
 	const DifxFreq *df;
 	const DifxDatastream *dd;
@@ -608,14 +606,6 @@ static int parseDifxPulseCal(const char *line,
 	
 	if(dsId != lastDsId)
 	{
-		/* for(pol = 0; pol < 2; ++pol) */
-		/* { */
-		/* 	for(i = 0; i < array_MAX_BANDS; ++i) */
-		/* 	{ */
-		/* 		tooMany[pol][i] = 0; */
-		/* 		tooFew[pol][i] = 0; */
-		/* 	} */
-		/* } */
 		lastDsId = dsId;
 	}
 
@@ -1295,6 +1285,11 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 				}
 				else /* reading difx-extracted pcals */
 				{	
+					if(!inDifx)
+					{
+						printf("\n    No DiFX file to read for antenna %s", D->antenna[a].name);
+						break;
+					}
 					rv = fgets(line, MaxLineLength, inDifx);
 					if(!rv)
 					{

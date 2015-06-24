@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2010, 2015 by Walter Brisken                             *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -95,7 +95,7 @@ int getGateWindow(const DifxPulsar *dp, int bin,
 
 const DifxInput *DifxInput2FitsGM(const DifxInput *D,
                                   struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
-                                  struct CommandLineOptions *opts)
+                                  const struct CommandLineOptions *opts)
 {
 	char bandFormFloat[8], polyFormDouble[8];
 
@@ -230,11 +230,12 @@ const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 		{
 			continue;
 		}
-		if(dp->nBin > 1) for(i = 0; i < nBand; i++)
-		                 {
-			                 onPhase[i]  = phaseOpen;
-			                 offPhase[i] = phaseClose;
-		                 }
+		if(dp->nBin > 1)
+			for(i = 0; i < nBand; i++)
+			{
+				onPhase[i]  = phaseOpen;
+				offPhase[i] = phaseClose;
+			}
 
 		for(p = 0; p < dp->nPolyco; p++)
 		{
@@ -260,10 +261,11 @@ const DifxInput *DifxInput2FitsGM(const DifxInput *D,
 				poly[c] = pc->coef[c]*f;
 				f /= 60.0;
 			}
-			if(c < nPoly) for(; c < nPoly; c++)
-			              {
-				              poly[c] = 0.0;
-			              }
+			if(c < nPoly)
+				for(; c < nPoly; c++)
+				{
+					poly[c] = 0.0;
+				}
 			poly[0] += pc->p0;
 			poly[1] += pc->f0;
 

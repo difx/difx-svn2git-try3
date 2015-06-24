@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -45,6 +45,8 @@ const double DefaultSniffInterval = 30.0;	/* sec */
 const double DefaultJobMatrixInterval = 20.0;	/* sec */
 const double DefaultDifxTsysInterval = 30.0;	/* sec */
 const double DefaultDifxPCalInterval = 30.0;	/* sec */
+
+/* FIXME: someday add option to specify EOP merge mode from command line */
 
 static void usage(const char *pgm)
 {
@@ -155,6 +157,7 @@ struct CommandLineOptions *newCommandLineOptions()
         opts->skipExtraAutocorrs = 0;
 	opts->DifxTsysAvgSeconds = DefaultDifxTsysInterval;
 	opts->DifxPcalAvgSeconds = DefaultDifxPCalInterval;
+	opts->eopMergeMode = EOPMergeModeUnspecified;
 
 	return opts;
 }
@@ -166,6 +169,7 @@ void deleteCommandLineOptions(struct CommandLineOptions *opts)
 		if(opts->nBaseFile > 0)
 		{
 			int i;
+
 			for(i = 0; i < opts->nBaseFile; ++i)
 			{
 				if(opts->baseFile[i])
@@ -198,16 +202,17 @@ void deleteCommandLineOptions(struct CommandLineOptions *opts)
 int exceedOpenFileLimit(int numFiles)
 {
         struct rlimit limit;
-	//
-	// Get max number of open files that the OS allows
-	if (getrlimit(RLIMIT_NOFILE, &limit) != 0) 
+	
+	/* Get max number of open files that the OS allows */
+	if(getrlimit(RLIMIT_NOFILE, &limit) != 0) 
 	{
 		printf("Cannot determine user file open limit (errno=%d)\n", errno);
+
 		return 1;
 	}
-	//
-	// Check if the number of DIFX files (plus a buffer of 20) exceed OS limit
-	if (numFiles + 20 >= limit.rlim_cur)
+	
+	/* Check if the number of DIFX files (plus a buffer of 20) exceed OS limit */
+	if(numFiles + 20 >= limit.rlim_cur)
 	{
 		return 1;
 	}
@@ -580,8 +585,7 @@ static int populateFitsKeywords(const DifxInput *D, struct fits_keywords *keys)
 	return 0;
 }
 
-static const DifxInput *DifxInput2FitsTables(const DifxInput *D, 
-	struct fitsPrivate *out, struct CommandLineOptions *opts)
+static const DifxInput *DifxInput2FitsTables(const DifxInput *D, struct fitsPrivate *out, const struct CommandLineOptions *opts)
 {
 	struct fits_keywords keys;
 	long long last_bytes = 0;
@@ -761,9 +765,142 @@ static const DifxInput *DifxInput2FitsTables(const DifxInput *D,
 	return D;
 }
 
-static int convertFits(struct CommandLineOptions *opts, int passNum, int *nWithoutPhaseCentre)
+static void deleteDifxInputSet(DifxInput **Dset, int n)
 {
-	DifxInput *D, *D1, *D2;
+	if(Dset)
+	{
+		int i;
+
+		for(i = 0; i < n; ++i)
+		{
+			if(Dset[i])
+			{
+				deleteDifxInput(Dset[i]);
+				Dset[i] = 0;
+			}
+		}
+		free(Dset);
+	}
+}
+
+/* return number of days, inclusive, spanned by a number n of provided DifxInput structures */
+static int nEOPDays(DifxInput **Dset, int n)
+{
+	int minDay = 1000000, maxDay = -1000000;	/* MJD */
+	int i;
+
+	if(n == 0)
+	{
+		return 0;
+	}
+
+	for(i = 0; i < n; ++i)
+	{
+		int e;
+
+		if(Dset[i]->nEOP == 0)
+		{
+			continue;
+		}
+		for(e = 0; e < Dset[i]->nEOP; ++e)
+		{
+			if(Dset[i]->eop[e].mjd < minDay)
+			{
+				minDay = Dset[i]->eop[e].mjd;
+			}
+			if(Dset[i]->eop[e].mjd > maxDay)
+			{
+				maxDay = Dset[i]->eop[e].mjd;
+			}
+		}
+	}
+
+	return maxDay - minDay + 1;
+}
+
+static DifxInput **loadDifxInputSet(const struct CommandLineOptions *opts)
+{
+	DifxInput **Dset;
+	enum EOPMergeMode eopMergeMode;
+	int i;
+
+	Dset = (DifxInput **)calloc(opts->nBaseFile, sizeof(DifxInput *));
+	if(!Dset)
+	{
+		fprintf(stderr, "Error: cannot allocate %d bytes for %d DifxInput structures\n", (int)(opts->nBaseFile*sizeof(DifxInput *)), opts->nBaseFile);
+
+		return 0;
+	}
+
+	for(i = 0; i < opts->nBaseFile; ++i)
+	{
+		if(opts->verbose > 1)
+		{
+			printf("Loading %s\n", opts->baseFile[i]);
+		}
+		Dset[i] = loadDifxInput(opts->baseFile[i]);
+		if(!Dset[i])
+		{
+			fprintf(stderr, "loadDifxInput failed on <%s>.\n", opts->baseFile[i]);
+
+			deleteDifxInputSet(Dset, opts->nBaseFile);
+
+			return 0;
+		}
+		if(opts->specAvg)
+		{
+			Dset[i]->specAvg = opts->specAvg;
+		}
+		if(opts->nOutChan >= 1)
+		{
+			Dset[i]->nOutChan = opts->nOutChan;
+		}
+		else if(opts->nOutChan > 0.0) /* interpret in fractional sense */
+		{
+			Dset[i]->nOutChan = Dset[i]->freq[0].nChan*opts->nOutChan/Dset[i]->freq[0].specAvg;
+		}
+		if(opts->startChan >= 1)
+		{
+			Dset[i]->startChan = opts->startChan;
+		}
+		else if(opts->startChan > 0.0)
+		{
+			Dset[i]->startChan = (Dset[i]->freq[0].nChan*opts->startChan) + 0.5;
+		}
+	}
+	if(opts->eopMergeMode == EOPMergeModeUnspecified)
+	{
+		if(nEOPDays(Dset, opts->nBaseFile) > DIFXIO_MAX_EOP_PER_FITS)
+		{
+			/* here only allow merging if EOP sets match exactly */
+			eopMergeMode = EOPMergeModeStrict;
+		}
+		else
+		{
+			/* here allow non-contradictory EOP sets to be merged as long as common days have identical values */
+			eopMergeMode = EOPMergeModeRelaxed;
+		}
+	}
+	else
+	{
+		eopMergeMode = opts->eopMergeMode;
+	}
+
+	for(i = 0; i < opts->nBaseFile; ++i)
+	{
+		if(Dset[i]->eopMergeMode == EOPMergeModeUnspecified)
+		{
+			Dset[i]->eopMergeMode = eopMergeMode;
+		}
+	}
+
+	return Dset;
+}
+
+/* FIXME: use opts->eopMergeMode to drive merging of files */
+static int convertFits(const struct CommandLineOptions *opts, DifxInput **Dset, int passNum, int *nWithoutPhaseCentre)
+{
+	DifxInput *D;
 	struct fitsPrivate outfile;
 	char outFitsName[DIFXIO_FILENAME_LENGTH];
 	int i;
@@ -786,22 +923,15 @@ static int convertFits(struct CommandLineOptions *opts, int passNum, int *nWitho
 
 	for(i = 0; i < opts->nBaseFile; ++i)
 	{
-		if(opts->baseFile[i] == 0)
+		DifxInput *D2;
+
+		D2 = Dset[i];
+		if(Dset[i] == 0)
 		{
+			/* must have already been merged */
 			continue;
 		}
 
-		if(opts->verbose > 1)
-		{
-			printf("Loading %s\n", opts->baseFile[i]);
-		}
-		D2 = loadDifxInput(opts->baseFile[i]);
-		if(!D2)
-		{
-			fprintf(stderr, "loadDifxInput failed on <%s>.\n", opts->baseFile[i]);
-
-			return 0;
-		}
 		if(DifxInputGetMaxPhaseCentres(D2) <= opts->phaseCentre)
 		{
 			if(opts->verbose > 0)
@@ -809,44 +939,24 @@ static int convertFits(struct CommandLineOptions *opts, int passNum, int *nWitho
 				printf("Skipping %s because it doesn't contain phase centre %d\n", opts->baseFile[i], opts->phaseCentre);
 			}
 
+			/* signal not to try this one again */
 			deleteDifxInput(D2);
-			free(opts->baseFile[i]);
-			opts->baseFile[i] = 0;
+			D2 = Dset[i] = 0;
 
 			++(*nWithoutPhaseCentre);
 
 			continue;
 		}
-		if(opts->specAvg)
-		{
-			D2->specAvg = opts->specAvg;
-		}
-		if(opts->nOutChan >= 1)
-		{
-			D2->nOutChan = opts->nOutChan;
-		}
-		else if(opts->nOutChan > 0.0) /* interpret in fractional sense */
-		{
-			D2->nOutChan = D2->freq[0].nChan*opts->nOutChan/D->freq[0].specAvg;
-		}
-		if(opts->startChan >= 1)
-		{
-			D2->startChan = opts->startChan;
-		}
-		else if(opts->startChan > 0.0)
-		{
-			D2->startChan = (D2->freq[0].nChan*opts->startChan) + 0.5;
-		}
 
 		if(D)
 		{
+			DifxInput *D1;
+
 			D1 = D;
 
 			if(!areDifxInputsMergable(D1, D2) ||
 			   !areDifxInputsCompatible(D1, D2))
 			{
-				deleteDifxInput(D2);
-
 				continue;
 			}
 			else if(opts->verbose > 1)
@@ -856,8 +966,14 @@ static int convertFits(struct CommandLineOptions *opts, int passNum, int *nWitho
 
 			D = mergeDifxInputs(D1, D2, opts->verbose);
 
+			if(D->nEOP < D1->nEOP || D->nEOP < D2->nEOP)
+			{
+				fprintf(stderr, "  Warning: merging of EOP table from file %s failed.  EOP data will be lost for entire merged job set.\n", opts->baseFile[i]);
+			}
+
 			deleteDifxInput(D1);
 			deleteDifxInput(D2);
+			D1 = D2 = 0;
 
 			if(!D)
 			{
@@ -870,11 +986,11 @@ static int convertFits(struct CommandLineOptions *opts, int passNum, int *nWitho
 		{
 			D = D2;
 		}
-		if(opts->baseFile[i])
-		{
-			free(opts->baseFile[i]);
-			opts->baseFile[i] = 0;
-		}
+
+		/* Dset[i] was absorbed and will be freed automatically at end of conversion */
+		/* Setting to zero prevents future reuse of this job */
+		Dset[i] = 0;
+
 		++nConverted;
 		if(opts->dontCombine)
 		{
@@ -886,7 +1002,6 @@ static int convertFits(struct CommandLineOptions *opts, int passNum, int *nWitho
 	{
 		return 0;
 	}
-
 
 	if(opts->verbose > 2)
 	{
@@ -960,15 +1075,9 @@ static int convertFits(struct CommandLineOptions *opts, int passNum, int *nWitho
 		return 0;
 	}
 
-	if(strcmp(D->job->taperFunction, "UNIFORM") != 0)
-	{
-		fprintf(stderr, "Taper func %s not supported.  Using UNIFORM.\n", D->job->taperFunction);
-		strcpy(D->job->taperFunction, "UNIFORM");
-	}
-
 	if(opts->fitsFile)
 	{
-		if (passNum == 0)
+		if(passNum == 0)
 		{
 			strcpy(outFitsName, opts->fitsFile);
 		}
@@ -1028,6 +1137,7 @@ int main(int argc, char **argv)
 	int nConverted = 0;
 	int nWithoutPhaseCentre = 0;
 	int nFits = 0;
+	DifxInput **Dset;
 
 	if(argc < 2)
 	{
@@ -1047,11 +1157,20 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	Dset = loadDifxInputSet(opts);
+
+	if(Dset == 0)
+	{
+		deleteCommandLineOptions(opts);
+
+		return EXIT_FAILURE;
+	}
+
 	for(;;)
 	{
 		int n;
 
-		n = convertFits(opts, nFits, &nWithoutPhaseCentre);
+		n = convertFits(opts, Dset, nFits, &nWithoutPhaseCentre);
 		if(n <= 0)
 		{
 			break;
@@ -1059,6 +1178,8 @@ int main(int argc, char **argv)
 		nConverted += n;
 		++nFits;
 	}
+
+	deleteDifxInputSet(Dset, opts->nBaseFile);
 
 	printf("%d of %d jobs converted to %d FITS files\n", nConverted, opts->nBaseFile, nFits);
 	if(nWithoutPhaseCentre > 0)
