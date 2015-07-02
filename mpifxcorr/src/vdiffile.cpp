@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2013, 2015 by Adam Deller and Walter Brisken             *
+ *   Copyright (C) 2006-2015 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -339,7 +339,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 
 		return;
 	}
-	vdiffilesummarysetsamplerate(&fileSummary, static_cast<int>(bw*2*1000000));
+	vdiffilesummarysetsamplerate(&fileSummary, static_cast<int64_t>(bw*2*1000000));
 
 	// If verbose...
 	printvdiffilesummary(&fileSummary);
@@ -401,21 +401,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 	unsigned char *destination;
 	int bytes;
 	int muxReturn;
-	// int muxBits;
 	unsigned int bytesvisible;
-
-	// FIXME:
-	// 2015 Apr 30  JMA  The muxBits value below as never used anywhere, and
-	// so the code has been commented out
-	// if(samplingtype == Configuration::COMPLEX)
-	// {
-	// 	// muxing complex data is exactly the same as muxing real data, except the number of bits per sample needs to be doubled so we keep real and imaginary parts together
-	// 	muxBits = 2*nbits;
-	// }
-	// else
-	// {
-	// 	muxBits = nbits;
-	// }
 
 	destination = reinterpret_cast<unsigned char *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 

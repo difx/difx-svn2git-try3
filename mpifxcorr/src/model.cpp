@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009, 2014, 2015 by Adam Deller                                     *
+ *   Copyright (C) 2009, 2014--2015 by Adam Deller                         *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at  http://cira.ivec.org/dokuwiki/doku.php/difx/documentation for     *

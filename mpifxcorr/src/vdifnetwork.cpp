@@ -301,7 +301,6 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
 	Configuration::dataformat format;
 	double bw;
 	int rv;
-	// double startmjd;
 	int doUpdate = 0;
 
 	format = config->getDataFormat(configindex, streamnum);
@@ -339,8 +338,6 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
 
 	cinfo << startl << "VDIFNetworkDataStream::initialiseFile format=" << formatname << endl;
 
-	// startmjd = corrstartday + corrstartseconds/86400.0;
-
 	/* update all the configs to ensure that the nsincs and
 	 * headerbytes are correct
 	 */
@@ -376,20 +373,6 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 	unsigned int muxend, bytesvisible;
 	int lockmod = readbufferslots - 1;
 	int muxReturn;
-	// int muxBits;
-
-	// FIXME:
-	// 2015 Apr 30  JMA  The muxBits value below as never used anywhere, and
-	// so the code has been commented out
-	// if(samplingtype == Configuration::COMPLEX)
-	// {
-	// 	// muxing complex data is exactly the same as muxing real data, except the number of bits per sample needs to be doubled so we keep real and imaginary parts together
-	// 	muxBits = 2*nbits;
-	// }
-	// else
-	// {
-	// 	muxBits = nbits;
-	// }
 
 	if(lockstart < -1)
 	{

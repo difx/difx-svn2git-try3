@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006, 2015 by Adam Deller                                     *
+ *   Copyright (C) 2006, 2015 by Adam Deller                               *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -392,9 +392,7 @@ long long Core::getEstimatedBytes()
 
 void Core::loopprocess(int threadid)
 {
-	int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos;
-	// int maxbins;
-	int maxchan, maxpolycos, stadumpchannels, strideplussteplen, maxrotatestrideplussteplength, maxxmaclength, slen;
+	int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos, maxchan, maxpolycos, stadumpchannels, strideplussteplen, maxrotatestrideplussteplength, maxxmaclength, slen;
 	double sec;
 	bool pulsarbin, somepulsarbin, somescrunch, dumpingsta, nowdumpingsta;
 	processslot * currentslot;
@@ -424,7 +422,6 @@ void Core::loopprocess(int threadid)
 	dumpingsta = false;
 	maxpolycos = 0;
 	maxchan = config->getMaxNumChannels();
-	// maxbins = config->getMaxNumPulsarBins();	/* FIXME: This value is never used! */
 	slen = config->getArrayStrideLength(0);
 	if(slen>config->getXmacStrideLength(0))
 		slen = config->getXmacStrideLength(0);
@@ -1413,7 +1410,6 @@ void Core::averageAndSendKurtosis(int index, int threadid, double nsoffset, doub
 void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double nswidth, Polyco * currentpolyco, threadscratchspace * scratchspace)
 {
 	int status, startbaselinefreq, atbaselinefreq, startbaseline, startfreq, endbaseline;
-	// int binloop;
 	int localfreqindex, baselinefreqs;
 	int numxmacstrides, xmaclen;
 
@@ -1472,11 +1468,6 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
 	//}
 
 	startbaselinefreq = (threadid*baselinefreqs)/numprocessthreads;
-
-	/* FIXME: binloop calculated below is never used */
-	// binloop = 1;
-	// if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-	// 	binloop = procslots[index].numpulsarbins;
 
 	atbaselinefreq = 0;
 	startfreq = -1;
