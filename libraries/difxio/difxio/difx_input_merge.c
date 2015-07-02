@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012, 2015 by Walter Brisken                             *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -38,7 +38,6 @@ int areDifxInputsMergable(const DifxInput *D1, const DifxInput *D2)
 {
 #warning "FIXME: startChan, nInChan and nOutChan are probably vestigial; clean them up?"
 	if(D1->specAvg != D2->specAvg ||
-	   D1->job->aberCorr != D2->job->aberCorr ||
 	   strncmp(D1->job->difxVersion, D2->job->difxVersion, DIFXIO_VERSION_LENGTH) ||
 	   strncmp(D1->job->difxLabel, D2->job->difxLabel, DIFXIO_VERSION_LENGTH))
 	{
@@ -69,6 +68,11 @@ int areDifxInputsCompatible(const DifxInput *D1, const DifxInput *D2)
 		{
 			return 0;
 		}
+	}
+
+	if(D1->eopMergeMode != D2->eopMergeMode || areDifxEOPsCompatible(D1->eop, D1->nEOP, D2->eop, D2->nEOP, D1->eopMergeMode) == 0)
+	{
+		return 0;
 	}
 
 	for(a1 = 0; a1 < D1->nAntenna; ++a1)
@@ -212,6 +216,7 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, int verbose
 		&(D->nScan));
 
 	/* merge DifxEOP table */
+	D->eopMergeMode = D1->eopMergeMode;
 	D->eop = mergeDifxEOPArrays(D1->eop, D1->nEOP, D2->eop, D2->nEOP,
 		&(D->nEOP));
 	
@@ -233,6 +238,16 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, int verbose
 		for(r=0; r < D1->nRule; ++r)
 		{
 			copyDifxRule(D->rule+D1->nRule+r, D2->rule+r);
+		}
+	}
+
+	/* handle some random bits */
+	if(D1->job->aberCorr != D2->job->aberCorr)
+	{
+		D->job->aberCorr = AberCorrMixed;
+		if(D1->job->aberCorr != AberCorrMixed && D2->job->aberCorr != AberCorrMixed)
+		{
+			fprintf(stderr, "Warning: merging two DifxInput structures that have had different aberration correction types\n");
 		}
 	}
 

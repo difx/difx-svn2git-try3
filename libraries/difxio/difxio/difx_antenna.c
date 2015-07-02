@@ -1,20 +1,20 @@
 /***************************************************************************
- *	 Copyright (C) 2008, 2014, 2015 by Walter Brisken									 *
- *																		   *
- *	 This program is free software; you can redistribute it and/or modify  *
- *	 it under the terms of the GNU General Public License as published by  *
- *	 the Free Software Foundation; either version 3 of the License, or	   *
- *	 (at your option) any later version.								   *
- *																		   *
- *	 This program is distributed in the hope that it will be useful,	   *
- *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
- *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
- *	 GNU General Public License for more details.						   *
- *																		   *
- *	 You should have received a copy of the GNU General Public License	   *
- *	 along with this program; if not, write to the						   *
- *	 Free Software Foundation, Inc.,									   *
- *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -124,13 +124,13 @@ DifxAntenna *newDifxAntennaArray(int nAntenna)
 	int a, i;
 
 	da = (DifxAntenna *)calloc(nAntenna, sizeof(DifxAntenna));
-	for(a = 0; a < nAntenna; a++)
+	for(a = 0; a < nAntenna; ++a)
 	{
 		da[a].spacecraftId = -1;
 		da[a].mount = AntennaMountOther;
 		da[a].sitetype = AntennaSiteOther;
 		da[a].site_coord_frame = SourceCoordinateFrameDefault;
-		for(i=0; i<MAX_MODEL_ORDER; i++)
+		for(i=0; i<MAX_MODEL_ORDER; ++i)
 		{
 			da[a].clockcoeff[i] = 0.0;
 		}
@@ -152,10 +152,9 @@ void fprintDifxAntenna(FILE *fp, const DifxAntenna *da)
 	fprintf(fp, "    Calcname = %s\n", da->calcname);
 	fprintf(fp, "    OrigId = %d\n", da->origId);
 	fprintf(fp, "    Clock reference MJD = %f\n", da->clockrefmjd);
-	for(i=0;i<da->clockorder+1;i++)
+	for(i = 0; i <= da->clockorder; ++i)
 	{
-		fprintf(fp, "    Clock coeff[%d] = %e us/s^%d\n", i, 
-				da->clockcoeff[i], i);
+		fprintf(fp, "    Clock coeff[%d] = %e us/s^%d\n", i, da->clockcoeff[i], i);
 	}
 	fprintf(fp, "    Mount = %d = %s\n", da->mount, antennaMountTypeNames[da->mount]);
 	fprintf(fp, "    SiteType = %d = %s\n", da->sitetype, antennaSiteTypeNames[da->sitetype]);
@@ -221,6 +220,7 @@ int isSameDifxAntenna(const DifxAntenna *da1, const DifxAntenna *da2)
 	}
 }
 
+/* FIXME: I think the logic here may be a bit corrupt.  Low danger as truely identical clocks will still pass. */
 int isSameDifxAntennaClock(const DifxAntenna *da1, const DifxAntenna *da2)
 {
 	int i;
@@ -230,7 +230,7 @@ int isSameDifxAntennaClock(const DifxAntenna *da1, const DifxAntenna *da2)
 	{
 		return 0;
 	}
-	for(i=1;i<da1->clockorder;i++)
+	for(i = 1; i <= da1->clockorder; ++i)
 	{
 		if(da1->clockcoeff[i] != da2->clockcoeff[i])
 		{
@@ -241,7 +241,7 @@ int isSameDifxAntennaClock(const DifxAntenna *da1, const DifxAntenna *da2)
 	epochdiff = (da2->clockrefmjd - da1->clockrefmjd)*SEC_DAY_DBL;
 	dt = 1.0;
 	deltad = 0.0;
-	for(i=0;i<da1->clockorder;i++)
+	for(i = 0; i <= da1->clockorder; ++i)
 	{
 		deltad += (da1->clockcoeff[i] - da2->clockcoeff[i])*dt;
 		dt *= epochdiff;
@@ -284,13 +284,13 @@ void copyDifxAntenna(DifxAntenna *dest, const DifxAntenna *src)
 	}
 }
 
-/* dt is in microseconds */
+/* dt is in seconds */
 /* returns number of coefficients copied = order+1, or < 0 on error */
 int getDifxAntennaShiftedClock(const DifxAntenna *da, double dt, int outputClockSize, double *clockOut)
 {
 	int i;
 	double a[MAX_MODEL_ORDER+1];
-	double t2, t3, t4, t5;
+	double t2, t3, t4, t5;	/* units: sec^n, n = 2, 3, 4, 5 */
 
 	if(!da)
 	{
@@ -302,7 +302,7 @@ int getDifxAntennaShiftedClock(const DifxAntenna *da, double dt, int outputClock
 		return -2;
 	}
 
-	for(i = 0; i < MAX_MODEL_ORDER+1; i++)			   // pad out input array to full order with 0's
+	for(i = 0; i <= MAX_MODEL_ORDER; ++i)			   // pad out input array to full order with 0's
 	{
 		a[i] = (i <= da->clockorder) ? da->clockcoeff[i] : 0.0;
 	}
@@ -319,10 +319,38 @@ int getDifxAntennaShiftedClock(const DifxAntenna *da, double dt, int outputClock
 	case 3: clockOut[3] = a[3] + 4 * a[4] * dt + 10 * a[5] * t2;
 	case 2: clockOut[2] = a[2] + 3 * a[3] * dt +  6 * a[4] * t2 + 10 * a[5] * t3;
 	case 1: clockOut[1] = a[1] + 2 * a[2] * dt +  3 * a[3] * t2 +  4 * a[4] * t3 + 5 * a[5] * t4;
-	case 0: clockOut[0] = a[0] +	 a[1] * dt +	  a[2] * t2 +	   a[3] * t3 +	   a[4] * t4 + a[5] * t5; 
+	case 0: clockOut[0] = a[0] +     a[1] * dt +      a[2] * t2 +      a[3] * t3 +     a[4] * t4 + a[5] * t5; 
 	}
 
 	return da->clockorder + 1;
+}
+
+/* returns antenna's clock model in microseconds */
+double evaluateDifxAntennaClock(const DifxAntenna *da, double mjd)
+{
+	double dt;	/* [sec] time since the clock epoch */
+	double C;
+	double dtn;
+	int i;
+
+	if(!da)
+	{
+		fprintf(stderr, "Error: evaluateDifxAntennaClock called with null DifxAntenna pointer\n");
+
+		exit(EXIT_FAILURE);
+	}
+
+	dt = (mjd - da->clockrefmjd)*SEC_DAY_DBL;
+
+	dtn = 1.0;
+	C = 0.0;
+	for(i = 0; i <= da->clockorder; ++i)
+	{
+		C += da->clockcoeff[i]*dtn;
+		dtn *= dt;
+	}
+
+	return C;
 }
 
 DifxAntenna *mergeDifxAntennaArrays(const DifxAntenna *da1, int nda1,
@@ -334,9 +362,9 @@ DifxAntenna *mergeDifxAntennaArrays(const DifxAntenna *da1, int nda1,
 	*nda = nda1;
 
 	/* first identify entries that differ and assign new antennaIds */
-	for(j = 0; j < nda2; j++)
+	for(j = 0; j < nda2; ++j)
 	{
-		for(i = 0; i < nda1; i++)
+		for(i = 0; i < nda1; ++i)
 		{
 			if(isSameDifxAntenna(da1 + i, da2 + j))
 			{
@@ -354,13 +382,13 @@ DifxAntenna *mergeDifxAntennaArrays(const DifxAntenna *da1, int nda1,
 	da = newDifxAntennaArray(*nda);
 	
 	/* now copy da1 */
-	for(i = 0; i < nda1; i++)
+	for(i = 0; i < nda1; ++i)
 	{
 		copyDifxAntenna(da + i, da1 + i);
 	}
 
 	/* now copy unique members of da2 */
-	for(j = 0; j < nda2; j++)
+	for(j = 0; j < nda2; ++j)
 	{
 		if(antennaIdRemap[j] >= nda1)
 		{
@@ -388,7 +416,7 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 	}
 	n = 1;
 
-	for(i = 0; i < nAntenna; i++)
+	for(i = 0; i < nAntenna; ++i)
 	{
 		if(doClock)
 		{
@@ -398,20 +426,20 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 		{
 			writeDifxLine1(out, "TELESCOPE %d NAME", i, da[i].name);
 		}
-		n++;
+		++n;
 		if(doMount)
 		{
 			writeDifxLine1(out, "TELESCOPE %d CALCNAME", i, da[i].calcname);
-			n++;
+			++n;
 			writeDifxLine1(out, "TELESCOPE %d MOUNT", i, antennaMountTypeNames[da[i].mount]);
-			n++;
+			++n;
 			writeDifxLine1(out, "TELESCOPE %d SITETYPE", i, antennaSiteTypeNames[da[i].sitetype]);
-			n++;
+			++n;
 		}
 		if(doOffset)
 		{
 			writeDifxLineDouble1(out, "TELESCOPE %d OFFSET (m)", i, "%8.6f", da[i].offset[0]);
-			n++;
+			++n;
 		}
 		if(doCoords)
 		{
@@ -426,7 +454,7 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 			writeDifxLineDouble1(out, "CLOCK REF MJD %d", i, "%19.16f", da[i].clockrefmjd);
 			writeDifxLineInt1(out, "CLOCK POLY ORDER %d", i, da[i].clockorder);
 			writeDifxLine(out, "@ ***** Clock poly coeff N", " has units microsec / sec^N ***** @");
-			for(j=0;j<da[i].clockorder+1;j++)
+			for(j = 0; j <= da[i].clockorder; ++j)
 			{
 				writeDifxLineDouble2(out, "CLOCK COEFF %d/%d", i, j, "%18.16e", da[i].clockcoeff[j]);
 			}
@@ -435,7 +463,7 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 		if(doShelf)
 		{
 			writeDifxLine1(out, "TELESCOPE %d SHELF", i, da[i].shelf);
-			n++;
+			++n;
 		}
 		if(doSpacecraftID)
 		{
@@ -445,11 +473,11 @@ int writeDifxAntennaArray(FILE *out, int nAntenna, const DifxAntenna *da,
 				 && (da[i].spacecraftId == -1)))
 			{
 				writeDifxLineInt1(out, "TELESCOPE %d S/CRAFT ID", i, da[i].spacecraftId);
-				n++;
+				++n;
 				if((da[i].sc_name[0]))
 				{
 					writeDifxLine1(out, "TELESCOPE %d S/CRAFT NAME", i, da[i].sc_name);
-					n++;
+					++n;
 				}
 			}
 			else {

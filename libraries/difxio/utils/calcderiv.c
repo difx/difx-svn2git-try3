@@ -369,7 +369,9 @@ int run(const char *fileBase, int verbose, double deltaLMN, double deltaXYZ)
 	s = getenv("DIFX_CALC_PROGRAM");
 	if(s == 0)
 	{
-		snprintf(calcProgram, CommandLength, "%s", "calcif2");
+		fprintf(stderr, "Error! env var DIFX_CALC_PROGRAM needs to be set and point to your delay generator program!\n");
+
+		exit(0);
 	}
 	else
 	{
@@ -481,7 +483,7 @@ int main(int argc, char **argv)
 	int a;
 	int verbose = 0;
 	double deltaLMN = 10.0/206265.0;		/* (rad) about 10 arcseconds */
-	double deltaXYZ = 100.0;		/* (m) */
+	double deltaXYZ = 1000.0;		/* (m) */
 
 	for(a = 1; a < argc; ++a)
 	{

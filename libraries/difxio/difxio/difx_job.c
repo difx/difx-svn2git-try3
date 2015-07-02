@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2011, 2015 by Walter Brisken                             *
+ *   Copyright (C) 2007-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -38,7 +38,8 @@ const char aberCorrStrings[][MAX_ABER_CORR_STRING_LENGTH] =
 	"UNCORRECTED",
 	"APPROXIMATE",
 	"EXACT",
-	"NO ATMOS"
+	"NO ATMOS",
+	"MIXED"
 };
 
 
@@ -128,6 +129,27 @@ enum DelayServerType stringToDelayServerType(const char *str)
 }
 
 
+const char taperFunctionNames[][MAX_TAPER_FUNCTION_STRING_LENGTH] =
+{
+	"UNIFORM",
+	"UNKNOWN"
+};
+
+enum TaperFunction stringToTaperFunction(const char *str)
+{
+	enum TaperFunction f;
+
+	for(f = 0; f < NumTaperFunctions; ++f)
+	{
+		if(strcasecmp(str, taperFunctionNames[f]) == 0)
+		{
+			break;
+		}
+	}
+
+	return f;
+}
+
 DifxJob *newDifxJobArray(int nJob)
 {
 	DifxJob *dj;
@@ -137,7 +159,7 @@ DifxJob *newDifxJobArray(int nJob)
 	for(j = 0; j < nJob; j++)
 	{
 		snprintf(dj[j].obsCode,        DIFXIO_OBSCODE_LENGTH,  "%s", "DIFX");
-		snprintf(dj[j].taperFunction,  DIFXIO_TAPER_LENGTH,    "%s", "UNIFORM");
+		dj[j].taperFunction = TaperFunctionUniform;
 		dj[j].polyOrder = DIFXIO_DEFAULT_POLY_ORDER;
 		dj[j].polyInterval = DIFXIO_DEFAULT_POLY_INTERVAL;
 		dj[j].delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
@@ -189,7 +211,7 @@ void deleteDifxJobArray(DifxJob *djarray, int nJob)
 
 	if(djarray)
 	{
-		for(j = 0; j < nJob; j++)
+		for(j = 0; j < nJob; ++j)
 		{
 			dj = djarray + j;
 			deleteDifxJobInternals(dj);
@@ -215,6 +237,7 @@ void fprintDifxJob(FILE *fp, const DifxJob *dj)
 	fprintf(fp, "    calc file = %s\n", dj->calcFile);
 	fprintf(fp, "    im (model) file = %s\n", dj->imFile);
 	fprintf(fp, "    flag file = %s\n", dj->flagFile);
+	fprintf(fp, "    taperFunction = %s\n", taperFunctionNames[dj->taperFunction]);
 	fprintf(fp, "    output file = %s\n", dj->outputFile);
 	fprintf(fp, "    delay server host = %s\n", dj->delayServerHost);
 	fprintf(fp, "    delay server type = %s\n", delayServerTypeNames[dj->delayServerType]);

@@ -84,6 +84,10 @@ int main(int argc, char **argv)
 		else if(D == 0)
 		{
 			D = loadDifxInput(argv[a]);
+			if(D)
+			{
+				D->eopMergeMode = EOPMergeModeRelaxed;
+			}
 		}
 		else
 		{
@@ -93,6 +97,7 @@ int main(int argc, char **argv)
 			D2 = loadDifxInput(argv[a]);
 			if(D2)
 			{
+				D2->eopMergeMode = EOPMergeModeRelaxed;
 				mergable = areDifxInputsMergable(D1, D2);
 				compatible = areDifxInputsCompatible(D1, D2);
 				if(mergable && compatible)

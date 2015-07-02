@@ -1,21 +1,21 @@
 /***************************************************************************
- *	 Copyright (C) 2008-2015 by Walter Brisken							   *
- *				   2012-2015 by James M Anderson						  *
- *																		   *
- *	 This program is free software; you can redistribute it and/or modify  *
- *	 it under the terms of the GNU General Public License as published by  *
- *	 the Free Software Foundation; either version 3 of the License, or	   *
- *	 (at your option) any later version.								   *
- *																		   *
- *	 This program is distributed in the hope that it will be useful,	   *
- *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
- *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
- *	 GNU General Public License for more details.						   *
- *																		   *
- *	 You should have received a copy of the GNU General Public License	   *
- *	 along with this program; if not, write to the						   *
- *	 Free Software Foundation, Inc.,									   *
- *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
+ *                 2012-2015 by James M Anderson                           *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -38,6 +38,7 @@
 
 /* include spice files for spacecraft navigation if libraries are present */
 #if HAVE_SPICE
+#include "SpiceUsr.h"
 #include "SpiceCK.h"
 #include "SpiceZpr.h"
 #include "SpiceZfc.h"
@@ -391,15 +392,15 @@ int computeDifxSpacecraftTimeFrameOffset(DifxSpacecraft *ds, const char* JPLplan
 
 
 #if HAVE_SPICE
-static void ECI2J2000(doublereal et, doublereal state[6])
+static void TEME2J2000(double et, double state[6])
 {
-	doublereal precm[36];
-	doublereal invprecm[36];
-	doublereal tmpstate[6];
+	double precm[36];
+	double invprecm[36];
+	double tmpstate[6];
 	int six = 6;
 	int i;
 
-	/* Rotate from ECI to J2000 frame */
+	/* Rotate from TEME to J2000 frame */
 	/* Get rotation matrix from TEME @ET (sec past J2000 epoch) to J2000 */
 	/* PRECM is 6x6, goes from J2000 -> TEME */
 	zzteme_(&et, precm);
@@ -424,10 +425,11 @@ int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double sc_ep
 	if(strcmp(ephemType, "SPICE")==0)
 	{
 #if HAVE_SPICE
-		doublereal state[6];
+		double state[6];
 		int p;
 
 		ds->nPoint = nPoint;
+		free(ds->pos);
 		ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
 
 		state[0] = X/1000.0;
@@ -435,7 +437,10 @@ int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double sc_ep
 		state[2] = Z/1000.0;
 		state[3] = state[4] = state[5] = 0.0;
 
-		ldpool_c(naifFile);
+		if(naifFile)
+		{
+			ldpool_c(naifFile);
+		}
 
 		if(sc_epoch_mjd == 0.0)
 		{
@@ -450,7 +455,7 @@ int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double sc_ep
 				sprintf(jdstr, "JD %18.12Lf", jd);
 				str2et_c(jdstr, &et);
 
-				ECI2J2000(et, state);
+				TEME2J2000(et, state);
 
 				ds->pos[p].mjd = mjd;
 				ds->pos[p].fracDay = mjd - ds->pos[p].mjd;
@@ -472,7 +477,7 @@ int computeDifxSpacecraftSourceEphemerisFromXYZ(DifxSpacecraft *ds, double sc_ep
 			sprintf(jdstr, "JD %18.12Lf", jd);
 			str2et_c(jdstr, &et);
 
-			ECI2J2000(et, state);
+			TEME2J2000(et, state);
 			for(p = 0; p < nPoint; ++p)
 			{
 				mjd = mjd0 + p*deltat;
@@ -520,8 +525,16 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double s
 		int p;
 		int retcode;
 
-		ldpool_c(naifFile);
+
+		if(naifFile)
+		{
+			ldpool_c(naifFile);
+		}
 		spklef_c(ephemFile, &spiceHandle);
+
+		ds->nPoint = nPoint;
+		free(ds->pos);
+		ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
 
 		if(ds->name[0] == 0)
 		{
@@ -531,8 +544,6 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double s
 				fprintf(stderr, "Warning: computeDifxSpacecraftSourceEphemeris_bsp: spacecraft name %s is too long %d > %d\n", objectName, p, DIFXIO_NAME_LENGTH-1);
 			}
 		}
-		ds->nPoint = nPoint;
-		ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
 		if(sc_epoch_mjd == 0.0)
 		{
 			for(p = 0; p < nPoint; ++p)
@@ -546,9 +557,14 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double s
 				jd = mjd + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
 				sprintf(jdstr, "JD %18.12Lf", jd);
 				str2et_c(jdstr, &et);
-				if(ephemStellarAber == 0.0)
+				/* 399 is the earth geocenter */
+				if(ephemStellarAber < -0.5)
 				{
-					spkezr_c(objectName, et, "J2000", "LT", "399", state, &range);	/* 399 is the earth geocenter */
+					spkezr_c(objectName, et, "J2000", "NONE", "399", state, &range);
+				}
+				else if(ephemStellarAber == 0.0)
+				{
+					spkezr_c(objectName, et, "J2000", "LT", "399", state, &range);
 				}
 				else if(ephemStellarAber == 1.0)
 				{
@@ -588,9 +604,15 @@ static int computeDifxSpacecraftSourceEphemeris_bsp(DifxSpacecraft *ds, double s
 			jd = (long double)(sc_epoch_mjd) + 2400000.5 + ephemClockError/SECONDS_PER_DAY;
 			sprintf(jdstr, "JD %18.12Lf", jd);
 			str2et_c(jdstr, &et);
+			/* 399 is the earth geocenter */
+			if(ephemStellarAber < -0.5)
+			{
+				spkezr_c(objectName, et, "J2000", "NONE", "399", state, &range);
+			}
+			else 
 			if(ephemStellarAber == 0.0)
 			{
-				spkezr_c(objectName, et, "J2000", "LT", "399", state, &range);	/* 399 is the earth geocenter */
+				spkezr_c(objectName, et, "J2000", "LT", "399", state, &range);
 			}
 			else if(ephemStellarAber == 1.0)
 			{
@@ -697,20 +719,20 @@ static int findBestSet(double e, SpiceDouble *epochs, int nEpoch, double *f)
 	return -1;
 }
 
-void evaluateTLE(doublereal et, doublereal *elems, doublereal *state)
+void evaluateTLE(double et, double *elems, double *state)
 {
 	double R;
-	doublereal geophysConsts[] =	/* values from http://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ev2lin.html */
-		{
-			1.082616e-3,		/* J2 gravitational harmonic for earth */
-			-2.53881e-6,		/* J3 gravitational harmonic for earth */
-			-1.65597e-6,		/* J4 gravitational harmonic for earth */
-			7.43669161e-2,		/* KE: Square root of the GM for earth where GM is expressed in earth radii cubed per minutes squared. */
-			120.0,			/* QO: Low altitude bound for atmospheric model in km. */
-			78.0,			/* SO: High altitude bound for atmospheric model in km. */
-			6378.135,		/* RE: Equatorial radius of the earth in km. */
-			1.0			/* AE: Distance units/earth radius (normally 1) */
-		};
+	double geophysConsts[] = 	/* values from http://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ev2lin.html */
+	{
+		1.082616e-3,		/* J2 gravitational harmonic for earth */
+		-2.53881e-6,		/* J3 gravitational harmonic for earth */
+		-1.65597e-6,		/* J4 gravitational harmonic for earth */
+		7.43669161e-2,		/* KE: Square root of the GM for earth where GM is expressed in earth radii cubed per minutes squared. */
+		120.0,			/* QO: Low altitude bound for atmospheric model in km. */
+		78.0,			/* SO: High altitude bound for atmospheric model in km. */
+		6378.135,		/* RE: Equatorial radius of the earth in km. */
+		1.0			/* AE: Distance units/earth radius (normally 1) */
+	};
 
 	if(elems[8] >= 2.0*M_PI/225.0)
 	{
@@ -752,7 +774,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double s
 		const SpiceInt firstYear = 2000;
 		int p;
 		int retcode;
-		doublereal elems[MaxEphemElementSets][NElement];
+		double elems[MaxEphemElementSets][NElement];
 		SpiceDouble epochs[MaxEphemElementSets];
 		int nSet = 0;
 		FILE *in;
@@ -767,7 +789,10 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double s
 			return -1;
 		}
 
-		ldpool_c(naifFile);
+		if(naifFile)
+		{
+			ldpool_c(naifFile);
+		}
 
 		for(;;)
 		{
@@ -917,7 +942,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double s
 			{
 				/* linear interpolation between two TLE values */
 
-				doublereal state2[6];
+				double state2[6];
 				int j;
 
 				evaluateTLE(et, elems[set+1], state2);
@@ -927,7 +952,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double s
 				}
 			}
 
-			ECI2J2000(et, state);
+			TEME2J2000(et, state);
 			for(p = 0; p < nPoint; ++p)
 			{
 				mjd = mjd0 + p*deltat;
@@ -955,7 +980,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double s
 		else
 		{
 			/* fprintf(stderr, "Warning: computeDifxSpacecraftSourceEphemeris_tle: blank orientationFile --- orientation set to NULL.\n"); */
-			for(p = 0; p < nPoint; p++)
+			for(p = 0; p < nPoint; ++p)
 			{
 				ds->SCAxisVectors[p].X[0] = 0.0;
 				ds->SCAxisVectors[p].X[1] = 0.0;
@@ -1550,15 +1575,15 @@ int evaluateDifxSpacecraftSource(const DifxSpacecraft *sc, int mjd, double fracM
 	xPoly[0] = pos[r0].X;
 	xPoly[1] = pos[r0].dX*deltat;
 	xPoly[2] = -3.0L*(pos[r0].X-pos[r1].X) - (2.0L*pos[r0].dX+pos[r1].dX)*deltat;
-	xPoly[3] =	2.0L*(pos[r0].X-pos[r1].X) + (	  pos[r0].dX+pos[r1].dX)*deltat;
+	xPoly[3] =  2.0L*(pos[r0].X-pos[r1].X) + (     pos[r0].dX+pos[r1].dX)*deltat;
 	yPoly[0] = pos[r0].Y;
 	yPoly[1] = pos[r0].dY*deltat;
 	yPoly[2] = -3.0L*(pos[r0].Y-pos[r1].Y) - (2.0L*pos[r0].dY+pos[r1].dY)*deltat;
-	yPoly[3] =	2.0L*(pos[r0].Y-pos[r1].Y) + (	  pos[r0].dY+pos[r1].dY)*deltat;
+	yPoly[3] =  2.0L*(pos[r0].Y-pos[r1].Y) + (     pos[r0].dY+pos[r1].dY)*deltat;
 	zPoly[0] = pos[r0].Z;
 	zPoly[1] = pos[r0].dZ*deltat;
 	zPoly[2] = -3.0L*(pos[r0].Z-pos[r1].Z) - (2.0L*pos[r0].dZ+pos[r1].dZ)*deltat;
-	zPoly[3] =	2.0L*(pos[r0].Z-pos[r1].Z) + (	  pos[r0].dZ+pos[r1].dZ)*deltat;
+	zPoly[3] =  2.0L*(pos[r0].Z-pos[r1].Z) + (     pos[r0].dZ+pos[r1].dZ)*deltat;
 
 	evalPoly(xPoly, t, &X);
 	evalPoly(yPoly, t, &Y);
@@ -1979,6 +2004,82 @@ int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds)
 }
 
 
+
+/* properly handles seconds outside range [0,86400) and retains precision */
+void sixVectorSetTime(sixVector *v, int mjd, double sec)
+{
+	if(sec < 0)
+	{
+		int N = (int)((-sec)/SEC_DAY_DBL) + 1;
+
+		sec += N*SEC_DAY_DBL;
+		mjd -= N;
+	}
+	if(sec >= SEC_DAY_DBL)
+	{
+		int N = (int)(sec/SEC_DAY_DBL);
+
+		sec -= N*SEC_DAY_DBL;
+		mjd += N;
+	}
+
+	v->mjd = mjd;
+	v->fracDay = sec/SEC_DAY_DBL;
+}
+
+/* puts some parameters into the spice pool.  Call this function instead of
+ * supplying a leapsecond kernel file.
+ */
+int populateSpiceLeapSecondsFromEOP(const DifxEOP *eop, int nEOP)
+{
+	const double naif_deltet_delta_t_a = 32.184;
+	const double naif_deltet_k = 1.657e-3;
+	const double naif_deltet_eb = 1.671e-2; 
+	const double naif_deltet_m[2] = { 6.23999600, 1.99096871e-7 };
+	double *naif_taiutc;
+	int e;
+	int nLeapSec = 0;
+	double lastLeapSec = -1000.0;
+
+#if HAVE_SPICE
+	if(nEOP < 1)
+	{
+		fprintf(stderr, "Error: populateSpiceLeapSecondsFromEOP: too few values supplied (nEOP = %d)\n", nEOP);
+
+		return -2;
+	}
+
+	pdpool_c("DELTET/DELTA_T_A", 1, &naif_deltet_delta_t_a);
+	pdpool_c("DELTET/K",         1, &naif_deltet_k);
+	pdpool_c("DELTET/EB",        1, &naif_deltet_eb);
+	pdpool_c("DELTET/M",         2, naif_deltet_m);
+
+	naif_taiutc = (double *)malloc(2*nEOP*sizeof(double));
+
+	for(e = 0; e < nEOP; ++e)
+	{
+		if(eop[e].tai_utc != lastLeapSec)
+		{
+			naif_taiutc[2*nLeapSec] = eop[e].tai_utc;
+			naif_taiutc[2*nLeapSec+1] = (eop[e].mjd - 51544.5)*SEC_DAY_DBL;
+			
+			lastLeapSec = naif_taiutc[2*nLeapSec];
+
+			++nLeapSec;
+		}
+	}
+
+	pdpool_c("DELTET/DELTA_AT",  2*nLeapSec, naif_taiutc);
+
+	free(naif_taiutc);
+
+	return 0;
+#else
+	fprintf(stderr, "Error: populateSpiceLeapSecondsFromEOP: spice not compiled into difxio.\n");
+	
+	return -1;
+#endif
+}
 
 /* routines for handling Russian SCF format data for spacecraft positions */
 /* 2012 Feb 13	James M Anderson  --MPIfR  start adding SCF stuff in */

@@ -123,8 +123,23 @@
 	in calcif2 and new numerical derivatives for UVW, LMN, XYZ delay 
 	deltas
 
-3.4.1
+3.X.X
 * Changes for space VLBI correlation
+
+
+3.5.0
+* Post DiFX 2.4
+* Consider equality of EOP values when merging jobs
+* Implement EOP merging modes.  Currently this will be set automatically based total number of days spanned by EOPs.
+  - Relaxed means merge EOPs if they are consistent, with a resulting maximum of 6 days of values
+  - Strict means only merge if EOPs cover the same days
+  - In either case, refuse to merge if the EOPs are different on any day
+* Replaced string with enums for three parameter names
+  - Note: this breaks API compatibility.  Be sure to recompile all dependent code after updating difxio.
+* Fix merging of tables containing model extensions when different scans have different subsets of antennas
+* New utility: tabulatedelays.  Will make a list of evaluated delay polynomials every 24 seconds (on the usual grid of model points).  Delays and rates are printed.
+* New function: evaluateDifxAntennaClock
+* Write Parallactic Angle and/or Refraction Corrected Elevation to .im file if they are populated
 
 3.4.0
 * Fix X/Y polarization issue
