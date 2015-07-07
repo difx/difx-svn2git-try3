@@ -1,3 +1,7 @@
+2015-07-07  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/difx2fits.c: bugfixes
+
 2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
 
 	* src/difx2fits.c:
