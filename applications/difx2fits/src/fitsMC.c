@@ -505,6 +505,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 			MC_interval = -1;
 			while((found_MC_interval))
 			{
+				DifxAntenna *da;
 				MC_interval++;
 				/* set loop condition to false --- it will be set true as
 				   needed later on */
@@ -534,6 +535,8 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 						continue;
 					}
                                         
+					da = D->antenna + antId;	/* pointer to DifxAntenna structure */
+
 					/* ... and to FITS antennaId */
 					antId1 = antId + 1;
 
@@ -542,7 +545,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 						if(skip[antId] == 0)
 						{
 							printf("\n    Polynomial model error : skipping antId %d = %s", 
-							       antId, D->antenna[antId].name);
+							       antId, da->name);
 							++skip[antId];
 							++printed;
 							++skipped;
