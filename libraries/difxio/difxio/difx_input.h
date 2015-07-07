@@ -71,6 +71,10 @@ extern char *jma_malloc_strndup(const char *s, size_t n);
 #define MAX_SAMPLING_NAME_LENGTH                  16
 #define MAX_DELAY_SERVER_NAME_LENGTH              32
 #define MAX_TONE_SELECTION_STRING_LENGTH          12
+#define MAX_EOP_MERGE_MODE_STRING_LENGTH	      16
+#define MAX_PHASED_ARRAY_TYPE_STRING_LENGTH	      16
+#define MAX_PHASED_ARRAY_FORMAT_STRING_LENGTH	  16
+#define MAX_TAPER_FUNCTION_STRING_LENGTH          16
 #define MAX_SOURCE_COORDINATE_FRAME_STRING_LENGTH 32
 
 #define DIFXIO_FILENAME_LENGTH      256
@@ -93,6 +97,8 @@ extern char *jma_malloc_strndup(const char *s, size_t n);
 #define DIFXIO_POL_ERROR        0x100
 #define DIFXIO_POL_RL           (DIFXIO_POL_R | DIFXIO_POL_L)
 #define DIFXIO_POL_XY           (DIFXIO_POL_X | DIFXIO_POL_Y)
+
+#define DIFXIO_MAX_EOP_PER_FITS		         6
 
 #define DIFXIO_DEFAULT_POLY_ORDER            5
 #define DIFXIO_DEFAULT_POLY_INTERVAL       120

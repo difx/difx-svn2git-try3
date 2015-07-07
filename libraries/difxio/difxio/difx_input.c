@@ -925,9 +925,9 @@ static int loadPhasedArrayConfigFile(DifxInput *D, const char *fileName)
 
 	/* Fill in the info about quantisation, format etc for this phased array output */
 	r = DifxParametersfind(pp, 0, "OUTPUT TYPE");
-	snprintf(dpa->outputType, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(pp, r));
+	dpa->outputType = stringToPhasedArrayOutputType(DifxParametersvalue(pp, r));
 	r = DifxParametersfind(pp, r, "OUTPUT FORMAT");
-	snprintf(dpa->outputFormat, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(pp, r));
+	dpa->outputFormat = stringToPhasedArrayOutputFormat(DifxParametersvalue(pp, r));
 	r = DifxParametersfind(pp, r, "ACC TIME (NS)");
 	dpa->accTime = atoi(DifxParametersvalue(pp, r));
 	r = DifxParametersfind(pp, r, "COMPLEX OUTPUT");
@@ -2117,7 +2117,7 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 	row = DifxParametersfind_limited(cp, 0, nMedSkip, "TAPER FUNCTION");
 	if(row > 0)
 	{
-		snprintf(D->job->taperFunction, DIFXIO_TAPER_LENGTH, "%s", DifxParametersvalue(cp, row));
+		D->job->taperFunction = stringToTaperFunction(DifxParametersvalue(cp, row));
 	}
 	row = DifxParametersfind_limited(cp, 0, nMedSkip, "DELAY POLY ORDER");
 	if(row > 0)

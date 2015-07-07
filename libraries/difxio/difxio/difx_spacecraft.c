@@ -902,7 +902,7 @@ static int computeDifxSpacecraftSourceEphemeris_tle(DifxSpacecraft *ds, double s
 					}
 				}
 
-				ECI2J2000(et, state);
+				TEME2J2000(et, state);
 
 				ds->pos[p].mjd = mjd;
 				ds->pos[p].fracDay = mjd - ds->pos[p].mjd;

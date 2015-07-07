@@ -1,3 +1,11 @@
+2015-07-07  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_input.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_eop.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_input.h: bugfixes
+
 2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
 
 	* difxio/difx_antenna.c:

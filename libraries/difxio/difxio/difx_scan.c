@@ -104,15 +104,8 @@ void fprintDifxScan(FILE *fp, const DifxScan *ds)
 	fprintf(fp, "    Number of phase centres = %d\n", ds->nPhaseCentres);
 	for(i = 0; i < ds->nPhaseCentres; ++i) 
 	{
-<<<<<<< .working
-		fprintf(fp, "    Phase centre %d source index = %d\n", 
-				i, ds->phsCentreSrcs[i]);
-		fprintf(fp, "    Original job phase centre %d source index = %d\n",
-				i, ds->orgjobPhsCentreSrcs[i]);
-=======
-	        fprintf(fp, "    Phase centre %d source index = %d\n", i, ds->phsCentreSrcs[i]);
+		fprintf(fp, "    Phase centre %d source index = %d\n", i, ds->phsCentreSrcs[i]);
 		fprintf(fp, "    Original job phase centre %d source index = %d\n", i, ds->orgjobPhsCentreSrcs[i]);
->>>>>>> .merge-right.r6791
 	}
 	fprintf(fp, "    jobId    = %d\n", ds->jobId);
 	fprintf(fp, "    configId = %d\n", ds->configId);
@@ -164,12 +157,7 @@ void printDifxScan(const DifxScan *ds)
 
 void fprintDifxScanSummary(FILE *fp, const DifxScan *ds)
 {
-<<<<<<< .working
-	fprintf(fp, "  Start=%12.6f end=%12.6f identifier=%s\n", 
-			ds->mjdStart, ds->mjdEnd, ds->identifier);
-=======
 	fprintf(fp, "  Start=%12.6f end=%12.6f identifier=%s\n", ds->mjdStart, ds->mjdEnd, ds->identifier);
->>>>>>> .merge-right.r6791
 	fprintf(fp, "    PointingSourceIndex = %d\n", ds->pointingCentreSrc);
 	fprintf(fp, "    ConfigId = %d\n", ds->configId);
 }
@@ -179,60 +167,14 @@ void printDifxScanSummary(const DifxScan *ds)
 	fprintDifxScanSummary(stdout, ds);
 }
 
-<<<<<<< .working
-void copyDifxScan(DifxScan *dest, const DifxScan *src,
-				  const int *sourceIdRemap, const int *jobIdRemap, 
-				  const int *configIdRemap, const int *antennaIdRemap)
-=======
 void copyDifxScan(DifxScan *dest, const DifxScan *src, const int *sourceIdRemap, const int *jobIdRemap, const int *configIdRemap, const int *antennaIdRemap)
->>>>>>> .merge-right.r6791
 {
 	int i, j, srcAntenna, destAntenna;
 
 	if(dest != src)
 	{
-<<<<<<< .working
 		deleteDifxScanInternals(dest);
 		*dest = *src;
-=======
-		dest->pointingCentreSrc = sourceIdRemap[src->pointingCentreSrc];
-		for(i = 0; i < src->nPhaseCentres; ++i)
-		{
-			dest->phsCentreSrcs[i] = sourceIdRemap[src->phsCentreSrcs[i]];
-			dest->orgjobPhsCentreSrcs[i] = src->orgjobPhsCentreSrcs[i];
-		}
-	}
-	else
-	{
-		dest->pointingCentreSrc = src->pointingCentreSrc;
-		for(i = 0; i < src->nPhaseCentres; ++i)
-		{
-			dest->phsCentreSrcs[i] = src->phsCentreSrcs[i];
-			dest->orgjobPhsCentreSrcs[i] = src->orgjobPhsCentreSrcs[i];
-		}
-	}
-	if(jobIdRemap)
-	{
-		dest->jobId = jobIdRemap[src->jobId];
-	}
-	else
-	{
-		dest->jobId = src->jobId;
-	}
-	if(configIdRemap && src->configId >= 0)
-	{
-		dest->configId = configIdRemap[src->configId];
-	}
-	else
-	{
-		dest->configId = src->configId;
-	}
-	dest->startSeconds = src->startSeconds;
-	dest->durSeconds   = src->durSeconds;
-	dest->nPoly        = src->nPoly;
->>>>>>> .merge-right.r6791
-
-<<<<<<< .working
 		/* dest->mjdStart	   = src->mjdStart; */
 		/* dest->mjdEnd	   = src->mjdEnd; */
 		/* dest->startSeconds = src->startSeconds; */
@@ -245,61 +187,14 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src, const int *sourceIdRemap,
 		/* dest->startSeconds = src->startSeconds; */
 		/* dest->durSeconds   = src->durSeconds; */
 		/* dest->nPoly		   = src->nPoly; */
-=======
-	/* figure out how many antennas needed in this scan */
-	dest->nAntenna = src->nAntenna;
-	if(antennaIdRemap)
-	{
-		for(i = 0; i < src->nAntenna; ++i)
-		{
-			destAntenna = antennaIdRemap[i];
-			if(destAntenna >= dest->nAntenna)
-			{
-				dest->nAntenna = destAntenna+1;
-			}
-		}
-	}
->>>>>>> .merge-right.r6791
-
-<<<<<<< .working
 		/* figure out how many antennas needed in this scan */
 		/* dest->nAntenna = src->nAntenna; */
 		if(src->im)
-=======
-	if(src->im)
-	{
-		dest->im = (DifxPolyModel ***)calloc(dest->nAntenna, sizeof(DifxPolyModel **));
-		for(srcAntenna = 0; srcAntenna < src->nAntenna; ++srcAntenna)
->>>>>>> .merge-right.r6791
 		{
 			dest->im = (DifxPolyModel ***)calloc(dest->nAntenna, sizeof(DifxPolyModel **));
 			for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
 			{
-<<<<<<< .working
 				if(src->im[srcAntenna] == 0)
-=======
-				continue; //must have had a change of num antennas at some stage
-			}
-			if(antennaIdRemap)
-			{
-				destAntenna = antennaIdRemap[srcAntenna];
-			}
-			else
-			{
-				destAntenna = srcAntenna;
-			}
-			dest->im[destAntenna] = (DifxPolyModel **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModel *));
-			if(dest->im[destAntenna] == 0)
-			{
-				fprintf(stderr, "Error allocating space for IM table! Aborting");
-
-				exit(EXIT_FAILURE);
-			}
-			for(j = 0; j < src->nPhaseCentres+1; ++j)
-			{
-				dest->im[destAntenna][j] = dupDifxPolyModelColumn(src->im[srcAntenna][j], dest->nPoly);
-				if(dest->im[destAntenna][j] == 0)
->>>>>>> .merge-right.r6791
 				{
 					continue; //must have had a change of num antennas at some stage
 				}
@@ -325,43 +220,12 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src, const int *sourceIdRemap,
 			}
 		}
 
-<<<<<<< .working
 		if(src->imLMN)
-=======
-	if(src->imLM)
-	{
-		dest->imLM = (DifxPolyModelLMExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelLMExtension **));
-		for(srcAntenna = 0; srcAntenna < src->nAntenna; ++srcAntenna)
->>>>>>> .merge-right.r6791
 		{
 			dest->imLMN = (DifxPolyModelLMNExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelLMNExtension **));
 			for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
 			{
-<<<<<<< .working
 				if(src->imLMN[srcAntenna] == 0)
-=======
-				continue; 
-			}
-			if(antennaIdRemap)
-			{
-				destAntenna = antennaIdRemap[srcAntenna];
-			}
-			else
-			{
-				destAntenna = srcAntenna;
-			}
-			dest->imLM[destAntenna] = (DifxPolyModelLMExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelLMExtension *));
-			if(dest->imLM[destAntenna] == 0)
-			{
-				fprintf(stderr, "Error allocating space for LM Extension table! Aborting");
-
-				exit(EXIT_FAILURE);
-			}
-			for(j = 0; j < src->nPhaseCentres+1; ++j)
-			{
-				dest->imLM[destAntenna][j] = dupDifxPolyModelLMExtensionColumn(src->imLM[srcAntenna][j], dest->nPoly);
-				if(dest->imLM[destAntenna][j] == 0)
->>>>>>> .merge-right.r6791
 				{
 					continue; 
 				}
@@ -387,43 +251,12 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src, const int *sourceIdRemap,
 			}
 		}
 
-<<<<<<< .working
 		if(src->imXYZ)
-=======
-	if(src->imXYZ)
-	{
-		dest->imXYZ = (DifxPolyModelXYZExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelXYZExtension **));
-		for(srcAntenna = 0; srcAntenna < src->nAntenna; ++srcAntenna)
->>>>>>> .merge-right.r6791
 		{
 			dest->imXYZ = (DifxPolyModelXYZExtension ***)calloc(dest->nAntenna, sizeof(DifxPolyModelXYZExtension **));
 			for(srcAntenna = 0; srcAntenna < src->nAntenna; srcAntenna++)
 			{
-<<<<<<< .working
 				if(src->imXYZ[srcAntenna] == 0)
-=======
-				continue; 
-			}
-			if(antennaIdRemap)
-			{
-				destAntenna = antennaIdRemap[srcAntenna];
-			}
-			else
-			{
-				destAntenna = srcAntenna;
-			}
-			dest->imXYZ[destAntenna] = (DifxPolyModelXYZExtension **)calloc(dest->nPhaseCentres+1, sizeof(DifxPolyModelXYZExtension *));
-			if(dest->imXYZ[destAntenna] == 0)
-			{
-				fprintf(stderr, "Error allocating space for XYZ Extension table! Aborting");
-
-				exit(EXIT_FAILURE);
-			}
-			for(j = 0; j < src->nPhaseCentres+1; ++j)
-			{
-				dest->imXYZ[destAntenna][j] = dupDifxPolyModelXYZExtensionColumn(src->imXYZ[srcAntenna][j], dest->nPoly);
-				if(dest->imXYZ[destAntenna][j] == 0)
->>>>>>> .merge-right.r6791
 				{
 					continue; 
 				}
@@ -542,12 +375,7 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 		{
 			if(ds2[i2].configId >= 0)
 			{
-<<<<<<< .working
-				copyDifxScan(ds + i, ds2 + i2, sourceIdRemap,
-							 jobIdRemap, configIdRemap, antennaIdRemap);
-=======
 				copyDifxScan(ds + i, ds2 + i2, sourceIdRemap, jobIdRemap, configIdRemap, antennaIdRemap);
->>>>>>> .merge-right.r6791
 				i++;
 			}
 			i2++;
@@ -556,13 +384,6 @@ DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 
 	*nds = i;
 
-<<<<<<< .working
-/*
-  printf("After merging two inputs, which had nScan %d and %d, the result has nScan %d\n", nds1, nds2, *nds);
-*/
-
-=======
->>>>>>> .merge-right.r6791
 	return ds;
 }
 
