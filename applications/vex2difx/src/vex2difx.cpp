@@ -183,7 +183,6 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, con
 	snprintf(job->obsCode, DIFXIO_OBSCODE_LENGTH, "%s", obsCode.c_str());
 	job->obsCode[7] = 0;
 	job->taperFunction = TaperFunctionUniform;
-	snprintf(job->taperFunction, DIFXIO_TAPER_LENGTH, "%s", "UNIFORM");
 	snprintf(job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", P->delayServerHost.c_str());
 	job->delayServerType = stringToDelayServerType(P->delayServerType.c_str());
 	job->delayVersion = P->delayVersion;
@@ -2415,7 +2414,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				else
 				{
 					naifFile = phaseCentre->naifFile.c_str();
-				}				
+				}		
                 // Handle spacecraft target source information
 				ds->is_antenna = false;
 				ds->GS_exists = false;
@@ -2652,6 +2651,23 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				else
 				{
 					snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->vexName.c_str());
+				}
+
+				const char* naifFile = NULL;
+				if(antennaSetup->naifFile.empty())
+				{
+					v = populateSpiceLeapSecondsFromEOP(D->eop, D->nEOP);
+					if(v != 0)
+					{
+						cerr << "Error: populateSpiceLeapSecondsFromEOP returned " << v << endl;
+						
+						exit(EXIT_FAILURE);
+					}
+					naifFile = 0;
+				}
+				else
+				{
+					naifFile = antennaSetup->naifFile.c_str();
 				}
 
 				ds->is_antenna = true;

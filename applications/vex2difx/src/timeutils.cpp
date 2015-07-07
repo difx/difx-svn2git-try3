@@ -29,9 +29,11 @@
 
 #include "timeutils.h"
 
-const double MJD_UNIX0 = 40587.0;	// MJD at beginning of unix time
-const double SEC_DAY = 86400.0;
-const double MUSEC_DAY = 86400000000.0;
+const double MJD_UNIX0     = 40587.0;   // MJD at beginning of unix time
+const double SEC_DAY_DBL_  = 86400.0;
+const int    MJD_UNIX0_INT = 40587;
+const int    SEC_DAY_INT   = 86400;
+const double MUSEC_DAY     = 86400000000.0;
 
 double current_mjd()
 {
@@ -39,5 +41,5 @@ double current_mjd()
 
 	gettimeofday(&t, 0);
 
-	return MJD_UNIX0 + t.tv_sec/SEC_DAY + t.tv_usec/MUSEC_DAY;
+	return MJD_UNIX0 + t.tv_sec/SEC_DAY_DBL_ + t.tv_usec/MUSEC_DAY;
 }
