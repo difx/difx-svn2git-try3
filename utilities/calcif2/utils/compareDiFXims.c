@@ -54,9 +54,9 @@ typedef struct
 
 enum CompareObjectEnum
 	{
-		COEscan;
-		COEsource;
-		COEantenna;
+		COEscan,
+		COEsource,
+		COEantenna
 	};
 
 
@@ -2607,12 +2607,17 @@ void process_stats_single(const double* const sum, const double* const sumsqr, c
 
 
 
-void process_stats_compare_object_item(double d0, double d1, const char* const object, const int Id, )
+void process_stats_compare_object_item(double d0, double d1, const char* const object, int Id, const char* const field, const char* const units, const int verbose)
 {
+	double m = (d0 + d1) * 0.5;
+	double d = d0 - d1;
+	double f = d / m;
+	printf("    %10s %5d %10s %24.16E   %9.2E %9.2E\n", object, Id, field, m, d, f);
+	return;
 }
 
 
-void process_stats_compare_object(const DifxInput* const D0, const DifxInput* const D1, enum CompareObjectEnum object, int Id)
+void process_stats_compare_object(const DifxInput* const D0, const DifxInput* const D1, enum CompareObjectEnum object, int Id, const int verbose)
 {
 	switch(object)
 	{
@@ -2620,11 +2625,11 @@ void process_stats_compare_object(const DifxInput* const D0, const DifxInput* co
 		break;
 	case COEsource:
 		{
-			DifxSource S0 = D0->source+Id;
-			DifxSource S1 = D1->source+Id;
-			double d, f;
-			d = S0.ra - S1.ra;
-			f = d / (S0.ra + S1.ra) * 2.0;
+			const DifxSource* const S0 = D0->source+Id;
+			const DifxSource* const S1 = D1->source+Id;
+			process_stats_compare_object_item(S0->ra, S1->ra, "source", Id, "RA", "rad", verbose);
+			process_stats_compare_object_item(S0->dec, S1->dec, "source", Id, "Dec", "rad", verbose);
+		}
 		break;
 	case COEantenna:
 		break;
@@ -2766,6 +2771,7 @@ static int compareInputs(const DifxInput* const D0, const DifxInput* const D1, i
 	for(sourceId=0; sourceId < D0->nSource; ++sourceId)
 	{
 		process_stats(Csource+sourceId, "source", sourceId, D0->source[sourceId].name, verbose-1);
+		process_stats_compare_object(D0, D1, COEsource, sourceId, verbose);
 	}
 
 	fputs("#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n", stdout);
