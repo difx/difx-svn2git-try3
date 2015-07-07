@@ -268,7 +268,7 @@ C
 C   Program specifications -
       INTEGER*4 I
       REAL*8 DATMC(2,2), DAXOC(2,2), DIONC(2), SUN(3,2), EARTH(3,3), 
-     .       EPBASE(3,2), SITEA(3,2), STAR(3), SITEP(3,2), SITEV(3,2),
+     .       EPBASE(3,3), SITEA(3,2), STAR(3), SITEP(3,2), SITEV(3,2),
      .       XMOON(3,2), AT, SUNHAT(3), DLPGR
       Real*8 CONDEL(2), CONRAT, delta_t_grav, d_delta_t_grav, 
      .       tg2_tg1, dtg2_tg1, xtg2_tg1, CON_CNTRB(2), CON_PART(2),

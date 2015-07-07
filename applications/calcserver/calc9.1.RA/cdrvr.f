@@ -534,7 +534,7 @@ C     corrections to the J2000.0 site position vectors (SITEP), site velocity
 C     vectors (SITEV), and the J2000.0 baseline position and velocity vectors
 C     (EPBASE).
       CALL SITCR (TIDEP, TIDEV, USITEP, USITEV, XLOADP,
-     .     XLOADV, EPBASE, SITEP, SITEV, POLTDP, POLTDV)
+     .     XLOADV, EPBASE, SITEP, SITEV, SITEA, POLTDP, POLTDV)
       PRINT*, 'JMA SITCR ', SITEP
 C
 C     Call UVG to compute the (U,V) coordinates of the baseline, depending

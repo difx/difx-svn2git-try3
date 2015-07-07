@@ -74,7 +74,7 @@ struct DIFX_DELAY_SERVER_1_station {
                                site_type=="fixed" */
     DIFX_DELAY_SERVER_vec station_pointing_dir;
                             /* A vector describing the pointing direction of
-                               the station at this date.time.  Support for
+                               the station at this date/time.  Support for
                                pointing directions different from source
                                directions is server software dependent (none
                                provide this yet).  This may be a unit vector

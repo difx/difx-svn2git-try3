@@ -1,5 +1,5 @@
       SUBROUTINE SITCR ( TIDEP, TIDEV, USITEP, USITEV, XLOADP, XLOADV,
-     1                    EPBASE, SITEP, SITEV, POLTDP, POLTDV )
+     1                    EPBASE, SITEP, SITEV, SITEA, POLTDP, POLTDV )
       IMPLICIT None
 C
 C 1.    SITCR
@@ -33,9 +33,11 @@ C                               (M)
 C            6. XLOADV(3,2)  -  THE CORRECTIONS TO THE 2000.0 GEOCENTRIC SITE
 C                               VELOCITY VECTORS DUE TO OCEAN LOADING EFFECTS.
 C                               (M/SEC) 
-C            7. POLTDP(3,2)  -  GEOCENTRIC 2000.0 SITE POSITION CORRECTION FOR
+C            7. SITEA(3,2)   -  THE 2000.0 GEOCENTRIC SITE ACCELERATION VECTORS
+C                               *UN*CORRECTED FOR EARTH TIDAL EFFECTS.(M/SEC/SEC) 
+C            8. POLTDP(3,2)  -  GEOCENTRIC 2000.0 SITE POSITION CORRECTION FOR
 C                               THE EFFECTS OF THE POLE TIDE. (METERS) 
-C            8. POLTDV(3,2)  -  GEOCENTRIC 2000.0 SITE VELOCITY CORRECTION FOR 
+C            9. POLTDV(3,2)  -  GEOCENTRIC 2000.0 SITE VELOCITY CORRECTION FOR 
 C                               THE EFFECTS OF THE POLE TIDE. (M/SEC)
 C
 C           OUTPUT VARIABLES: 
@@ -56,7 +58,7 @@ C              2. KSTED  -  THE SITCR UTILITY ROUTINE DEBUG OUTPUT FLAG.
 C 
 C 1.2.3 PROGRAM SPECIFICATIONS -
       Real*8 CSITEP(3,2), CSITEV(3,2), EPBASE(3,3), SITEP(3,2), 
-     1       SITEV(3,2), TIDEP(3,2), TIDEV(3,2), USITEP(3,2), 
+     1       SITEV(3,2),SITEA(3,2), TIDEP(3,2), TIDEV(3,2), USITEP(3,2), 
      2       USITEV(3,2), XLOADP(3,2), XLOADV(3,2), POLTDP(3,2),
      3       POLTDV(3,2), TX(3,2), TV(3,2)
       Integer*4 L
@@ -111,6 +113,7 @@ C
 C   Compute the corrected J2000.0 geocentric baseline vectors.
       CALL VECSB ( SITEP(1,1), SITEP(1,2), EPBASE(1,1) )
       CALL VECSB ( SITEV(1,1), SITEV(1,2), EPBASE(1,2) )
+      CALL VECSB ( SITEA(1,1), SITEA(1,2), EPBASE(1,3) )
 C
 C   Check KSTED for debug output.
       IF ( KSTED .EQ. 0 )  GO TO 500

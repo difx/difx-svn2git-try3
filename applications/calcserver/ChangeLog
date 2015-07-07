@@ -1,3 +1,13 @@
+2015-07-07  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/DiFX_Delay_Server.c:
+	* calc9.1.RA/calcinit.f:
+	* calc9.1.RA/ctheu.f:
+	* calc9.1.RA/csitu.f:
+	* src/CALC_9_1_RA_Server.c:
+	* calc9.1.RA/calcmodl2.f:
+	* calc9.1.RA/cdrvr.f: bugfixes
+
 2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
 
 	* src/DiFX_Delay_Server.c:
