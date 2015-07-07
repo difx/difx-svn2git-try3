@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #**************************************************************************
-#   Copyright (C) 2008-2012, 2015 by Walter Brisken and Helge Rottmann          *
+#   Copyright (C) 2008-2015 by Walter Brisken and Helge Rottmann          *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -30,8 +30,8 @@
 #============================================================================
 
 PROGRAM = 'startdifx'
-VERSION = '2.3.0'
-VERDATE = '20131108'
+VERSION = '2.3.1'
+VERDATE = '20150702'
 AUTHOR  = 'Walter Brisken and Helge Rottmann'
 
 defaultgroup = "224.2.2.1"
@@ -104,21 +104,21 @@ class Parser:
 		self.tag = tag
 		self.tmp = ''
 		if tag == 'difxStatus':
-				self.ok = True
+			self.ok = True
 
 	def end(self, tag):
 		if tag == 'message' and self.ok:
-		self.message = self.tmp
-	elif tag == 'state':
-		self.state = self.tmp
-	elif tag == 'visibilityMJD':
-		self.mjd = float(self.tmp)
-	elif tag == 'from':
-		self.unit = lower(self.tmp)
-	elif tag == 'identifier':
-		self.id = self.tmp
-	elif tag == 'mpiProcessId':
-		self.mpiId = int(self.tmp)
+			self.message = self.tmp
+		elif tag == 'state':
+			self.state = self.tmp
+		elif tag == 'visibilityMJD':
+			self.mjd = float(self.tmp)
+		elif tag == 'from':
+			self.unit = lower(self.tmp)
+		elif tag == 'identifier':
+			self.id = self.tmp
+		elif tag == 'mpiProcessId':
+			self.mpiId = int(self.tmp)
 
 	def data(self, data):
 		if self.tag == 'message':
@@ -127,10 +127,10 @@ class Parser:
 			self.tmp = data
 
 	def getInfo(self):
-	if self.ok:
+		if self.ok:
 			return 'MPI[%2d] %-9s %-12s %-7s %s' % (self.mpiId, self.unit, self.id, self.state, self.message)
-	else:
-		return ''
+		else:
+			return ''
 
 def watchJob(jobId):
 	
@@ -160,29 +160,85 @@ def watchJob(jobId):
 			try:
 				message = s.recv(1500)
 				if len(message) > 0 and message[0] == '<':
-				p = Parser()
-				p.feed(message)
-				info = p.getInfo()
-				p.close()
-				now = time()
+					p = Parser()
+					p.feed(message)
+					info = p.getInfo()
+					p.close()
+					now = time()
 	#			print now
-				if p.ok and p.id == jobId:
-					if p.state == 'Running':
-						if verbose > 0:
-							stdout.write('.')
-							stdout.flush()
-					else:
-						if verbose > 0:
-							stdout.write("<%s>" % p.state)
-							stdout.flush()
-					if p.state == 'MpiDone' or p.state == 'Crashed':
-						return
+					if p.ok and p.id == jobId:
+						if p.state == 'Running':
+							if verbose > 0:
+								stdout.write('.')
+								stdout.flush()
+						else:
+							if verbose > 0:
+								stdout.write("<%s>" % p.state)
+								stdout.flush()
+						if p.state == 'MpiDone' or p.state == 'Crashed':
+							return
+			except socket.timeout:
+				pass
+	except KeyboardInterrupt:
+		pass
+	
+	if verbose > 1:
+			print 'Watching %s:' % jobId
+
+	port = getenv('DIFX_MESSAGE_PORT')
+	if port == None:
+			print 'DIFX_MESSAGE_PORT needs to be defined'
+			exit(0)
+	else:
+			port = int(port)
+	group = getenv('DIFX_MESSAGE_GROUP')
+	if group == None:
+			print 'DIFX_MESSAGE_GROUP needs to be defined'
+			exit(0)
+
+	# FIXME: eventually migrate to IPv6 compliant multicast receive
+	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	s.bind(('', port))
+	mreq = struct.pack("4sl", socket.inet_aton(group), socket.INADDR_ANY)
+	s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+	try:
+		while 1:
+			try:
+				message = s.recv(1500)
+				if len(message) > 0 and message[0] == '<':
+					p = Parser()
+					p.feed(message)
+					info = p.getInfo()
+					p.close()
+					now = time()
+					#			print now
+					if p.ok and p.id == jobId:
+						if p.state == 'Running':
+							if verbose > 0:
+								stdout.write('.')
+								stdout.flush()
+						else:
+							if verbose > 0:
+								stdout.write("<%s>" % p.state)
+								stdout.flush()
+						if p.state == 'MpiDone' or p.state == 'Crashed':
+							return
 			except socket.timeout:
 				pass
 	except KeyboardInterrupt:
 		pass
 
 
+def updateMpiOptions():
+	global mpiOptions
+	opt = getenv('DIFX_MPIRUNOPTIONS')
+	if opt is not None:
+		mpiOptions = opt
+
+
+	
 def updateEnvironment(filename):
 	
 	savedEnvironment = []
@@ -480,13 +536,13 @@ def runMessage(fileBase, machinesPolicy, deletePolicy, makeModel, override, useL
 	if not isfile(fileBase+'.im'):
 		if makeModel and isfile(fileBase+'.calc'):
 			calcOptions = ""
-						if override:
-								calcOptions += "--override-version "
+			if override:
+				calcOptions += "--override-version "
 
-						for i in range(verbose):
-								calcOptions += "-v "
+			for i in range(verbose):
+				calcOptions += "-v "
 
-						system('%s %s %s.calc' % (calcif, calcOptions, fileBase))
+			system('%s %s %s.calc' % (calcif, calcOptions, fileBase))
 	
 		else:
 			return 'Error: model not available for %s' % fileBase
@@ -551,7 +607,7 @@ def runDirect(fileBase, machinesPolicy, deletePolicy, makeModel, override, useLo
 			system('rm -rf %s.difx' % fileBase)
 		else:
 			print 'Warning: output file %s.difx exists' % fileBase
-						return
+			return
 	
 	np = doMachines(fileBase, machinesPolicy, machinesCache)
 	if np <= 0:
@@ -618,6 +674,7 @@ restartSeconds = 0.0
 fileBaseList = []
 cwd = getcwd()
 machinesCache = ['','',['Nothing to see here']]
+updateMpiOptions()
 
 signal.signal(signal.SIGINT, handler)
 
@@ -661,30 +718,30 @@ fb = None
 for a in args[start:]:
 	# check for extension
 	if a[-6:] == '.input':
-				fb = a[:-6]
+		fb = a[:-6]
 	elif a[-8:] == '.joblist':
-				d = open(a).readlines()
-				for l in d:
-						parts = l.split()
-						if len(parts) == 0:
-								job = strip(l)
-						else:
-								job = strip(parts[0])
+		d = open(a).readlines()
+		for l in d:
+			parts = l.split()
+			if len(parts) == 0:
+				job = strip(l)
+			else:
+				job = strip(parts[0])
 
-						if job.startswith("#") or job.startswith("exper"):
-								continue
-						if parts[0] == '/':
-								fileBaseList.append(parts[0])
-						else:
-								fileBaseList.append(cwd + '/' + parts[0])
-		else:
-				fb = a
+			if job.startswith("#") or job.startswith("exper"):
+				continue
+			if parts[0] == '/':
+				fileBaseList.append(parts[0])
+			else:
+				fileBaseList.append(cwd + '/' + parts[0])
+	else:
+		fb = a
 
 	if fb != None:
-			if fb[0] == '/':
-				fileBaseList.append(a)
-			else:
-				fileBaseList.append(cwd + '/' + fb)
+		if fb[0] == '/':
+			fileBaseList.append(a)
+		else:
+			fileBaseList.append(cwd + '/' + fb)
 	
 # verify that joblist is not empty
 if len(fileBaseList) < 1:

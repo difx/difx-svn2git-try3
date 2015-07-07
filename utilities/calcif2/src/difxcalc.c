@@ -326,6 +326,23 @@ static int convert_RA_Dec_PM_to_vector(const double RA, const double Dec, const 
         /* no proper motion */
         difx_RADec_to_Cartesian(RA, Dec, r, pos);
         vel[2] = vel[1] = vel[0] = 0.0;
+		/* handle reference direction */
+		{
+			double ca, sa;
+			double cd, sd;
+#ifdef _GNU_SOURCE
+			sincos(RA, &sa, &ca);
+			sincos(Dec, &sd, &cd);
+#else
+			sa = sin(RA);
+			ca = cos(RA);
+			sd = sin(Dec);
+			cd = cos(Dec);
+#endif
+			ref_dir[0] = -ca*sd;
+			ref_dir[1] = -sa*sd;
+			ref_dir[2] = cd;
+		}
     }
     else
     {
@@ -536,7 +553,7 @@ static int callCalc(struct getDIFX_DELAY_SERVER_1_arg* const request, struct get
     else if((results->getDIFX_DELAY_SERVER_1_res_u.response.date != request->date)
       || (results->getDIFX_DELAY_SERVER_1_res_u.response.time != request->time))
     {
-        fprintf(stderr, "Error: callCalc: response date does not match request (%d %.16E    %d %.16E)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.date, results->getDIFX_DELAY_SERVER_1_res_u.response.time, request->date, request->time);
+        fprintf(stderr, "Error: callCalc: response date does not match request (%ld %.16E    %ld %.16E)\n", results->getDIFX_DELAY_SERVER_1_res_u.response.date, results->getDIFX_DELAY_SERVER_1_res_u.response.time, request->date, request->time);
         return -4;
     }
     else if((results->getDIFX_DELAY_SERVER_1_res_u.response.Num_Stations != request->Num_Stations)
@@ -1446,12 +1463,12 @@ static int calcSpacecraftAntennaPosition(const DifxInput* const D, struct getDIF
     request->station.station_val[stationIndex].station_pos.x = pos.X;
     request->station.station_val[stationIndex].station_pos.y = pos.Y;
     request->station.station_val[stationIndex].station_pos.z = pos.Z;
-    request->station.station_val[stationIndex].station_vel.x = pos.X;
-    request->station.station_val[stationIndex].station_vel.y = pos.Y;
-    request->station.station_val[stationIndex].station_vel.z = pos.Z;
-    request->station.station_val[stationIndex].station_acc.x = pos.X;
-    request->station.station_val[stationIndex].station_acc.y = pos.Y;
-    request->station.station_val[stationIndex].station_acc.z = pos.Z;
+    request->station.station_val[stationIndex].station_vel.x = pos.dX;
+    request->station.station_val[stationIndex].station_vel.y = pos.dY;
+    request->station.station_val[stationIndex].station_vel.z = pos.dZ;
+    request->station.station_val[stationIndex].station_acc.x = pos.ddX;
+    request->station.station_val[stationIndex].station_acc.y = pos.ddY;
+    request->station.station_val[stationIndex].station_acc.z = pos.ddZ;
         
 
     /* Now work on the pointing axes */
@@ -2695,7 +2712,7 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
 
 
     /* Setup source information */
-    /* TODO: get source as spacecraft soruce instead of spacecraft
+    /* TODO: get source as spacecraft source instead of spacecraft
        antenna */
     difx_strlcpy(sc_request->source.source_val[0].source_name, sc->name, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     sc_request->source.source_val[0].IAU_name[0] = 0;
@@ -2770,7 +2787,11 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
         /* get the predicted delays */
         sc_delay = res->result.result_val[1].delay;
         gs_delay = res->result.result_val[2].delay;
-        sc_gs_delay = sc_delay - gs_delay;
+		/* The delay server provides time relative to station 0, with
+		   negative delays meaning arrving *before* station zero.  We want the
+		   positive delay time of flight from the spacecraft to the station.
+		 */
+        sc_gs_delay = gs_delay - sc_delay;
         if(verbose >= 3)
         {
             fprintf(stderr, "CALCIF2_DEBUG: have loop_count=%d delays [s] sc=%E gs=%E sc_gs=%E\n", loop_count, sc_delay, gs_delay, sc_gs_delay);
@@ -2818,7 +2839,7 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
             DIFX_DELAY_SERVER_vec bV = res->result.result_val[2].baselineV2000;
             if(verbose >= 3)
             {
-                fprintf(stderr, "CALCIF2_DEBUG: Have Spacecraft    Ground  station positions [m] at\n");
+                fprintf(stderr, "CALCIF2_DEBUG: Have Spacecraft     Ground  station positions [m] (J2000 and ITRF2008) at\n");
                 fprintf(stderr, "CALCIF2_DEBUG: X  %15.3f %15.3f\n", sc_pos.x, -bP.x);
                 fprintf(stderr, "CALCIF2_DEBUG: Y  %15.3f %15.3f\n", sc_pos.y, -bP.y);
                 fprintf(stderr, "CALCIF2_DEBUG: Z  %15.3f %15.3f\n", sc_pos.z, -bP.z);
@@ -2862,7 +2883,7 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
             DIFX_DELAY_SERVER_vec gs_pos = sc_request->station.station_val[2].station_pos;
             if(verbose >= 3)
             {
-                fprintf(stderr, "CALCIF2_DEBUG: Have Spacecraft    Ground  station positions [m] at\n");
+                fprintf(stderr, "CALCIF2_DEBUG: Have Spacecraft     Ground  station positions [m] (same coordinate frame) at\n");
                 fprintf(stderr, "CALCIF2_DEBUG: X  %15.3f %15.3f\n", sc_pos.x, gs_pos.x);
                 fprintf(stderr, "CALCIF2_DEBUG: Y  %15.3f %15.3f\n", sc_pos.y, gs_pos.y);
                 fprintf(stderr, "CALCIF2_DEBUG: Z  %15.3f %15.3f\n", sc_pos.z, gs_pos.z);
@@ -2998,7 +3019,7 @@ static int adjustSingleSpacecraftAntennaFrameTime(DifxSpacecraft* const sc, cons
                 fprintf(stderr, "Error: recieved code %d from evaluateDifxSpacecraftAntennaTimeFrameOffset in adjustSingleSpacecraftAntennaFrameTime\n", r);
                 return -1;
             }
-            *frame_time_offset = -Toffset.Delta_t;
+            *frame_time_offset = Toffset.Delta_t;
         }
         return 0;
     case SpacecraftTimeGroundClock:
@@ -3207,13 +3228,13 @@ static int adjustSpacecraftAntennaCalcResults(const DifxScan* const scan, DifxIn
         a_index = (antId+1)*response->Num_Sources;
         for(l=0; l < response->Num_Sources; l++)
         {
-            r = adjustSingleSpacecraftAntennaFrameTime(sc, request->date, request->time, response->result.result_val[a_index+l].delay, &sc_time_frame_delay, verbose);
+            r = adjustSingleSpacecraftAntennaFrameTime(sc, request->date, request->time, -response->result.result_val[a_index+l].delay, &sc_time_frame_delay, verbose);
             if(r < 0)
             {
                 fprintf(stderr, "Error: adjustSingleSpacecraftAntennaFrameTime returned %d\n", r);
                 return -2;
             }
-            response->result.result_val[a_index+l].delay += sc_extra_delay + sc_time_frame_delay;
+            response->result.result_val[a_index+l].delay += sc_extra_delay - sc_time_frame_delay;
         }
     }
     return 0;
@@ -3914,7 +3935,7 @@ static unsigned int scanCalcSetupSingleSource(unsigned int s_index, struct getDI
         request->source.source_val[s_index].source_pointing_reference_dir.z = ref_dir[2];
         point_dir[0] = -pos[0];
         point_dir[1] = -pos[1];
-        point_dir[1] = -pos[2];
+        point_dir[2] = -pos[2];
         difx_normalize_to_unit_vector(point_dir, point_dir);
         request->source.source_val[s_index].source_pointing_dir.x = point_dir[0];
         request->source.source_val[s_index].source_pointing_dir.y = point_dir[1];
