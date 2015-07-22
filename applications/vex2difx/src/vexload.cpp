@@ -295,7 +295,7 @@ double vexDate(char *value)
 			exit(EXIT_FAILURE);
 		}
 
-		mjd = DOYtoMJD( static_cast<int>(floor(years+0.1)), static_cast<int>(floor(days+0.1)) ) + hours/24.0 + minutes/1440.0 + seconds/86400.0;
+		mjd = DOYtoMJD( static_cast<int>(floor(years+0.1)), static_cast<int>(floor(days+0.1)) ) + hours/24.0 + minutes/1440.0 + seconds/SEC_DAY_DBL;
 	}
 
 	return mjd;
@@ -590,7 +590,7 @@ static int getAntennas(VexData *V, Vex *v, const CorrParams &params)
 						break;
 					}
 
-					Interval vsnTimeRange(t1+0.001/86400.0, t2);
+					Interval vsnTimeRange(t1+0.001/SEC_DAY_DBL, t2);
 
 					if(!vsnTimeRange.isCausal())
 					{
@@ -831,7 +831,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 
 			vex_field(T_STATION, p, 2, &link, &name, &value, &units);
 			fvex_double(&value, &units, &startAnt);
-			startAnt = mjd + startAnt/86400.0;	// mjd of antenna start
+			startAnt = mjd + startAnt/SEC_DAY_DBL;	// mjd of antenna start
 			if(startAnt < startScan)
 			{
 				startScan = startAnt;
@@ -839,7 +839,7 @@ static int getScans(VexData *V, Vex *v, const CorrParams &params)
 
 			vex_field(T_STATION, p, 3, &link, &name, &value, &units);
 			fvex_double(&value, &units, &stopAnt);
-			stopAnt = mjd + stopAnt/86400.0;	// mjd of antenna stop
+			stopAnt = mjd + stopAnt/SEC_DAY_DBL;	// mjd of antenna stop
 			if(stopAnt > stopScan)
 			{
 				stopScan = stopAnt;
@@ -1658,7 +1658,7 @@ static int getVSN(VexData *V, Vex *v, const char *station)
 		std::string vsn(p->label);
 		fixOhs(vsn);
 
-		Interval vsnTimeRange(vexDate(p->start)+0.001/86400.0, vexDate(p->stop));
+		Interval vsnTimeRange(vexDate(p->start)+0.001/SEC_DAY_DBL, vexDate(p->stop));
 
 		if(!vsnTimeRange.isCausal())
 		{
@@ -1785,7 +1785,7 @@ static int getEOPs(VexData *V, Vex *v, const CorrParams &params)
 				fvex_double(&value, &units, &y_wobble);
 
 				E = V->newEOP();
-				E->mjd = refEpoch + i*interval/86400.0;
+				E->mjd = refEpoch + i*interval/SEC_DAY_DBL;
 				E->tai_utc = tai_utc;
 				E->ut1_utc = ut1_utc;
 				E->xPole = x_wobble;
@@ -1908,7 +1908,7 @@ static void calculateScanSizes(VexData *V, const CorrParams &P)
 		setup = P.getCorrSetup(scan->corrSetupName);
 		nSubband = mode->subbands.size();
 		nBaseline = scan->stations.size()*(scan->stations.size()+1)/2;
-		V->setScanSize(s, scan->duration()*86400*nBaseline*nSubband*setup->bytesPerSecPerBLPerBand());
+		V->setScanSize(s, scan->duration()*SEC_DAY*nBaseline*nSubband*setup->bytesPerSecPerBLPerBand());
 	}
 }
 

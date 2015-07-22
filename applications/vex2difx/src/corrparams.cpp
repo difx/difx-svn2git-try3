@@ -259,8 +259,17 @@ format_error:
 
 
 
-// Turns a SpacecraftGroundClockBreak string into two MJDs and a clock offset fudge
-// /start@MJD/sync@MJD/clockfudge@sec
+// Turns a SpacecraftGroundClockBreak string into two MJDs,
+// a clock offset fudge, and a possible clock offset polynomial fudge
+// start@MJD/sync@MJD/clockfudge0@sec/clockfudge1@sec_per_sec_1/clockfudge2@sec_per_sec_2/clockfudge3@sec_per_sec_3/clockfudge4@sec_per_sec_4/clockfudge5@sec_per_sec_5
+// The clock fudge terms in the class have units of seconds per second^{N}.
+// In the .v2d file, the fudge terms have units of
+// microseconds per second^{N}.
+// The terms may be provided in any order within the .../.../... construct.
+// Zero or more of the clock terms may be present.  The start MJD indicates
+// the time to create the clock break, and the sync MJD indicates the
+// instant at which the recorder syncs the
+// time between the ground station and the spacecraft.
 // The following formats are allowed for the MJDs:
 // 1. decimal mjd:				   54345.341944
 // 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
@@ -270,7 +279,12 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const std::string &ti
 {
 	bool have_start = false;
 	bool have_sync = false;
-	bool have_fudge = false;
+	bool have_fudge0 = false;
+	bool have_fudge1 = false;
+	bool have_fudge2 = false;
+	bool have_fudge3 = false;
+	bool have_fudge4 = false;
+	bool have_fudge5 = false;
 	bool no_identifiers = false;
 	int pos_count = 0;
 	std::string::size_type at, last, splitat;
@@ -317,13 +331,17 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const std::string &ti
 			}
 			else if(pos_count == 2) {
 				errno = 0;
-				result.clock_break_fudge_seconds = strtod(str,&endptr);
+				result.clock_break_fudge_seconds_0 = strtod(str,&endptr);
 				if((*endptr == 0) && (errno==0)) {}
 				else {
 					goto format_error;
 				}
-				result.clock_break_fudge_seconds *= 1E-6; // convert from \mu s to s
-				have_fudge = true;
+				if(result.clock_break_fudge_order < 0)
+				{
+					result.clock_break_fudge_order = 0;
+				}
+				result.clock_break_fudge_seconds_0 *= 1E-6; // convert from \mu s to s
+				have_fudge0 = true;
 			}
 			else {
 				std::cerr << "Error: too many values in old-style SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
@@ -360,19 +378,113 @@ SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const std::string &ti
 				}
 				have_sync = true;
 			}
-			else if(key == "clockfudge") {
-				if(have_fudge) {
-					std::cerr << "Error: multiple 'fudge' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
+			else if((key == "clockfudge")||(key == "clockfudge0")) {
+				if(have_fudge0) {
+					std::cerr << "Error: multiple 'clockfudge0' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
 					goto format_error;
 				}
 				errno = 0;
-				result.clock_break_fudge_seconds = strtod(value.c_str(),&endptr);
+				result.clock_break_fudge_seconds_0 = strtod(value.c_str(),&endptr);
 				if((*endptr == 0) && (errno==0)) {}
 				else {
 					goto format_error;
 				}
-				result.clock_break_fudge_seconds *= 1E-6; // convert from \mu s to s
-				have_fudge = true;
+				if(result.clock_break_fudge_order < 0)
+				{
+					result.clock_break_fudge_order = 0;
+				}
+				result.clock_break_fudge_seconds_0 *= 1E-6; // convert from \mu s to s
+				have_fudge0 = true;
+			}
+			else if(key == "clockfudge1") {
+				if(have_fudge1) {
+					std::cerr << "Error: multiple 'clockfudge1' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
+					goto format_error;
+				}
+				errno = 0;
+				result.clock_break_fudge_seconds_1 = strtod(value.c_str(),&endptr);
+				if((*endptr == 0) && (errno==0)) {}
+				else {
+					goto format_error;
+				}
+				if(result.clock_break_fudge_order < 1)
+				{
+					result.clock_break_fudge_order = 1;
+				}
+				result.clock_break_fudge_seconds_1 *= 1E-6; // convert from \mu s to s
+				have_fudge1 = true;
+			}
+			else if(key == "clockfudge2") {
+				if(have_fudge2) {
+					std::cerr << "Error: multiple 'clockfudge2' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
+					goto format_error;
+				}
+				errno = 0;
+				result.clock_break_fudge_seconds_2 = strtod(value.c_str(),&endptr);
+				if((*endptr == 0) && (errno==0)) {}
+				else {
+					goto format_error;
+				}
+				if(result.clock_break_fudge_order < 2)
+				{
+					result.clock_break_fudge_order = 2;
+				}
+				result.clock_break_fudge_seconds_2 *= 1E-6; // convert from \mu s to s
+				have_fudge2 = true;
+			}
+			else if(key == "clockfudge3") {
+				if(have_fudge3) {
+					std::cerr << "Error: multiple 'clockfudge3' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
+					goto format_error;
+				}
+				errno = 0;
+				result.clock_break_fudge_seconds_3 = strtod(value.c_str(),&endptr);
+				if((*endptr == 0) && (errno==0)) {}
+				else {
+					goto format_error;
+				}
+				if(result.clock_break_fudge_order < 3)
+				{
+					result.clock_break_fudge_order = 3;
+				}
+				result.clock_break_fudge_seconds_3 *= 1E-6; // convert from \mu s to s
+				have_fudge3 = true;
+			}
+			else if(key == "clockfudge4") {
+				if(have_fudge4) {
+					std::cerr << "Error: multiple 'clockfudge4' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
+					goto format_error;
+				}
+				errno = 0;
+				result.clock_break_fudge_seconds_4 = strtod(value.c_str(),&endptr);
+				if((*endptr == 0) && (errno==0)) {}
+				else {
+					goto format_error;
+				}
+				if(result.clock_break_fudge_order < 4)
+				{
+					result.clock_break_fudge_order = 4;
+				}
+				result.clock_break_fudge_seconds_4 *= 1E-6; // convert from \mu s to s
+				have_fudge4 = true;
+			}
+			else if(key == "clockfudge5") {
+				if(have_fudge5) {
+					std::cerr << "Error: multiple 'clockfudge5' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
+					goto format_error;
+				}
+				errno = 0;
+				result.clock_break_fudge_seconds_5 = strtod(value.c_str(),&endptr);
+				if((*endptr == 0) && (errno==0)) {}
+				else {
+					goto format_error;
+				}
+				if(result.clock_break_fudge_order < 5)
+				{
+					result.clock_break_fudge_order = 5;
+				}
+				result.clock_break_fudge_seconds_5 *= 1E-6; // convert from \mu s to s
+				have_fudge5 = true;
 			}
 			else {
 				std::cerr << "Error: unrecognized SC_GS_clock_break sub-key '" << key << "' in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
@@ -397,7 +509,13 @@ format_error:
 	std::cerr << std::endl;
 	std::cerr << "Error: SC_GS_clock_break entry '" << timeStr << "' not parsable." << std::endl;
 	std::cerr << std::endl;
-	std::cerr << "SC_GS_clock_break should be given as start@MJD/sync@MJD/clockfudge@SS.SSS" << std::endl;
+	std::cerr << "SC_GS_clock_break should be given as start@MJD/sync@MJD/clockfudge0@sec/clockfudge1@sec_per_sec_1/clockfudge2@sec_per_sec_2/clockfudge3@sec_per_sec_3/clockfudge4@sec_per_sec_4/clockfudge5@sec_per_sec_5\n"
+"In the .v2d file, the clock fudge polynomial terms have units of\n"
+"microseconds per second^{N}.\n"
+"The SC_GS_clock_break terms may be provided in any order within the .../.../... construct.\n"
+"Zero  or more of the clock fudge polynomial terms may be present.\n"
+"The start MJD indicates the time to create the clock break,\n"
+"and the sync MJD indicates the zero point for the fudge series." << std::endl;
 	std::cerr << std::endl;
 	std::cerr << "Allowable MJD date formats are:" << std::endl;
 	std::cerr << "1. Straight MJD		 54345.341944" << std::endl;
@@ -405,7 +523,7 @@ format_error:
 	std::cerr << "3. VLBA-like format	 2009SEP02-08:12:24" << std::endl;
 	std::cerr << "4. ISO 8601 format	 2009-09-02T08:12:24" << std::endl;
 	std::cerr << std::endl;
-	std::cerr << "Clock fudge should be specified as a floating point value such as:" << std::endl;
+	std::cerr << "Clock fudge polynomial terms should be specified as a floating point value such as:" << std::endl;
 	std::cerr << "1" << std::endl;
 	std::cerr << "1.2" << std::endl;
 	std::cerr << "1.2E3" << std::endl;
@@ -2165,8 +2283,8 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "SC_time_type")
 	{
-		ss >> spacecraft_time_type;
-		if(stringToSpacecraftTimeType(spacecraft_time_type.c_str()) == SpacecraftTimeOther)
+		spacecraft_time_type = stringToSpacecraftTimeType(value.c_str());
+		if(spacecraft_time_type == SpacecraftTimeOther)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has unrecognized SC_time_type value" << std::endl;
 			nWarn++;
@@ -2262,7 +2380,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			nWarn++;
 		}
 		ss >> GS_dX;
-		GS_dX /= 365.25*86400.0; // convert from m/yr to m/s
+		GS_dX /= 365.25*SEC_DAY_DBL; // convert from m/yr to m/s
 		GS_exists = true;
 	}
 	else if(key == "GS_dY" || key == "GS_dy")
@@ -2273,7 +2391,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			nWarn++;
 		}
 		ss >> GS_dY;
-		GS_dY /= 365.25*86400.0; // convert from m/yr to m/s
+		GS_dY /= 365.25*SEC_DAY_DBL; // convert from m/yr to m/s
 		GS_exists = true;
 	}
 	else if(key == "GS_dZ" || key == "GS_dz")
@@ -2284,7 +2402,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			nWarn++;
 		}
 		ss >> GS_dZ;
-		GS_dZ /= 365.25*86400.0; // convert from m/yr to m/s
+		GS_dZ /= 365.25*SEC_DAY_DBL; // convert from m/yr to m/s
 		GS_exists = true;
 	}
 	else if(key == "GS_pos_epoch")

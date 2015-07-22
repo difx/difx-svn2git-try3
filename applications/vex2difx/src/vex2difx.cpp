@@ -2013,7 +2013,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 		scan->mjdStart = scanInterval.mjdStart;
 		scan->mjdEnd = scanInterval.mjdStop;
-		scan->startSeconds = static_cast<int>((scanInterval.mjdStart - J.mjdStart)*86400.0 + 0.01);
+		scan->startSeconds = static_cast<int>((scanInterval.mjdStart - J.mjdStart)*SEC_DAY_DBL + 0.01);
 		scan->durSeconds = static_cast<int>(scanInterval.duration_seconds() + 0.01);
 		if(scan->durSeconds == 0)
 		{
@@ -2378,7 +2378,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 		int mjdint, n0, nPoint, v;
 		double mjd0;
 		double max_speed = 0.0; // for spacecraft antennas
-		static const double deltat_2min = 120.0/86400.0; // two minutes as a fraction of a day
+		static const double deltat_2min = 120.0/SEC_DAY_DBL; // two minutes as a fraction of a day
 
 		D->spacecraft = newDifxSpacecraftArray(spacecraftSet.size());
 		D->nSpacecraft = spacecraftSet.size();
@@ -2639,7 +2639,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			} // if phaseCentre
 			else if((antennaSetup = P->getAntennaSetupExact(*s)))
 			{
-				// give the spacecraft table the right name so it can be linked to the source
+				// give the spacecraft table the right name so it can be linked to the antenna
 				if(!antennaSetup->sc_difxname.empty())
 				{
 					snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->sc_difxname.c_str());
@@ -2671,11 +2671,12 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				}
 
 				ds->is_antenna = true;
-				ds->spacecraft_time_type = stringToSpacecraftTimeType(antennaSetup->spacecraft_time_type.c_str());
+				ds->spacecraft_time_type = antennaSetup->spacecraft_time_type;
 				ds->SC_recording_delay = antennaSetup->SC_recording_delay;
 				ds->SC_Comm_Rec_to_Elec = antennaSetup->SC_Comm_Rec_to_Elec;
 				ds->SC_Elec_to_Comm = antennaSetup->SC_Elec_to_Comm;
 				ds->GS_exists = antennaSetup->GS_exists;
+				ds->GS_clock_break_fudge_sec = 0.0;
 				if(ds->GS_exists)
 				{
 					if(antennaSetup->GS_difxName.size() > 0)
@@ -2712,13 +2713,25 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 						double mjd_break_start = it->mjd_start + it->day_fraction_start;
 						if(mjd_break_start < J.mjdStop - 0.5/SEC_DAY_DBL)
 						{
-							if(it->mjd_sync + it->day_fraction_sync + (it->clock_break_fudge_seconds /86400.0) > ds->GS_mjd_sync + ds->GS_dayfraction_sync)
+							double check = (it->mjd_sync - ds->GS_mjd_sync) + (it->day_fraction_sync - ds->GS_dayfraction_sync);
+							if((ds->spacecraft_time_type == SpacecraftTimeGroundReception)
+							  || (ds->spacecraft_time_type == SpacecraftTimeGroundClock)
+							  || (ds->spacecraft_time_type == SpacecraftTimeGroundClockReception))
+							{
+								check += it->clock_break_fudge_seconds_0 /SEC_DAY_DBL;
+							}
+							if(check > 0.0)
 							{
 								ds->GS_mjd_sync = it->mjd_sync;
 								ds->GS_dayfraction_sync = it->day_fraction_sync;
-								ds->GS_clock_break_fudge_sec = it->clock_break_fudge_seconds;
+								if((ds->spacecraft_time_type == SpacecraftTimeGroundReception)
+								  || (ds->spacecraft_time_type == SpacecraftTimeGroundClock)
+								  || (ds->spacecraft_time_type == SpacecraftTimeGroundClockReception))
+								{
+									ds->GS_clock_break_fudge_sec = it->clock_break_fudge_seconds_0;
+								}
 								// correct sync time
-								ds->GS_dayfraction_sync += ds->GS_clock_break_fudge_sec /86400.0;
+								ds->GS_dayfraction_sync += ds->GS_clock_break_fudge_sec /SEC_DAY_DBL;
 								if(ds->GS_dayfraction_sync >= 1.0)
 								{
 									ds->GS_dayfraction_sync -= 1.0;
@@ -2758,6 +2771,34 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					ds->GS_dayfraction_sync = 0.0;
 					ds->GS_clock_break_fudge_sec = 0.0;
 				}
+				// Check for clock fudge information in the
+				// antennaSetup->spacecraft_ground_clock_recording_breaks
+				for(std::vector<SpacecraftGroundClockBreak>::const_iterator it = antennaSetup->spacecraft_ground_clock_recording_breaks.begin(); it != antennaSetup->spacecraft_ground_clock_recording_breaks.end(); ++it)
+				{
+					double mjd_break_start = it->mjd_start + it->day_fraction_start;
+					if(mjd_break_start < J.mjdStop - 0.5/SEC_DAY_DBL)
+					{
+						// Set up the spacecraft clock order offset info
+						ds->SC_clock_offset_order = it->clock_break_fudge_order;
+						switch(ds->SC_clock_offset_order) {
+						case 5: ds->SC_clock_offset[5] = it->clock_break_fudge_seconds_5*1.0e6; // convert to us/sec^5 from sec/sec^5
+						case 4: ds->SC_clock_offset[4] = it->clock_break_fudge_seconds_4*1.0e6; // convert to us/sec^5 from sec/sec^4
+						case 3: ds->SC_clock_offset[3] = it->clock_break_fudge_seconds_3*1.0e6; // convert to us/sec^5 from sec/sec^3
+						case 2: ds->SC_clock_offset[2] = it->clock_break_fudge_seconds_2*1.0e6; // convert to us/sec^5 from sec/sec^2
+						case 1: ds->SC_clock_offset[1] = it->clock_break_fudge_seconds_1*1.0e6; // convert to us/sec^5 from sec/sec^1
+						case 0: ds->SC_clock_offset[0] = it->clock_break_fudge_seconds_0*1.0e6; // convert to us/sec^5 from sec/sec^0
+							if(ds->spacecraft_time_type != SpacecraftTimeLocal)
+							{
+								ds->SC_clock_offset[0] = 0.0;
+							}
+						case -1: // no clock offset information is ok
+							break;
+						default: cerr << "Crazy spacecraft clock fudge offset order " << ds->SC_clock_offset_order << " for antenna " << antennaSetup->difxName << " (" << antennaSetup->vexName << " with SpacecraftGroundClockBreak starting at MJD=" << it->mjd_start << " day_fraction=" << it->day_fraction_start << " !" << endl;
+							cerr << "Defaulting to no clock fudge offset!" << endl;
+							ds->SC_clock_offset_order = -1;
+						}
+					}
+				}
 				if((stringToSourceCoordinateFrameType(antennaSetup->site_coord_frame.c_str()) == DIFXIO_DEFAULT_STATION_COORDINATE_FRAME) &&
 				   (stringToSourceCoordinateFrameType(antennaSetup->spacecraft_pointing_coord_frame.c_str()) == SourceCoordinateFrameJ2000_Earth))
 				{
@@ -2783,7 +2824,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					break;
 				default: cerr << "Crazy spacecraft position offset order " << ds->SC_pos_offsetorder << " for antenna " << antennaSetup->difxName << " (" << antennaSetup->vexName << "!" << endl;
 					cerr << "Defaulting to no position offset!" << endl;
-					ds->SC_pos_offsetorder = 0;
+					ds->SC_pos_offsetorder = -1;
 				}
 							
 				ds->SC_pos_offset_refmjd = antennaSetup->SC_pos_offset_refmjd;
@@ -2897,6 +2938,10 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 					for(int ii=0; ii < ds->SC_pos_offsetorder+1; ii++) {
 						cout << "  SC_pos_offset" << ii << " = " << ds->SC_pos_offset[ii].X << ',' << ds->SC_pos_offset[ii].Y << ',' << ds->SC_pos_offset[ii].Z << endl;
 					}
+					cout << "  SC_clock_offset_order = " << ds->SC_clock_offset_order;
+					for(int ii=0; ii < ds->SC_clock_offset_order+1; ii++) {
+						cout << "  SC_clock_offset" << ii << " = " << ds->SC_clock_offset << endl;
+					}
 					cout << "  ephemClockError = " << antennaSetup->ephemClockError << endl;
 					cout << "  calc_own_retardation = " << antennaSetup->calculate_own_retarded_position << endl;
 				}
@@ -2995,6 +3040,23 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 						{
 							D->antenna[a].spacecraftId = sc;
 							spacecraft_found = true;
+							// handle clock fudge offsets
+							switch(D->spacecraft[sc].SC_clock_offset_order) {
+							case 5: D->antenna[a].clockcoeff[5] += D->spacecraft[sc].SC_clock_offset[5];
+							case 4: D->antenna[a].clockcoeff[4] += D->spacecraft[sc].SC_clock_offset[4];
+							case 3: D->antenna[a].clockcoeff[3] += D->spacecraft[sc].SC_clock_offset[3];
+							case 2: D->antenna[a].clockcoeff[2] += D->spacecraft[sc].SC_clock_offset[2];
+							case 1: D->antenna[a].clockcoeff[1] += D->spacecraft[sc].SC_clock_offset[1];
+							case 0: D->antenna[a].clockcoeff[0] += D->spacecraft[sc].SC_clock_offset[0];
+							case -1: // means no clock fudge offset present
+								break;
+							default: cerr << "Crazy clock fudge offset " << D->spacecraft[sc].SC_clock_offset_order << "!" << endl;
+							}
+							if(D->spacecraft[sc].SC_clock_offset_order > D->antenna[a].clockorder)
+							{
+								D->antenna[a].clockorder = D->spacecraft[sc].SC_clock_offset_order;
+							}
+								
 								
 							break;
 						}
@@ -3009,6 +3071,22 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 								D->antenna[a].spacecraftId = sc;
 								cerr << "Found match at antenna " << D->antenna[a].name << endl;
 								spacecraft_found = true;
+								// handle clock fudge offsets
+								switch(D->spacecraft[sc].SC_clock_offset_order) {
+								case 5: D->antenna[a].clockcoeff[5] += D->spacecraft[sc].SC_clock_offset[5];
+								case 4: D->antenna[a].clockcoeff[4] += D->spacecraft[sc].SC_clock_offset[4];
+								case 3: D->antenna[a].clockcoeff[3] += D->spacecraft[sc].SC_clock_offset[3];
+								case 2: D->antenna[a].clockcoeff[2] += D->spacecraft[sc].SC_clock_offset[2];
+								case 1: D->antenna[a].clockcoeff[1] += D->spacecraft[sc].SC_clock_offset[1];
+								case 0: D->antenna[a].clockcoeff[0] += D->spacecraft[sc].SC_clock_offset[0];
+								case -1: // means no clock fudge offset present
+									break;
+								default: cerr << "Crazy clock fudge offset " << D->spacecraft[sc].SC_clock_offset_order << "!" << endl;
+								}
+								if(D->spacecraft[sc].SC_clock_offset_order > D->antenna[a].clockorder)
+								{
+									D->antenna[a].clockorder = D->spacecraft[sc].SC_clock_offset_order;
+								}
 								
 								break;
 							}

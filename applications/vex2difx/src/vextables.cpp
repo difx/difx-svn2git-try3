@@ -1136,7 +1136,7 @@ int VexJob::generateFlagFile(const VexData &V, const char *fileName, unsigned in
 		}
 		else if(e->eventType == VexEvent::JOB_START)
 		{
-			if(fabs(e->mjd - mjdStart) < 0.5/86400.0)
+			if(fabs(e->mjd - mjdStart) < 0.5/SEC_DAY_DBL)
 			{
 				for(std::map<std::string,std::string>::const_iterator a = vsns.begin(); a != vsns.end(); ++a)
 				{
@@ -1146,7 +1146,7 @@ int VexJob::generateFlagFile(const VexData &V, const char *fileName, unsigned in
 		}
 		else if(e->eventType == VexEvent::JOB_STOP)
 		{
-			if(fabs(e->mjd - mjdStart) < 0.5/86400.0)
+			if(fabs(e->mjd - mjdStart) < 0.5/SEC_DAY_DBL)
 			{
 				for(std::map<std::string,std::string>::const_iterator a = vsns.begin(); a != vsns.end(); ++a)
 				{
@@ -1161,7 +1161,7 @@ int VexJob::generateFlagFile(const VexData &V, const char *fileName, unsigned in
 			{
 				if(flagStart[antId] > 0)
 				{
-					if(e->mjd - flagStart[antId] > 0.5/86400.0)
+					if(e->mjd - flagStart[antId] > 0.5/SEC_DAY_DBL)
 					{
 						VexJobFlag f(flagStart[antId], e->mjd, antId);
 						// only add flag if it overlaps in time with this job
@@ -1188,7 +1188,7 @@ int VexJob::generateFlagFile(const VexData &V, const char *fileName, unsigned in
 	{
 		if( (flagMask[antId] & invalidMask) != 0)
 		{
-			if(mjdStop - flagStart[antId] > 0.5/86400.0)
+			if(mjdStop - flagStart[antId] > 0.5/SEC_DAY_DBL)
 			{
 				VexJobFlag f(flagStart[antId], mjdStop, antId);
 				// only add flag if it overlaps in time with this job
@@ -2020,7 +2020,7 @@ std::ostream& operator << (std::ostream &os, const VexEvent &x)
 	int d, s;
 
 	d = static_cast<int>(x.mjd);
-	s = static_cast<int>((x.mjd - d)*86400.0 + 0.5);
+	s = static_cast<int>((x.mjd - d)*SEC_DAY_DBL + 0.5);
 
 	os << "mjd=" << d << " sec=" << s << " : " << VexEvent::eventName[x.eventType] << " " << x.name;
 

@@ -41,7 +41,7 @@ bool areScansCompatible(const VexScan *A, const VexScan *B, const CorrParams *P)
 	{
 		return false;
 	}
-	if(A->overlap(*B) >= -0.1/86400.0)
+	if(A->overlap(*B) >= -0.1/SEC_DAY_DBL)
 	{
 		return false;
 	}
@@ -313,7 +313,7 @@ static void genJobs(std::vector<VexJob> &Js, const VexJobGroup &JG, VexData *V, 
 		}
 		else
 		{
-			std::cerr << "Warning: skipping short job of " << (jobTimeRange.duration()*86400.0) << " seconds duration." << std::endl;
+			std::cerr << "Warning: skipping short job of " << (jobTimeRange.duration()*SEC_DAY_DBL) << " seconds duration." << std::endl;
 		}
 		start = *t;
 	}

@@ -172,18 +172,40 @@ public:
 			: mjd_start(-1), mjd_sync(-1),
 			  day_fraction_start(-1.0),
 			  day_fraction_sync(-1.0),
-			  clock_break_fudge_seconds(0.0) {}
+			  clock_break_fudge_order(-1),
+			  clock_break_fudge_seconds_0(0.0),
+			  clock_break_fudge_seconds_1(0.0),
+			  clock_break_fudge_seconds_2(0.0),
+			  clock_break_fudge_seconds_3(0.0),
+			  clock_break_fudge_seconds_4(0.0),
+			  clock_break_fudge_seconds_5(0.0)
+	{}
 	SpacecraftGroundClockBreak(int mjd_start_, double day_fraction_start_,
 							   int mjd_sync_, double day_fraction_sync_,
-							   double clock_break_fudge_seconds_)
-			: mjd_start(mjd_start_), mjd_sync(mjd_sync_),
-			  day_fraction_start(day_fraction_start_),
-			  day_fraction_sync(day_fraction_sync_),
-			  clock_break_fudge_seconds(clock_break_fudge_seconds_) {}
+	                           int clock_break_fudge_order_,
+	                           double clock_break_fudge_seconds_0_,
+	                           double clock_break_fudge_seconds_1_,
+	                           double clock_break_fudge_seconds_2_,
+	                           double clock_break_fudge_seconds_3_,
+	                           double clock_break_fudge_seconds_4_,
+	                           double clock_break_fudge_seconds_5_)
+	: mjd_start(mjd_start_), mjd_sync(mjd_sync_),
+		day_fraction_start(day_fraction_start_),
+		day_fraction_sync(day_fraction_sync_),
+		clock_break_fudge_order(clock_break_fudge_order_),
+		clock_break_fudge_seconds_0(clock_break_fudge_seconds_0_),
+		clock_break_fudge_seconds_1(clock_break_fudge_seconds_1_),
+		clock_break_fudge_seconds_2(clock_break_fudge_seconds_2_),
+		clock_break_fudge_seconds_3(clock_break_fudge_seconds_3_),
+		clock_break_fudge_seconds_4(clock_break_fudge_seconds_4_),
+		clock_break_fudge_seconds_5(clock_break_fudge_seconds_5_)
+	{}
 
 	int mjd_start, mjd_sync;
 	double day_fraction_start, day_fraction_sync;
-	double clock_break_fudge_seconds;
+	int clock_break_fudge_order;       // Order of clock poly (if fudging)
+	double clock_break_fudge_seconds_0;// Clock offset, in s  (if fudging)
+	double clock_break_fudge_seconds_1, clock_break_fudge_seconds_2, clock_break_fudge_seconds_3, clock_break_fudge_seconds_4, clock_break_fudge_seconds_5;	   // Clock coefficients (if fudging, in s/s^{N})
 };
 
 class GlobalZoom
@@ -262,7 +284,9 @@ public:
 	double ephemClockError;	// (sec) 0.0 is no error
 	// This is the clock error in the ephemeris
 	// providing the position of the spacecraft
-	std::string spacecraft_time_type; // type of spacecraft clock
+	enum SpacecraftTimeType spacecraft_time_type; // type of spacecraft clock
+	// See difx_input.h for enum values and descriptions.  In the .v2d file,
+	// the allowed values are:
 	//	   "Local" onboard maser gives timestamp
 	//	   "GroundReception" the spacecraft has an
 	//		   onboard maser to drive the sampler,
@@ -272,6 +296,16 @@ public:
 	//	   "GroundClock" the spacecraft sampler is
 	//		   driven by a continuous clock signal
 	//		   transmitted from the ground station.
+	//     "GroundClockReception"  The ground station sends a
+	// 		   continuous clock signal to the
+	// 		   spacecraft, which is used to
+	// 		   set the sampling rate.  The
+	// 		   absolute clock offset is
+	// 		   determined by the reception of
+	// 		   the communications transmission
+	// 		   to the ground and the arrival
+	// 		   at some specified instant at the
+	// 		   ground station.
 	std::string spacecraft_pointing_coord_frame; // Coordinate frame
                            	// See difx_input.h and difx_source.c
                          	// for allowed values of
@@ -281,20 +315,31 @@ public:
 	//		"GroundReception" time type for
 	//		the spacecraft timekeeping.	 This should
 	//		be a string of the form
-	//		start@YYYYyDDDdHHhMMmSS.SSSSSSs/sync@YYYYyDDDdHHhMMmSS.SSSSSSs/clockfudge@SS.SSSSSSSSS
+	//		start@YYYYyDDDdHHhMMmSS.SSSSSSs/sync@YYYYyDDDdHHhMMmSS.SSSSSSs/clockfudge0@uS.SSSSSSSSS/clockfudge1@uS.SSSSSSSSS/clockfudge2@uS.SSSSSSSSS/clockfudge3@uS.SSSSSSSSS/clockfudge4@uS.SSSSSSSSS/clockfudge5@uS.SSSSSSSSS
 	//		such as
-	//		start@2011y335d15h30m00s/sync@2011y335d15h30m00s/clockfudge@0.0E0
-	//		The first time part gives the start time
+	//		start@2011y335d15h30m00s/sync@2011y335d15h30m00s/clockfudge0@0.0E0
+	//		The first date part (start) gives the start time
 	//		for which the new clock information is
-	//		valid.	The second time part gives the
+	//		valid.	The second date part (sync) gives the
 	//		instant at which the recorder syncs the
 	//		time between the ground station and
-	//		the spacecraft.	 The third part gives
-	//		an additional ground station recording
-	//		time offset between the actual recording
+	//		the spacecraft.	 The clock polynomial terms give
+	//      an additional clock polynomial offset to use.
+	//      For SpacecraftTimeLocal
+	//          the polynomial applies to the spacecraft clock
+	//      SpacecraftTimeGroundReception
+	//          the polynomial 0 term applies to the ground clock,
+	//          and higher order terms apply to the spacecraft clock
+	//      SpacecraftTimeGroundClock and
+	//      SpacecraftTimeGroundClockReception
+	//          the polynomial terms apply to the ground clock
+	//		The polynomial clock terms are
+	//      an additional time offset between the actual recording
 	//		time and the indicated time (extra
 	//		seconds that the indicated time is late)
-	//		in units of seconds.
+	//		in units of seconds per second^{N} inside of this program, but are
+	//      supplied in units of microseconds per second^{N} in the
+	//      .v2d file.
 	double SC_recording_delay; // This is the time between reception of the
 	                           // wavefront at the astronomical antenna
 	                           // phase center and the
