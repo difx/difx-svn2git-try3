@@ -976,6 +976,12 @@ typedef struct
     simple3Vector SC_pos_offset[MAX_MODEL_ORDER+1]; /* spacecraft
                                                        position offset polynomial information, as
                                                        m, m/s, m/s^2, ... */
+	int SC_clock_offset_order; /* polynomial order of SC_clock_offset,
+								  with value -1 indicating no offsets are
+								  to be applied */
+    double SC_clock_offset[MAX_MODEL_ORDER+1];
+                        /* clock polynomial offset (fudge) coefficients
+						   (us, us/s, us/s^2... */
     int calculate_own_retarded_position;
                         /* If 0, let the spacecraft software calculate its
                            own time retardation for spacecraft.

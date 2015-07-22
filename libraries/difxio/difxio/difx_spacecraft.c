@@ -109,6 +109,7 @@ DifxSpacecraft *newDifxSpacecraftArray(int nSpacecraft)
 		ds[s].GS_mount = AntennaMountOther;
 		ds[s].GS_clockorder = -1;
 		ds[s].SC_pos_offsetorder = -1;
+		ds[s].SC_clock_offset_order = -1;
 	}
 
 		

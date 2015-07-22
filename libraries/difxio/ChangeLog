@@ -1,3 +1,8 @@
+2015-07-22  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_input.h: Enable higher order spacecraft clock offset terms
+
 2015-07-07  James Anderson  <anderson@gfz-potsdam.de>
 
 	* difxio/difx_input.c:
