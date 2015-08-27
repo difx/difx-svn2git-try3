@@ -247,43 +247,29 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
         }
 
         if (isfft) {
-          status = vectorInitFFTC_cf32(&pFFTSpecC, order, flag, hint);
+          status = vectorInitFFTC_cf32(&pFFTSpecC, order, flag, hint, &fftbuffersize, &fftbuffer);
           if (status != vecNoErr)
             csevere << startl << "Error in FFT initialisation!!!" << status << endl;
-          status = vectorGetFFTBufSizeC_cf32(pFFTSpecC, &fftbuffersize);
-          if (status != vecNoErr)
-            csevere << startl << "Error in FFT buffer size calculation!!!" << status << endl;
         }
         else {
-          status = vectorInitDFTC_cf32(&pDFTSpecC, fftchannels, flag, hint);
+          status = vectorInitDFTC_cf32(&pDFTSpecC, fftchannels, flag, hint, &fftbuffersize, &fftbuffer);
           if(status != vecNoErr)
             csevere << startl << "Error in DFT initialisation!!!" << status << endl;
-          status = vectorGetDFTBufSizeC_cf32(pDFTSpecC, &fftbuffersize);
-          if (status != vecNoErr)
-            csevere << startl << "Error in DFT buffer size calculation!!!" << status << endl;
         }
         break;
       case 0: //zeroth order interpolation, can do "post-F"
         if (isfft) {
-          status = vectorInitFFTR_f32(&pFFTSpecR, order, flag, hint);
+          status = vectorInitFFTR_f32(&pFFTSpecR, order, flag, hint, &fftbuffersize, &fftbuffer);
           if (status != vecNoErr)
             csevere << startl << "Error in FFT initialisation!!!" << status << endl;
-          status = vectorGetFFTBufSizeR_f32(pFFTSpecR, &fftbuffersize);
-          if (status != vecNoErr)
-            csevere << startl << "Error in FFT buffer size calculation!!!" << status << endl;
         }
         else {
-          status = vectorInitDFTR_f32(&pDFTSpecR, fftchannels, flag, hint);
+          status = vectorInitDFTR_f32(&pDFTSpecR, fftchannels, flag, hint, &fftbuffersize, &fftbuffer);
           if (status != vecNoErr)
             csevere << startl << "Error in DFT initialisation!!!" << status << endl;
-          status = vectorGetDFTBufSizeR_f32(pDFTSpecR, &fftbuffersize);
-          if (status != vecNoErr)
-            csevere << startl << "Error in DFT buffer size calculation!!!" << status << endl;
         }
         break;
     }
-
-    fftbuffer = vectorAlloc_u8(fftbuffersize);
     estimatedbytes += fftbuffersize;
 
     subfracsamparg = vectorAlloc_f32(arraystridelength);
@@ -508,26 +494,33 @@ Mode::~Mode()
       vectorFree(complexunpacked);
       vectorFree(complexrotator);
       vectorFree(fftd);
-
       if(isfft) {
-        status = vectorFreeFFTC_cf32(pFFTSpecC);
+#warning CJP: Memory Leak need to work out how to do this properly
+	//        status = vectorFreeFFTC_cf32(pFFTSpecC);
+	status = vecNoErr;
         if (status != vecNoErr)
           csevere << startl << "Error in freeing FFT spec!!!" << status << endl;
       }
       else{
-        status = vectorFreeDFTC_cf32(pDFTSpecC);
+#warning CJP: Memory Leak need to work out how to do this properly
+	status = vecNoErr;
+	//        status = vectorFreeDFTC_cf32(pDFTSpecC);
         if (status != vecNoErr)
           csevere << startl << "Error in freeing DFT spec!!!" << status << endl;
       }
       break;
     case 0: //zeroth order interpolation, "post-F"
       if(isfft) {
-        status = vectorFreeFFTR_f32(pFFTSpecR);
+#warning CJP: Memory Leak need to work out how to do this properly
+	status = vecNoErr;
+	//        status = vectorFreeFFTR_f32(pFFTSpecR);
         if (status != vecNoErr)
           csevere << startl << "Error in freeing FFT spec!!!" << status << endl;
       }
       else{
-        status = vectorFreeDFTR_f32(pDFTSpecR);
+#warning CJP: Memory Leak need to work out how to do this properly
+	status = vecNoErr;
+	//        status = vectorFreeDFTR_f32(pDFTSpecR);
         if (status != vecNoErr)
           csevere << startl << "Error in freeing DFT spec!!!" << status << endl;
       }
