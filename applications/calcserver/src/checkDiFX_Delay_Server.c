@@ -237,9 +237,6 @@ int test_CALCServer_mode(CLIENT *cl, const char *host)
     difx_strlcpy(p_request->station.station_val[1].antenna_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     difx_strlcpy(p_request->station.station_val[1].site_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[1].site_ID = station_ID;
-    p_request->station.station_val[1].station_pos.x =  0.000;
-    
-
     p_request->station.station_val[1].station_pos.x =     -1995678.4969;
     p_request->station.station_val[1].station_pos.y =     -5037317.8209;
     p_request->station.station_val[1].station_pos.z =      3357328.0825;
@@ -629,9 +626,6 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
     difx_strlcpy(p_request->station.station_val[1].antenna_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     difx_strlcpy(p_request->station.station_val[1].site_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
     p_request->station.station_val[1].site_ID = station_ID;
-    p_request->station.station_val[1].station_pos.x =  0.000;
-    
-
     p_request->station.station_val[1].station_pos.x =     -1995678.4969;
     p_request->station.station_val[1].station_pos.y =     -5037317.8209;
     p_request->station.station_val[1].station_pos.z =      3357328.0825;
@@ -852,9 +846,6 @@ int test_CALC_9_1_RA_Server_mode(CLIENT *cl, const char *host)
         difx_strlcpy(p_request->station.station_val[1].antenna_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
         difx_strlcpy(p_request->station.station_val[1].site_name, stnnameb, DIFX_DELAY_SERVER_STATION_STRING_SIZE);
         p_request->station.station_val[1].site_ID = station_ID;
-        p_request->station.station_val[1].station_pos.x =  0.000;
-    
-
         p_request->station.station_val[1].station_pos.x =   3.376890878000000e+07;
         p_request->station.station_val[1].station_pos.y =  -2.575678163900000e+07;
         p_request->station.station_val[1].station_pos.z =   9.492685457100001e+07;

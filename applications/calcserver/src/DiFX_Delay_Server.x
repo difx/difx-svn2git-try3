@@ -767,15 +767,6 @@ struct DIFX_DELAY_SERVER_1_res {
                              */
     long date;              /* DIFX_DELAY_SERVER model date (MJD) */
     double time;            /* DIFX_DELAY_SERVER model time UTC (fraction of day) */
-    unsigned long unix_utc_seconds_0; /* DIFX_DELAY_SERVER UTC Unix timestamp 0 */
-    unsigned long unix_utc_seconds_1; /* DIFX_DELAY_SERVER UTC Unix timestamp 1 */
-    double utc_second_fraction; /* DIFX_DELAY_SERVER fractional second offset
-                                   from the DIFX_DELAY_SERVER UTC Unix
-                                   timestamp.                         */
-                            /* Note that the 64 bit Unix timestamp is made
-                               by (time_t)(((uint64_t)(unix_utc_seconds_1) << 32) | unix_utc_seconds_0)
-                               and utc_second_fraction is a fractional second
-                               with respect to this second.           */
     /*************************************************************************/
     /*** Stations*************************************************************/
     unsigned int Num_Stations; /* The number of stations in this call */
