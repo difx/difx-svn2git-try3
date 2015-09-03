@@ -185,6 +185,7 @@ static DifxJob *makeDifxJob(string directory, const VexJob& J, int nAntenna, con
 	job->taperFunction = TaperFunctionUniform;
 	snprintf(job->delayServerHost, DIFXIO_HOSTNAME_LENGTH, "%s", P->delayServerHost.c_str());
 	job->delayServerType = stringToDelayServerType(P->delayServerType.c_str());
+	job->delayServerHandlerType = stringToDelayServerHandlerType(P->delayServerHandlerType.c_str());
 	job->delayVersion = P->delayVersion;
 	job->delayProgram = P->delayProgram;
 	job->delayHandler = P->delayHandler;

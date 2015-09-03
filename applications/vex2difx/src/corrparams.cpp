@@ -2809,9 +2809,10 @@ void CorrParams::defaults()
 	simFXCORR = false;
 	delayServerHost = "";
 	delayServerType = delayServerTypeNames[DIFXIO_DEFAULT_DELAY_SERVER_TYPE];
+	delayServerHandlerType = delayServerHandlerTypeNames[DIFXIO_DEFAULT_DELAY_SERVER_HANDLER_TYPE];
 	delayVersion = DIFXIO_DEFAULT_DELAY_SERVER_VERSION;
 	delayProgram = delayServerTypeIds[DIFXIO_DEFAULT_DELAY_SERVER_TYPE];
-	delayHandler = DIFXIO_DEFAULT_DELAY_SERVER_HANDLER;
+	delayHandler = delayServerHandlerTypeIds[DIFXIO_DEFAULT_DELAY_SERVER_HANDLER_TYPE];
 	DelayPolyOrder = DIFXIO_DEFAULT_POLY_ORDER;
 	DelayPolyInterval = DIFXIO_DEFAULT_POLY_INTERVAL; // 2 minutes
 	delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
@@ -2948,17 +2949,19 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 		}
 		delayProgram = delayServerTypeIds[stringToDelayServerType(delayServerType.c_str())];
 	}
+	else if(key == "delayServerHandlerType")
+	{
+		ss >> delayServerHandlerType;
+		if(stringToDelayServerHandlerType(delayServerHandlerType.c_str()) == NumDelayServerHandlerTypes)
+		{
+			std::cerr << "Error: delayServerHandlerType has unrecognized value" << std::endl;
+			exit(EXIT_FAILURE);
+		}
+		delayHandler = delayServerHandlerTypeIds[stringToDelayServerHandlerType(delayServerHandlerType.c_str())];
+	}
 	else if(key == "delayVersion")
 	{
 		ss >> delayVersion;
-	}
-	else if(key == "delayProgram")
-	{
-		ss >> delayProgram;
-	}
-	else if(key == "delayHandler")
-	{
-		ss >> delayHandler;
 	}
 	else if(key == "DelayPolyOrder")
 	{

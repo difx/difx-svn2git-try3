@@ -552,6 +552,8 @@ public:
 	std::string delayServerHost; // Hostname to use for delay service
 	std::string delayServerType; // Type of delay server to use
                                	 // See difx_input.h and difx_write_calc.c
+	std::string delayServerHandlerType; // Type of delay server handler to use
+                               	 // See difx_input.h and difx_write_calc.c
 	unsigned long delayVersion;	 // version number of delay server
 	unsigned long delayProgram;	 // RPC program id of delay server
 	unsigned long delayHandler;	 // RPC program id of the delay server handler
