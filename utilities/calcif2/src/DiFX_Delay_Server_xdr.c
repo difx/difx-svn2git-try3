@@ -405,12 +405,6 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 		}
 		 if (!xdr_double (xdrs, &objp->time))
 			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_0))
-			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_1))
-			 return FALSE;
-		 if (!xdr_double (xdrs, &objp->utc_second_fraction))
-			 return FALSE;
 		 if (!xdr_u_int (xdrs, &objp->Num_Stations))
 			 return FALSE;
 		 if (!xdr_u_int (xdrs, &objp->Num_Sources))
@@ -451,12 +445,6 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 		}
 		 if (!xdr_double (xdrs, &objp->time))
 			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_0))
-			 return FALSE;
-		 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_1))
-			 return FALSE;
-		 if (!xdr_double (xdrs, &objp->utc_second_fraction))
-			 return FALSE;
 		 if (!xdr_u_int (xdrs, &objp->Num_Stations))
 			 return FALSE;
 		 if (!xdr_u_int (xdrs, &objp->Num_Sources))
@@ -484,12 +472,6 @@ xdr_DIFX_DELAY_SERVER_1_res (XDR *xdrs, DIFX_DELAY_SERVER_1_res *objp)
 	 if (!xdr_long (xdrs, &objp->date))
 		 return FALSE;
 	 if (!xdr_double (xdrs, &objp->time))
-		 return FALSE;
-	 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_0))
-		 return FALSE;
-	 if (!xdr_u_long (xdrs, &objp->unix_utc_seconds_1))
-		 return FALSE;
-	 if (!xdr_double (xdrs, &objp->utc_second_fraction))
 		 return FALSE;
 	 if (!xdr_u_int (xdrs, &objp->Num_Stations))
 		 return FALSE;

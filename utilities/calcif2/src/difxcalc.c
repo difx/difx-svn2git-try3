@@ -2863,7 +2863,7 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
             sc_request->source.source_val[0].source_pos.y = dpos[1] / radius * 1E30;
             sc_request->source.source_val[0].source_pos.z = dpos[2] / radius * 1E30;
             sc_request->station.station_val[0].station_pointing_dir = sc_request->source.source_val[0].source_pos;
-            sc_request->station.station_val[0].station_pointing_dir = sc_request->station.station_val[0].station_pointing_dir;
+            sc_request->station.station_val[2].station_pointing_dir = sc_request->source.source_val[0].source_pos;
             /* TODO:  Is the aberration correction below actually needed? */
             /* /\* the spacecraft velocity and acceleration is fudged in order */
             /*    that the abberation is the same as seen by the */
@@ -2903,7 +2903,7 @@ static int adjustSingleSpacecraftAntennaGSRecording(const DifxScan* const scan, 
             sc_request->source.source_val[0].source_pos.y = dpos[1] / radius * 1E30;
             sc_request->source.source_val[0].source_pos.z = dpos[2] / radius * 1E30;
             sc_request->station.station_val[0].station_pointing_dir = sc_request->source.source_val[0].source_pos;
-            sc_request->station.station_val[0].station_pointing_dir = sc_request->station.station_val[0].station_pointing_dir;
+            sc_request->station.station_val[2].station_pointing_dir = sc_request->station.station_val[0].station_pointing_dir;
         }
         else
         {

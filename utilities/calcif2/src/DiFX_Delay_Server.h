@@ -144,9 +144,6 @@ struct DIFX_DELAY_SERVER_1_res {
 	u_long server_version;
 	long date;
 	double time;
-	u_long unix_utc_seconds_0;
-	u_long unix_utc_seconds_1;
-	double utc_second_fraction;
 	u_int Num_Stations;
 	u_int Num_Sources;
 	struct {

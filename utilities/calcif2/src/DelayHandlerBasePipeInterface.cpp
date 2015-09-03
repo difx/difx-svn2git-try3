@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2011, 2015 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015 by James M Anderson                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -16,41 +16,8 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-//===========================================================================
-// SVN properties (DO NOT CHANGE)
-//
-// $Id$
-// $HeadURL: $
-// $LastChangedRevision$
-// $Author$
-// $LastChangedDate$
-//
-//============================================================================
 
-#ifndef __POLY_H__
-#define __POLY_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
-/* Implement a specific variant of Neville's algorithm for equally spaced
- * data.  The expansion is about x=0 and the input data points are 
- * expected to be at x = d*i for i = [0, n) 
- */
-void computePoly(double *p, int n, double d);
-
-double computePoly2(double *p, const double *q, int n, int oversamp, double d, int interpolationType);
-
-void fitPoly(double *p, const double *q, int n, int oversamp, double d);
-
-/* Use Cramer's rule to evaluate polynomial */
-double evaluatePoly(const double *p, int n, double x);
-
-double evaluatePolyDeriv(const double *p, int n, double x);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#define DelayHandlerBasePipeInterface_cpp
+#include "DelayHandlerBasePipeInterface.h"
