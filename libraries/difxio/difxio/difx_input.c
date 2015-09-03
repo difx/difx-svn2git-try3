@@ -2149,6 +2149,16 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		fprintf(stderr, "No delay server type found --- default in job is %d (%s)\n", (int)D->job->delayServerType, delayServerTypeNames[D->job->delayServerType]);
 		row=0;
 	}
+	row = DifxParametersfind_limited(cp, 0, nMedSkip, "DELAY SERVER HANDLER TYPE");
+	if(row > 0)
+	{
+		D->job->delayServerHandlerType = stringToDelayServerHandlerType(DifxParametersvalue(cp, row));
+	}
+	else
+	{
+		fprintf(stderr, "No delay server handler type found --- default in job is %d (%s)\n", (int)D->job->delayServerHandlerType, delayServerHandlerTypeNames[D->job->delayServerHandlerType]);
+		row=0;
+	}
 	row = DifxParametersfind_limited(cp, row, nMedSkip, "DELAY VERSION");
 	if(row > 0)
 	{
@@ -2912,6 +2922,15 @@ static DifxInput *parseCalcServerInfo(DifxInput *D, DifxParameters *cp)
 	if(row >= 0)
 	{
 		D->job->delayServerType = stringToDelayServerType(DifxParametersvalue(cp, row));
+	}
+	else
+	{
+		row=0;
+	}
+	row = DifxParametersfind(cp, 0, "DELAY SERVER HANDLER TYPE");
+	if(row >= 0)
+	{
+		D->job->delayServerHandlerType = stringToDelayServerHandlerType(DifxParametersvalue(cp, row));
 	}
 	else
 	{

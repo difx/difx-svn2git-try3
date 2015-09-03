@@ -129,6 +129,39 @@ enum DelayServerType stringToDelayServerType(const char *str)
 }
 
 
+
+
+const char delayServerHandlerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH] =
+{
+	"UnknownServerHandler",
+	"DiFX_Delay_Server",
+	"Pipe",
+	"unknown"
+};
+const unsigned long delayServerHandlerTypeIds[] =
+{
+	0,            /* Default to not knowning anything */
+	0x20000342,   /* DiFX_Delay_Server                */
+	1,            /* Pipe                             */
+	0
+};
+
+enum DelayServerHandlerType stringToDelayServerHandlerType(const char *str)
+{
+	enum DelayServerHandlerType ds;
+
+	for(ds = 0; ds < NumDelayServerHandlerTypes; ++ds)
+	{
+		if(strcasecmp(str, delayServerHandlerTypeNames[ds]) == 0)
+		{
+			break;
+		}
+	}
+
+	return ds;
+}
+
+
 const char taperFunctionNames[][MAX_TAPER_FUNCTION_STRING_LENGTH] =
 {
 	"UNIFORM",
@@ -164,9 +197,10 @@ DifxJob *newDifxJobArray(int nJob)
 		dj[j].polyInterval = DIFXIO_DEFAULT_POLY_INTERVAL;
 		dj[j].delayModelPrecision = DIFXIO_DEFAULT_DELAY_MODEL_PRECISION;
 		dj[j].delayServerType = DIFXIO_DEFAULT_DELAY_SERVER_TYPE;
+		dj[j].delayServerHandlerType = DIFXIO_DEFAULT_DELAY_SERVER_HANDLER_TYPE;
 		dj[j].delayVersion = DIFXIO_DEFAULT_DELAY_SERVER_VERSION;
-		dj[j].delayProgram = delayServerTypeIds[DIFXIO_DEFAULT_DELAY_SERVER_TYPE];
-		dj[j].delayHandler = DIFXIO_DEFAULT_DELAY_SERVER_HANDLER;
+		dj[j].delayProgram = delayServerTypeIds[dj[j].delayServerType];
+		dj[j].delayHandler = delayServerHandlerTypeIds[dj[j].delayServerHandlerType];
 		dj[j].perform_uvw_deriv = PerformDirectionDerivativeFirstDerivative;
 		dj[j].perform_lmn_deriv = PerformDirectionDerivativeNone;
 		dj[j].perform_xyz_deriv = PerformDirectionDerivativeNone;
@@ -241,6 +275,7 @@ void fprintDifxJob(FILE *fp, const DifxJob *dj)
 	fprintf(fp, "    output file = %s\n", dj->outputFile);
 	fprintf(fp, "    delay server host = %s\n", dj->delayServerHost);
 	fprintf(fp, "    delay server type = %s\n", delayServerTypeNames[dj->delayServerType]);
+	fprintf(fp, "    delay server handler type = %s\n", delayServerHandlerTypeNames[dj->delayServerHandlerType]);
 	fprintf(fp, "    delay version = 0x%lX\n", dj->delayVersion);
 	fprintf(fp, "    delay program = 0x%lX\n", dj->delayProgram);
 	fprintf(fp, "    delay handler = 0x%lX\n", dj->delayHandler);

@@ -70,6 +70,7 @@ int writeDifxIM(const DifxInput* const D)
 		writeDifxLine(out, "DELAY SERVER HOST", D->job->delayServerHost);		
 	}
 	writeDifxLine(out, "DELAY SERVER TYPE", delayServerTypeNames[D->job->delayServerType]);
+	writeDifxLine(out, "DELAY SERVER HANDLER TYPE", delayServerHandlerTypeNames[D->job->delayServerHandlerType]);
 	writeDifxLineULong(out, "DELAY VERSION", D->job->delayVersion);
 	writeDifxLineULong(out, "DELAY PROGRAM", D->job->delayProgram);
 	writeDifxLineULong(out, "DELAY HANDLER", D->job->delayHandler);

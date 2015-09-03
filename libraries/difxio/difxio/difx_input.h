@@ -310,9 +310,20 @@ enum DelayServerType
 };
 extern const char delayServerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH];
 extern const unsigned long delayServerTypeIds[];
+/* keep this current with delayServerTypeNames in difx_job.c */
+enum DelayServerHandlerType
+{
+	UnknownDelayServerHandler = 0,  /* Default to not knowning anything */
+    DelayServerHandler_DiFX_Delay_Server,
+	DelayServerHandler_Pipe,        /* Use multithreaded calls to piped servers */
+	                                /* DiFX_Delay_Server RPC calls */
+    NumDelayServerHandlerTypes      /* must remain as last entry */
+};
+extern const char delayServerHandlerTypeNames[][MAX_DELAY_SERVER_NAME_LENGTH];
+extern const unsigned long delayServerHandlerTypeIds[];
 #define DIFXIO_DEFAULT_DELAY_SERVER_TYPE CALCServer
 #define DIFXIO_DEFAULT_DELAY_SERVER_VERSION 0
-#define DIFXIO_DEFAULT_DELAY_SERVER_HANDLER 0x20000342
+#define DIFXIO_DEFAULT_DELAY_SERVER_HANDLER_TYPE DelayServerHandler_DiFX_Delay_Server
 
 /* keep this current with sourceCoordinateFrameTypeNames in difx_source.c */
 /* See DiFX_Delay_Server.x for more information */
@@ -1023,6 +1034,7 @@ typedef struct
 	enum TaperFunction taperFunction;	 /* currently only "UNIFORM" is supported */
     char delayServerHost[DIFXIO_HOSTNAME_LENGTH]; /* name of delay server */
     enum DelayServerType delayServerType; /* type of delay server */
+    enum DelayServerHandlerType delayServerHandlerType; /* type of delay server handler */
     unsigned long delayVersion;  /* version number of delay server */
     unsigned long delayProgram;  /* RPC program id of delay server */
     unsigned long delayHandler;  /* RPC program id of the delay server handler*/
@@ -1143,6 +1155,7 @@ typedef struct
 enum AberCorr stringToAberCorr(const char* str);
 enum PerformDirectionDerivativeType stringToPerformDirectionDerivativeType(const char *str);
 enum DelayServerType stringToDelayServerType(const char *str);
+enum DelayServerHandlerType stringToDelayServerHandlerType(const char *str);
 enum TaperFunction stringToTaperFunction(const char *str);
 DifxJob *newDifxJobArray(int nJob);
 void deleteDifxJobArray(DifxJob *dj, int nJob);
