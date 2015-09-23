@@ -37,23 +37,24 @@
 
 /* Note: these values cannot have whitespace */
 const char dataSourceNames[][MAX_DATA_SOURCE_NAME_LENGTH] = 
-	{
-		"NONE",
-		"MODULE",
-		"FILE",
-		"NETWORK",
-		"FAKE",
-		"ERROR"     /* takes place of NumDataSources */
-	};
+{
+	"NONE",
+	"MODULE",
+	"FILE",
+	"NETWORK",
+	"FAKE",
+	"MARK6",
+	"ERROR"		/* takes place of NumDataSources */
+};
 
 /* Note: these values cannot have whitespace */
 const char samplingTypeNames[][MAX_SAMPLING_NAME_LENGTH] =
-	{
-		"REAL",
-		"COMPLEX",
-		"COMPLEX_DSB",
-		"ERROR"     /* takes place of NumSamplingTypes */
-	};
+{
+	"REAL",
+	"COMPLEX",
+	"COMPLEX_DSB",
+	"ERROR"		/* takes place of NumSamplingTypes */
+};
 
 enum DataSource stringToDataSource(const char *str)
 {
