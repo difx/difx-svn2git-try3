@@ -38,6 +38,15 @@
 #include <algorithm>
 #include <sys/time.h>
 #include <sys/stat.h>
+#ifndef __STDC_FORMAT_MACROS       // Defines for broken C++ implementations
+#  define __STDC_FORMAT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
+#  define __STDC_CONSTANT_MACROS
+#endif
+#ifndef __STDC_LIMIT_MACROS
+#  define __STDC_LIMIT_MACROS
+#endif
 #include <stdint.h>             // using <cstdint> requires C++11 support
 #include <difxio/difx_input.h>
 #include <difxmessage.h>
@@ -2358,15 +2367,31 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 	populateEOPTable(D, V->getEOPs());
 
 	// Check antenna list for spacecraft
-	for(vector<AntennaSetup>::const_iterator as=P->antennaSetups.begin(); as != P->antennaSetups.end(); ++as)
 	{
-		if(as->isSpacecraft())
+		bool have_spacecraft_antenna = false;
+		for(vector<AntennaSetup>::const_iterator as=P->antennaSetups.begin(); as != P->antennaSetups.end(); ++as)
 		{
-			if(!as->difxName.empty()) {
-				spacecraftSet.insert(as->difxName);
+			if(as->isSpacecraft())
+			{
+				if(!as->difxName.empty()) {
+					spacecraftSet.insert(as->difxName);
+				}
+				else {
+					spacecraftSet.insert(as->vexName);
+				}
+				have_spacecraft_antenna = true;
 			}
-			else {
-				spacecraftSet.insert(as->vexName);
+		}
+		if(have_spacecraft_antenna)
+		{
+			switch(D->job->delayServerType)
+			{
+			case CALC_9_1_RA_Server:
+				break;
+			default:
+				cerr << "Error: delayServerType " << delayServerTypeNames[D->job->delayServerType] << " is not known to support spacecraft antennas.  Use a different delay server type, or contact your developer." << endl;
+		
+				exit(EXIT_FAILURE);
 			}
 		}
 	}
