@@ -16,20 +16,30 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-//===========================================================================
-// SVN properties (DO NOT CHANGE)
-//
-// $Id$
-// $HeadURL$
-// $LastChangedRevision$
-// $Author$
-// $LastChangedDate$
-//
-//============================================================================
+/*===========================================================================
+//  SVN properties (DO NOT CHANGE)
+
+//  $Id$
+//  $HeadURL$
+//  $LastChangedRevision$
+//  $Author$
+//  $LastChangedDate$
+
+// ============================================================================
+*/
 
 #ifndef __DIFX_INPUT_H__
 #define __DIFX_INPUT_H__
 
+#ifndef __STDC_FORMAT_MACROS       /* Defines for broken C++ implementations */
+#  define __STDC_FORMAT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
+#  define __STDC_CONSTANT_MACROS
+#endif
+#ifndef __STDC_LIMIT_MACROS
+#  define __STDC_LIMIT_MACROS
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -43,12 +53,14 @@ extern "C" {
 #endif
 
 
-// #define malloc jma_malloc_malloc
-// #define free(p) jma_malloc_free((p), __FILE__, __LINE__)
-// #define calloc jma_malloc_calloc
-// #define realloc(nmemb,size) jma_malloc_realloc((nmemb),(size), __FILE__, __LINE__)
-// #define strdup(s) jma_malloc_strdup((s))
-// #define strndup(s,n) jma_malloc_strndup((s),(n))
+/*
+#define malloc jma_malloc_malloc
+#define free(p) jma_malloc_free((p), __FILE__, __LINE__)
+#define calloc jma_malloc_calloc
+#define realloc(nmemb,size) jma_malloc_realloc((nmemb),(size), __FILE__, __LINE__)
+#define strdup(s) jma_malloc_strdup((s))
+#define strndup(s,n) jma_malloc_strndup((s),(n))
+*/
 extern void* jma_malloc_malloc(size_t size);
 extern void jma_malloc_free(void *ptr, const char* file, int line);
 extern void *jma_malloc_calloc(size_t nmemb, size_t size);
