@@ -28,6 +28,36 @@
 //
 //============================================================================
 
+// INCLUDES
+#ifndef __STDC_FORMAT_MACROS       // Defines for broken C++ implementations
+#  define __STDC_FORMAT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
+#  define __STDC_CONSTANT_MACROS
+#endif
+#ifndef __STDC_LIMIT_MACROS
+#  define __STDC_LIMIT_MACROS
+#endif
+#ifndef _ISOC99_SOURCE
+#  define _ISOC99_SOURCE
+#endif
+#ifndef _GNU_SOURCE
+#  define _GNU_SOURCE 1
+#endif
+#ifndef __USE_ISOC99
+#  define __USE_ISOC99 1
+#endif
+#ifndef _ISOC99_SOURCE
+#  define _ISOC99_SOURCE
+#endif
+#ifndef __USE_MISC
+#  define __USE_MISC 1
+#endif
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

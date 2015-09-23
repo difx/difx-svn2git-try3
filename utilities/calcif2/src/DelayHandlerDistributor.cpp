@@ -19,6 +19,9 @@
 
 
 // INCLUDES
+#ifndef __STDC_FORMAT_MACROS       // Defines for broken C++ implementations
+#  define __STDC_FORMAT_MACROS
+#endif
 #ifndef __STDC_CONSTANT_MACROS
 #  define __STDC_CONSTANT_MACROS
 #endif
@@ -130,7 +133,7 @@ uint_fast32_t DelayHandlerDistributor::get_best_NUM_THREADS(const uint_fast32_t 
 	{
 		return NUM_THREADS_;
 	}
-	const char* env = getenv("DIFX_NUMBERCALCSERVERTHREADS");
+	const char* env = getenv(DelayHandlerBase::get_NUM_THREAD_ENV_VARIABLE());
 	if((env))
 	{
 		uint_fast32_t n = strtoul(env, NULL, 0);
@@ -140,12 +143,12 @@ uint_fast32_t DelayHandlerDistributor::get_best_NUM_THREADS(const uint_fast32_t 
 		}
 		if(verbosity > 1)
 		{
-			fprintf(stderr, "Warning: environment variable DIFX_NUMBERCALCSERVERTHREADS has invalid value '%s' --- using 1 thread for CALC calls\n", env);
+			fprintf(stderr, "Warning: environment variable %s has invalid value '%s' --- using 1 thread for CALC calls\n", DelayHandlerBase::get_NUM_THREAD_ENV_VARIABLE(), env);
 		}
 	}
 	else if(verbosity > 1)
 	{
-		fprintf(stderr, "Warning: environment variable DIFX_NUMBERCALCSERVERTHREADS not found --- using 1 thread for CALC calls\n");
+		fprintf(stderr, "Warning: environment variable %s not found --- using 1 thread for CALC calls\n", DelayHandlerBase::get_NUM_THREAD_ENV_VARIABLE());
 	}
 	return 1;
 }

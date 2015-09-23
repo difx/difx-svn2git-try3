@@ -19,6 +19,9 @@
 
 
 // INCLUDES
+#ifndef __STDC_FORMAT_MACROS       // Defines for broken C++ implementations
+#  define __STDC_FORMAT_MACROS
+#endif
 #ifndef __STDC_CONSTANT_MACROS
 #  define __STDC_CONSTANT_MACROS
 #endif
@@ -94,6 +97,7 @@ extern "C" void* thread_entry(void* pthis)
 
 // GLOBALS
 const char* DelayHandlerBase::TMP_DIRECTORY = "DiFX_DelayHandler_tmp";
+const char* DelayHandlerBase::NUM_THREAD_ENV_VARIABLE = "DIFX_NUMBERCALCSERVERTHREADS";
 
 // FUNCTIONS
 
@@ -236,14 +240,14 @@ int_fast32_t DelayHandlerBase::init_NUM_THREADS() throw()
 	{
 		if(verbosity >= 5)
 		{
-			DHBfprintf(stdout, "Input NUM_THREADS=%"PRIdFAST32", checking for DIFX_CALCIF2_NUM_CALC_THREADS\n", NUM_THREADS);
+			DHBfprintf(stdout, "Input NUM_THREADS=%"PRIdFAST32", checking for %s\n", NUM_THREADS, get_NUM_THREAD_ENV_VARIABLE());
 		}
-		const char* const cp = getenv("DIFX_CALCIF2_NUM_CALC_THREADS");
+		const char* const cp = getenv(get_NUM_THREAD_ENV_VARIABLE());
 		if(cp != NULL)
 		{
 			if(verbosity >= 5)
 			{
-				DHBfprintf(stdout, "Found DIFX_CALCIF2_NUM_CALC_THREADS=%s\n", cp);
+				DHBfprintf(stdout, "Found %s=%s\n", get_NUM_THREAD_ENV_VARIABLE(), cp);
 			}
 			NUM_THREADS = atoi(cp);
 		}
@@ -251,7 +255,7 @@ int_fast32_t DelayHandlerBase::init_NUM_THREADS() throw()
 		{
 			if(verbosity >= 5)
 			{
-				DHBfprintf(stdout, "Could not find DIFX_CALCIF2_NUM_CALC_THREADS\n");
+				DHBfprintf(stdout, "Could not find %s\n", get_NUM_THREAD_ENV_VARIABLE());
 			}
 		}
 	}

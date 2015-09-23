@@ -22,6 +22,9 @@
 #define DelayHandlerBase_h
 
 // INCLUDES
+#ifndef __STDC_FORMAT_MACROS       // Defines for broken C++ implementations
+#  define __STDC_FORMAT_MACROS
+#endif
 #ifndef __STDC_CONSTANT_MACROS
 #  define __STDC_CONSTANT_MACROS
 #endif
@@ -118,6 +121,8 @@ public:
     // memory stack...
     void* start_thread();
 
+    const char* get_NUM_THREAD_ENV_VARIABLE() const throw() {return NUM_THREAD_ENV_VARIABLE;}
+
 
 protected:
     uint_fast64_t commands_processed;
@@ -158,6 +163,8 @@ protected:
 
     // Where should temporary files go?
     static const char* TMP_DIRECTORY;
+    // What is the environment variable name for the number of threads to use?
+    static const char* NUM_THREAD_ENV_VARIABLE;
 
 	// Information about server
 	uint64_t detailed_version_number;
