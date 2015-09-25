@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2011 by Walter Brisken                             *
+ *   Copyright (C) 2015 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,30 +20,77 @@
  * SVN properties (DO NOT CHANGE)
  *
  * $Id$
- * $HeadURL$
+ * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/util.h $
  * $LastChangedRevision$
  * $Author$
  * $LastChangedDate$
  *
  *==========================================================================*/
 
-#ifndef __UTIL_H__
-#define __UTIL_H__
-
 #include <algorithm>
+#include "interval.h"
 
-// To capitalize a string
-#define Upper(s) transform(s.begin(), s.end(), s.begin(), (int(*)(int))toupper)
-
-// To uncapitalize a string
-#define Lower(s) transform(s.begin(), s.end(), s.begin(), (int(*)(int))tolower)
-
-extern "C" {
-int fvex_double(char **field, char **units, double *d);
-int fvex_ra(char **field, double *ra);
-int fvex_dec(char **field, double *dec);
+// returns a negative number if no overlap
+double Interval::overlap(const Interval &v) const
+{
+	return std::min(mjdStop, v.mjdStop) - std::max(mjdStart, v.mjdStart);
 }
 
-int checkCRLF(const char *filename);
+void Interval::logicalAnd(double start, double stop)
+{
+	if(mjdStart < start)
+	{
+		mjdStart = start;
+	}
+	if(mjdStop > stop)
+	{
+		mjdStop = stop;
+	}
+}
 
-#endif
+void Interval::logicalAnd(const Interval &v)
+{
+	if(mjdStart < v.mjdStart)
+	{
+		mjdStart = v.mjdStart;
+	}
+	if(mjdStop > v.mjdStop)
+	{
+		mjdStop = v.mjdStop;
+	}
+}
+
+void Interval::logicalOr(double start, double stop)
+{
+	if(mjdStart > start)
+	{
+		mjdStart = start;
+	}
+	if(mjdStop < stop)
+	{
+		mjdStop = stop;
+	}
+}
+
+void Interval::logicalOr(const Interval &v)
+{
+	if(mjdStart > v.mjdStart)
+	{
+		mjdStart = v.mjdStart;
+	}
+	if(mjdStop < v.mjdStop)
+	{
+		mjdStop = v.mjdStop;
+	}
+}
+
+std::ostream& operator << (std::ostream &os, const Interval &x)
+{
+	int p = os.precision();
+
+	os.precision(12);
+	os << "mjd(" << x.mjdStart << "," << x.mjdStop << ")";
+	os.precision(p);
+
+	return os;
+}

@@ -42,639 +42,17 @@
 #include <unistd.h>
 #include <difxio.h>
 #include <cerrno>
-#include "util.h"
+#include <vexdatamodel.h>
+
 #include "timeutils.h"
 #include "corrparams.h"
+#include "parserhelp.h"
 
 const double PhaseCentre::DEFAULT_RA  = -999.9;
 const double PhaseCentre::DEFAULT_DEC = -999.9;
 
-/* round to nearest second */
-static double roundSeconds(double mjd)
-{
-	int intmjd, intsec;
 
-	intmjd = static_cast<int>(mjd);
-	intsec = static_cast<int>((mjd - intmjd)*SEC_DAY_DBL_ + 0.5);
-
-	return intmjd + intsec/SEC_DAY_DBL_;
-}
-
-bool isTrue(const std::string &str)
-{
-	if(str[0] == '0' || str[0] == 'f' || str[0] == 'F' || str[0] == '-')
-	{
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-}
-
-/* check if an integer is a power of 2 */
-bool isPower2(int n)
-{
-	if(!(n & (n - 1))) 
-	{
-		return true;
-	}
-
-	return false; // also true for zero but this shouldn't concern us
-}
-
-// Turns a string into MJD 
-// The following formats are allowed:
-// 1. decimal mjd:	55345.113521
-// 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
-// 3. VLBA-like time:	2009MAR08-12:34:56.121
-// 4. vex time: 2009y245d08h12m24s"
-double parseTime(const std::string &timeStr)
-{
-	double mjd;
-	const char* const str = timeStr.c_str();
-	const char *p;
-	double t;
-	double f;
-	int n;
-	struct tm tm;
-	bool need_s = false;
-	char dummy;
-	char* endptr;
-
-	// Test for ISO 8601
-	p = strptime(str, "%FT%T", &tm);
-	if(!p)
-	{
-		//Test for VLBA-like
-		p = strptime(str, "%Y%b%d-%T", &tm);
-	}
-	if(!p)
-	{
-		//Test for Vex
-		p = strptime(str, "%Yy%jd%Hh%Mm%S", &tm);
-		need_s = true;
-	}
-	if(p)
-	{
-		f = 0.0;
-		if(p[0] == '.') {
-			errno = 0;
-			f = strtod(p,&endptr);
-			if((endptr != p) && (errno==0)) {
-				p = endptr;
-			}
-			else {
-				f = 0.0;
-			}
-		}
-		if(need_s) {
-			if(p[0] == 's') {}
-			else {
-				goto format_error;
-			}
-		}
-		t = mktime(&tm);
-				
-		mjd = (t+f)/SEC_DAY_DBL_ + MJD_UNIX0;
-
-		return mjd;
-	}
-
-	n = sscanf(str, "%lf%c", &mjd, &dummy);
-	if(n == 1)
-	{
-		// Must be straight MJD value
-		return mjd;
-	}
-		
-format_error:
-	// No match
-	std::cerr << std::endl;
-	std::cerr << "Error: date not parsable: " << timeStr << std::endl;
-	std::cerr << std::endl;
-	std::cerr << "Allowable formats are:" << std::endl;
-	std::cerr << "1. Straight MJD		 54345.341944" << std::endl;
-	std::cerr << "2. Vex formatted date	 2009y245d08h12m24s" << std::endl;
-	std::cerr << "3. VLBA-like format	 2009SEP02-08:12:24" << std::endl;
-	std::cerr << "4. ISO 8601 format	 2009-09-02T08:12:24" << std::endl;
-	std::cerr << std::endl;
-
-	exit(EXIT_FAILURE);
-}
-
-namespace {
-// Turns a string into an MJD with a integer and fractional day parts
-// The following formats are allowed:
-// 1. decimal mjd:				   54345.341944
-// 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
-// 3. VLBA-like time			   2009MAR08-12:34:56.121
-// 4. vex time					   2009y061d12h34m56.121s
-void parseTimeFractional(const char* const str,
-						 int& mjd,
-						 double& dayfraction,
-						 char** endptr)
-{
-	char *p;
-	double f;
-	struct tm tm;
-	bool need_s = false;
-	*endptr = 0;
-
-	// Test for ISO 8601
-	p = strptime(str, "%FT%T", &tm);
-	if(!p)
-	{
-		//Test for VLBA-like
-		p = strptime(str, "%Y%b%d-%T", &tm);
-	}
-	if(!p)
-	{
-		//Test for Vex
-		p = strptime(str, "%Yy%jd%Hh%Mm%S", &tm);
-		need_s = true;
-	}
-	if(p)
-	{
-		f = 0.0;
-		if(p[0] == '.') {
-			errno = 0;
-			f = strtod(p,endptr);
-			if((*endptr != p) && (errno==0)) {
-				p = *endptr;
-			}
-			else {
-				f = 0.0;
-			}
-		}
-		if(need_s) {
-			if(p[0] == 's') {
-				*endptr = const_cast<char*>(p+1);
-			}
-			else {
-				goto format_error;
-			}
-		}
-		else {
-			*endptr = const_cast<char*>(p);
-		}
-		time_t tt = mktime(&tm);
-				
-		mjd = tt/SEC_DAY_INT + MJD_UNIX0_INT;
-		dayfraction = (tt%SEC_DAY_INT + f)/SEC_DAY_DBL_;
-		return;
-	}
-
-	errno = 0;
-	mjd = int(strtol(p,endptr,10));
-	if((*endptr != p) && (errno==0)) {}
-	else {
-		goto format_error;
-	}
-	p=*endptr;
-	dayfraction = strtod(p,endptr);
-	if((*endptr != p) && (errno==0)) {}
-	else {
-		goto format_error;
-	}
-	return;
-		
-format_error:
-	// No match
-	std::cerr << std::endl;
-	std::cerr << "Error: date not parsable in parseTimeFractional: " << str << std::endl;
-	std::cerr << std::endl;
-	std::cerr << "Allowable formats are:" << std::endl;
-	std::cerr << "1. Straight MJD		 54345.341944" << std::endl;
-	std::cerr << "2. Vex formatted date	 2009y245d08h12m24s" << std::endl;
-	std::cerr << "3. VLBA-like format	 2009SEP02-08:12:24" << std::endl;
-	std::cerr << "4. ISO 8601 format	 2009-09-02T08:12:24" << std::endl;
-	std::cerr << std::endl;
-
-	exit(EXIT_FAILURE);
-}
-}
-
-
-
-
-
-// Turns a SpacecraftGroundClockBreak string into two MJDs,
-// a clock offset fudge, and a possible clock offset polynomial fudge
-// start@MJD/sync@MJD/clockfudge0@sec/clockfudge1@sec_per_sec_1/clockfudge2@sec_per_sec_2/clockfudge3@sec_per_sec_3/clockfudge4@sec_per_sec_4/clockfudge5@sec_per_sec_5
-// The clock fudge terms in the class have units of seconds per second^{N}.
-// In the .v2d file, the fudge terms have units of
-// microseconds per second^{N}.
-// The terms may be provided in any order within the .../.../... construct.
-// Zero or more of the clock terms may be present.  The start MJD indicates
-// the time to create the clock break, and the sync MJD indicates the
-// instant at which the recorder syncs the
-// time between the ground station and the spacecraft.
-// The following formats are allowed for the MJDs:
-// 1. decimal mjd:				   54345.341944
-// 2. ISO 8601 dateTtime strings:  2009-03-08T12:34:56.121
-// 3. VLBA-like time			   2009MAR08-12:34:56.121
-// 4. vex time					   2009y061d12h34m56.121s
-SpacecraftGroundClockBreak parseSpacecraftGroundClockBreak(const std::string &timeStr, int* nWarn)
-{
-	bool have_start = false;
-	bool have_sync = false;
-	bool have_fudge0 = false;
-	bool have_fudge1 = false;
-	bool have_fudge2 = false;
-	bool have_fudge3 = false;
-	bool have_fudge4 = false;
-	bool have_fudge5 = false;
-	bool no_identifiers = false;
-	int pos_count = 0;
-	std::string::size_type at, last, splitat;
-	std::string nestedkeyval;
-	std::string key;
-	std::string value;
-	const char* str;
-	char* endptr = 0;
-	SpacecraftGroundClockBreak result;
-   
-	last = 0;
-	at = 0;
-	while(at != std::string::npos)
-	{
-		at = timeStr.find_first_of('/', last);
-		nestedkeyval = timeStr.substr(last, at-last);
-		splitat = nestedkeyval.find_first_of('@');
-		if(splitat == std::string::npos)
-		{
-			if(pos_count == 0)
-			{
-				std::cerr << "Warning: old style SC_GS_clock_break entry without key@value pairs found.	 Assuming the values come in the correct order" << std::endl;
-				++(*nWarn);
-				no_identifiers = true;
-			}
-			else if(!no_identifiers) {
-				std::cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.	 SC_GS_clock_break entry is '" << timeStr << "'" << std::endl;
-				goto format_error;
-			}
-			str = nestedkeyval.c_str();
-			if(pos_count == 0) {
-				parseTimeFractional(str, result.mjd_start, result.day_fraction_start, &endptr);
-				if((endptr == 0) || (*endptr != 0)) {
-					goto format_error;
-				}
-				have_start = true;
-			}
-			else if(pos_count == 1) {
-				parseTimeFractional(str, result.mjd_sync, result.day_fraction_sync, &endptr);
-				if((endptr == 0) || (*endptr != 0)) {
-					goto format_error;
-				}
-				have_sync = true;
-			}
-			else if(pos_count == 2) {
-				errno = 0;
-				result.clock_break_fudge_seconds_0 = strtod(str,&endptr);
-				if((*endptr == 0) && (errno==0)) {}
-				else {
-					goto format_error;
-				}
-				if(result.clock_break_fudge_order < 0)
-				{
-					result.clock_break_fudge_order = 0;
-				}
-				result.clock_break_fudge_seconds_0 *= 1E-6; // convert from \mu s to s
-				have_fudge0 = true;
-			}
-			else {
-				std::cerr << "Error: too many values in old-style SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-				goto format_error;
-			}
-		}
-		else {
-			// key@value
-			if(no_identifiers) {
-				std::cerr << "Error: mixed old style (vlaues only) and new style (key@value) entries in SC_GS_clock_break entry is not allowed.	 SC_GS_clock_break entry is '" << timeStr << "'" << std::endl;
-				goto format_error;
-			}
-			key = nestedkeyval.substr(0,splitat);
-			value = nestedkeyval.substr(splitat+1);
-			if(key == "start") {
-				if(have_start) {
-					std::cerr << "Error: multiple 'start' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				parseTimeFractional(value.c_str(), result.mjd_start, result.day_fraction_start, &endptr);
-				if((endptr == 0) || (*endptr != 0)) {
-					goto format_error;
-				}
-				have_start = true;
-			}
-			else if(key == "sync") {
-				if(have_sync) {
-					std::cerr << "Error: multiple 'sync' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				parseTimeFractional(value.c_str(), result.mjd_sync, result.day_fraction_sync, &endptr);
-				if((endptr == 0) || (*endptr != 0)) {
-					goto format_error;
-				}
-				have_sync = true;
-			}
-			else if((key == "clockfudge")||(key == "clockfudge0")) {
-				if(have_fudge0) {
-					std::cerr << "Error: multiple 'clockfudge0' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				errno = 0;
-				result.clock_break_fudge_seconds_0 = strtod(value.c_str(),&endptr);
-				if((*endptr == 0) && (errno==0)) {}
-				else {
-					goto format_error;
-				}
-				if(result.clock_break_fudge_order < 0)
-				{
-					result.clock_break_fudge_order = 0;
-				}
-				result.clock_break_fudge_seconds_0 *= 1E-6; // convert from \mu s to s
-				have_fudge0 = true;
-			}
-			else if(key == "clockfudge1") {
-				if(have_fudge1) {
-					std::cerr << "Error: multiple 'clockfudge1' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				errno = 0;
-				result.clock_break_fudge_seconds_1 = strtod(value.c_str(),&endptr);
-				if((*endptr == 0) && (errno==0)) {}
-				else {
-					goto format_error;
-				}
-				if(result.clock_break_fudge_order < 1)
-				{
-					result.clock_break_fudge_order = 1;
-				}
-				result.clock_break_fudge_seconds_1 *= 1E-6; // convert from \mu s to s
-				have_fudge1 = true;
-			}
-			else if(key == "clockfudge2") {
-				if(have_fudge2) {
-					std::cerr << "Error: multiple 'clockfudge2' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				errno = 0;
-				result.clock_break_fudge_seconds_2 = strtod(value.c_str(),&endptr);
-				if((*endptr == 0) && (errno==0)) {}
-				else {
-					goto format_error;
-				}
-				if(result.clock_break_fudge_order < 2)
-				{
-					result.clock_break_fudge_order = 2;
-				}
-				result.clock_break_fudge_seconds_2 *= 1E-6; // convert from \mu s to s
-				have_fudge2 = true;
-			}
-			else if(key == "clockfudge3") {
-				if(have_fudge3) {
-					std::cerr << "Error: multiple 'clockfudge3' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				errno = 0;
-				result.clock_break_fudge_seconds_3 = strtod(value.c_str(),&endptr);
-				if((*endptr == 0) && (errno==0)) {}
-				else {
-					goto format_error;
-				}
-				if(result.clock_break_fudge_order < 3)
-				{
-					result.clock_break_fudge_order = 3;
-				}
-				result.clock_break_fudge_seconds_3 *= 1E-6; // convert from \mu s to s
-				have_fudge3 = true;
-			}
-			else if(key == "clockfudge4") {
-				if(have_fudge4) {
-					std::cerr << "Error: multiple 'clockfudge4' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				errno = 0;
-				result.clock_break_fudge_seconds_4 = strtod(value.c_str(),&endptr);
-				if((*endptr == 0) && (errno==0)) {}
-				else {
-					goto format_error;
-				}
-				if(result.clock_break_fudge_order < 4)
-				{
-					result.clock_break_fudge_order = 4;
-				}
-				result.clock_break_fudge_seconds_4 *= 1E-6; // convert from \mu s to s
-				have_fudge4 = true;
-			}
-			else if(key == "clockfudge5") {
-				if(have_fudge5) {
-					std::cerr << "Error: multiple 'clockfudge5' keys in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-					goto format_error;
-				}
-				errno = 0;
-				result.clock_break_fudge_seconds_5 = strtod(value.c_str(),&endptr);
-				if((*endptr == 0) && (errno==0)) {}
-				else {
-					goto format_error;
-				}
-				if(result.clock_break_fudge_order < 5)
-				{
-					result.clock_break_fudge_order = 5;
-				}
-				result.clock_break_fudge_seconds_5 *= 1E-6; // convert from \mu s to s
-				have_fudge5 = true;
-			}
-			else {
-				std::cerr << "Error: unrecognized SC_GS_clock_break sub-key '" << key << "' in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-				goto format_error;
-			}
-		}
-		pos_count++;
-		last = at+1;
-	}
-	// Did we get everything we need?
-	if((have_start) && (have_sync)) {
-		// all we need
-	}
-	else {
-		std::cerr << "Error: not all required sub-keys were found in SC_GS_clock_break entry '" << timeStr << "'" << std::endl;
-		goto format_error;
-	}
-	return result;
-
-format_error:
-	// No match
-	std::cerr << std::endl;
-	std::cerr << "Error: SC_GS_clock_break entry '" << timeStr << "' not parsable." << std::endl;
-	std::cerr << std::endl;
-	std::cerr << "SC_GS_clock_break should be given as start@MJD/sync@MJD/clockfudge0@sec/clockfudge1@sec_per_sec_1/clockfudge2@sec_per_sec_2/clockfudge3@sec_per_sec_3/clockfudge4@sec_per_sec_4/clockfudge5@sec_per_sec_5\n"
-"In the .v2d file, the clock fudge polynomial terms have units of\n"
-"microseconds per second^{N}.\n"
-"The SC_GS_clock_break terms may be provided in any order within the .../.../... construct.\n"
-"Zero  or more of the clock fudge polynomial terms may be present.\n"
-"The start MJD indicates the time to create the clock break,\n"
-"and the sync MJD indicates the zero point for the fudge series." << std::endl;
-	std::cerr << std::endl;
-	std::cerr << "Allowable MJD date formats are:" << std::endl;
-	std::cerr << "1. Straight MJD		 54345.341944" << std::endl;
-	std::cerr << "2. Vex formatted date	 2009y245d08h12m24s" << std::endl;
-	std::cerr << "3. VLBA-like format	 2009SEP02-08:12:24" << std::endl;
-	std::cerr << "4. ISO 8601 format	 2009-09-02T08:12:24" << std::endl;
-	std::cerr << std::endl;
-	std::cerr << "Clock fudge polynomial terms should be specified as a floating point value such as:" << std::endl;
-	std::cerr << "1" << std::endl;
-	std::cerr << "1.2" << std::endl;
-	std::cerr << "1.2E3" << std::endl;
-		
-
-	exit(0);
-}
-
-
-
-simple3Vector parseSpacecraftsimple3Vector(const std::string &vecStr)
-{
-	const char* const str = vecStr.c_str();
-	const char *p;
-	char* endptr;
-	simple3Vector result;
-
-	p = str;
-	endptr = 0;
-	errno=0;
-	result.X = strtod(p, &endptr);
-	if((endptr == 0) || (endptr == p) || (errno != 0) || (*endptr == 0)) {
-		goto format_error;
-	}
-	p = endptr + 1;
-	endptr = 0;
-	result.Y = strtod(p, &endptr);
-	if((endptr == 0) || (endptr == p) || (errno != 0) || (*endptr == 0)) {
-		goto format_error;
-	}
-	p = endptr + 1;
-	endptr = 0;
-	result.Z = strtod(p, &endptr);
-	if((endptr == 0) || (endptr == p) || (errno != 0) || (*endptr != 0)) {
-		goto format_error;
-	}
-	return result;
-
-format_error:
-	// No match
-	std::cerr << std::endl;
-	std::cerr << "Error: simple3Vector values not parsable: " << vecStr << std::endl;
-	std::cerr << std::endl;
-	std::cerr << "simple3Vector entries should be provided as" << std::endl;
-	std::cerr << "NUMBER,NUMBER,NUMBER" << std::endl;
-	std::cerr << "with no whitespace between entries" << std::endl;
-	std::cerr << std::endl;
-
-	exit(0);
-}
-
-
-
-
-
-
-		
-
-double parseCoord(const char *str, char type)
-{
-	int sign = 1, l, n;
-	double a, b, c;
-	double v = -999999.0;
-
-	if(type != ' ' && type != 'R' && type != 'D')
-	{
-		std::cerr << "Programmer error: parseCoord: parameter 'type' has illegal value = " << type << std::endl;
-		
-		exit(EXIT_FAILURE);
-	}
-
-	if(str[0] == '-')
-	{
-		sign = -1;
-		++str;
-	}
-	else if(str[0] == '+')
-	{
-		++str;
-	}
-
-	l = strlen(str);
-
-	if(sscanf(str, "%lf:%lf:%lf", &a, &b, &c) == 3)
-	{
-		v = sign*(a + b/60.0 + c/3600.0);
-		if(type == 'D')
-		{
-			v *= M_PI/180.0;
-		}
-		else
-		{
-			v *= M_PI/12.0;
-		}
-	}
-	else if(sscanf(str, "%lfh%lfm%lf", &a, &b, &c) == 3 && str[l-1] == 's' && type != 'D')
-	{
-		v = sign*(a + b/60.0 + c/3600.0);
-		v *= M_PI/12.0;
-	}
-	else if(sscanf(str, "%lfd%lf'%lf\"", &a, &b, &c) == 3 && str[l-1] == '"' && type == 'D')
-	{
-		v = sign*(a + b/60.0 + c/3600.0);
-		v *= M_PI/180.0;
-	}
-	else if(sscanf(str, "%lf%n", &a, &n) == 1)
-	{
-		if(n == l)
-		{
-			v = a;
-		}
-		else if(strcmp(str+n, "rad") == 0)
-		{
-			v = a;
-		}
-		else if(strcmp(str+n, "deg") == 0)
-		{
-			v = a*M_PI/180.0;
-		}
-		else
-		{
-			std::cerr << "Error parsing coordinate value " << str << std::endl;
-
-			exit(EXIT_FAILURE);
-		}
-		v *= sign;
-	}
-
-	return v;
-}
-
-// From http://oopweb.com/CPP/Documents/CPPHOWTO/Volume/C++Programming-HOWTO-7.html
-void split(const std::string &str, std::vector<std::string> &tokens, const std::string &delimiters = " ")
-{
-	// Skip delimiters at beginning.
-	std::string::size_type lastPos = str.find_first_not_of(delimiters, 0);
-	// Find first "non-delimiter".
-	std::string::size_type pos	   = str.find_first_of(delimiters, lastPos);
-
-	while(std::string::npos != pos || std::string::npos != lastPos)
-	{
-		// Found a token, add it to the vector.
-		tokens.push_back(str.substr(lastPos, pos - lastPos));
-		// Skip delimiters.	 Note the "not_of"
-		lastPos = str.find_first_not_of(delimiters, pos);
-		// Find next "non-delimiter"
-		pos = str.find_first_of(delimiters, lastPos);
-	}
-}
-
-int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandFile> &basebandFiles)
+int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandData> &basebandFiles)
 {
 	const int MaxLineLength=1024;
 	std::ifstream is;
@@ -719,12 +97,12 @@ int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandFil
 		}
 		else if(l == 1)
 		{
-			basebandFiles.push_back(VexBasebandFile(tokens[0]));
+			basebandFiles.push_back(VexBasebandData(tokens[0], 0));
 			++n;
 		}
 		else if(l == 3)
 		{
-			basebandFiles.push_back(VexBasebandFile(tokens[0],
+			basebandFiles.push_back(VexBasebandData(tokens[0], 0,
 													parseTime(tokens[1]),
 													parseTime(tokens[2]) ));
 			++n;
@@ -826,15 +204,15 @@ int CorrSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "doPolar")
 	{
-		doPolar = isTrue(value);
+		doPolar = parseBoolean(value);
 	}
 	else if(key == "doAuto")
 	{
-		doAuto = isTrue(value);
+		doAuto = parseBoolean(value);
 	}
 	else if(key == "doMSAcalibration")
 	{
-		doMSAcalibration = isTrue(value);
+		doMSAcalibration = parseBoolean(value);
 	}
 	else if(key == "MC_tab_interval")
 	{
@@ -1079,7 +457,7 @@ CorrRule::CorrRule(const std::string &name) : ruleName(name)
 {
 }
 
-bool CorrRule::match(const std::string &scan, const std::string &source, const std::string &mode, char cal, int qual) const
+bool CorrRule::match(const std::string &scan, const std::string &source, const std::string &mode) const
 {
 	if(!scanName.empty() && find(scanName.begin(), scanName.end(), scan) == scanName.end())
 	{
@@ -1090,10 +468,6 @@ bool CorrRule::match(const std::string &scan, const std::string &source, const s
 		return false;
 	}
 	if(!modeName.empty() && find(modeName.begin(), modeName.end(), mode) == modeName.end())
-	{
-		return false;
-	}
-	if(!calCode.empty() && find(calCode.begin(), calCode.end(), cal) == calCode.end())
 	{
 		return false;
 	}
@@ -1363,7 +737,7 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 	{
 		std::string es;
 		ss >> es;
-		pc->calculate_own_retarded_position = isTrue(es);
+		pc->calculate_own_retarded_position = parseBoolean(es);
 	}
 	else if(key == "X" || key == "x")
 	{
@@ -1400,6 +774,9 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 		std::string naifFile_filename = pc->naifFile.substr(dir_pos+1);
 		if(naifFile_filename < "naif0011.tls")
 		{
+			// This if/else exists for those periods of time when a new
+			// naif file exists for a planned leap second, but
+			// the leap second has not yet happened.
 			if(time(0) > 1435708800) // 2015 Jul 01
 			{
 				std::cout << "Error: naif0011.tls or newer is needed for correct ephemeris evaluation.	An old or unrecognized file, " << pc->naifFile << " was supplied." << std::endl;
@@ -1413,6 +790,7 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 				nWarn++;
 			}
 		}
+		std::cout << "Hint to user: inclusion of naif (leap second kernel) files may no longer be needed." << std::endl;
 	}
 	else if(key == "doPointingCentre" || key == "doPointingCenter")
 	{
@@ -1462,6 +840,7 @@ ZoomFreq::ZoomFreq()
 	initialise(-999, -999, false, -1);
 }
 
+// freq and bw supplied in MHz
 void ZoomFreq::initialise(double freq, double bw, bool corrparent, int specavg)
 {
 	frequency = freq*1000000; //convert to Hz
@@ -1469,6 +848,289 @@ void ZoomFreq::initialise(double freq, double bw, bool corrparent, int specavg)
 	correlateparent = corrparent;
 	spectralaverage = specavg;
 }
+
+
+
+DatastreamSetup::DatastreamSetup(const std::string &name) : difxName(name)
+{
+	networkPort = "0";
+	windowSize = 0;
+	dataSource = DataSourceNone;
+	dataSampling = NumSamplingTypes;	// flag that no sampling is is identified here
+	startBand = -1;
+	nBand = 0;				// Zero implies all.
+}
+
+
+int DatastreamSetup::setkv(const std::string &key, const std::string &value)
+{
+	std::stringstream ss;
+	int nWarn = 0;
+
+	ss << value;
+
+	if(key == "machine")
+	{
+		ss >> machine;
+	}
+	else if(key == "nBand")
+	{
+		ss >> nBand;
+	}
+	else if(key == "format")
+	{
+		std::string s;
+		ss >> s;
+		Upper(s);
+
+		if(s == "MARK4")
+		{
+			s = "MKIV";
+		}
+
+		format = s;
+	}
+	else if(key == "sampling")
+	{
+		dataSampling = stringToSamplingType(value.c_str());
+		if(dataSampling >= NumSamplingTypes)
+		{
+			std::cerr << "Error: datastream " << difxName << " has illegal samping type set: " << value << std::endl;
+
+			exit(EXIT_FAILURE);
+		}
+	}
+	else if(key == "file" || key == "files")
+	{
+		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceFile;
+		basebandFiles.push_back(VexBasebandData(value, 0));
+	}
+	else if(key == "mark6file" || key == "mark6files")
+	{
+		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceMark6;
+		basebandFiles.push_back(VexBasebandData(value, 0));
+	}
+	else if(key == "filelist")
+	{
+		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceFile;
+		loadBasebandFilelist(value, basebandFiles);
+	}
+	else if(key == "mark6filelist")
+	{
+		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceMark6;
+		loadBasebandFilelist(value, basebandFiles);
+	}
+	else if(key == "networkPort")
+	{
+		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceNetwork;
+		ss >> networkPort;
+	}
+	else if(key == "windowSize")
+	{
+		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceNetwork;
+		ss >> windowSize;
+	}
+	else if(key == "UDP_MTU")
+	{
+		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceNetwork;
+		ss >> windowSize;
+		windowSize = -windowSize;
+	}
+	else if(key == "module" || key == "vsn")
+	{
+		if(dataSource == DataSourceModule)
+		{
+			std::cerr << "Warning: datastream " << difxName << " has multiple vsns assigned to it.  Only using the last one = " << value << " and discarding " << basebandFiles[0].filename << std::endl;
+		}
+		else if(dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: datastream " << difxName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		dataSource = DataSourceModule;
+		vsn = value;
+	}
+	else if(key == "fake")
+	{
+		dataSource = DataSourceFake;
+		basebandFiles.clear();
+		basebandFiles.push_back(VexBasebandData(value, 0));
+	}
+	else
+	{
+		std::cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << std::endl; 
+		++nWarn;
+	}
+
+	return nWarn;
+}
+
+bool DatastreamSetup::hasBasebandData(const Interval &interval) const
+{
+	if(dataSource == DataSourceFile || dataSource == DataSourceMark6)
+	{
+		for(std::vector<VexBasebandData>::const_iterator it = basebandFiles.begin(); it != basebandFiles.end(); ++it)
+		{
+			if(it->overlap(interval) > 0.0)
+			{
+				return true;
+			}
+		}
+	}
+	else if(dataSource == DataSourceModule)
+	{
+		if(!vsn.empty())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+int DatastreamSetup::merge(const DatastreamSetup *dss)
+{
+	nBand = dss->nBand;	// there is no way for the defaultDatastreamSetup to have this set
+
+	if(dataSource == DataSourceNone)
+	{
+		dataSource = dss->dataSource;
+	}
+	else if(dataSource != dss->dataSource && dss->dataSource != DataSourceNone)
+	{
+		std::cerr << "Error: conflicting data sources: " << dataSourceNames[dataSource] << " != " << dataSourceNames[dss->dataSource] << std::endl;
+
+		return -1;
+	}
+
+	if(format.empty())
+	{
+		format = dss->format;
+	}
+	else if(format != dss->format && !dss->format.empty())
+	{
+		std::cerr << "Error: conflicting formats: " << format << " != " << format << std::endl;
+
+		return -2;
+	}
+
+	if(dataSampling < dss->dataSampling)
+	{
+		if(dataSampling != 0)
+		{
+			std::cerr << "Error: conflicting sampling types specified" << std::endl;
+
+			return -3;
+		}
+		dataSampling = dss->dataSampling;	
+	}
+
+	if(dataSource == DataSourceFile || dataSource == DataSourceMark6)
+	{
+		if(!basebandFiles.empty())
+		{
+			std::cerr << "Error: cannot provide baseband file(s) in ANTENNA section when datastreams are specified." << std::endl;
+			for(std::vector<VexBasebandData>::const_iterator it = basebandFiles.begin(); it != basebandFiles.end(); ++it)
+			{
+				std::cerr << "  File: " << *it << std::endl;
+			}
+
+			return -4;
+		}
+		else
+		{
+			if(!dss->basebandFiles.empty())
+			{
+				basebandFiles = dss->basebandFiles;
+			}
+		}
+	}
+	else if(dataSource == DataSourceModule)
+	{
+		if(!vsn.empty())
+		{
+			std::cerr << "Error: cannot provide vsn in ANTENNA section when datastreams are specified." << std::endl;
+			std::cerr << "  VSN: " << vsn << std::endl;
+
+			return -4;
+		}
+		else
+		{
+			if(!dss->vsn.empty())
+			{
+				vsn = dss->vsn;
+			}
+		}
+	}
+
+	if(dataSource == DataSourceNetwork)
+	{
+		if((!networkPort.empty() && networkPort != "0") || windowSize != 0)
+		{
+			std::cerr << "Error: cannot provide network (eVLBI) information in ANTENNA section when datastreams are specified." << std::endl;
+			std::cout << "  Network port = '" << networkPort << "' and windowSize = " << windowSize << std::endl;
+
+			return -5;
+		}
+		else
+		{
+			networkPort = dss->networkPort;
+			windowSize = dss->windowSize;
+		}
+	}
+
+	if(machine.empty())
+	{
+		machine = dss->machine;
+	}
+	else
+	{
+		if(!dss->machine.empty())
+		{
+			std::cerr << "Error: cannot provide machine both in ANTENNA section and DATASTREAM section." << std::endl;
+
+			return -6;
+		}
+	}
+
+	return 0;
+}
+
 
 AntennaSetup::AntennaSetup(const std::string &name) :
 		vexName(name),
@@ -1484,22 +1146,23 @@ AntennaSetup::AntennaSetup(const std::string &name) :
 		GS_Name(""),
 		GS_difxName(""),
 		GS_calcName(""),
-		GS_X(0.0), GS_Y(0.0), GS_Z(0.0),
+		GS_X(ANTENNA_COORD_NOT_SET), GS_Y(ANTENNA_COORD_NOT_SET), GS_Z(ANTENNA_COORD_NOT_SET),
 		GS_dX(0.0), GS_dY(0.0), GS_dZ(0.0),
 		GS_pos_epoch(0.0),
 		GS_axisType(""),
 		GS_axisOffset0(0.0),GS_axisOffset1(0.0),GS_axisOffset2(0.0),
 		GS_clockorder(-1),
 		GS_clock0(0.0),GS_clock1(0.0),GS_clock2(0.0),GS_clock3(0.0),GS_clock4(0.0),GS_clock5(0.0),
-																	  GS_clockEpoch(0.0),
-																	  SC_pos_offset_refmjd(0.0),
-																	  SC_pos_offsetorder(-1)
+		GS_clockEpoch(0.0),
+		SC_pos_offset_refmjd(0.0),
+		SC_pos_offsetorder(-1),
+		defaultDatastreamSetup(name)
 {
 	polSwap = false;
-	X = 0.0;
-	Y = 0.0;
-	Z = 0.0;
-	axisOffset = -1e6;
+	X = ANTENNA_COORD_NOT_SET;
+	Y = ANTENNA_COORD_NOT_SET;
+	Z = ANTENNA_COORD_NOT_SET;
+	axisOffset = AXIS_OFFSET_NOT_SET;
 	deltaClock = 0.0;
 	deltaClockRate = 0.0;
 	clock.mjdStart = -1e9;
@@ -1508,14 +1171,11 @@ AntennaSetup::AntennaSetup(const std::string &name) :
 	clock3 = 0.0;
 	clock4 = 0.0;
 	clock5 = 0.0;
-	networkPort = "0";
-	windowSize = 0;
 	phaseCalIntervalMHz = -1;
 	toneGuardMHz = -1.0;
 	toneSelection = ToneSelectionSmart;
 	tcalFrequency = -1;
-	dataSource = DataSourceNone;
-	dataSampling = NumSamplingTypes;	// flag that no sampling is is identified here
+
 	// spacecraft ephemeris
 	ephemDeltaT = 24.0; //seconds; 24 seconds is perfectly matched to the default behavior of calcif2
 	ephemType = "";
@@ -1531,287 +1191,6 @@ AntennaSetup::AntennaSetup(const std::string &name) :
 	mjdStart = -1.0;
 	mjdStop = -1.0;
 }
-
-int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFreq *zoomFreq)
-{
-	int nWarn = 0;
-
-	if(key == "freq" || key == "FREQ")
-	{
-		zoomFreq->frequency = atof(value.c_str())*1000000; //convert to Hz
-	}
-	else if(key == "bw" || key == "BW")
-	{
-		zoomFreq->bandwidth = atof(value.c_str())*1000000; //convert to Hz
-	}
-	else if(key == "noparent" || key == "NOPARENT")
-	{
-		if(value == "TRUE" || value == "True" || value == "true")
-		{
-			zoomFreq->correlateparent = false;
-		}
-		else
-		{
-			zoomFreq->correlateparent = true;
-		}
-	}
-	else if(key == "specAvg" || key == "SPECAVG" || key == "specavg")
-	{
-		zoomFreq->spectralaverage = atoi(value.c_str());
-	}
-	else
-	{
-		std::cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << std::endl; 
-		++nWarn;
-	}
-
-	return nWarn;
-}
-
-enum charType {SIGN,DIGIT,DOT,E,SPACE,CHARERROR};
-
-enum charType whatChar(const char a) {
-	if (a=='+'||a=='-') 
-		return SIGN;
-	else if (a=='E'||a=='e')
-		return (E);
-	else if (a>='0'&&a<='9')
-		return DIGIT;
-	else if (a==' ')
-		return SPACE;
-	else if (a=='.')
-		return DOT;
-	else
-		return CHARERROR;
-}
-
-int getdouble(std::string &value, double &x) {
-	enum stateType {START, STARTINT, INTEGER, DECIMAL, STARTEXP, EXPONENT, END, ERROR};
-	enum stateType state = START;
-	enum charType what;
-
-	unsigned int i;
-	for (i=0 ; i<value.length(); i++) {
-		what = whatChar(value[i]);
-	  
-		switch (state) {
-		case START:
-			switch (what) {
-			case CHARERROR:
-				std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-				value = "";
-				return 1; 
-				break;
-			case SIGN:
-				state = STARTINT;
-				break;
-			case DIGIT:
-				state = INTEGER;
-				break;
-			case SPACE:
-				break;
-			case E:
-				state = ERROR;
-				break;
-			case DOT:
-				state=DECIMAL;
-				break;
-			}
-			break;
-	
-		case STARTINT:
-			switch (what) {
-			case CHARERROR:
-				std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-				value = "";
-				return 1; 
-				break;
-			case SIGN:
-			case E:
-				state = ERROR;
-				break;
-			case DIGIT:
-				state = INTEGER;
-				break;
-			case SPACE:
-				break;
-			case DOT:
-				state = DECIMAL;
-			}
-			break;
-
-		case INTEGER:
-			switch (what) {
-			case CHARERROR:
-				std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-				value = "";
-				return 1; 
-				break;
-			case DIGIT:
-				break;
-			case SIGN:
-			case SPACE:
-				state = END;
-				break;
-			case E:
-				state = STARTEXP;
-				break;
-			case DOT:
-				state = DECIMAL;
-			}
-			break;
-	
-		case DECIMAL:
-			switch (what) {
-			case CHARERROR:
-				std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-				value = "";
-				return 1; 
-				break;
-			case DIGIT:
-				break;
-			case SIGN:
-			case SPACE:
-				state = END;
-				break;
-			case E:
-				state = STARTEXP;
-				break;
-			case DOT:
-				state = ERROR;
-				break;
-			}
-			break;
-	
-		case STARTEXP:
-			switch (what) {
-			case CHARERROR:
-				std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-				value = "";
-				return 1; 
-				break;
-			case SIGN:
-			case DIGIT:
-				state = EXPONENT;
-				break;
-			case SPACE:
-			case E:
-			case DOT:
-				state = ERROR;
-				break;
-			}
-			break;
-	
-		case EXPONENT:
-			switch (what) {
-			case CHARERROR:
-				std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-				value = "";
-				return 1; 
-				break;
-			case SPACE:
-			case SIGN:
-				state = END;
-				break;
-			case DIGIT:
-				break;
-			case DOT:
-			case E:
-				state = ERROR;
-				break;
-			}
-			break;
-
-		case ERROR:
-		case END:
-			break;
-	
-		}
-	  
-		if (state==ERROR) {
-			std::cerr << "Error parsing \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-			value = "";
-			return 1; 
-		}
-		if (state==END) break;
-	}
-
-	std::stringstream ss;
-	if (state==START) {
-		value = "";
-		return 1;
-	} else if (state==END) {
-	} else {
-		i = value.length();
-	}
-	ss << value.substr(0,i);
-	ss >> x;
-	value  = value.substr(i);
-
-	return 0;
-}
-  
-int getOp(std::string &value, int &plus) {
-	enum charType what;
-
-	unsigned int i;
-	for (i=0 ; i<value.length(); i++) {
-		what = whatChar(value[i]);
-	  
-		if (what==CHARERROR) {
-			std::cerr << "Error parsing character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-			value = "";
-			return 1; 
-		} else if (what==SPACE) {
-			continue;
-		} else if (what==SIGN) {
-			if (value[i]=='+') {
-				plus = 1;
-			} else {
-				plus = 0;
-			} 
-			value = value.substr(i+1);
-			return(0);
-		} else {
-			std::cerr << "Unexpected character in \"" << value << "\" at : '" << value[i] << "':" << i << std::endl;
-			value = "";
-			return 1; 
-		}
-	}
-	return(1); // Did not match anything
-}
-
-double parseDouble(const std::string &value) {
-	// Read a string consisting of a series of additions and subtrations (only) and return a double
-
-	std::string str = value; // Copy as the procedure destroys the string
-  
-	int status, number=1, sign=-1;
-	double thisvalue, result=0;
-	while (str.length()) {
-		if (number) {
-			status = getdouble(str, thisvalue);
-			if (status) break;
-			if (sign==-1)
-				result = thisvalue;
-			else if (sign==1) 
-				result += thisvalue;
-			else
-				result -= thisvalue;
-			number = 0;
-	
-		} else	{
-			status = getOp(str, sign);
-			if (status) break;
-			number = 1;
-		}
-	}
-
-	return result;
-
-}
-
-
 
 int AntennaSetup::setkv(const std::string &key, const std::string &value)
 {
@@ -1838,7 +1217,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "X" || key == "x")
 	{
-		if(X != 0.0)
+		if(X != ANTENNA_COORD_NOT_SET)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has multiple X definitions" << std::endl;
 			++nWarn;
@@ -1847,7 +1226,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "Y" || key == "y")
 	{
-		if(Y != 0.0)
+		if(Y != ANTENNA_COORD_NOT_SET)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has multiple Y definitions" << std::endl;
 			++nWarn;
@@ -1856,7 +1235,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "Z" || key == "z")
 	{
-		if(Z != 0.0)
+		if(Z != ANTENNA_COORD_NOT_SET)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has multiple Z definitions" << std::endl;
 			++nWarn;
@@ -1874,7 +1253,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "axisOffset")
 	{
-		if(axisOffset > -1.0e5)
+		if(axisOffset != AXIS_OFFSET_NOT_SET)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has multiple axisOffset definitions" << std::endl;
 
@@ -2053,7 +1432,13 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "polSwap")
 	{
-		polSwap = isTrue(value);
+		polSwap = parseBoolean(value);
+	}
+	else if(key == "datastreams")
+	{
+		std::string s;
+		ss >> s;
+		addDatastream(s);
 	}
 	else if(key == "format")
 	{
@@ -2066,93 +1451,110 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			s = "MKIV";
 		}
 
-		format = s;
+		defaultDatastreamSetup.format = s;
 	}
 	else if(key == "machine")
 	{
-		ss >> machine;	// FIXME: when multiple datastreams per antenna are supported, this should be a list append
-	}
-	else if(key == "file" || key == "files")
-	{
-		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
-		{
-			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
-			++nWarn;
-		}
-		dataSource = DataSourceFile;
-		basebandFiles.push_back(VexBasebandFile(value));
-	}
-	else if(key == "filelist")
-	{
-		if(dataSource != DataSourceFile && dataSource != DataSourceNone)
-		{
-			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
-			++nWarn;
-		}
-		dataSource = DataSourceFile;
-		loadBasebandFilelist(value, basebandFiles);
+		ss >> defaultDatastreamSetup.machine;
 	}
 	else if(key == "sampling")
 	{
-		dataSampling = stringToSamplingType(value.c_str());
-		if(dataSampling >= NumSamplingTypes)
+		defaultDatastreamSetup.dataSampling = stringToSamplingType(value.c_str());
+		if(defaultDatastreamSetup.dataSampling >= NumSamplingTypes)
 		{
 			std::cerr << "Error: antenna " << vexName << " has illegal samping type set: " << value << std::endl;
 
 			exit(EXIT_FAILURE);
 		}
 	}
-	else if(key == "networkPort")
+	else if(key == "file" || key == "files")
 	{
-		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
+		if(defaultDatastreamSetup.dataSource != DataSourceFile && defaultDatastreamSetup.dataSource != DataSourceNone)
 		{
-			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
 			++nWarn;
 		}
-		dataSource = DataSourceNetwork;
-		ss >> networkPort;
+		defaultDatastreamSetup.dataSource = DataSourceFile;
+		defaultDatastreamSetup.basebandFiles.push_back(VexBasebandData(value, 0));
+	}
+	else if(key == "mark6file" || key == "mark6files")
+	{
+		if(defaultDatastreamSetup.dataSource != DataSourceFile && defaultDatastreamSetup.dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		defaultDatastreamSetup.dataSource = DataSourceMark6;
+		defaultDatastreamSetup.basebandFiles.push_back(VexBasebandData(value, 0));
+	}
+	else if(key == "filelist")
+	{
+		if(defaultDatastreamSetup.dataSource != DataSourceFile && defaultDatastreamSetup.dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		defaultDatastreamSetup.dataSource = DataSourceFile;
+		loadBasebandFilelist(value, defaultDatastreamSetup.basebandFiles);
+	}
+	else if(key == "mark6filelist")
+	{
+		if(defaultDatastreamSetup.dataSource != DataSourceFile && defaultDatastreamSetup.dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			++nWarn;
+		}
+		defaultDatastreamSetup.dataSource = DataSourceMark6;
+		loadBasebandFilelist(value, defaultDatastreamSetup.basebandFiles);
+	}
+	else if(key == "networkPort")
+	{
+		if(defaultDatastreamSetup.dataSource != DataSourceNetwork && defaultDatastreamSetup.dataSource != DataSourceNone)
+		{
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
+			++nWarn;
+		}
+		defaultDatastreamSetup.dataSource = DataSourceNetwork;
+		ss >> defaultDatastreamSetup.networkPort;
 	}
 	else if(key == "windowSize")
 	{
-		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
+		if(defaultDatastreamSetup.dataSource != DataSourceNetwork && defaultDatastreamSetup.dataSource != DataSourceNone)
 		{
-			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
 			++nWarn;
 		}
-		dataSource = DataSourceNetwork;
-		ss >> windowSize;
+		defaultDatastreamSetup.dataSource = DataSourceNetwork;
+		ss >> defaultDatastreamSetup.windowSize;
 	}
 	else if(key == "UDP_MTU")
 	{
-		if(dataSource != DataSourceNetwork && dataSource != DataSourceNone)
+		if(defaultDatastreamSetup.dataSource != DataSourceNetwork && defaultDatastreamSetup.dataSource != DataSourceNone)
 		{
-			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceNetwork] << std::endl;
 			++nWarn;
 		}
-		dataSource = DataSourceNetwork;
-		ss >> windowSize;
-		windowSize = -windowSize;
+		defaultDatastreamSetup.dataSource = DataSourceNetwork;
+		ss >> defaultDatastreamSetup.windowSize;
+		defaultDatastreamSetup.windowSize = -defaultDatastreamSetup.windowSize;
 	}
 	else if(key == "module" || key == "vsn")
 	{
-		if(dataSource == DataSourceModule)
+		if(defaultDatastreamSetup.dataSource == DataSourceModule)
 		{
-			std::cerr << "Warning: antenna " << vexName << " has multiple vsns assigned to it.	Only using the last one = " << value << " and discarding " << basebandFiles[0].filename << std::endl;
+			std::cerr << "Warning: antenna " << vexName << " has multiple vsns assigned to it.  Only using the last one = " << value << " and discarding " << defaultDatastreamSetup.basebandFiles[0].filename << std::endl;
 		}
-		else if(dataSource != DataSourceNone)
+		else if(defaultDatastreamSetup.dataSource != DataSourceNone)
 		{
-			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
+			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
 			++nWarn;
 		}
-		dataSource = DataSourceModule;
-		basebandFiles.clear();
-		basebandFiles.push_back(VexBasebandFile(value));
+		defaultDatastreamSetup.dataSource = DataSourceModule;
+		defaultDatastreamSetup.vsn = value;
 	}
 	else if(key == "fake")
 	{
-		dataSource = DataSourceFake;
-		basebandFiles.clear();
-		basebandFiles.push_back(VexBasebandFile(value));
+		defaultDatastreamSetup.dataSource = DataSourceFake;
 	}
 	else if(key == "phaseCalInt")
 	{
@@ -2209,7 +1611,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			at = value.find_first_of('/', last);
 			nestedkeyval = value.substr(last, at-last);
 			splitat = nestedkeyval.find_first_of('@');
-			nWarn += setkv(nestedkeyval.substr(0,splitat), nestedkeyval.substr(splitat+1), newfreq);
+			nWarn += setkv(nestedkeyval.substr(0, splitat), nestedkeyval.substr(splitat+1), newfreq);
 			last = at+1;
 		}
 	}
@@ -2344,7 +1746,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "GS_X" || key == "GS_x")
 	{
-		if(GS_X != 0.0)
+		if(GS_X != ANTENNA_COORD_NOT_SET)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has multiple GS_X definitions" << std::endl;
 			nWarn++;
@@ -2354,7 +1756,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "GS_Y" || key == "GS_y")
 	{
-		if(GS_Y != 0.0)
+		if(GS_Y != ANTENNA_COORD_NOT_SET)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has multiple GS_Y definitions" << std::endl;
 			nWarn++;
@@ -2364,7 +1766,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "GS_Z" || key == "GS_z")
 	{
-		if(GS_Z != 0.0)
+		if(GS_Z != ANTENNA_COORD_NOT_SET)
 		{
 			std::cerr << "Warning: antenna " << vexName << " has multiple GS_Z definitions" << std::endl;
 			nWarn++;
@@ -2662,7 +2064,43 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	{
 		std::string es;
 		ss >> es;
-		calculate_own_retarded_position = isTrue(es);
+		calculate_own_retarded_position = parseBoolean(es);
+	}
+	else
+	{
+		std::cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << std::endl; 
+		++nWarn;
+	}
+
+	return nWarn;
+}
+
+int AntennaSetup::setkv(const std::string &key, const std::string &value, ZoomFreq *zoomFreq)
+{
+	int nWarn = 0;
+
+	if(key == "freq" || key == "FREQ")
+	{
+		zoomFreq->frequency = atof(value.c_str())*1000000; //convert to Hz
+	}
+	else if(key == "bw" || key == "BW")
+	{
+		zoomFreq->bandwidth = atof(value.c_str())*1000000; //convert to Hz
+	}
+	else if(key == "noparent" || key == "NOPARENT")
+	{
+		if(value == "TRUE" || value == "True" || value == "true")
+		{
+			zoomFreq->correlateparent = false;
+		}
+		else
+		{
+			zoomFreq->correlateparent = true;
+		}
+	}
+	else if(key == "specAvg" || key == "SPECAVG" || key == "specavg")
+	{
+		zoomFreq->spectralaverage = atoi(value.c_str());
 	}
 	else
 	{
@@ -2681,11 +2119,11 @@ void AntennaSetup::copyGlobalZoom(const GlobalZoom &globalZoom)
 	}
 }
 
-bool AntennaSetup::hasBasebandFile(const Interval &interval) const
+bool AntennaSetup::hasBasebandData(const Interval &interval) const
 {
-	for(std::vector<VexBasebandFile>::const_iterator it = basebandFiles.begin(); it != basebandFiles.end(); ++it)
+	for(std::vector<DatastreamSetup>::const_iterator it = datastreamSetups.begin(); it != datastreamSetups.end(); ++it)
 	{
-		if(it->overlap(interval) > 0.0)
+		if(it->hasBasebandData(interval))
 		{
 			return true;
 		}
@@ -2693,6 +2131,20 @@ bool AntennaSetup::hasBasebandFile(const Interval &interval) const
 
 	return false;
 }
+
+
+// For now this returns the first datastreamSetup's data source...
+enum DataSource AntennaSetup::getDataSource() const
+{
+	return datastreamSetups[0].dataSource;
+}
+
+// For now this returns the first datastreamSetup's format...
+const std::string &AntennaSetup::getFormat() const
+{
+	return datastreamSetups[0].format;
+}
+
 
 int GlobalZoom::setkv(const std::string &key, const std::string &value, ZoomFreq *zoomFreq)
 {
@@ -2835,7 +2287,6 @@ void CorrParams::defaults()
 	invalidMask = ~0;		// write flags for all types of invalidity
 	visBufferLength = 80;
 	v2dMode = V2D_MODE_NORMAL;
-	overSamp = 0;
 	outputFormat = OutputFormatDIFX;
 	nCore = 0;
 	nThread = 0;
@@ -2909,31 +2360,31 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "singleScan")
 	{
-		singleScan = isTrue(value);
+		singleScan = parseBoolean(value);
 	}
 	else if(key == "fake")
 	{
-		fakeDatasource = isTrue(value);
+		fakeDatasource = parseBoolean(value);
 	}
 	else if(key == "singleSetup")
 	{
-		singleSetup = isTrue(value);
+		singleSetup = parseBoolean(value);
 	}
 	else if(key == "allowOverlap")
 	{
-		allowOverlap = isTrue(value);
+		allowOverlap = parseBoolean(value);
 	}
 	else if(key == "mediaSplit")
 	{
-		mediaSplit = isTrue(value);
+		mediaSplit = parseBoolean(value);
 	}
 	else if(key == "simFXCORR")
 	{
-		simFXCORR = isTrue(value);
+		simFXCORR = parseBoolean(value);
 	}
 	else if(key == "tweakIntTime")
 	{
-		tweakIntTime = isTrue(value);
+		tweakIntTime = parseBoolean(value);
 	}
 	else if(key == "delayServerHost")
 	{
@@ -3045,7 +2496,7 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	{
 		std::string es;
 		ss >> es;
-		calculate_own_retarded_position = isTrue(es);
+		calculate_own_retarded_position = parseBoolean(es);
 	}
 	else if(key == "nCore")
 	{
@@ -3114,7 +2565,7 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	}
 	else if(key == "padScans")
 	{
-		padScans = isTrue(value);
+		padScans = parseBoolean(value);
 	}
 	else if(key == "invalidMask")
 	{
@@ -3169,10 +2620,6 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 		{
 			outputFormat = OutputFormatASCII;
 		}
-	}
-	else if(key == "overSamp")
-	{
-		ss >> overSamp;
 	}
 	else if(key == "machines")
 	{
@@ -3231,6 +2678,7 @@ int CorrParams::load(const std::string &fileName)
 		PARSE_MODE_SETUP,
 		PARSE_MODE_RULE,
 		PARSE_MODE_SOURCE,
+		PARSE_MODE_DATASTREAM,
 		PARSE_MODE_ANTENNA,
 		PARSE_MODE_GLOBAL_ZOOM,
 		PARSE_MODE_EOP,
@@ -3245,6 +2693,7 @@ int CorrParams::load(const std::string &fileName)
 	CorrSetup	*corrSetup=0;
 	CorrRule	*rule=0;
 	SourceSetup *sourceSetup=0;
+	DatastreamSetup *datastreamSetup=0;
 	AntennaSetup *antennaSetup=0;
 	GlobalZoom	*globalZoom=0;
 	VexEOP		 *eop=0;
@@ -3387,6 +2836,34 @@ int CorrParams::load(const std::string &fileName)
 			key = "";
 			parseMode = PARSE_MODE_SOURCE;
 		}
+		else if(*i == "DATASTREAM")
+		{
+			if(parseMode != PARSE_MODE_GLOBAL)
+			{
+				std::cerr << "Error: DATASTREAM out of place." << std::endl;
+				
+				exit(EXIT_FAILURE);
+			}
+			++i;
+			std::string dsName(*i);
+			if(getDatastreamSetup(dsName) != 0)
+			{
+				std::cerr << "Error: two DATASTREAM blocks named " << dsName << std::endl;
+
+				exit(EXIT_FAILURE);
+			}
+			datastreamSetups.push_back(DatastreamSetup(dsName));
+			datastreamSetup = &datastreamSetups.back();
+			++i;
+			if(*i != "{")
+			{
+				std::cerr << "Error: DATASTREAM " << datastreamSetup->difxName << ": '{' expected." << std::endl;
+
+				exit(EXIT_FAILURE);
+			}
+			key = "";
+			parseMode = PARSE_MODE_DATASTREAM;
+		}
 		else if(*i == "ANTENNA")
 		{
 			if(parseMode != PARSE_MODE_GLOBAL)
@@ -3517,6 +2994,9 @@ int CorrParams::load(const std::string &fileName)
 			case PARSE_MODE_SOURCE:
 				nWarn += sourceSetup->setkv(key, value);
 				break;
+			case PARSE_MODE_DATASTREAM:
+				nWarn += datastreamSetup->setkv(key, value);
+				break;
 			case PARSE_MODE_ANTENNA:
 				nWarn += antennaSetup->setkv(key, value);
 				break;
@@ -3589,6 +3069,44 @@ int CorrParams::load(const std::string &fileName)
 		}
 	}
 
+	// populate datastream structures
+	for(std::vector<AntennaSetup>::iterator it = antennaSetups.begin(); it != antennaSetups.end(); ++it)
+	{
+		if(it->datastreamList.empty())	// no explicit datastreams defined
+		{
+			// just copy the datastream from the antenna's default
+			it->datastreamSetups.push_back(it->defaultDatastreamSetup);
+		}
+		else
+		{
+			for(std::list<std::string>::const_iterator cit = it->datastreamList.begin(); cit != it->datastreamList.end(); ++cit)
+			{
+				const DatastreamSetup *dss;
+				dss = getDatastreamSetup(*cit);
+				if(dss == 0)
+				{
+					std::cerr << "Error: referenced DATASTREAM " << *cit << " is not defined!" << std::endl;
+
+					exit(EXIT_FAILURE);
+				}
+				else
+				{
+					int v;
+
+					it->datastreamSetups.push_back(it->defaultDatastreamSetup);
+					it->datastreamSetups.back().difxName = *cit;
+					v = it->datastreamSetups.back().merge(dss);
+					if(v != 0)
+					{
+						std::cerr << "Error merging default datastream setup of antenna " << it->vexName << " with supplied DATASTREAM " << *cit << std::endl;
+
+						exit(EXIT_FAILURE);
+					}
+				}
+			}
+		}
+	}
+
 	return nWarn;
 }
 
@@ -3606,7 +3124,7 @@ int CorrParams::checkSetupValidity()
 
 		if(!c->nFFTChan && !c->nOutputChan && !c->explicitFFTSpecRes && !c->explicitOutputSpecRes)
 		{
-			std::cerr << "WARNING: No information was provided regarding spectral resolution.  Basic defaults WILL be used.	 Please check that this suits your needs." << std::endl;
+			std::cerr << "Warning: No information was provided regarding spectral resolution.  Basic defaults WILL be used.	 Please check that this suits your needs." << std::endl;
 			++nWarn;
 		}
 
@@ -3876,22 +3394,24 @@ bool baselineMatch(const std::pair<std::string,std::string> &bl, const std::stri
 
 bool CorrParams::useAntenna(const std::string &antName) const
 {
+	bool rv = false;
 	std::list<std::string>::const_iterator it;
 
 	if(antennaList.empty())
 	{
-		return true;
+		rv = true;
 	}
 
 	for(it = antennaList.begin(); it != antennaList.end(); ++it)
 	{
 		if(antennaMatch(*it, antName))
 		{
-			return true;
+			rv = true;
+			break;
 		}
 	}
 
-	return false;
+	return rv;
 }
 
 bool CorrParams::useBaseline(const std::string &ant1, const std::string &ant2) const
@@ -3952,6 +3472,22 @@ const VexClock *CorrParams::getAntennaClock(const std::string &antName) const
 	return 0;
 }
 
+const DatastreamSetup *CorrParams::getDatastreamSetup(const std::string &name) const
+{
+	const DatastreamSetup *d = 0;
+
+	for(std::vector<DatastreamSetup>::const_iterator it = datastreamSetups.begin(); it != datastreamSetups.end(); ++it)
+	{
+		if(it->difxName == name)
+		{
+			d = &(*it);
+			break;
+		}
+	}
+
+	return d;
+}
+
 const AntennaSetup *CorrParams::getAntennaSetup(const std::string &name) const
 {
 	const AntennaSetup *a = 0;
@@ -3987,6 +3523,35 @@ const AntennaSetup *CorrParams::getAntennaSetupExact(const std::string &name) co
 	}
 
 	return a;
+}
+
+AntennaSetup *CorrParams::getNonConstAntennaSetup(const std::string &name)
+{
+	AntennaSetup *a = 0;
+
+	for(std::vector<AntennaSetup>::iterator it = antennaSetups.begin(); it != antennaSetups.end(); ++it)
+	{
+		if(it->vexName == "DEFAULT")
+		{
+			// keep this as a placeholder in case nothing better is found
+			a = &(*it);
+		}
+		if(it->vexName == name)
+		{
+			a = &(*it);
+			break;
+		}
+	}
+
+	return a;
+}
+
+void AntennaSetup::addDatastream(const std::string &dsName)
+{
+	if(find(datastreamList.begin(), datastreamList.end(), dsName) == datastreamList.end())
+	{
+		datastreamList.push_back(dsName);
+	}
 }
 
 const GlobalZoom *CorrParams::getGlobalZoom(const std::string &name) const
@@ -4091,7 +3656,7 @@ const PhaseCentre *CorrParams::getPhaseCentre(const std::string &difxName) const
 	return 0;
 }
 
-const std::string &CorrParams::findSetup(const std::string &scan, const std::string &source, const std::string &mode, char cal, int qual) const
+const std::string &CorrParams::findSetup(const std::string &scan, const std::string &source, const std::string &mode) const
 {
 	std::vector<CorrRule>::const_iterator it;
 	static const std::string def("default");
@@ -4099,7 +3664,7 @@ const std::string &CorrParams::findSetup(const std::string &scan, const std::str
 
 	for(it = rules.begin(); it != rules.end(); ++it)
 	{
-		if(it->match(scan, source, mode, cal, qual))
+		if(it->match(scan, source, mode))
 		{
 			return it->corrSetupName;
 		}
@@ -4232,6 +3797,27 @@ std::ostream& operator << (std::ostream &os, const SourceSetup &x)
 	return os;
 }
 
+
+std::ostream& operator << (std::ostream &os, const DatastreamSetup &x)
+{
+	os << "DATASTREAM " << x.difxName << std::endl;
+	os << "{" << std::endl;
+	if(!x.format.empty())
+	{
+		os << "  format=" << x.format << std::endl;
+	}
+	os << "  # dataSource=" << dataSourceNames[x.dataSource] << std::endl;
+	if(x.dataSource == DataSourceNetwork)
+	{
+		os << "  networkPort=" << x.networkPort << std::endl;
+		os << "  windowSize=" << x.windowSize << std::endl;
+	}
+
+	os << "}" << std::endl;
+
+	return os;
+}
+
 std::ostream& operator << (std::ostream &os, const AntennaSetup &x)
 {
 	os << "ANTENNA " << x.vexName << std::endl;
@@ -4255,16 +3841,6 @@ std::ostream& operator << (std::ostream &os, const AntennaSetup &x)
 		os << "	 clockEpoch=" << x.clock.offset_epoch << std::endl;
 	}
 	os << "	 polSwap=" << x.polSwap << std::endl;
-	if(!x.format.empty())
-	{
-		os << "	 format=" << x.format << std::endl;
-	}
-	os << "	 # dataSource=" << dataSourceNames[x.dataSource] << std::endl;
-	if(x.dataSource == DataSourceNetwork)
-	{
-		os << "	 networkPort=" << x.networkPort << std::endl;
-		os << "	 windowSize=" << x.windowSize << std::endl;
-	}
 	os << "	 phaseCalInt=" << x.phaseCalIntervalMHz << std::endl;
 	os << "	 tcalFreq=" << x.tcalFrequency << std::endl;
 	if(x.ephemFile.size() > 0) {
@@ -4329,7 +3905,6 @@ std::ostream& operator << (std::ostream &os, const CorrParams &x)
 	os << "nDataSegments=" << x.nDataSegments << std::endl;
 	os << "maxReadSize=" << x.maxReadSize << " # Bytes" << std::endl;
 	os << "minReadSize=" << x.minReadSize << " # Bytes" << std::endl;
-	os << "overSamp=" << x.overSamp << std::endl;
 	os << "outputFormat=" << x.outputFormat << std::endl;
 	
 	if(!x.antennaList.empty())
@@ -4439,111 +4014,6 @@ bool areCorrSetupsCompatible(const CorrSetup *A, const CorrSetup *B, const CorrP
 	}
 
 	return true;
-}
-
-int CorrParams::loadShelves(const std::string &fileName)
-{
-	int nWarn = 0;
-	std::ifstream is;
-	bool doAntennas;
-	char s[1024], a[32], v[32], ms[32];
-	std::string vsn, shelf;
-	std::vector<std::string> noShelf;
-
-	is.open(fileName.c_str());
-
-	if(is.fail())
-	{
-		return 0;
-	}
-
-	// only change antenna selection if the antenna list is empty to start with
-	doAntennas = antennaList.empty();
-
-	for(int lineNum = 1; ; ++lineNum)
-	{
-		is.getline(s, 1024);
-		if(is.eof())
-		{
-			break;
-		}
-		for(int i = 0; s[i]; ++i)
-		{
-			if(s[i] == '#')
-			{
-				s[i] = 0;
-				break;
-			}
-		}
-
-		if(strlen(s) < 5)
-		{
-			continue;
-		}
-
-		if(sscanf(s, "%31s%31s%31s", a, v, ms) != 3)
-		{
-			std::cerr << "Error: line " << lineNum << " of " << fileName << " not parsable." << std::endl;
-
-			exit(EXIT_FAILURE);
-		}
-
-		std::string antName(a);
-		Upper(antName);
-
-		if(doAntennas)
-		{
-			addAntenna(antName);
-		}
-		else if(!useAntenna(antName))
-		{
-			continue;
-		}
-
-		vsn = std::string(v);
-		shelf = std::string(ms);
-
-		Upper(vsn);
-		Upper(shelf);
-
-		if(shelf == std::string("NONE"))
-		{
-			noShelf.push_back(vsn);
-		}
-		else
-		{
-			shelves[vsn] = shelf;
-		}
-	}
-
-	is.close();
-
-	if(!noShelf.empty())
-	{
-		std::cerr << "Warning: " << noShelf.size() << " modules have no shelf location:";
-		for(std::vector<std::string>::const_iterator s = noShelf.begin(); s != noShelf.end(); ++s)
-		{
-			std::cerr << " " << *s;
-		}
-		std::cerr << std::endl;
-	}
-
-	return nWarn;
-}
-
-const char *CorrParams::getShelf(const std::string &vsn) const
-{
-	std::map<std::string,std::string>::const_iterator it;
-
-	it = shelves.find(vsn);
-	if(it == shelves.end())
-	{
-		return "NONE";
-	}
-	else
-	{
-		return it->second.c_str();
-	}
 }
 
 const std::string &CorrParams::getNewSourceName(const std::string &origName) const

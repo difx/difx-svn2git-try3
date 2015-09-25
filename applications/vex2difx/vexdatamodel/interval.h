@@ -27,60 +27,38 @@
  *
  *==========================================================================*/
 
-#include <algorithm>
-#include "interval.h"
+#ifndef __INTERVAL_H__
+#define __INTERVAL_H__
 
-// returns a negative number if no overlap
-double Interval::overlap(const Interval &v) const
+#include <iostream>
+
+class Interval
 {
-	return std::min(mjdStop, v.mjdStop) - std::max(mjdStart, v.mjdStart);
-}
+public:
+	double mjdStart;
+	double mjdStop;
 
-void Interval::logicalAnd(double start, double stop)
-{
-	if(mjdStart < start)
-	{
-		mjdStart = start;
-	}
-	if(mjdStop > stop)
-	{
-		mjdStop = stop;
-	}
-}
+	Interval(double start=0.0, double end=0.0) : mjdStart(start), mjdStop(end) {}
+	Interval(const Interval &vi) : mjdStart(vi.mjdStart), mjdStop(vi.mjdStop) {}
+	double duration() const { return mjdStop-mjdStart; }
+	double duration_seconds() const { return 86400.0*(mjdStop-mjdStart); }
+	double overlap(const Interval &v) const;
+	double overlap_seconds(const Interval &v) const { return 86400.0*overlap(v); }
+	double center() const { return 0.5*(mjdStart+mjdStop); }
+	void shift(double deltaT) { mjdStart += deltaT; mjdStop += deltaT; }
+	void setTimeRange(double start, double stop) { mjdStart = start; mjdStop = stop; }
+	void setTimeRange(const Interval &v) { mjdStart = v.mjdStart; mjdStop = v.mjdStop; }
+	void logicalAnd(double start, double stop);
+	void logicalAnd(const Interval &v);
+	void logicalOr(double start, double stop);
+	void logicalOr(const Interval &v);
+	bool contains(double mjd) const { return (mjdStart <= mjd) && (mjd <= mjdStop); }
+	bool contains(const Interval &v) const { return (mjdStart <= v.mjdStart) && (mjdStop >= v.mjdStop); }
+	bool containsAbsolutely(double mjd) const { return (mjdStart < mjd) && (mjd < mjdStop); }
+	bool containsAbsolutely(const Interval &v) const { return (mjdStart < v.mjdStart) && (mjdStop > v.mjdStop); }
+	bool isCausal() const { return (mjdStart <= mjdStop); }
+};
 
-void Interval::logicalAnd(const Interval &v)
-{
-	if(mjdStart < v.mjdStart)
-	{
-		mjdStart = v.mjdStart;
-	}
-	if(mjdStop > v.mjdStop)
-	{
-		mjdStop = v.mjdStop;
-	}
-}
+std::ostream& operator << (std::ostream &os, const Interval &x);
 
-void Interval::logicalOr(double start, double stop)
-{
-	if(mjdStart > start)
-	{
-		mjdStart = start;
-	}
-	if(mjdStop < stop)
-	{
-		mjdStop = stop;
-	}
-}
-
-void Interval::logicalOr(const Interval &v)
-{
-	if(mjdStart > v.mjdStart)
-	{
-		mjdStart = v.mjdStart;
-	}
-	if(mjdStop < v.mjdStop)
-	{
-		mjdStop = v.mjdStop;
-	}
-}
-
+#endif

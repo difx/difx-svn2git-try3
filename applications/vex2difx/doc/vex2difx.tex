@@ -1,0 +1,345 @@
+\documentclass[12pt]{article}
+
+% Notes to potential editors:
+% 1. Please don't change the line wrapping.  Exactly one sentence per line!
+% 2. Update "date" and "version" below with each update
+% 3. Notation : 
+%       Program names and other text to be typed by user or returned by the computer in {\tt }
+%       Variables or arguments in {\em } or in $<$ $>$
+
+
+\usepackage[margin=0.75in,twoside]{geometry}
+\usepackage{graphics}
+\usepackage{float}
+\usepackage{color}
+\definecolor{darkblue}{rgb}{0,0.2,0.4}
+\usepackage[colorlinks,linkcolor=darkblue,citecolor=blue,urlcolor=blue,pdftitle={How vex2difx works},pdfauthor={Walter Brisken}]{hyperref}
+
+\floatstyle{ruled}
+\newfloat{code}{thp}{lop}
+\floatname{code}{Code}
+
+\begin{document}
+
+\newcommand{\vexdifx}{{\tt vex2difx} }
+\newcommand{\vd}{{\tt .v2d} }
+\newcommand{\vx}{{\tt .vex} }
+\newcommand{\defname}{{\em def name} }
+\newcommand{\fs}{{\tt /}}
+\newcommand{\hy}{{\tt -}}
+\newcommand{\us}{{\tt \_}}
+
+\begin{center}
+{\Large How does vex2difx work?}
+
+\vspace{10pt}
+Walter Brisken
+
+\vspace{10pt}
+{\em draft} 2015/09/02
+\end{center}
+
+
+\section{Introduction}
+
+This document was produced to demystify the inner workings of \vexdifx...
+The version of \vexdifx covered here is that which will become part of the DiFX 2.5 release series.
+This version has had considerable changes since the most recent stable version (2.4.0).
+
+\section{Sources of information}
+
+\vexdifx explicitly takes a single file as its input, the \vd file.
+This file must contain a reference to a \vx file (using the {\tt vex} parameter.
+Contents of the {\tt .vex} file will be used unless overridden in the {\tt .v2d} file.
+Additional optional files referenced by the {\tt .v2d} file will be discussed as needed.
+Some bits of information (e.g., names of files to correlate) can only be provided by the \vd file, and some information, such as frequency setups, can only be provided by the \vx file.
+Little attention will be paid to these cases where the source of information is unambiguous.
+The \vexdifx wiki page and vex documentation should be sufficient to understand these cases.
+The more complicated options are those where settings in the \vd file are used to override those in the \vx file; that will be the primary focus of this document.
+
+Note that as of now the only version of the vex format that is supported is vex 1.5.
+This version of the standard itself is not fully capable of conveying many details of modern VLBI systems, including the VDIF format, some recording systems, and all eVLBI.
+The lack of unambiguous support by vex 1.5 means that \vexdifx had to adopt some conventions and make some assumptions.
+\vexdifx aims to warn the user when assumptions are being made.
+
+\section{Output files}
+
+\vexdifx generates three output files for each job created.
+See Sec.~\ref{sec:break} for information on how \vexdifx breaks an observation into multiple jobs.
+The {\tt .input} file is the master file for each DiFX job.
+It is passed to {\tt mpifxcorr} and has reference to other files.
+The {\tt .calc} file is primarily used as input to generate the delay model {\tt .im} file that {\tt mpifxcorr} requires.
+Finally a {\tt .flag} file is written.
+This file is used to mask data that may be inadvertently correlated but that is irrelevant to the particular job.
+This is important espeically when the observing antenna array is broken into subarrays, each observing different sources.
+It is also important in cases where an observation is interrupted but where data for the interrupting observation is accessible to the correlator.
+See the DiFX reference manual \url{...} for more information.
+
+\section{Details}
+
+The sections below detail how various bits of information get conveyed to the DiFX input files.
+
+\subsection{Frequency tunings}
+
+At the moment the only way to specify frequency tunings is in the \vx file within a \$FREQ block.
+
+\subsection{Data format}
+
+The data format is probably the most confusing and complicated parameter.
+The format, in the context of DiFX, consists of a number of more elementary parts, some of which are not applicable to every format, that when used together completely determine the structure of the baseband data.
+Things are further complicated by the fact that \vexdifx allows some of these parts to be determined by the \vx file and some to be set by the \vd file.
+Various parts of the format include
+\begin{itemize}
+\item {\em class}: VDIF, Mark5B, VLBA, Mark4, and a few other variants and lesser used options.
+\item {\em bits}: number of bits per sample, often equal to 1 or 2.
+\item {\em chans}: the number of baseband channels has an impact on the layout of data so is considered part of the data format.  Note that not all of the channels need be correlated, but DiFX needs to know which channels are present in any case.  See more on this in Sec.~\ref{sec:channels}
+\item {\em fanout}: used only in older formats (VLBA and Mark4).  From the DiFX perspective this describes the internal ordering of channel data in a data stream.
+\item {\em threads}: currently used only for the VDIF format.  The thread is a numeric identifier for a channel set within a VDIF stream.  One or more channel can be contained in each thread.
+\item {\em sampling type}: in most cases today this is real.  Two forms of complex sampling (single-sideband and double-sideband) are also supported, but only for VDIF format.
+\item {\em size}: the size in bytes of one frame of data (currently required only for VDIF).  Unless otherwise noted, {\em size} includes the framing overhead.
+\item {\em rate}: the data rate (excluding framing overhead), in Mbps.
+\end{itemize}
+
+\noindent
+Each of these parts will be discussed in more detail below.
+
+The \vx file does not provide all of this information in a single place, but instead it can (often) be constructed by combining information from various places in the \vx file, but mostly from the {\tt \$TRACKS} block.
+Typically some parts of the format will be specified by the {\tt track\_frame\_format} parameter in the {\tt \$TRACKS} block.
+\vexdifx is able to parse a wide variety of values for this parameter, most of which contain more information than just {\tt format class}.
+The wide variety of syntaxes that are supported is in response to a wide variety of specifications and informal usage that has accumulated over the years.
+Fortunately, there are no known cases where ambiguity arises.
+The complete list of possible values is shown in Table~\ref{tab:format}.
+
+\begin{table}
+\begin{center}
+\caption{
+Allowed format specifiers.
+The numbering is consistent with internal details of the format matching code in \vexdifx.
+The {\em class} parameter is case insensitive.
+Certain shorthands are allowed: {\tt MARK5B} format can be written as {\tt MK5B} and {\tt MARK4} can be written as {\tt MKIV}.
+See Table~\ref{tab:vdifclass} for specifying variations of the {\tt VDIF} format class.
+}
+\label{tab:format}
+\begin{tabular}{llll}
+\# & Syntax & Example & Notes \\
+\hline
+0 & {\em class} & {\tt MARK5B} & \\
+1 & {\em class}\fs{\em threads}\fs{\em size}\fs{\em bits} & {\tt VDIF/0:1:2:3/5032/2} & For VDIF formats only. \\
+  &                                                       & {\tt VDIF/0,1,2,3/5032/2} & Commas or colons as separators. \\
+2 & {\em class}\fs{\em size}\fs{\em bits} & {\tt VDIF/5032/2} & For VDIF formats only. \\
+3 & {\em class} {\em size} & {\tt VDIF5032} & This syntax is discouraged. \\
+4 & {\em class}{\tt 1\_}{\em fanout} & {\tt VLBA1\_4} & For VLBA and Mark4 formats only. \\
+5 & {\em class}\us{\em size}\hy{\em rate}\hy{\em chans}\hy{\em bits} & {\tt VDIF\_5000-2048-16-2} & VDIF only. \\
+  & & & {\em size} here excludes frame headers. \\
+6 & {\em class}\hy{\em rate}\hy{\em chans}\hy{\em bits} & {\tt MARK5B-1024-8-2} & \\
+7 & {\em class}{\tt 1\_}{\em fanout}\hy{\em rate}\hy{\em chans}\hy{\em bits} & {\tt VLBA1\_4-512-8-2} & For VLBA and Mark4 formats only. \\
+8a & {\em class}\fs{\em bits} & {\tt MARK5B/2} & Assumes {\em bits} $\le 32$.  Use is discouraged. \\
+8b & {\em class}\fs{\em size} & {\tt VDIF/5032} & Assumes {\em size} $> 32$.  Use is discouraged. \\
+8c & {\em class}\hy{\em bits} & {\tt MARK5B-2} & Assumes {\em bits} $\le 32$.  Use is discouraged. \\
+8d & {\em class}\hy{\em size} & {\tt VDIF-5032} & Assumes {\em size} $> 32$.  Use is discouraged. \\
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}
+\begin{center}
+\caption{
+Supported classes for various VDIF formats.
+}
+\label{tab:vdifclass}
+\begin{tabular}{p{3.5cm}p{12cm}}
+Class & Description \\
+\hline
+{\tt VDIF} & Can describe any non-legacy VDIF.  Usually defaults to single-thread unless threads are explicitly defined.  See note on canonical threads (Sec.~\ref{sec:canonicalthreads}). \\
+{\tt VDIFL} & Specify Legacy VDIF.  DiFX supports legacy VDIF only in single-thread cases. \\
+{\tt VDIFC} & Same as {\tt VDIF}, but specifies single-sideband complex sampling. \\
+{\tt VDIFD} & Same as {\tt VDIF}, but specifies double-sideband complex sampling. \\
+{\tt INTERLACEDVDIF} & Same as {\tt VDIF}, but explicitly forces multiple threads.  The list of threads must be provided through some means. \\
+{\tt INTERLACEDVDIFC} & Same as {\tt INTERLACEDVDIF}, but for single-sideband complex sampling. \\
+{\tt INTERLACEDVDIFD} & Same as {\tt INTERLACEDVDIF}, but for double-sideband complex sampling. \\
+\end{tabular}
+\end{center}
+\end{table}
+
+Note that behavior is undefined if the \vx file contains conflicting information regarding the format of data.
+
+The subsections below dictate how the various format parts are specified.
+Everything in this section is relevant both for single and multiple datastreams per channel.
+For details on configuring multiple datastreams, see Sec.~\ref{sec:mds}.
+
+\subsubsection{Format class}
+
+Format class can only be specified in two places: the {\tt track\_frame\_format} parameter in the \vx file's {\tt \$TRACKS} section and the {\tt format} parameter in the \vd file (which can live either in an {\tt ANTENNA} or {\tt DATASTREAM} section).
+Collectively these parameters will be called ``format parameters''.
+At least one file must provide this information.
+If the information is provided in both files, the \vd file will override.
+Both the \vx and \vd parameters accept the same set of possible values as enumerated in Table~\ref{tab:format}.
+The sources of format class, listed in increasing priority, are:
+\begin{enumerate}
+\item {\tt track\_frame\_format} statement in a {\tt \$TRACKS} block of the \vx file
+\item {\tt format} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt format} statement in a {\tt DATASTREAM} section of the \vd file
+\end{enumerate}
+
+\subsubsection{Number of bits}
+
+The number of bits per sample can be specified in the format parameters.
+However, if the \vx file has tracks defined in the {\tt \$TRACKS} block, the number of bits is determined by the absense or presense of magnitude tracks: if a magnitude track is found, 2 bits is assumed, otherwise 1 bit is used.
+Any format parameter in the \vd file containing number of bits will override that in the \vx file, however it is deduced.
+These sources of bits per sample, listed in increasing priority, are:
+\begin{enumerate}
+\item {\tt track\_frame\_format} statement in a {\tt \$TRACKS} block of the \vx file
+\item Existence of magnitude tracks listed in {\tt fanout\_def} statments in a {\tt \$TRACKS} block of the \vx file
+\item {\tt format} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt format} statement in a {\tt DATASTREAM} section of the \vd file
+\end{enumerate}
+
+\subsubsection{Number of channels}
+
+The number of recorded baseband channels can be specified in the format parameters.
+There are two additional sources of channel count within the \vx file: the {\tt format\_def} statements in {\tt \$TRACKS} section and the {\tt chan\_def} statements in the {\tt \$FREQ} block. 
+These sources of channel count, listed in increasing priority, are:
+\begin{enumerate}
+\item {\tt track\_frame\_format} statement in a {\tt \$TRACKS} block of the \vx file
+\item Number of {\tt chan\_def} entries in a {\tt \$FREQ} block of the \vx file
+\item Number of sign tracks listed in {\tt fanout\_def} statments in a {\tt \$TRACKS} block of the \vx file
+\item {\tt format} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt format} statement in a {\tt DATASTREAM} section of the \vd file
+\end{enumerate}
+
+\subsubsection{Fanout}
+
+Fanout is relevant only to VLBA and Mark4 formats, and some other very closely related formats\footnote{E.g., Mark3 and the so-called {\tt VLBN} format, which is equivalent to the VLBA format but without modulation.}
+
+Fanout can be set three ways.
+The format parameters cover two of these (by use of syntax numbers 4 or 7 in Table~\ref{tab:format}).
+The repetition of the same bit of the same channel in the {\tt \$TRACKS} table is the third mechanism.
+The VLBA and Mark4 formats as implemented within DiFX require that the fanout be the same for all channels and that fanout groups (sets of tracks used for one channel) use consecutive track numbers.
+The sources of fanout, listed in increasing priority, are:
+\begin{enumerate}
+\item {\tt track\_frame\_format} statement in a {\tt \$TRACKS} block of the \vx file
+\item Multiplicity of tracks for the same channel/bit in the {\tt \$TRACKS} block of the \vx file
+\item {\tt format} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt format} statement in a {\tt DATASTREAM} section of the \vd file
+\end{enumerate}
+
+\subsubsection{Threads}
+
+Threads are relevant only to multi-threaded VDIF format.
+With one exception (see Sec.~\ref{sec:canonicalthreads}) an explicit list of threads must be provided throug a format parameter for any multi-threaded VDIF format using syntax number 1 of Table~\ref{tab:format}.
+The sources of thread information, listed in increasing priority, are:
+\begin{enumerate}
+\item Canonical thread values (see Sec.~\ref{sec:canonicalthreads})
+\item {\tt track\_frame\_format} statement in a {\tt \$TRACKS} block of the \vx file
+\item {\tt format} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt format} statement in a {\tt DATASTREAM} section of the \vd file
+\end{enumerate}
+
+\subsubsection{Sample type}
+
+Sample type describes the representation of data samples.
+Three kinds are supported: real, single-sideband complex and double-sideband complex.
+The choice of sampling type is independent of choice of upper- or lower-sideband, which is not considered here.
+This can be overridden either in the \vx or \vd files.
+Sampling type always defaults to real.
+There are several ways to change to one of the complex types:
+\begin{enumerate}
+\item {\tt track\_frame\_format} statement in a {\tt \$TRACKS} block of the \vx file
+\item {\tt format} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt sampling} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt format} statement in a {\tt DATASTREAM} section of the \vd file
+\item {\tt sampling} statement in a {\tt DATASTREAM} section of the \vd file
+\end{enumerate}
+Note that unlike for most parameters, a priority system does not strictly determine the final value of sampling.
+Instead any indicator of non-real sampling will override a lower priority real value, but a real setting cannot override a complex value.
+
+\subsubsection{Data frame size}
+
+Data frame size is completely determined based on other data for all formats except for VDIF.
+For VDIF the size must be explicitly provided.
+The only means to provide frame size are through format parameters.
+The sources, listed in increasing priority, are:
+\begin{enumerate}
+\item {\tt track\_frame\_format} statement in a {\tt \$TRACKS} block of the \vx file
+\item {\tt format} statement in a {\tt ANTENNA} section of the \vd file
+\item {\tt format} statement in a {\tt DATASTREAM} section of the \vd file
+\end{enumerate}
+\noindent
+Note! For historical reasons some format syntaxes only consider the size of the data portion of a frame, while others specify the full frame size.
+See comments in Table~\ref{tab:format} for details.
+
+\subsubsection{Data rate}
+
+Data rate is completely determined based on other parameters and the contents of the \vx {\tt \$FREQ} block.
+The format parameters can include data rate, but in all cases it is ignored.
+It is mentioned here only because some of the historical data format syntaxes include a data rate field.
+
+\subsection{Special topics related to data format}
+
+The following sections provide details on some special cases of format specification.
+
+\subsubsection{Canonical VDIF threads} \label{sec:canonicalthreads}
+
+The VLBA introduced the concept of ``canonical thread numbering'' as a thread numbering convention that allows thread numbers to be deduced purely by the contents of the {\$FREQ} block of a \vx file.
+The numbering scheme works as follows:
+\begin{enumerate}
+\item Sort the baseband channels specified in {\tt chan\_def} statements in a {\tt \$FREQ} block in alphabetical order.
+\item The channels are then given sequential integer thread numbers starting with 0 for the first channel alphabetically listed.
+\end{enumerate}
+\vexdifx only assigns canonical thread numbers if no other source of thread information is present {\em and} they are from one of the antennas known to produce channels in canonical order.
+These antennas are those of the VLBA, GBT, VLA, Arecibo, and Effelsberg (using the RDBE backend, station code {\tt EB}).
+
+\subsubsection{Format overriding with multiple modes}
+
+In general, format settings made within the \vd file apply to all modes.
+It is not possible to explicitly set format parameters separately for each mode, but careful omission of parameters in the \vd file can allow the mode-dependent values from the \vx file to remain in control.
+Essentially any format parameter that must change with mode must not be set in the \vd file.
+
+\subsubsection{Specifying multi-channel multi-thread VDIF}
+
+This mode is not yet supported, but will make use of the fact that the number of channels and number of threads is independently specified.
+The number of channels per thread will be determined as the ratio of number of channels to number of specified threads, which must be an exact power of 2.
+Details of channel ordering in this case are not yet established.
+
+\subsection{Channel ordering} \label{sec:channels}
+
+The \vx file is the only place where ordering of channels can be specified.
+There are two mechanisms:
+\begin{itemize}
+\item If {\tt fanout\_def} statements are present in a {\tt \$TRACKS} block, the ordering, by track number, is used to specify the channel ordering.
+\item If no {\tt fanout\_def} statements are present, the channels as specified by {\tt chan\_def} statements in the {\tt \$FREQ} table are ordered alphabetically by the name of the channels.
+\end{itemize}
+
+\subsection{Multiple datastreams} \label{sec:mds}
+
+\subsection{Antenna properties}
+
+Note that within the DiFX ecosystem three terms, ``station'', ``antenna'', and ``telescope'' are all used more or less interchangably.
+Within the vex format itself there is a distinction between ``station'' and ``antenna'', and there is no concept of ``telescope''.
+
+\subsubsection{Antenna name}
+
+By default the antenna name assigned by \vexdifx is the \defname of the corresponding entry in the {\tt \$STATION} block of the \vx file, promoted to all capital letters.
+Antenna names can be overridden in the \vd file within a corresponding {\tt ANTENNA} section through the use of the {\tt name} parameter.
+
+\subsubsection{Antenna coordinates}
+
+\subsubsection{Axis offsets}
+
+\subsubsection{Clock models}
+
+\subsubsection{Ephemeris information}
+
+\subsection{Earth orientation parameters}
+
+\subsection{Correlator parameters}
+
+\subsection{Zoom bands}
+
+
+
+\section{Job separation} \label{sec:break}
+
+This section describes what triggers splitting of a project into more than one job.
+
+\end{document}

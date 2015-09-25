@@ -1,10 +1,7 @@
+ACLOCAL_AMFLAGS = -I m4
+
 SUBDIRS = \
 	vex \
+	vexdatamodel \
 	src \
 	utilities
-
-DIST_SUBDIRS = \
-	vex \
-	src \
-	utilities
-

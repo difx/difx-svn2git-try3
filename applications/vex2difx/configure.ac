@@ -3,7 +3,9 @@ AM_CONFIG_HEADER([config.h])
 
 AC_C_BIGENDIAN
  
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign])
+
+AC_CONFIG_MACRO_DIR([m4])
 
 AC_PROG_CC
 AC_PROG_F77
@@ -30,7 +32,7 @@ CXXFLAGS="${CFLAGS}"
 AC_OUTPUT([ \
 	Makefile \
 	vex/Makefile \
-	vex/vex.pc \
+	vexdatamodel/Makefile \
 	src/Makefile \
 	utilities/Makefile \
 ])

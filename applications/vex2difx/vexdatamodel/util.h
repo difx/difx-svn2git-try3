@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2010 by Walter Brisken                             *
+ *   Copyright (C) 2009-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -27,11 +27,49 @@
  *
  *==========================================================================*/
 
-#ifndef __VEXLOAD_H__
-#define __VEXLOAD_H__
+#ifndef __UTIL_H__
+#define __UTIL_H__
 
-#include "corrparams.h"
+#include <algorithm>
+#ifndef __STDC_FORMAT_MACROS       // Defines for broken C++ implementations
+#  define __STDC_FORMAT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
+#  define __STDC_CONSTANT_MACROS
+#endif
+#ifndef __STDC_LIMIT_MACROS
+#  define __STDC_LIMIT_MACROS
+#endif
+#include <stdint.h>             // using <cstdint> requires C++11 support
 
-VexData *loadVexFile(const CorrParams &P, int * numWarnings);
+// To capitalize a string
+#define Upper(s) transform(s.begin(), s.end(), s.begin(), (int(*)(int))toupper)
+
+// To uncapitalize a string
+#define Lower(s) transform(s.begin(), s.end(), s.begin(), (int(*)(int))tolower)
+
+extern "C" {
+int fvex_double(char **field, char **units, double *d);
+int fvex_ra(char **field, double *ra);
+int fvex_dec(char **field, double *dec);
+}
+
+int checkCRLF(const char *filename);
+
+//FIXME: add DOYtoMJD from vexload also to timeutils?
+
+//FIXME: move to timeutils?
+/* round to nearest second */
+double roundSeconds(double mjd);
+
+/* check if an integer is a power of 2 */
+bool isPowerOf2(uint32_t n);
+
+uint32_t nextPowerOf2(uint32_t x);
+
+/* Modified from http://www-graphics.stanford.edu/~seander/bithacks.html */
+int intlog2(uint32_t v);
+
+char swapPolarizationCode(char pol);
 
 #endif
