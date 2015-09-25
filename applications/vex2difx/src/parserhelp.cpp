@@ -245,20 +245,19 @@ int getOp(std::string &value, int &plus) {
 			return 1; 
 		}
 	}
-	return(1); // Did not match anything
+	return 1; // Did not match anything
 }
 
 // Read a string consisting of a series of additions and subtrations (only) and return a double
-double parseDouble(const std::string &value) {
-	// Read a string consisting of a series of additions and subtrations (only) and return a double
-
+double parseDouble(const std::string &value)
+{
 	std::string str = value; // Copy as the procedure destroys the string
   
 	int status, number=1, sign=-1;
 	double thisvalue, result=0;
 	while (str.length()) {
 		if (number) {
-			status = getdouble(str, thisvalue);
+			status = getDouble(str, thisvalue);
 			if (status) break;
 			if (sign==-1)
 				result = thisvalue;
@@ -276,7 +275,6 @@ double parseDouble(const std::string &value) {
 	}
 
 	return result;
-
 }
 
 // Turns a string into MJD 
@@ -843,7 +841,7 @@ double parseCoord(const char *str, char type)
 }
 
 // From http://oopweb.com/CPP/Documents/CPPHOWTO/Volume/C++Programming-HOWTO-7.html
-void split(const std::string &str, std::vector<std::string> &tokens, const std::string &delimiters = " ")
+void split(const std::string &str, std::vector<std::string> &tokens, const std::string &delimiters)
 {
 	// Skip delimiters at beginning.
 	std::string::size_type lastPos = str.find_first_not_of(delimiters, 0);

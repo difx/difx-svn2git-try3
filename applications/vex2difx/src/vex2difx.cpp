@@ -55,6 +55,7 @@
 
 #include "corrparams.h"
 #include "freq.h"
+#include "job.h"
 #include "makejobs.h"
 #include "timeutils.h"
 #include "sanitycheck.h"
@@ -507,7 +508,6 @@ static int getToneSetId(vector<vector<unsigned int> > &toneSets, const vector<un
 static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<unsigned int> >& toneSets, const VexMode *mode, const string &antName, int startBand, const VexSetup &setup, const VexStream &stream, const CorrSetup *corrSetup, enum V2D_Mode v2dMode)
 {
 	vector<pair<int,int> > bandMap;
-	int overSamp, decimation;
 
 	if(mode == 0)
 	{
@@ -520,7 +520,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	int antId = D->datastream[dsId].antennaId;
 	if(antId < 0 || antId >= D->nAntenna)
 	{
-		cerr << "Error: setFormat: antId=" << antId << " while nAntenna=" << D->nAntenna << endl;
+		cerr << "Developer error: setFormat: antId=" << antId << " while nAntenna=" << D->nAntenna << endl;
 		
 		exit(EXIT_FAILURE);
 	}
@@ -1220,6 +1220,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 			return i;
 		}
 	}
+
 	// get worst case datastream count
 	nDatastream = 0;
 	for(int antennaId = 0; antennaId < D->nAntenna; ++antennaId)
@@ -3338,7 +3339,6 @@ int main(int argc, char **argv)
 	int nSkip = 0;
 	int nDigit;
 	int nJob = 0;
-	int nMulti = 0;
 	std::list<std::pair<int,std::string> > removedAntennas;
 
 	if(argc < 2)
@@ -3517,6 +3517,7 @@ int main(int argc, char **argv)
 	{
 		const VexScan *scan = V->getScan(s);
 		const std::string &corrSetupName = P->findSetup(scan->defName, scan->sourceDefName, scan->modeDefName);
+		CorrSetup *corrSetup = P->getNonConstCorrSetup(corrSetupName);
 		const VexMode *mode = V->getModeByDefName(scan->modeDefName);
 		for(map<string,VexSetup>::const_iterator sp = mode->setups.begin(); sp != mode->setups.end(); ++sp)
 		{
