@@ -217,6 +217,8 @@
 #define vectorZero_s16(dest, length)                                        ippsZero_16s(dest, length)
 #define vectorZero_s32(dest, length)                                        genericZero_32s(dest, length)
 
+
+
 #define vectorMax_f32(src, dest, length)                                    ippsMax_32f(src, dest, length)
 #define vectorMin_f32(src, dest, length)                                    ippsMin_32f(src, dest, length)
 #define vectorMove_cf32(src, dest, length)                                  ippsMove_32fc(src, dest, length)
@@ -231,7 +233,7 @@
 
 // FFT Functions
 
-//#define vectorInitFFTR_f32(fftspec, order, flag, hint)                      ippsFFTInitAlloc_R_32f(fftspec, order, flag, hint)
+#ifdef IPP9
 inline vecStatus vectorInitFFTR_f32(vecFFTSpecR_f32 **fftspec, int order, int flag, IppHintAlgorithm hint, int *wbufsize, u8 **fftworkbuf) {
   // Alloc FFT buffers
   int sizeFFTSpec, sizeFFTInitBuf;
@@ -247,6 +249,7 @@ inline vecStatus vectorInitFFTR_f32(vecFFTSpecR_f32 **fftspec, int order, int fl
   if (fftInitBuf) ippFree(fftInitBuf);
 } 
 #define vectorInitFFTC_f32(fftspec, order, flag, hint)                      ippsFFTInitAlloc_C_32f(fftspec, order, flag, hint)
+
 //#define vectorInitFFTC_cf32(fftspec, order, flag, hint)                     ippsFFTInitAlloc_C_32fc(fftspec, order, flag, hint)
 inline vecStatus vectorInitFFTC_cf32(vecFFTSpecC_cf32 **fftspec, int order, int flag, IppHintAlgorithm hint, int *wbufsize, u8 **fftworkbuf) {
   // Alloc FFT buffers
@@ -285,7 +288,7 @@ inline vecStatus vectorInitDFTR_f32(vecDFTSpecR_f32 **dftspec, int length, int f
   int sizeDFTSpec, sizeDFTInitBuf;
   u8 *dftInitBuf;
   
-  ippsDFTGetSize_R_32f(length, flag, hint,  &sizeDFTSpec, &sizeDFTInitBuf, wbufsize);
+  ippsDFTGetSize_R_f32(length, flag, hint,  &sizeDFTSpec, &sizeDFTInitBuf, wbufsize);
   *dftspec = (IppsDFTSpec_R_32f*)ippsMalloc_8u(sizeDFTSpec);
   dftInitBuf = ippsMalloc_8u(sizeDFTInitBuf);
   *dftworkbuf = ippsMalloc_8u(*wbufsize);
@@ -295,7 +298,55 @@ inline vecStatus vectorInitDFTR_f32(vecDFTSpecR_f32 **dftspec, int length, int f
   if (dftInitBuf) ippFree(dftInitBuf);
 }
 
-#define vectorInitFFT_s16(fftspec, order, flag, hint)                       ippsFFTInitAlloc_R_16s(fftspec, order, flag, hint)
+#else
+
+inline vecStatus vectorInitFFTR_f32(vecFFTSpecR_f32 **fftspec, int order, int flag, IppHintAlgorithm hint, int *wbufsize, u8 **fftworkbuf) {
+  vecStatus status = ippsFFTInitAlloc_R_32f(fftspec, order, flag, hint);
+  if (status != vecNoErr) return(status);
+
+  status = ippsFFTGetBufSize_R_32f(*fftspec, wbufsize);
+  if (status != vecNoErr) return(status);
+  
+  *fftworkbuf = ippsMalloc_8u(*wbufsize);
+  return vecNoErr;
+}
+
+inline vecStatus vectorInitFFTC_cf32(vecFFTSpecC_cf32 **fftspec, int order, int flag, IppHintAlgorithm hint, int *wbufsize, u8 **fftworkbuf) {
+  vecStatus status = ippsFFTInitAlloc_C_32fc(fftspec, order, flag, hint);
+  if (status != vecNoErr) return(status);
+
+  status = ippsFFTGetBufSize_C_32fc(*fftspec, wbufsize);
+  if (status != vecNoErr) return(status);
+  
+  *fftworkbuf = ippsMalloc_8u(*wbufsize);
+  return vecNoErr;
+}
+
+inline vecStatus vectorInitDFTC_cf32(vecDFTSpecC_cf32 **dftspec, int length, int flag, IppHintAlgorithm hint, int *wbufsize, u8 **dftworkbuf) {
+  vecStatus status = ippsDFTInitAlloc_C_32fc(dftspec, length, flag, hint);
+  if (status != vecNoErr) return(status);
+
+  status = ippsDFTGetBufSize_C_32fc(*dftspec, wbufsize);
+  if (status != vecNoErr) return(status);
+  
+  *dftworkbuf = ippsMalloc_8u(*wbufsize);
+  return vecNoErr;
+}
+
+inline vecStatus vectorInitDFTR_f32(vecDFTSpecR_f32 **dftspec, int length, int flag, IppHintAlgorithm hint, int *wbufsize, u8 **dftworkbuf) {
+  vecStatus status = ippsDFTInitAlloc_R_32f(dftspec, length, flag, hint);
+  if (status != vecNoErr) return(status);
+
+  status = ippsDFTGetBufSize_R_32f(*dftspec, wbufsize);
+  if (status != vecNoErr) return(status);
+  
+  *dftworkbuf = ippsMalloc_8u(*wbufsize);
+  return vecNoErr;
+}
+
+#endif
+
+//#define vectorInitFFT_s16(fftspec, order, flag, hint)                       ippsFFTInitAlloc_R_16s(fftspec, order, flag, hint)
 #define vectorGetFFTBufSizeR_f32(fftspec, buffersize)                       ippsFFTGetBufSize_R_32f(fftspec, buffersize)
 #define vectorGetFFTBufSizeC_f32(fftspec, buffersize)                       ippsFFTGetBufSize_C_32f(fftspec, buffersize)
 #define vectorGetFFTBufSizeC_cf32(fftspec, buffersize)                      ippsFFTGetBufSize_C_32fc(fftspec, buffersize)
