@@ -496,32 +496,24 @@ Mode::~Mode()
       vectorFree(complexrotator);
       vectorFree(fftd);
       if(isfft) {
-#warning CJP: Memory Leak need to work out how to do this properly
-	//        status = vectorFreeFFTC_cf32(pFFTSpecC);
-	status = vecNoErr;
+	vectorFreeFFTC_cf32(pFFTSpecC);
         if (status != vecNoErr)
           csevere << startl << "Error in freeing FFT spec!!!" << status << endl;
       }
       else{
-#warning CJP: Memory Leak need to work out how to do this properly
-	status = vecNoErr;
-	//        status = vectorFreeDFTC_cf32(pDFTSpecC);
+	vectorFreeDFTC_cf32(pDFTSpecC);
         if (status != vecNoErr)
           csevere << startl << "Error in freeing DFT spec!!!" << status << endl;
       }
       break;
     case 0: //zeroth order interpolation, "post-F"
       if(isfft) {
-#warning CJP: Memory Leak need to work out how to do this properly
-	status = vecNoErr;
-	//        status = vectorFreeFFTR_f32(pFFTSpecR);
+	vectorFreeFFTR_f32(pFFTSpecR);
         if (status != vecNoErr)
           csevere << startl << "Error in freeing FFT spec!!!" << status << endl;
       }
       else{
-#warning CJP: Memory Leak need to work out how to do this properly
-	status = vecNoErr;
-	//        status = vectorFreeDFTR_f32(pDFTSpecR);
+	vectorFreeDFTR_f32(pDFTSpecR);
         if (status != vecNoErr)
           csevere << startl << "Error in freeing DFT spec!!!" << status << endl;
       }
