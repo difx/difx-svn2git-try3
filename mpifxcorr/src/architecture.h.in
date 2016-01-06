@@ -777,6 +777,12 @@ inline vecStatus genericSum_32f(const f32 *src, int length, f32 *sum)
 // inline vecStatus genericNULLFIRGen(f64 freq, f64 *taps, int length, vecStatus window, vecStatus normalise) {return vecNoErr;} 
 
 // FFTs
+
+// FFTW plan creation is not thread safe. Use a global mutex to make this safe
+
+#include <pthread.h>
+extern pthread_mutex_t FFTinitMutex;
+
 inline vecStatus genericInitDFTR_f32(GenFFTPtrRf32 **fftspec, int length, int flag, vecHintAlg hint, int *wbufsize, u8 **fftworkbuf) {
   fftspec[0] = (GenFFTPtrRf32 *) malloc(sizeof(GenFFTPtrRf32)); 
   fftspec[0]->len = length;
@@ -784,7 +790,9 @@ inline vecStatus genericInitDFTR_f32(GenFFTPtrRf32 **fftspec, int length, int fl
   fftspec[0]->len3 = 1;
   fftspec[0]->in = (f32 *) fftwf_malloc(fftspec[0]->len*sizeof(f32)); 
   fftspec[0]->out = (cf32 *) fftwf_malloc((fftspec[0]->len/2+1)*sizeof(cf32)); 
+  pthread_mutex_lock(&FFTinitMutex);
   fftspec[0]->p = fftwf_plan_dft_r2c_1d(fftspec[0]->len,fftspec[0]->in, (fftwf_complex *) fftspec[0]->out, FFTW_ESTIMATE);
+  pthread_mutex_unlock(&FFTinitMutex);
   return vecNoErr;
 } // Always FORWARD
 
@@ -795,7 +803,9 @@ inline vecStatus genericInitDFTCR_f32(GenFFTPtrCRf32 **fftspec, int length, int 
   fftspec[0]->len3 = 1;
   fftspec[0]->out = (f32 *) fftwf_malloc(fftspec[0]->len*sizeof(f32)); 
   fftspec[0]->in = (cf32 *) fftwf_malloc((fftspec[0]->len/2+1)*sizeof(cf32)); 
+  pthread_mutex_lock(&FFTinitMutex);
   fftspec[0]->p = fftwf_plan_dft_c2r_1d(fftspec[0]->len,(fftwf_complex *) fftspec[0]->in, fftspec[0]->out, FFTW_ESTIMATE); 
+  pthread_mutex_unlock(&FFTinitMutex);
   return vecNoErr;
 } // Always BACKWARDS
 
@@ -806,7 +816,9 @@ inline vecStatus genericInitDFTC_cf32(GenFFTPtrCfc32 **fftspec, int length, int 
   fftspec[0]->len3 = 1;
   fftspec[0]->in = (cf32 *) fftwf_malloc(fftspec[0]->len*sizeof(cf32));
   fftspec[0]->out = (cf32 *) fftwf_malloc(fftspec[0]->len*sizeof(cf32));
+  pthread_mutex_lock(&FFTinitMutex);
   fftspec[0]->p = fftwf_plan_dft_1d(fftspec[0]->len,(fftwf_complex *) fftspec[0]->in,(fftwf_complex *) fftspec[0]->out, FFTW_FORWARD, FFTW_ESTIMATE);
+  pthread_mutex_unlock(&FFTinitMutex);
   *wbufsize = 0;
   *fftworkbuf = 0;
   return vecNoErr;
@@ -825,7 +837,9 @@ inline vecStatus generic2DInitFFTC_32fc(GenFFTPtrCfc32 **fftspec, int orderx, in
   fftspec[0]->len = ox; fftspec[0]->len2 = oy; fftspec[0]->len3 = 1;
   fftspec[0]->in = (cf32 *) fftwf_malloc(fftspec[0]->len*sizeof(cf32));
   fftspec[0]->out = (cf32 *) fftwf_malloc(fftspec[0]->len*sizeof(cf32));
+  pthread_mutex_lock(&FFTinitMutex);
   fftspec[0]->p = fftwf_plan_dft_2d(ox,oy,(fftwf_complex *) fftspec[0]->in,(fftwf_complex *) fftspec[0]->out, FFTW_FORWARD, FFTW_ESTIMATE); 
+  pthread_mutex_unlock(&FFTinitMutex);
   return vecNoErr;} // Always FORWARD
 
 inline vecStatus genericMove_32fc(cf32 *src,cf32 *dest, int len) 
@@ -954,9 +968,30 @@ inline vecStatus genericMaxIndx_32f(f32 *src, int len, f32 *max, int *imax)
 #define vectorInitDFTR_f32(fftspec, length, flag, hint, wbufsize, dftworkbuf)    genericInitDFTR_f32(fftspec, length, flag, hint, wbufsize, dftworkbuf)
 #define vectorInitDFTCR_f32(fftspec, length, flag, hint, wbufsize, dftworkbuf)   genericInitDFTCR_f32(fftspec, length, flag, hint, wbufsize, dftworkbuf)
 
-inline vecStatus genFreeFFTR_f32(GenFFTPtrRf32* fftspec) { fftwf_free(fftspec->in);fftwf_free(fftspec->out);fftwf_destroy_plan(fftspec->p);free(fftspec);return vecNoErr; }
-inline vecStatus genFreeFFTC_cf32(GenFFTPtrCfc32* fftspec) { fftwf_free(fftspec->in);fftwf_free(fftspec->out);fftwf_destroy_plan(fftspec->p);free(fftspec);return vecNoErr; }
-inline vecStatus genFreeFFTCR_f32(GenFFTPtrCRf32* fftspec) { fftwf_free(fftspec->in);fftwf_free(fftspec->out);fftwf_destroy_plan(fftspec->p);free(fftspec);return vecNoErr; }
+inline vecStatus genFreeFFTR_f32(GenFFTPtrRf32* fftspec) { 
+  fftwf_free(fftspec->in);
+  fftwf_free(fftspec->out);
+  pthread_mutex_lock(&FFTinitMutex);
+  fftwf_destroy_plan(fftspec->p);
+  pthread_mutex_unlock(&FFTinitMutex);
+  free(fftspec);return vecNoErr; 
+}
+inline vecStatus genFreeFFTC_cf32(GenFFTPtrCfc32* fftspec) { 
+  fftwf_free(fftspec->in);fftwf_free(fftspec->out);
+  pthread_mutex_lock(&FFTinitMutex);
+  fftwf_destroy_plan(fftspec->p);
+  pthread_mutex_unlock(&FFTinitMutex);
+  free(fftspec);
+  return vecNoErr; }
+inline vecStatus genFreeFFTCR_f32(GenFFTPtrCRf32* fftspec) {
+  fftwf_free(fftspec->in);
+  fftwf_free(fftspec->out);
+  pthread_mutex_lock(&FFTinitMutex);
+  fftwf_destroy_plan(fftspec->p);
+  pthread_mutex_unlock(&FFTinitMutex);
+  free(fftspec);
+  return vecNoErr; 
+}
 
 #define vectorFreeFFTR_f32(fftspec)    genFreeFFTR_f32(fftspec)
 #define vectorFreeFFTC_cf32(fftspec)   genFreeFFTC_cf32(fftspec)
