@@ -36,6 +36,7 @@ mpifxcorr_SOURCES = \
 	polyco.cpp \
 	alert.cpp \
 	pcal.cpp \
+	pfb.cpp \
 	switchedpower.cpp \
 	vdifmark6_datastream.cpp \
 	$(mark5_files)
@@ -55,6 +56,7 @@ library_include_HEADERS = \
         model.h \
         mode.h \
 	polyco.h \
+	pfb.h \
 	nativemk5.h \
 	watchdog.h \
 	mark5utils.h \
@@ -85,6 +87,7 @@ libmpifxcorr_a_SOURCES = \
 	fxmanager.cpp \
 	mathutil.cpp \
         model.cpp \
+	pfb.cpp \
 	visibility.cpp \
 	alert.cpp \
 	switchedpower.cpp \
@@ -107,6 +110,7 @@ libfxcorr_a_SOURCES = \
 	polyco.cpp \
 	visibility.cpp \
         model.cpp \
+        pfb.cpp \
 	datamuxer.cpp \
 	alert.cpp
 
@@ -115,6 +119,7 @@ neuteredmpifxcorr_SOURCES = \
 	fxmanager.cpp \
 	core.cpp \
 	datastream.cpp \
+	pfb.cpp \
 	mathutil.cpp \
 	mk5.cpp \
 	switchedpower.cpp \
