@@ -30,6 +30,7 @@
 #include "architecture.h"
 #include "configuration.h"
 #include "pcal.h"
+#include "pfb.h"
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -339,6 +340,10 @@ protected:
   f32 ** s1; //[numrecordedbands][recordedbandchannels]
   f32 ** s2; //[numrecordedbands][recordedbandchannels]
   f32 ** sk; //[numrecordedbands][recordedbandchannels]
+
+  //polyphase filter bank
+  PFB ** pfbs;
+  bool use_pfb;
 
   // Linear to circular conversion
 

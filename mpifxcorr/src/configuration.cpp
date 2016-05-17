@@ -32,6 +32,7 @@
 #include "mk5mode.h"
 #include "configuration.h"
 #include "mode.h"
+#include "pfb.h"
 #include "visibility.h"
 #include "alert.h"
 #include "vdifio.h"
@@ -84,6 +85,7 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
   baselineread = false;
   maxnumchannels = 0;
   estimatedbytes = 0;
+  enablePFB = false;
   model = NULL;
 
   //open the file
@@ -313,7 +315,19 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
     dumpkurtosis = false;
     stadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
     ltadumpchannels = DEFAULT_MONITOR_NUMCHANNELS;
-    
+
+    // look for polyphase filterbank file (the other option would be datastreamtable[i].filterbank ...)
+    string pfbcoefffile = configfilestring;
+    size_t baselen = pfbcoefffile.find_last_of('.');
+    pfbcoefffile = pfbcoefffile.substr(0, baselen) + ".pfb";
+    ifstream inputpfb(pfbcoefffile.c_str());
+    basePFB = new PFB(inputpfb, true);
+    enablePFB = basePFB->isValid();
+    if (enablePFB)
+      cinfo << startl << "Found valid polyphase filter bank file " << pfbcoefffile << ", tentatively enabling PFB." << endl;
+    else
+      cverbose << startl << "Polyphase filter bank file " << pfbcoefffile << " not found or not valid (" << basePFB << "). Disabling PFB" << endl;
+
     char *monitor_tcpwin = getenv("DIFX_MONITOR_TCPWINDOW");
     if (monitor_tcpwin!=0) {
       Configuration::MONITOR_TCP_WINDOWBYTES = atoi(monitor_tcpwin)*1024;

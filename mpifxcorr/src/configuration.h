@@ -36,6 +36,7 @@
 #include "model.h"
 #include "mark5access.h"
 #include "mpifxcorr.h"
+#include "pfb.h"
 
 //forward declaration of class Mode
 class Mode;
@@ -434,6 +435,8 @@ public:
     { return configs[configindex].numpafreqpols[freqindex]; }
   inline char getFPhaseArrayPol(int configindex, int freqindex, int polindex) const
     { return configs[configindex].papols[freqindex][polindex]; }
+  bool isPFBEnabled() const
+    { return (basePFB != NULL) && (basePFB->isValid()); }
 
 //@}
 
@@ -485,6 +488,13 @@ public:
   * @return A new Mode object for that datastream, in that configuration
   */
   Mode * getMode(int configindex, int datastreamindex);
+
+
+ /**
+  * Returns polyphase filter bank (PFB), if declared for this job.
+  * @return Pointer to a common valid PFB object, or NULL of PFB is invalid/unavailable
+  */
+  const PFB * getPFB() const { return isPFBEnabled() ? basePFB : NULL; }
 
  /**
   * @param scan The scan index
@@ -961,7 +971,7 @@ private:
   int mpiid;
   char header[MAX_KEY_LENGTH];
   bool commonread, configread, datastreamread, freqread, ruleread, baselineread;
-  bool consistencyok, commandthreadinitialised, commandthreadfailed, dumpsta, dumplta, dumpkurtosis;
+  bool consistencyok, commandthreadinitialised, commandthreadfailed, dumpsta, dumplta, dumpkurtosis, enablePFB;
   int visbufferlength, databufferfactor, numdatasegments;
   int numdatastreams, numbaselines, numcoreconfs;
   int executeseconds, startmjd, startseconds, startns;
@@ -983,6 +993,7 @@ private:
   datastreamdata * datastreamtable;
   Model * model;
   outputformat outformat;
+  PFB * basePFB;
 };
 
 #endif

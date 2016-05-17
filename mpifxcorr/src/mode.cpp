@@ -31,6 +31,7 @@
 #include "architecture.h"
 #include "alert.h"
 #include "pcal.h"
+#include "pfb.h"
 
 //using namespace std;
 const float Mode::TINY = 0.000000001;
@@ -427,6 +428,21 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     }
   }
 
+  // Polyhase filter bank
+  use_pfb = config->isPFBEnabled();
+  if(use_pfb && (fftchannels != config->getPFB()->getNch())) {
+    use_pfb = false;
+    // TODO: tell config that PFB was disabled again, we need to mark this in the FITS/Mark4 files...
+    cinfo << startl << "Reverting to FFT/DFT processing since " << config->getPFB()->getNch() << "-channel PFB file does not match " << fftchannels << "-channel FFT" << endl;
+  }
+  if (use_pfb) {
+    pfbs = new PFB*[numrecordedbands];
+    for(int i=0;i<numrecordedbands;i++) {
+      pfbs[i] = new PFB(config->getPFB());
+    }
+  }
+
+  // Polarization conversion or phase offsets
   if (linear2circular || phasepoloffset ) {
     
     tmpvec = new cf32[recordedbandchannels];
@@ -1113,7 +1129,10 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
 
             //do the fft
             // Chris add C2C fft for complex data
-            if(isfft) {
+            if(use_pfb) {
+              pfbs[j]->channelize_single(&(unpackedarrays[j][nearestsample - unpackstartsamples]), fftptr, fftchannels);
+            }
+            else if(isfft) {
               status = vectorFFT_RtoC_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), (f32*) fftptr, pFFTSpecR, fftbuffer);
               if (status != vecNoErr)
                 csevere << startl << "Error in FFT!!!" << status << endl;
@@ -1124,6 +1143,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
               if (status != vecNoErr)
                 csevere << startl << "Error in DFT!!!" << status << endl;  
             }
+
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
             {
               status = vectorConjFlip_cf32(&(fftptr[1]), fftoutputs[j][subloopindex], recordedbandchannels);
@@ -1145,7 +1165,10 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
               if(status != vecNoErr)
               	csevere << startl << "Error in fringe rotation!!!" << status << endl;
             }
-            if(isfft) {
+            if(use_pfb) {
+              pfbs[j]->channelize_single(complexunpacked, fftd, fftchannels);
+            }
+            else if(isfft) {
               status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
               if(status != vecNoErr)
                 csevere << startl << "Error doing the FFT!!!" << endl;
