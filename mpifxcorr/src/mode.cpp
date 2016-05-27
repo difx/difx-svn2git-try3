@@ -430,15 +430,15 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
   // Polyhase filter bank
   use_pfb = config->isPFBEnabled();
-  if(use_pfb && (fftchannels != config->getPFB()->getNch())) {
+  if(use_pfb && (fftchannels != config->getPFBCoeffs()->getNch())) {
     use_pfb = false;
-    // TODO: tell config that PFB was disabled again, we need to mark this in the FITS/Mark4 files...
-    cinfo << startl << "Reverting to FFT/DFT processing since " << config->getPFB()->getNch() << "-channel PFB file does not match " << fftchannels << "-channel FFT" << endl;
+    // TODO: two alternatives, tell config that PFB was disabled again, or, generate suitable coefficients on the fly
+    cinfo << startl << "Reverting to FFT/DFT processing since " << config->getPFBCoeffs()->getNch() << "-channel PFB file does not match " << fftchannels << "-channel FFT" << endl;
   }
   if (use_pfb) {
     pfbs = new PFB*[numrecordedbands];
     for(int i=0;i<numrecordedbands;i++) {
-      pfbs[i] = new PFB(config->getPFB());
+      pfbs[i] = new PFB(config->getPFBCoeffs(), true);
     }
   }
 

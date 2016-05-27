@@ -321,12 +321,12 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
     size_t baselen = pfbcoefffile.find_last_of('.');
     pfbcoefffile = pfbcoefffile.substr(0, baselen) + ".pfb";
     ifstream inputpfb(pfbcoefffile.c_str());
-    basePFB = new PFB(inputpfb, true);
-    enablePFB = basePFB->isValid();
+    basePFBCoeffs = new PFBCoeffs(inputpfb);
+    enablePFB = basePFBCoeffs->isValid();
     if (enablePFB)
       cinfo << startl << "Found valid polyphase filter bank file " << pfbcoefffile << ", tentatively enabling PFB." << endl;
     else
-      cverbose << startl << "Polyphase filter bank file " << pfbcoefffile << " not found or not valid (" << basePFB << "). Disabling PFB" << endl;
+      cverbose << startl << "Polyphase filter bank file " << pfbcoefffile << " not found or not valid (" << basePFBCoeffs << "). Disabling PFB" << endl;
 
     char *monitor_tcpwin = getenv("DIFX_MONITOR_TCPWINDOW");
     if (monitor_tcpwin!=0) {

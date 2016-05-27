@@ -436,7 +436,7 @@ public:
   inline char getFPhaseArrayPol(int configindex, int freqindex, int polindex) const
     { return configs[configindex].papols[freqindex][polindex]; }
   bool isPFBEnabled() const
-    { return (basePFB != NULL) && (basePFB->isValid()); }
+    { return (basePFBCoeffs != NULL) && (basePFBCoeffs->isValid()); }
 
 //@}
 
@@ -491,10 +491,10 @@ public:
 
 
  /**
-  * Returns polyphase filter bank (PFB), if declared for this job.
-  * @return Pointer to a common valid PFB object, or NULL of PFB is invalid/unavailable
+  * Returns polyphase filter bank (PFB) coefficients, if declared for this job.
+  * @return Pointer to a common valid PFB coefficients object, or NULL if PFB is invalid/unavailable
   */
-  const PFB * getPFB() const { return isPFBEnabled() ? basePFB : NULL; }
+  const PFBCoeffs * getPFBCoeffs() const { return isPFBEnabled() ? basePFBCoeffs : NULL; }
 
  /**
   * @param scan The scan index
@@ -993,7 +993,7 @@ private:
   datastreamdata * datastreamtable;
   Model * model;
   outputformat outformat;
-  PFB * basePFB;
+  PFBCoeffs * basePFBCoeffs;
 };
 
 #endif

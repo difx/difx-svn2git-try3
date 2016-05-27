@@ -126,29 +126,23 @@
 
 #define PFB_MAX_PRTARRAY 8 // length limit related to debug printout of arrays
 
+//===========================================================================
+// Coefficients class for sharing identical coefficients between PFB objects
+//===========================================================================
 
-// STATIC DATA SHARED BETWEEN PFB INSTANCES
-// TODO: better method to achieve the same, without 'static'; perhaps coeffs outside class
-f32*   PFB::coeffs_contiguous = NULL;
-cf32*  PFB::coeffscplx_contiguous = NULL;
-f32**  PFB::coeffs = NULL;
-cf32** PFB::coeffscplx = NULL;
-int    PFB::Nch = 0;
-int    PFB::Ntap = 0;
-int    PFB::Ncoeff = 0;
+/** Destructor */
+PFBCoeffs::~PFBCoeffs()
+{
+	PFBCoeffs::dealloc();
+}
 
-
-/**
- * Constructor, loads filter bank coefficients shared by all instances of the class.
+/** Constructor, loads filter bank coefficients from an external source.
  * @param scoeff An std::istream input text stream containing the PFB description.
- * @param maximize_usage Output direct FFT result during leading/tailing time where PFB has no valid output
  */
-PFB::PFB(istream& scoeff, bool maximize_usage)
+PFBCoeffs::PFBCoeffs(istream& scoeff)
 {
 	std::string line;
 	int n = 0;
-
-	valid = false;
 
 	if (!std::getline(scoeff, line)) return;
 	Nch = ::atoi(line.c_str());
@@ -156,18 +150,283 @@ PFB::PFB(istream& scoeff, bool maximize_usage)
 	if (!std::getline(scoeff, line)) return;
 	Ntap = ::atoi(line.c_str());
 
-	Ncoeff =  Nch*Ntap;
+	Ncoeff = Nch*Ntap;
 	if ((Ncoeff < 0) || ((Nch % 4) != 0) || (Ntap <=1)) return;
 
-	PFB::alloc();
+	PFBCoeffs::alloc();
 	while (std::getline(scoeff, line) && (n < Ncoeff)) {
 		coeffs_contiguous[n++] = ::atof(line.c_str());
 	}
-	PFB::autoscale_coeffs();
-	PFB::fill_complex_coeffs();
+	PFBCoeffs::autoscale_coeffs();
+	PFBCoeffs::fill_complex_coeffs();
 
 	valid = (n == Ncoeff);
+}
+
+/** Constructor, generates filter bank coefficients for some predefined responses.
+ * Also see G Heinzel, A Ruediger, R Schilling, "Spectrum and spectral density
+ * estimation by the Discrete Fourier transform (DFT), including a comprehensive
+ * list of window functions and some new at-top windows", 2002 (https://holometer.fnal.gov/GH_FFT.pdf)
+ * @param One of PFBCoeffs::Response types
+ * @param Number of channels
+ * @param Number of taps per channel
+ */
+PFBCoeffs::PFBCoeffs(PFBCoeffs::Response response, int nch, int ntap)
+{
+	valid = false;
+
+	Nch = nch;
+	Ntap = ntap;
+	Ncoeff = Nch*Ntap;
+
+	if ((Ncoeff < 0) || ((Nch % 4) != 0) || (Ntap <=1)) return;
+
+	PFBCoeffs::alloc();
+	PFBCoeffs::generate(response);
+	PFBCoeffs::autoscale_coeffs();
+	PFBCoeffs::fill_complex_coeffs();
+
+	valid = true;
+}
+
+/** Generate new coefficients based on one of the predefined responses.
+ * @param Desired response. */
+void PFBCoeffs::generate(PFBCoeffs::Response response)
+{
+	memset(coeffs_contiguous, 0x00, sizeof(f32)*Ncoeff);
+	memset(coeffscplx_contiguous, 0x00, sizeof(cf32)*Ncoeff);
+	switch (response) {
+		case hsinc:
+			generate_hsinc();
+			break;
+		case bsinc:
+			generate_bsinc();
+			break;
+		case flattop:
+			generate_flattop();
+			break;
+		case hft248d:
+			generate_hft248d();
+			break;
+	}
+}
+
+/** Copy constructor. */
+PFBCoeffs::PFBCoeffs(const PFBCoeffs *p)
+{
+        Nch = p->Nch;
+        Ntap = p->Ntap;
+        Ncoeff = p->Ncoeff;
+        valid = p->valid;
+	M = p->M;
+	Wn_cutoff = p->Wn_cutoff;
+        PFBCoeffs::alloc();
+        for (int n=0; n<p->Ntap && p->valid; n++) {
+                vectorCopy_f32(p->coeffs[n], coeffs[n], p->Nch);
+                vectorCopy_cf32(p->coeffscplx[n], coeffscplx[n], p->Nch);
+        }
+}
+
+/** Copy constructor. */
+PFBCoeffs::PFBCoeffs(const PFBCoeffs &p)
+{
+        Nch = p.Nch;
+        Ntap = p.Ntap;
+        Ncoeff = p.Ncoeff;
+        valid = p.valid;
+	M = p.M;
+	Wn_cutoff = p.Wn_cutoff;
+        PFBCoeffs::alloc();
+        for (int n=0; n<p.Ntap && p.valid; n++) {
+                vectorCopy_f32(p.coeffs[n], coeffs[n], p.Nch);
+                vectorCopy_cf32(p.coeffscplx[n], coeffscplx[n], p.Nch);
+        }
+}
+
+/** Allocate internal arrays */
+void PFBCoeffs::alloc()
+{
+	assert(Ntap >= 2);
+	assert(Nch  >= 32); // 128 byte cache line = 32 floats
+	assert((Nch % 4) == 0);
+	coeffs_contiguous = (f32*)memalign(4096, sizeof(f32)*Ntap*Nch);
+	coeffs = (f32**)malloc(sizeof(f32*)*Ntap);
+	for (int n=0; n<Ntap; n++) {
+		coeffs[n] = coeffs_contiguous + n*Nch;
+	}
+	coeffscplx_contiguous = (cf32*)memalign(4096, sizeof(cf32)*Ntap*Nch);
+	coeffscplx = (cf32**)malloc(sizeof(cf32*)*Ntap);
+	for (int n=0; n<Ntap; n++) {
+		coeffscplx[n] = coeffscplx_contiguous + n*Nch;
+	}
+}
+
+/** Free up internal arrays */
+void PFBCoeffs::dealloc()
+{
+	if (valid) {
+		free(coeffs_contiguous);
+		free(coeffscplx_contiguous);
+		free(coeffs);
+		free(coeffscplx);
+	}
+	valid = false;
+}
+
+/** Scale the real-valued PFB coefficients to get amplitudes equivalent to direct FFT. */
+void PFBCoeffs::autoscale_coeffs(void)
+{
+	double sum = 0.0, scale;
+	for (int n=0; n<Ntap; n++) {
+		for (int c=0; c<Nch; c++) {
+			sum += coeffs[n][c];
+		}
+	}
+	scale = ((double)Nch) / sum;
+	for (int n=0; n<Ntap; n++) {
+		for (int c=0; c<Nch; c++) {
+			coeffs[n][c] *= scale;
+		}
+	}
+}
+
+/** Copy real-valued coefficients into the complex coeffs array. */
+void PFBCoeffs::fill_complex_coeffs(void)
+{
+	for (int n=0; n<Ntap; n++) {
+		for (int c=0; c<Nch; c++) {
+			coeffscplx[n][c].re = coeffs[n][c];
+			coeffscplx[n][c].im = 0.0f;
+		}
+	}
+}
+
+/** Generate coefficients : sinc */
+void PFBCoeffs::generate_sinc()
+{
+	// Determine M+1 coefficients where M is even and M+1 <= Ncoeff.
+        // These will be zero-padded to get exactly Ncoeff coefficients.
+	Wn_cutoff = 1.0f / double(Nch);
+	M = (Ncoeff-1) - (Ncoeff-1)%2;
+	for (int n=0; (n<(M+1)) && (n<Ncoeff); n++) {
+		double x = ((-M/2) + n) * Wn_cutoff;
+		if (x == 0) {
+			coeffs_contiguous[n] = 1.0f;
+		} else {
+			coeffs_contiguous[n] = (float) (sin(M_PI*x)/(M_PI*x));
+		}
+	}
+}
+
+/** Generate coefficients : Hann windowed sinc */
+void PFBCoeffs::generate_hsinc()
+{
+	generate_sinc();
+	for (int n=0; (n<(M+1)) && (n<Ncoeff); n++) {
+		double w = 0.54 - 0.46*cos(2*M_PI*double(n)/double(M));
+		coeffs_contiguous[n] *= w;
+	}
+}
+
+/** Generate coefficients : Blackman windowed sinc */
+void PFBCoeffs::generate_bsinc()
+{
+	generate_sinc();
+	for (int n=0; (n<(M+1)) && (n<Ncoeff); n++) {
+		double w = 0.42 - 0.5*cos(2*M_PI*double(n)/double(M)) + 0.08*cos(4*M_PI*double(n)/double(M));
+		coeffs_contiguous[n] *= w;
+	}
+}
+
+/**
+ * Generate coefficients : generic flat-top window form
+ */
+void PFBCoeffs::generate_flattop_from(const double *coeff, int order)
+{
+	double w = 2*M_PI/(Ncoeff-1);
+	for (int n=0; n<Ncoeff; n++) {
+		coeffs_contiguous[n] = 0.0f;
+		for (int m=0; m<order; m++) {
+			coeffs_contiguous[n] *= pow(-1.0, m) * coeff[m] * cos(w*double(m*n));
+		}
+	}
+}
+
+/** Generate coefficients : flat-top window 'hft248d'
+ * Coefficients like http://de.mathworks.com/help/signal/ref/flattopwin.html
+ */
+void PFBCoeffs::generate_flattop()
+{
+	static const double h_flattopwin[] = { 0.21557895, 0.41663158, 0.277263158, 0.083578947, 0.006947368 };
+	generate_flattop_from(h_flattopwin, sizeof(h_flattopwin)/sizeof(double));
+}
+
+/** Generate coefficients : flat-top window 'hft248d'
+ * Coefficients from G. Heinzel et al. (2002), HFT248D (10-term cosine),
+ * peak sidelobe down 248.4, differentiable, 0.0009 dB flatness, needs 80% FFT overlap i.e. at least 4 PFB taps
+ */
+void PFBCoeffs::generate_hft248d()
+{
+	static const double h_hft248d[] = {
+		1.000000000000, 1.985844164102, 1.791176438506, 1.282075284005, 0.667777530266,
+		0.240160796576, 0.056656381764, 0.008134974479, 0.000624544650, 0.000019808998,
+		0.000000132974
+	};
+	generate_flattop_from(h_hft248d, sizeof(h_hft248d)/sizeof(double));
+}
+
+/** Stream printout of PFB coefficients ("toString()") */
+ostream& operator<<(ostream& os, const PFBCoeffs* pc)
+{
+	os << "PFBCoeff { Nch=" << pc->Nch << ", Ntap=" << pc->Ntap << ", Ncoeff=" << pc->Ncoeff << ", [";
+	if (pc->Ncoeff < 32) {
+		for (int i=0; i<pc->Ncoeff; i++) {
+			os << pc->coeffs_contiguous[i] << " ";
+		}
+	} else {
+		for (int i=0; i<8; i++) {
+			os << pc->coeffs_contiguous[i] << " ";
+		}
+		os << "... ";
+		for (int i=pc->Ncoeff-8; i<pc->Ncoeff; i++) {
+			if (i > 8) os << pc->coeffs_contiguous[i] << " ";
+		}
+	}
+	os << "] }";
+	return os;
+}
+
+ostream& operator<<(ostream& os, const PFBCoeffs& pc)
+{
+	return os << &pc;
+}
+
+
+
+//===========================================================================
+// Main PFB class
+//===========================================================================
+
+/**
+ * Constructor, loads filter bank coefficients shared by all instances of the class.
+ * @param scoeff An std::istream input text stream containing the PFB description.
+ * @param maximize_usage Output direct FFT result during leading/tailing time where PFB has no valid output
+ */
+PFB::PFB(const PFBCoeffs *coeffs, bool maximize_usage)
+{
+	valid = false;
+	if (coeffs == NULL) return;
+
+	h = coeffs;
+	Nch = h->Nch;
+	Ntap = h->Ntap;
+	Ncoeff = Nch*Ntap;
+	if ((Ncoeff < 0) || ((Nch % 4) != 0) || (Ntap <=1)) return;
+
 	use_fft = !(Nch & (Nch-1)); // bitwise test to check for power of 2
+	PFB::alloc();
+
+	valid = coeffs->isValid();
 	maximize_data_use = maximize_usage;
 	iter = 0;
 }
@@ -175,7 +434,7 @@ PFB::PFB(istream& scoeff, bool maximize_usage)
 /** Copy constructor. Allocates memory and copies PFB state. Shared coefficients are not altered. */
 PFB::PFB(const PFB *p)
 {
-	f32 *tmpcoeffs;
+	h = p->h;
 	Nch = p->Nch;
 	Ntap = p->Ntap;
 	Ncoeff = p->Ncoeff;
@@ -183,22 +442,18 @@ PFB::PFB(const PFB *p)
 	use_fft = p->use_fft;
 	maximize_data_use = p->maximize_data_use;
 	iter = p->iter;
-	tmpcoeffs = vectorAlloc_f32(p->Ncoeff);
-	vectorCopy_f32(p->coeffs_contiguous, tmpcoeffs, p->Ncoeff); // back up 'static' data
-	alloc();
+	PFB::alloc();
+
 	for (int n=0; n<p->Ntap; n++) {
 		vectorCopy_f32(p->lags[n], lags[n], p->Nch);
 		vectorCopy_cf32(p->lagscplx[n], lagscplx[n], p->Nch);
 	}
-	vectorCopy_f32(tmpcoeffs, coeffs_contiguous, p->Ncoeff);
-	vectorFree(tmpcoeffs);
-	fill_complex_coeffs();
 }
 
 /** Copy constructor. Allocates memory and copies PFB state. Shared coefficients are not altered. */
 PFB::PFB(const PFB &p)
 {
-	f32 *tmpcoeffs;
+	h = p.h;
 	Nch = p.Nch;
 	Ntap = p.Ntap;
 	Ncoeff = p.Ncoeff;
@@ -206,15 +461,12 @@ PFB::PFB(const PFB &p)
 	use_fft = p.use_fft;
 	maximize_data_use = p.maximize_data_use;
 	iter = p.iter;
-	tmpcoeffs = vectorAlloc_f32(p.Ncoeff);
-	vectorCopy_f32(p.coeffs_contiguous, tmpcoeffs, p.Ncoeff); // back up 'static' data
-	alloc();
+	PFB::alloc();
+
 	for (int n=0; n<p.Ntap; n++) {
 		vectorCopy_f32(p.lags[n], lags[n], p.Nch);
+		vectorCopy_cf32(p.lagscplx[n], lagscplx[n], p.Nch);
 	}
-	vectorCopy_f32(tmpcoeffs, coeffs_contiguous, p.Ncoeff);
-	vectorFree(tmpcoeffs);
-	fill_complex_coeffs();
 }
 
 /** Allocate internal arrays */
@@ -228,25 +480,17 @@ void PFB::alloc()
 
 	while ((Nch >> order) != 1) { order++; }
 
-	PFB::dealloc_static(); // ensure static vars are free'd beforehand
-
-	coeffs_contiguous = (f32*)memalign(4096, sizeof(f32)*Ntap*Nch);
 	lags_contiguous = (f32*)memalign(4096, sizeof(f32)*Ntap*Nch);
-	coeffs = (f32**)malloc(sizeof(f32*)*Ntap);
 	lags = (f32**)malloc(sizeof(f32*)*Ntap);
 	for (int n=0; n<Ntap; n++) {
 		lags[n] = lags_contiguous + n*Nch;
-		coeffs[n] = coeffs_contiguous + n*Nch;
 	}
 	y = vectorAlloc_f32(Nch);
 
-	coeffscplx_contiguous = (cf32*)memalign(4096, sizeof(cf32)*Ntap*Nch);
 	lagscplx_contiguous = (cf32*)memalign(4096, sizeof(cf32)*Ntap*Nch);
-	coeffscplx = (cf32**)malloc(sizeof(cf32*)*Ntap);
 	lagscplx = (cf32**)malloc(sizeof(cf32*)*Ntap);
 	for (int n=0; n<Ntap; n++) {
 		lagscplx[n] = lagscplx_contiguous + n*Nch;
-		coeffscplx[n] = coeffscplx_contiguous + n*Nch;
 	}
 	yc = vectorAlloc_cf32(Nch);
 
@@ -288,59 +532,7 @@ void PFB::dealloc(void)
 		vectorFreeDFTR_f32(planDFTr2c);
 		vectorFreeDFTC_cf32(planDFTc2c);
 	}
-
-	// PFB::dealloc_static(); // dangerous here since other PFB instances might exist that need the data!
 }
-
-/** Free up static allocations */
-void PFB::dealloc_static(void)
-{
-	if (coeffs_contiguous != NULL) {
-		free(coeffs_contiguous);
-		coeffs_contiguous = NULL;
-	}
-	if (coeffscplx_contiguous != NULL) {
-		free(coeffscplx_contiguous);
-		coeffscplx_contiguous = NULL;
-	}
-	if (coeffs != NULL) {
-		free(coeffs);
-		coeffs = NULL;
-	}
-	if (coeffscplx != NULL) {
-		free(coeffscplx);
-		coeffscplx = NULL;
-	}
-}
-
-/** Copy real-valued coefficients into the complex coeffs array. */
-void PFB::fill_complex_coeffs(void)
-{
-	for (int n=0; n<Ntap; n++) {
-		for (int c=0; c<Nch; c++) {
-			coeffscplx[n][c].re = coeffs[n][c];
-			coeffscplx[n][c].im = 0.0f;
-		}
-	}
-}
-
-/** Scale the PFB coefficients to get amplitudes equivalent to direct FFT. */
-void PFB::autoscale_coeffs(void)
-{
-	double sum = 0.0, scale;
-	for (int n=0; n<Ntap; n++) {
-		for (int c=0; c<Nch; c++) {
-			sum += coeffs[n][c];
-		}
-	}
-	scale = ((double)Nch) / sum;
-	for (int n=0; n<Ntap; n++) {
-		for (int c=0; c<Nch; c++) {
-			coeffs[n][c] *= scale;
-		}
-	}
-}
-
 
 /** Reset the internal state of the PFB.
  * Call this function when channelizing with channelize_single() and you changed
@@ -373,9 +565,9 @@ void PFB::channelize_single(f32 const *x, cf32 *Y, const int len)
 	vectorCopy_f32(x, lags[lag_idcs[Ntap-1]], Nch);
 
 	// Weighted sum of all lags
-	vectorMul_f32(lags[lag_idcs[0]], coeffs[0], y, Nch);
+	vectorMul_f32(lags[lag_idcs[0]], h->coeffs[0], y, Nch);
 	for (int n=1; n<Ntap; n++) {
-		vectorAddProduct_f32(lags[lag_idcs[n]], coeffs[n], y, Nch);
+		vectorAddProduct_f32(lags[lag_idcs[n]], h->coeffs[n], y, Nch);
 	}
 
 	// Transform for final output
@@ -414,9 +606,9 @@ void PFB::channelize_single(cf32 const *x, cf32 *Y, const int len)
 	vectorCopy_cf32(x, lagscplx[lag_idcs[Ntap-1]], Nch);
 
 	// Weighted sum of all lags
-	vectorMul_cf32(lagscplx[lag_idcs[0]], coeffscplx[0], yc, Nch);
+	vectorMul_cf32(lagscplx[lag_idcs[0]], h->coeffscplx[0], yc, Nch);
 	for (int n=1; n<Ntap; n++) {
-		vectorAddProduct_cf32(lagscplx[lag_idcs[n]], coeffscplx[n], yc, Nch);
+		vectorAddProduct_cf32(lagscplx[lag_idcs[n]], h->coeffscplx[n], yc, Nch);
 	}
 
 	// Transform for final output
@@ -456,9 +648,9 @@ void PFB::channelize(f32 const *x, cf32 *Y, const int len) const
 	while (x < x_end) {
 
 		// Weighted sum of all lags
-		vectorMul_f32(x, coeffs[0], y, Nch);
+		vectorMul_f32(x, h->coeffs[0], y, Nch);
 		for (int n=1; n<Ntap; n++) {
-			vectorAddProduct_f32(x + n*Nch, coeffs[n], y, Nch);
+			vectorAddProduct_f32(x + n*Nch, h->coeffs[n], y, Nch);
 		}
 
 		// Transform for final output
@@ -475,7 +667,8 @@ void PFB::channelize(f32 const *x, cf32 *Y, const int len) const
 }
 
 /** Stream printout of PFB settings ("toString()") */
-ostream& operator<<(ostream &os, const PFB *p) {
+ostream& operator<<(ostream &os, const PFB *p)
+{
         os << "PFB(valid=" << p->valid
 		<< ", max_use=" << p->maximize_data_use
 		<< ", FFT=" << p->use_fft
@@ -485,26 +678,19 @@ ostream& operator<<(ostream &os, const PFB *p) {
 	if (!p->valid) {
 		return os << ")";
 	}
-        os << "; [";
-        if (p->Ncoeff < 32) {
-                for (int i=0; i<p->Ncoeff; i++) {
-                        os << p->coeffs_contiguous[i] << " ";
-                }
-        } else {
-                for (int i=0; i<8; i++) {
-                        os << p->coeffs_contiguous[i] << " ";
-                }
-                os << "... ";
-                for (int i=p->Ncoeff-8; i<p->Ncoeff; i++) {
-                        os << p->coeffs_contiguous[i] << " ";
-                }
+        os << "; ";
+	if (p->h != NULL) {
+		os << (p->h);
+	} else {
+		os << "null coeffs";
         }
-        os << "])";
+        os << ")";
         return os;
 }
 
 /** Stream printout of PFB settings ("toString()") */
-ostream& operator<<(ostream &os, const PFB &p) {
+ostream& operator<<(ostream &os, const PFB &p)
+{
 	return os << &p;
 }
 
@@ -542,7 +728,8 @@ int main(int argc, char** argv)
 	// Test: bad input coeffs
 	if (0) {
 		ifstream dummyfile("/tmp/pfb-none");
-		PFB *p = new PFB(dummyfile);
+		PFBCoeffs *cbad = new PFBCoeffs(dummyfile);
+		PFB *p = new PFB(cbad);
 		cout << p << endl;
 		delete p;
 	}
@@ -556,8 +743,13 @@ int main(int argc, char** argv)
 	}
 	ifstream coeffile(cfile);
 
-	PFB pfb(coeffile, maximize);
+	PFBCoeffs coeffs(coeffile);
+	PFB pfb(&coeffs, maximize);
 	cout << pfb << endl;
+
+	PFBCoeffs coeffs_generated(PFBCoeffs::bsinc, coeffs.getNch(), coeffs.getNtaps());
+	cout << "Loaded : " << coeffs << endl;
+	cout << "Generated 'bsinc' : " << coeffs_generated << endl;
 
 	int Nch = pfb.getNch();
 	int Nblocks = 4*pfb.getNtaps();

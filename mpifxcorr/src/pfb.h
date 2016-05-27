@@ -39,23 +39,107 @@ using namespace std;
 #define f32 float
 #endif
 
+class PFBCoeffs;
+class PFB;
+
+/**
+@class PFBCoeffs
+@brief Storage class for polyphase filter bank coefficients.
+@author Jan Wagner
+*/
+class PFBCoeffs {
+	friend class PFB;
+
+public:
+	enum Response { hsinc, bsinc, flattop, hft248d };
+
+public:
+	/** Constructor, loads filter bank coefficients from an external source.
+	 * @param scoeff An std::istream input text stream containing the PFB description.
+	 */
+	PFBCoeffs(istream& scoeff);
+
+	/** Constructor, generates filter bank coefficients for some predefined responses.
+         * Also see G Heinzel, A Ruediger, R Schilling, "Spectrum and spectral density
+	 * estimation by the Discrete Fourier transform (DFT), including a comprehensive
+	 * list of window functions and some new at-top windows", 2002 (https://holometer.fnal.gov/GH_FFT.pdf)
+	 * @param One of PFBCoeffs::Response types
+	 * @param Number of channels
+ 	 * @param Number of taps per channel
+	 */
+	PFBCoeffs(PFBCoeffs::Response response, int nch, int ntap);
+
+	/** Destructor */
+	~PFBCoeffs();
+
+	/** Copy constructor. */
+	PFBCoeffs(const PFBCoeffs*);
+
+	/** Copy constructor. */
+	PFBCoeffs(const PFBCoeffs&);
+
+public:
+
+	/** Generate new coefficients based on one of the predefined responses */
+	void generate(PFBCoeffs::Response response);
+
+	/** @return true if PFB configuration is usable and valid */
+	bool isValid() const { return valid; }
+
+	/** @return number of output channels of the PFB */
+	int getNch() const { return valid ? Nch : 0; }
+
+	/** @return number of FIR taps in the PFB */
+	int getNtaps() const { return valid ? Ntap : 0; }
+
+	/** @return total number of FIR coefficients (channels x taps) in the PFB */
+	int getNcoeff() const { return valid ? Ncoeff : 0; }
+
+	/** @return all FIR filter coefficients */
+	const float *getCoeff() const { return valid ? coeffs_contiguous : NULL; }
+
+private:
+	f32* coeffs_contiguous;
+	cf32* coeffscplx_contiguous; // identical values to coeffs_contiguous but complex ({re,0.0f})
+	f32** coeffs; // "coeffs[Ntap][Nch]" pointers into coeffs_contiguous
+	cf32** coeffscplx; // "coeffscplx[Ntap][Nch]" pointers into coeffscplx_contiguous
+	int Ncoeff, Nch, Ntap, M;
+	double Wn_cutoff;
+	bool valid;
+
+private:
+	friend ostream& operator<<(ostream&, const PFBCoeffs*);
+	friend ostream& operator<<(ostream&, const PFBCoeffs&);
+	void alloc(void);
+	void dealloc(void);
+	void fill_complex_coeffs(void);
+	void autoscale_coeffs(void);
+
+private:
+	void generate_sinc();
+	void generate_bsinc();
+	void generate_hsinc();
+	void generate_flattop_from(const double *coeff, int order);
+	void generate_flattop();
+	void generate_hft248d();
+};
 
 /**
 @class PFB
 @brief Polyphase filter bank class
 @author Jan Wagner
 */
-
 class PFB {
+	friend class PFBCoeffs;
 
 public:
 
 	/**
-	 * Constructor, loads filter bank coefficients shared by all instances of the class.
-	 * @param scoeff An std::istream input text stream containing the PFB description.
+	 * Constructor
+	 * @param coeffs A pointer to a PFBCoeffs object that contains the desired coefficients
          * @param maximize_usage Output direct FFT result during leading/tailing time where PFB has no valid output
 	 */
-	PFB(istream& scoeff, bool maximize_usage = false);
+	PFB(const PFBCoeffs *coeffs, bool maximize_usage = false);
 
 	/** Copy constructor. Allocates memory and copies PFB state. Shared coefficients are not altered. */
 	PFB(const PFB*);
@@ -127,18 +211,15 @@ public:
 	void reset();
 
 private:
-	static f32* coeffs_contiguous;
-	static cf32* coeffscplx_contiguous; // identical values to coeffs_contiguous but complex ({re,0.0f})
-	static f32** coeffs; // "coeffs[Ntap][Nch]" pointers into coeffs_contiguous
-	static cf32** coeffscplx; // "coeffscplx[Ntap][Nch]" pointers into coeffscplx_contiguous
-	static int Ncoeff, Nch, Ntap;
+	const PFBCoeffs *h;
+	int Ncoeff, Nch, Ntap;
 	bool valid;
 	bool use_fft;
 	bool maximize_data_use;
-	f32* lags_contiguous;
-	f32** lags; // "lags[Ntap][Nch]"
-	cf32* lagscplx_contiguous;
-	cf32** lagscplx; // "lags[Ntap][Nch]"
+	f32 *lags_contiguous;
+	f32 **lags; // "lags[Ntap][Nch]"
+	cf32 *lagscplx_contiguous;
+	cf32 **lagscplx; // "lags[Ntap][Nch]"
 	int* lag_idcs;
 	int lag_curr;
 	int iter;
@@ -147,8 +228,8 @@ private:
 	vecFFTSpecC_cf32 *planFFTc2c;
 	vecDFTSpecR_f32  *planDFTr2c;
 	vecDFTSpecC_cf32 *planDFTc2c;
-	f32* y;
-	cf32* yc;
+	f32 *y;
+	cf32 *yc;
 	u8 * ftbuffer;
 	u8 * ftbuffercplx;
 private:
@@ -156,10 +237,10 @@ private:
 	friend ostream& operator<<(ostream&, const PFB&);
 	void alloc(void);
 	void dealloc(void);
-	static void dealloc_static(void);
-	void fill_complex_coeffs(void);
-	void autoscale_coeffs(void);
 };
+
+extern ostream& operator<<(ostream&, const PFBCoeffs*);
+extern ostream& operator<<(ostream&, const PFBCoeffs&);
 
 extern ostream& operator<<(ostream &os, const PFB *p);
 extern ostream& operator<<(ostream &os, const PFB &p);
