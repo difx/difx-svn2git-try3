@@ -1,1 +1,0 @@
-gcc -o b2a b2a.c -O3 -mcpu=pentium4 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
