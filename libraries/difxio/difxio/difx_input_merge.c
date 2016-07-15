@@ -225,6 +225,22 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, int verbose
 		D2->spacecraft, D2->nSpacecraft,
 		spacecraftIdRemap, &(D->nSpacecraft));
 
+	/* concatenate DifxRule tables */
+	/* FIXME: write a merge function */
+	D->nRule = D1->nRule + D2->nRule;
+	D->rule = newDifxRuleArray(D->nRule);
+	{
+		int r;
+		for(r=0; r < D1->nRule; ++r)
+		{
+			copyDifxRule(D->rule+r, D1->rule+r);
+		}
+		for(r=0; r < D1->nRule; ++r)
+		{
+			copyDifxRule(D->rule+D1->nRule+r, D2->rule+r);
+		}
+	}
+
 	/* handle some random bits */
 	if(D1->job->aberCorr != D2->job->aberCorr)
 	{

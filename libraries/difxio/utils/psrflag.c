@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2014 by Walter Brisken                                  *
+ *   Copyright (C) 2014, 2015 by Walter Brisken                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -145,7 +145,9 @@ int runPulsar(const DifxInput *D, int configId, const char *pulsarName, double t
 	int i, j;
 	int nBin, bin;
 	double m;
-	double binEnd0, binEnd1, binWeight1;
+	/* double binEnd0; */
+	/* double binEnd1; */
+	double binWeight1;
 	FILE *out;
 	FILE *flagOut;
 	char T1[20], T2[20];
@@ -184,8 +186,8 @@ int runPulsar(const DifxInput *D, int configId, const char *pulsarName, double t
 			bin = 0;
 		}
 
-		binEnd0 = D->pulsar[pulsarId].binEnd[(bin+nBin-1) % nBin];
-		binEnd1 = D->pulsar[pulsarId].binEnd[bin];
+		/* binEnd0 = D->pulsar[pulsarId].binEnd[(bin+nBin-1) % nBin]; */
+		/* binEnd1 = D->pulsar[pulsarId].binEnd[bin]; */
 		binWeight1 = D->pulsar[pulsarId].binWeight[bin];
 
 		gate[i] = binWeight1;

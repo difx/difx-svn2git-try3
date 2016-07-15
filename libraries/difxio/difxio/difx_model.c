@@ -32,6 +32,9 @@
 #include <string.h>
 #include "difxio/difx_input.h"
 
+#error "This file is no longer used."
+
+typedef struct {double u,v,w,t;} DifxModel;
 
 DifxModel **newDifxModelArray(int nAntenna, int nPoint)
 {

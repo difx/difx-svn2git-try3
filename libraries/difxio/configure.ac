@@ -26,6 +26,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign])
 
 AC_PROG_CC
+AC_PROG_CXX
 AC_PROG_LIBTOOL
 AM_SANITY_CHECK
 
@@ -47,10 +48,6 @@ fi
 AM_CONDITIONAL(HAVE_SPICE, $spice_enabled)
 
 PKG_CHECK_MODULES(GSL, gsl, [hasgsl=true], [hasgsl=false])
-if test "$hasgsl" == "true"; then
-	AC_DEFINE([HAVE_GSL], 1, [1=has GSL (Gnu Scientific Library)])
-fi
-AM_CONDITIONAL(WITH_GSL, $hasgsl)
 
 spicelibs="$SPICE_LIBS"
 AC_SUBST(spicelibs)

@@ -1,16 +1,15 @@
-ACLOCAL_AMFLAGS = -I m4
-
-if ENABLE_PYTHON_CTYPES
-PYTHON_OPT = python
-endif
-
 SUBDIRS = \
 	src \
-	utils \
-	$(PYTHON_OPT)
+	utils
+
+if ENABLE_PYTHON_CTYPES
+SUBDIRS += python
+endif
 
 EXTRA_DIST = \
 	vdifio.spec.in
+
+DIST_SUBDIRS = $(SUBDIRS) python
 
 dist-hook: vdifio.spec
 	cp vdifio.spec $(distdir)

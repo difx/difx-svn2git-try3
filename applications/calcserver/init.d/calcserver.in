@@ -11,30 +11,40 @@ export SERVERLOG=ON
 export HORIZONS_FILENAME=@prefix@/share/CalcServer/Horizons.lis
 export HORIZONS_SRCNAME=TSTCURVE
 
+serverlist="CalcServer CALC_9_1_RA_Server"
+
+
+
 start() {
-	pushd /tmp
-	echo "starting CalcServer" 
-	@prefix@/bin/CalcServer > /dev/null &
-	popd
+    pushd /tmp
+    for server in $serverlist
+    do
+	echo "starting ${server}" 
+	@prefix@/bin/"${server}" > /dev/null 2>&1 &
+    done
+    popd
 }
 
 stop() {
-	echo "terminating CALCServer that is currently"
-	killall CalcServer
+    for server in $serverlist
+    do
+	echo "terminating ${server} that is currently"
+	killall "${server}"
+    done
 }
 
 case "$1" in
-  start)
-        start
-        ;;
-  stop)
-        stop
-        ;;
-  restart)
-        stop && start
-        ;;
-  *)
-        echo $"Usage: $0 {start|stop|restart}"
-        exit 1
+    start)
+	start
+	;;
+    stop)
+	stop
+	;;
+    restart)
+	stop && start
+	;;
+    *)
+	echo $"Usage: $0 {start|stop|restart}"
+	exit 1
 esac
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken                             *
+ *   Copyright (C) 2008-2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -107,15 +107,34 @@ int writeDifxCalc(const DifxInput *D)
 		writeDifxLineDouble(out, "START MJD", "%13.7f", roundSeconds(D->mjdStart));
 		writeDifxDateLines(out, roundSeconds(D->mjdStart));
 	}
-	writeDifxLineInt(out, "SPECTRAL AVG", D->specAvg);
-	writeDifxLine(out, "TAPER FUNCTION", taperFunctionNames[D->job->taperFunction]);
-	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1);
-        writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 0);
+	writeDifxLineInt(out,    "SPECTRAL AVG", D->specAvg);
+	writeDifxLine(out,       "TAPER FUNCTION", taperFunctionNames[D->job->taperFunction]);
+	writeDifxLineInt(out,    "DELAY POLY ORDER", D->job->polyOrder);
+	writeDifxLineInt(out,    "DELAY POLY INTERVAL", D->job->polyInterval);
+	writeDifxLineDouble(out, "DELAY MODEL PREC", "%10.2e",  D->job->delayModelPrecision);
+	if(D->job->delayServerHost != 0)
+	{
+		writeDifxLine(out,   "DELAY SERVER HOST", D->job->delayServerHost);		
+	}
+	writeDifxLine(out,       "DELAY SERVER TYPE", delayServerTypeNames[D->job->delayServerType]);
+	writeDifxLine(out,       "DELAY SERVER HANDLER TYPE", delayServerHandlerTypeNames[D->job->delayServerHandlerType]);
+	writeDifxLineULong(out,  "DELAY VERSION", D->job->delayVersion);
+	writeDifxLineULong(out,  "DELAY PROGRAM", D->job->delayProgram);
+	writeDifxLineULong(out,  "DELAY HANDLER", D->job->delayHandler);
+	writeDifxLine(out,       "JOB PERFORM UVW", performDirectionDerivativeTypeNames[D->job->perform_uvw_deriv]);
+	writeDifxLine(out,       "JOB PERFORM LMN", performDirectionDerivativeTypeNames[D->job->perform_lmn_deriv]);
+	writeDifxLine(out,       "JOB PERFORM XYZ", performDirectionDerivativeTypeNames[D->job->perform_xyz_deriv]);
+	writeDifxLineDouble(out, "JOB DELTA LMN", "%24.16e",  D->job->delta_lmn);
+	writeDifxLineDouble(out, "JOB DELTA XYZ", "%24.16e",  D->job->delta_xyz);
+	writeDifxLine(out,       "JOB ABER CORR",  aberCorrStrings[D->job->aberCorr]);
+	writeDifxLineBoolean(out,"JOB CALC_RETARDED_POSITION", D->job->calculate_own_retarded_position);
+	writeDifxAntennaArray(out, D->nAntenna, D->antenna, 1, 1, 1, 0, 1, 1);
+	writeDifxSourceArray(out, D->nSource, D->source, 1, 1, 1);
 	writeDifxScanArray(out, D->nScan, D->scan, D->config);
 	writeDifxEOPArray(out, D->nEOP, D->eop);
 	writeDifxSpacecraftArray(out, D->nSpacecraft, D->spacecraft);
-	writeDifxLine(out, "IM FILENAME", D->job->imFile);
-	writeDifxLine(out, "FLAG FILENAME", D->job->flagFile);
+	writeDifxLine(out,       "IM FILENAME", D->job->imFile);
+	writeDifxLine(out,       "FLAG FILENAME", D->job->flagFile);
 
 	fclose(out);
 

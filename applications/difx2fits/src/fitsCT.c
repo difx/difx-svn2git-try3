@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2009 by Walter Brisken                             *
+ *   Copyright (C) 2008-2009, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -33,6 +33,12 @@
 #include "difx2fits.h"
 
 
+/* 2015 May 04   James M Anderson  --- the following constants from the CALC 9.1
+ *               server are left in as default values to put in when the
+ *               delay server does not provide the values to calcif2.  The
+ *               new Difx_Delay_Server structure should be used for future
+ *               work to provide delay model information for FITS files.
+ */
 /*
 * IAU (1976) System of Astronomical Constants
 * SOURCE:  USNO Circular # 163 (1981dec10)
@@ -98,6 +104,15 @@ struct __attribute__((packed)) CTrow
 	double dPsi, ddPsi, dEps, ddEps;
 };
 
+
+static void fill_version_string(unsigned long v, char* vs, const size_t size)
+{
+	snprintf(vs, size, "%lu.%lu.%lu.%lu", v >> 24, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+	return;
+}
+
+
+
 const DifxInput *DifxInput2FitsCT(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
 {
@@ -122,6 +137,8 @@ const DifxInput *DifxInput2FitsCT(const DifxInput *D,
 	int nColumn;
 	int e;
 	const DifxEOP *eop;
+	const size_t V_SIZE = 32;
+	char v_string[V_SIZE];
 
 	if(D == 0)
 	{
@@ -134,32 +151,74 @@ const DifxInput *DifxInput2FitsCT(const DifxInput *D,
 	fitsWriteBinTable(out, nColumn, columns, nRowBytes, "CALC");
 	arrayWriteKeys(p_fits_keys, out);
 	fitsWriteInteger(out, "TABREV", 2, "");
-	fitsWriteString (out, "C_SRVR", D->job->calcServer, "");
-	fitsWriteString (out, "C_VERSN", "9.1", "");
-	fitsWriteString (out, "A_VERSN", "2.2", "");
-	fitsWriteString (out, "I_VERSN", "0.0", "");
-	fitsWriteString (out, "E_VERSN", "9.1", "");
+	fitsWriteString (out, "C_SRVR", delayServerTypeNames[D->job->delayServerType], "");
+	/* fitsWriteString (out, "C_VERSN", "9.1", ""); */
+	/* fitsWriteString (out, "A_VERSN", "2.2", ""); */
+	/* fitsWriteString (out, "I_VERSN", "0.0", ""); */
+	/* fitsWriteString (out, "E_VERSN", "9.1", ""); */
+	fill_version_string(D->job->delayProgramDetailedVersion, v_string, V_SIZE);
+	fitsWriteString (out, "C_VERSN", v_string, "");
+	fill_version_string(D->job->delayVersion, v_string, V_SIZE);
+	fitsWriteString (out, "A_VERSN", v_string, "");
+	fill_version_string(D->job->delayProgram, v_string, V_SIZE);
+	fitsWriteString (out, "I_VERSN", v_string, "");
+	fill_version_string(D->job->delayHandler, v_string, V_SIZE);
+	fitsWriteString (out, "E_VERSN", v_string, "");
+	if((D->job->calcParamTable))
+	{
 
-	fitsWriteFloat(out, "ACCELGRV", ACCEL_GRV, "");
-	fitsWriteFloat(out, "E-FLAT", E_FLAT_FCTR, "");
-	fitsWriteFloat(out, "EARTHRAD", E_EQ_RADIUS, "");
-	fitsWriteFloat(out, "MMSEMS", LMASS_RATIO, "");
-	fitsWriteInteger(out, "EPHEPOC", 2000, "");
+		fitsWriteFloat(out, "ACCELGRV",  D->job->calcParamTable->accelgrv,  "METER/SEC/SEC");
+		fitsWriteFloat(out, "E-FLAT",    D->job->calcParamTable->e_flat,    "");
+		fitsWriteFloat(out, "EARTHRAD",  D->job->calcParamTable->earthrad,  "METER");
+		fitsWriteFloat(out, "MMSEMS",    D->job->calcParamTable->mmsems,    "");
+		fitsWriteFloat(out, "EPHEPOC",   D->job->calcParamTable->ephepoc,   "");
+		fitsWriteFloat(out, "GAUSS",     D->job->calcParamTable->gauss,     "AU**1.5 DAY**-1 MSUN**-0.5");
+		fitsWriteFloat(out, "U-GRV-CN",  D->job->calcParamTable->u_grv_cn,  "METER**3/KG/SEC/SEC");
+		fitsWriteFloat(out, "GMSUN",     D->job->calcParamTable->gmsun,     "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMMERCURY", D->job->calcParamTable->gmmercury, "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMVENUS",   D->job->calcParamTable->gmvenus,   "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMEARTH",   D->job->calcParamTable->gmearth,   "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMMOON",    D->job->calcParamTable->gmmoon,    "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMMARS",    D->job->calcParamTable->gmmars,    "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMJUPITER", D->job->calcParamTable->gmjupiter, "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMSATURN",  D->job->calcParamTable->gmsaturn,  "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMURANUS",  D->job->calcParamTable->gmuranus,  "METER**3 SEC**-2");
+		fitsWriteFloat(out, "GMNEPTUNE", D->job->calcParamTable->gmneptune, "METER**3 SEC**-2");
+		fitsWriteFloat(out, "ETIDELAG",  D->job->calcParamTable->etidelag,  "RAD");
+		fitsWriteFloat(out, "LOVE_H",    D->job->calcParamTable->love_h,    "");
+		fitsWriteFloat(out, "LOVE_L",    D->job->calcParamTable->love_l,    "");
+		fitsWriteFloat(out, "PRE_DATA",  D->job->calcParamTable->pre_data,  "ARCSEC/JULIAN CENTURY");
+		fitsWriteFloat(out, "REL_DATA",  D->job->calcParamTable->rel_data,  "");
+		fitsWriteFloat(out, "TIDALUT1",  D->job->calcParamTable->tidalut1,  "");
+		fitsWriteFloat(out, "AU",        D->job->calcParamTable->au,        "METER");
+		fitsWriteFloat(out, "TSECAU",    D->job->calcParamTable->tsecau,    "SEC");
+		fitsWriteFloat(out, "VLIGHT",    D->job->calcParamTable->vlight,    "METER/SEC");
+	}
+	else
+	{
+		printf("\n    Warning: No delay server model parameter data --- defaulting to CALC9.1 values\n");
+		printf("                            ");
 
-	fitsWriteFloat(out, "ETIDELAG", ETIDE_LAG, "");
-	fitsWriteFloat(out, "GAUSS", GAUSS_GRAV, "");
-	fitsWriteFloat(out, "GMMOON", GRAV_MOON, "");
-	fitsWriteFloat(out, "GMSUN", GRAV_HELIO, "");
-	fitsWriteFloat(out, "LOVE_H", LOVE_H, "");
-	fitsWriteFloat(out, "LOVE_L", LOVE_L, "");
-	fitsWriteFloat(out, "PRE_DATA", PRECESS, "");
-	fitsWriteFloat(out, "REL_DATA", 1.0, "");
-	fitsWriteInteger(out, "TIDALUT1", 0, "");
+		fitsWriteFloat(out, "ACCELGRV", ACCEL_GRV, "");
+		fitsWriteFloat(out, "E-FLAT", E_FLAT_FCTR, "");
+		fitsWriteFloat(out, "EARTHRAD", E_EQ_RADIUS, "");
+		fitsWriteFloat(out, "MMSEMS", LMASS_RATIO, "");
+		fitsWriteFloat(out, "EPHEPOC", 2000.0, "");
 
-	fitsWriteFloat(out, "TSECAU", TAU_A, "");
-	fitsWriteFloat(out, "U-GRV-CN", GRAV_CONST, "");
-	fitsWriteFloat(out, "VLIGHT", C_LIGHT, "");
+		fitsWriteFloat(out, "ETIDELAG", ETIDE_LAG, "");
+		fitsWriteFloat(out, "GAUSS", GAUSS_GRAV, "");
+		fitsWriteFloat(out, "GMMOON", GRAV_MOON, "");
+		fitsWriteFloat(out, "GMSUN", GRAV_HELIO, "");
+		fitsWriteFloat(out, "LOVE_H", LOVE_H, "");
+		fitsWriteFloat(out, "LOVE_L", LOVE_L, "");
+		fitsWriteFloat(out, "PRE_DATA", PRECESS, "");
+		fitsWriteFloat(out, "REL_DATA", 1.0, "");
+		fitsWriteFloat(out, "TIDALUT1", 0.0, "");
 
+		fitsWriteFloat(out, "TSECAU", TAU_A, "");
+		fitsWriteFloat(out, "U-GRV-CN", GRAV_CONST, "");
+		fitsWriteFloat(out, "VLIGHT", C_LIGHT, "");
+	}		
 	fitsWriteEnd(out);
 
 	if(D->nEOP > 0)

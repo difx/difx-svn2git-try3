@@ -7,10 +7,10 @@
 
 bool_t
 xdr_getCALC_arg(xdrs, objp)
-	register XDR *xdrs;
-	getCALC_arg *objp;
+register XDR *xdrs;
+getCALC_arg *objp;
 {
-        int i;
+	int i;
 
 	if (!xdr_long(xdrs, &objp->request_id))
 		return (FALSE);
@@ -20,9 +20,9 @@ xdr_getCALC_arg(xdrs, objp)
 		return (FALSE);
 	if (!xdr_long(xdrs, &objp->ref_frame))
 		return (FALSE);
-        for (i = 0; i < 64; i++)
-            if (!xdr_short(xdrs, &objp->kflags[i]))
-                    return (FALSE);
+	for (i = 0; i < 64; i++)
+		if (!xdr_short(xdrs, &objp->kflags[i]))
+			return (FALSE);
 	if (!xdr_double(xdrs, &objp->a_x))
 		return (FALSE);
 	if (!xdr_double(xdrs, &objp->a_y))
@@ -67,28 +67,28 @@ xdr_getCALC_arg(xdrs, objp)
 	if (!xdr_string(xdrs, &objp->source, ~0))
 		return (FALSE);
 
-        for (i = 0; i < 5; i++)
+	for (i = 0; i < 5; i++)
 	{
-   	   if (!xdr_double(xdrs, &objp->EOP_time[i]))
-		   return (FALSE);
-	   if (!xdr_double(xdrs, &objp->tai_utc[i]))
-		   return (FALSE);
-	   if (!xdr_double(xdrs, &objp->ut1_utc[i]))
-		   return (FALSE);
-	   if (!xdr_double(xdrs, &objp->xpole[i]))
-		   return (FALSE);
-	   if (!xdr_double(xdrs, &objp->ypole[i]))
-		   return (FALSE);
-        }
+		if (!xdr_double(xdrs, &objp->EOP_time[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->tai_utc[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->ut1_utc[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->xpole[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->ypole[i]))
+			return (FALSE);
+	}
 	return (TRUE);
 }
 
 bool_t
 xdr_CALCRecord(xdrs, objp)
-	register XDR *xdrs;
-	CALCRecord *objp;
+register XDR *xdrs;
+CALCRecord *objp;
 {
-        int i;
+	int i;
 
 	if (!xdr_long(xdrs, &objp->request_id))
 		return (FALSE);
@@ -96,36 +96,38 @@ xdr_CALCRecord(xdrs, objp)
 		return (FALSE);
 	if (!xdr_double(xdrs, &objp->time))
 		return (FALSE);
-        for (i = 0; i < 2; i++)
+	for (i = 0; i < 2; i++)
 	{ 
-            if (!xdr_double(xdrs, &objp->delay[i]))
-		   return (FALSE);
-	    if (!xdr_double(xdrs, &objp->UV[i]))
-		   return (FALSE);
-	    if (!xdr_double(xdrs, &objp->riseset[i]))
-		   return (FALSE);
-        }
-        if (!xdr_double(xdrs, &objp->UV[2]))
-	       return (FALSE);
-        for (i = 0; i < 4; i++)
+		if (!xdr_double(xdrs, &objp->delay[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->UV[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->riseset[i]))
+			return (FALSE);
+	}
+	if (!xdr_double(xdrs, &objp->UV[2]))
+		return (FALSE);
+	for (i = 0; i < 4; i++)
 	{
-	    if (!xdr_double(xdrs, &objp->dry_atmos[i]))
-		   return (FALSE);
-	    if (!xdr_double(xdrs, &objp->wet_atmos[i]))
-		   return (FALSE);
-	    if (!xdr_double(xdrs, &objp->el[i]))
-		   return (FALSE);
-	    if (!xdr_double(xdrs, &objp->az[i]))
-		   return (FALSE);
-        }
+		if (!xdr_double(xdrs, &objp->dry_atmos[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->wet_atmos[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->el[i]))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->az[i]))
+			return (FALSE);
+	}
 	return (TRUE);
 }
 
 bool_t
 xdr_getCALC_res(xdrs, objp)
-	register XDR *xdrs;
-	getCALC_res *objp;
+register XDR *xdrs;
+getCALC_res *objp;
 {
+
+
 	if (!xdr_int(xdrs, &objp->error))
 		return (FALSE);
 	switch (objp->error) {

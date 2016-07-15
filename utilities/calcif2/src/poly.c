@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <float.h>
+#include <stdint.h>
 #include "config.h"
 #if HAVE_GSL
 #include <gsl/gsl_multifit.h>
@@ -219,6 +221,26 @@ double computePoly2(double *p, const double *q, int n, int oversamp, double d, i
 	double r = 0.0;
 	int i;
 
+	if(n>0)
+	{
+		if(isnan(q[0]))
+		{
+			/* Don't even bother computing */
+			/* Note: This is a particular NaN variant the FITS-IDI format/convention 
+			 * wants, namely 0xFFFFFFFFFFFFFFFF */
+			static const union
+			{
+				uint64_t u64;
+				double d;
+				float f;
+			} fitsnan = {UINT64_C(0xFFFFFFFFFFFFFFFF)};
+			for(i=0; i < n; ++i)
+			{
+				p[i] = fitsnan.d;
+			}
+			return -1.0;
+		}
+	}
 	switch(interpolationType)
 	{
 	case 0:	

@@ -1,4 +1,5 @@
-bin_PROGRAMS = calc2skd
+bin_PROGRAMS = calc2skd \
+	compareDiFXims
 
 dist_bin_SCRIPTS = \
 	jobdisks \
@@ -12,6 +13,9 @@ dist_bin_SCRIPTS = \
 
 calc2skd_SOURCES = \
 	calc2skd.c
+
+compareDiFXims_SOURCES = \
+	compareDiFXims.c
 
 install-exec-hook:
 	mv $(DESTDIR)$(bindir)/genmachines.py $(DESTDIR)$(bindir)/genmachines

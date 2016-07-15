@@ -5,6 +5,9 @@ LANGUAGE: C
 ENVIRONMENT: Any
 :: header include constant math IAU
 -*/
+#ifndef __MATHCNST_H__
+#define __MATHCNST_H__
+
 #define PI         3.1415926535897932385
 #define TWOPI      6.2831853071795864769    /* value from 'CALC' code */
 #define PIOVR2     1.5707963267948966192    /* PI/2 */
@@ -23,10 +26,23 @@ ENVIRONMENT: Any
 #define LOG_E_2    0.6931471805599453       /* log (base e) of 2 */
 #define LOG_10_E   4.3429448190325182765E-1 /* log (base 10) of e */
 
-#define JUL_YEAR   365.25              /* days per Julian year */
+#define JUL_YEAR   365.25                   /* days per Julian year */
  
-#define SEC_DAY    86400               /* seconds per day */
-#define JUL_CENT   36525               /* days per Julian century */
+#ifndef SEC_DAY
+#    define SEC_DAY    86400                /* seconds per day */
+#endif
+#ifndef SEC_DAY_DBL
+#    define SEC_DAY_DBL 86400.0             /* seconds per day */
+#endif
+#define JUL_CENT   36525                    /* days per Julian century */
+#define ASTR_UNIT_IAU_2012 149597870700.0   /* meters,  IAU 2012 Resolution B2*/
+#ifndef MJD_AT_UNIX_TIME_ORIGIN
+#    define MJD_AT_UNIX_TIME_ORIGIN  40587  /* The MJD value at Unix time 0 */
+#    define MJD_AT_2000_01_01 51544         /* The MJD value at 2000-01-01T00:00:00 */
+#    define MJD_AT_J2000 51544.5            /* The MJD value at 2000-01-01T12:00:00 */
+#    define JD_AT_J2000 2451545             /* The JD value at 2000-01-01T12:00:00 */
+#endif
+
 
 /*
 * IAU (1976) System of Astronomical Constants
@@ -86,3 +102,5 @@ ENVIRONMENT: Any
 /* NOTE-  If the time interval between two events is t_sid sidereal
 *         time units, then that same interval is t_sol = (t_sid * SOLAR_SID)
 *         solar time units.  Similarly,  t_sid = (t_sol * SID_SOLAR). */
+
+#endif

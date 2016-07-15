@@ -13,7 +13,6 @@ bin_PROGRAMS = \
 	fakemultiVDIF \
 	extractSingleVDIFThread \
 	extractVDIFThreads \
-	filterVDIF \
 	countVDIFPackets \
 	printVDIF \
 	printVDIFgaps \
@@ -63,12 +62,6 @@ padVDIF_SOURCES = \
 
 extractSingleVDIFThread_SOURCES = \
 	extractSingleVDIFThread.c
-
-extractVDIFThreads_SOURCES = \
-	extractVDIFThreads.c
-
-filterVDIF_SOURCES = \
-	filterVDIF.c
 
 cleanVDIF_SOURCES = \
 	cleanVDIF.c

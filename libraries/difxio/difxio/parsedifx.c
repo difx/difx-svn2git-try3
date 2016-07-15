@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2012 by Walter Brisken                             *
+ *   Copyright (C) 2007-2012, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -98,18 +98,12 @@ void deleteDifxParameters(DifxParameters *dp)
 				DifxRow *row;
 				
 				row = dp->rows + i;
-				if(row->line)
-				{
-					free(row->line);
-				}
-				if(row->key)
-				{
-					free(row->key);
-				}
-				if(row->value)
-				{
-					free(row->value);
-				}
+				free(row->line);
+				row->line = 0;
+				free(row->key);
+				row->key = 0;
+				free(row->value);
+				row->value = 0;
 			}
 			free(dp->rows);
 		}
@@ -199,21 +193,12 @@ void resetDifxParameters(DifxParameters *dp)
 		DifxRow *row;
 		
 		row = &dp->rows[i];
-		if(row->line)
-		{
-			free(row->line);
-			row->line = 0;
-		}
-		if(row->key)
-		{
-			free(row->key);
-			row->key = 0;
-		}
-		if(row->value)
-		{
-			free(row->value);
-			row->value = 0;
-		}
+		free(row->line);
+		row->line = 0;
+		free(row->key);
+		row->key = 0;
+		free(row->value);
+		row->value = 0;
 	}
 
 	dp->num_rows = 0;
@@ -685,10 +670,7 @@ void DifxStringArrayclear(DifxStringArray *sa)
 
 		for(i = 0; i < sa->n; ++i)
 		{
-			if(sa->str[i])
-			{
-				free(sa->str[i]);
-			}
+			free(sa->str[i]);
 		}
 		free(sa->str);
 		sa->nAlloc = 0;

@@ -1,3 +1,51 @@
+2015-07-07  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/difx2fits.c: bugfixes
+
+2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/difx2fits.c:
+	* src/fitsAN.c:
+	* src/fitsMC.c:
+	* src/fitsSU.c:
+	* src/fitsUV.c:
+	* src/fits.h: bugfixes for RadioAstron compilation
+
+2015-05-04  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/fitsCT.c:
+	* src/fitsMC.c:
+	* src/fitsSO.c: Bugfixes to make things compile
+
+2015-04-29  James Anderson  <anderson@gfz-potsdam>
+
+	* src/fitsCT.c: update for new delay server returning model
+	parameters for CT table
+
+2015-04-22  James Anderson  <anderson@gfz-potsdam>
+
+	* src/difx2fits.c:
+	* src/fitsCT.c:
+	* src/fitsAN.c:
+	* src/fitsML.c:
+	* src/fitsAG.c:
+	* src/fitsGM.c:
+	* src/fitsHeader.c:
+	* src/fits.c:
+	* src/fitsTS.c:
+	* src/time2str.c:
+	* src/fitsMC.c:
+	* src/fitsGN.c:
+	* src/fitsPH.c:
+	* src/fitsSO.c:
+	* src/fitsUV.c:
+	* src/difx2fits.h:
+	* src/fits.h: updates for conversion to new delay server code
+
+Version ?.?.?
+* changes for space VLBI support
+
+
 Version 3.5.0
 * Post DiFX 2.4
 * Remove duplicate RDATE keywords from AG and ML tables

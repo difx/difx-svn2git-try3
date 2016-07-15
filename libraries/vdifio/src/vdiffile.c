@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013-2015 Walter Brisken                                *
+ *   Copyright (C) 2013 Walter Brisken                                     *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,9 +32,9 @@
 #include <stdlib.h>
 #include <vdifio.h>
 #include <sys/stat.h>
-#include "dateutils.h"
 #include "config.h"
 
+int ymd2mjd(int yr, int mo, int day);
 
 void resetvdiffilesummary(struct vdif_file_summary *sum)
 {

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2012 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2012, 2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -31,27 +31,31 @@
 #define __DIFX_CALC_H__
 
 #include <difxio.h>
-#include "CALCServer.h"
+#include "DiFX_Delay_Server.h"
 
 #define MAX_MODEL_OVERSAMP 5
 
 typedef struct
 {
-	int order;
-	int oversamp;
-	int interpol;
-	int increment;	/* seconds */
-	double delta;	/* (rad) step size for dtau/dl and dtau/dm */
-	char calcServer[64];
-	int calcProgram;
-	int calcVersion;
-	int allowNegDelay;
-	struct getCALC_arg request;
-	enum AberCorr aberCorr;
-	CLIENT *clnt;
+    int oversamp;
+    int interpol;
+    int allowNegDelay;
+	int warnSpacecraftPointingSource;
+	int useExtraExternalDelay; /* Flag
+								  0: Do not use some extra delay software
+								  1: Use the calc_Sekido software
+							   */
+    unsigned int Num_Allocated_Stations;
+    unsigned int Num_Allocated_Sources;
+    struct getDIFX_DELAY_SERVER_1_arg request;
+    struct getDIFX_DELAY_SERVER_1_arg sc_request;
+	struct DIFX_DELAY_SERVER_1_station sc_station[3];
+	struct DIFX_DELAY_SERVER_1_source sc_source[1];
+    CLIENT *clnt;
 } CalcParams;
 
-int difxCalcInit(const DifxInput *D, CalcParams *p);
+int difxCalcInit(DifxInput *D, CalcParams *p, int verbose);
+int CheckInputForSpacecraft(const DifxInput *D, CalcParams *p);
 int difxCalc(DifxInput *D, CalcParams *p, const char *prefix, int verbose);
 
 #endif

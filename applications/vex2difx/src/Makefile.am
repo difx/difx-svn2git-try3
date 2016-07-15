@@ -1,41 +1,44 @@
-AM_CPPFLAGS = -I$(top_srcdir)/vexdatamodel
-
 bin_PROGRAMS = \
-	vexpeek \
-	vex2difx
+	vex2difx \
+	vexpeek
 
 LDADD = \
-	$(top_builddir)/vexdatamodel/libvexdatamodel.la \
 	$(top_builddir)/vex/libvex.la
 
 vex2difx_SOURCES = \
-	applycorrparams.cpp \
-	applycorrparams.h \
-	corrparams.cpp \
+	vextables.h \
+	vextables.cpp \
+	vexload.h \
+	vexload.cpp \
 	corrparams.h \
-	freq.cpp \
+	corrparams.cpp \
 	freq.h \
-	job.cpp \
-	job.h \
-	jobflag.cpp \
-	jobflag.h \
-	jobgroup.cpp \
-	jobgroup.h \
-	makejobs.cpp \
+	freq.cpp \
+	interval.h \
+	interval.cpp \
 	makejobs.h \
-	mediachange.cpp \
+	makejobs.cpp \
 	mediachange.h \
-	parserhelp.cpp \
-	parserhelp.h \
-	sanitycheck.cpp \
+	mediachange.cpp \
 	sanitycheck.h \
-	shelves.cpp \
-	shelves.h \
-	timeutils.cpp \
+	sanitycheck.cpp \
 	timeutils.h \
-	vex2difx.cpp
+	timeutils.cpp \
+	util.h \
+	util.cpp \
+	vex2difx.cpp 
 
 vexpeek_SOURCES = \
+	vextables.cpp \
+	vextables.h \
+	vexload.cpp \
+	vexload.h \
+	corrparams.cpp \
+	corrparams.h \
 	timeutils.h \
 	timeutils.cpp \
+	interval.h \
+	interval.cpp \
+	util.h \
+	util.cpp \
 	vexpeek.cpp

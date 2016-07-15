@@ -1,3 +1,145 @@
+2015-07-22  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_input.h: Enable higher order spacecraft clock offset terms
+
+2015-07-07  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_input.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_eop.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_input.h: bugfixes
+
+2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_antenna.c:
+	* difxio/difx_write_input.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_source.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_write_im.c:
+	* difxio/difx_poly_model.c:
+	* difxio/difx_input.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_job.c:
+	* difxio/difx_input.h: bugfixes for RadioAstron compilation
+
+2015-05-15  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_tcal.h:
+	* difxio/difx_input.h:
+	* difxio/difx_model.c:
+	* difxio/difx_calculator.c:
+	* difxio/difx_flag.c:
+	* difxio/difx_if.c:
+	* difxio/difx_input_merge.c:
+	* difxio/difx_phasedarray.c:
+	* difxio/difx_poly_model.c:
+	* difxio/difx_polyco.c:
+	* difxio/difx_pulsar.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_tcal.c:
+	* difxio/difx_datastream.c:
+	* difxio/difx_baseline.c:
+	* difxio/difx_antenna.c:
+	* difxio/difx_eop.c:
+	* difxio/difx_rule.c:
+	* difxio/difx_threads.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_freq.c:
+	* difxio/difx_write.c:
+	* difxio/difx_write_input.c:
+	* difxio/difx_write_im.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_config.c:
+	* difxio/difx_source.c:
+	* difxio/difx_input.c:
+	* difxio/difx_job.c: bugfixes
+
+2015-05-06  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_input.h:
+	* difxio/difx_input.c: bugfixes
+
+2015-05-04  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_input.h:
+	* difxio/difx_input.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_write_calc.c:
+	* utils/psrflag.c:
+	* utils/calcderiv.c:
+	* tests/testephem.c:
+	* tests/pbgen.c: Bugfixes to make things compile
+
+2015-04-29  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_input.h:
+	* difxio/difx_job.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_input.c: Updates to provide information for FITS CT
+	(Calc parameters table) data from the delay server
+
+2015-04-20  James Anderson  <anderson@gfz-potsdam>
+
+	* difxio/difx_config.c:
+	* difxio/difx_input.c:
+	* difxio/difx_source.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_job.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_input.h: Updates while updating vex2difx code to fix
+	remaining bugs in difxio
+
+2015-04-16  James Anderson  <anderson@gfz-potsdam>
+
+	* difxio/difx_baseline.c:
+	* difxio/difx_flag.c:
+	* difxio/difx_freq.c:
+	* difxio/difx_write_pulsar.c:
+	* difxio/difx_datastream.c:
+	* difxio/difx_write_input.c:
+	* difxio/difx_write.h:
+	* difxio/difx_config.c:
+	* difxio/difx_job.c:
+	* difxio/parsedifx.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_eop.c:
+	* difxio/difx_antenna.c:
+	* difxio/parsedifx.h:
+	* difxio/difx_rule.c:
+	* difxio/difx_poly_model.c:
+	* difxio/difx_model.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_source.c:
+	* difxio/difx_tcal.c:
+	* difxio/difx_write.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_write_im.c:
+	* difxio/difx_input.c:
+	* difxio/difx_input.h: changes
+	to incoroporate updated spacecraft handling and new delay server
+	handling
+
+2015-04-13  James Anderson  <anderson@gfz-potsdam>
+
+	* difxio/difx_write.h:
+	* difxio/difx_input.c:
+	* difxio/difx_source.c:
+	* difxio/difx_spacecraft.c:
+	* difxio/difx_write.c:
+	* difxio/difx_write_calc.c:
+	* difxio/difx_scan.c:
+	* difxio/difx_job.c:
+	* difxio/difx_input.h: changes for new DiFX_Delay_Server RPC calls
+	in calcif2 and new numerical derivatives for UVW, LMN, XYZ delay 
+	deltas
+
+3.X.X
+* Changes for space VLBI correlation
+
+
 3.5.0
 * Post DiFX 2.4
 * Consider equality of EOP values when merging jobs
@@ -9,7 +151,6 @@
   - Note: this breaks API compatibility.  Be sure to recompile all dependent code after updating difxio.
 * Fix merging of tables containing model extensions when different scans have different subsets of antennas
 * New utility: tabulatedelays.  Will make a list of evaluated delay polynomials every 24 seconds (on the usual grid of model points).  Delays and rates are printed.
-* New utility: reducepoly.  Will reduce the order of the delay model polynomial.  [Needs GSL]
 * New function: evaluateDifxAntennaClock
 * Write Parallactic Angle and/or Refraction Corrected Elevation to .im file if they are populated
 

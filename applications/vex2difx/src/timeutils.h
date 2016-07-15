@@ -33,7 +33,9 @@
 #include <sys/time.h>
 
 extern const double MJD_UNIX0;	// MJD at beginning of unix time
-extern const double SEC_DAY;
+extern const double SEC_DAY_DBL_;
+extern const int	MJD_UNIX0_INT;
+extern const int	SEC_DAY_INT;
 extern const double MUSEC_DAY;
 
 double current_mjd();

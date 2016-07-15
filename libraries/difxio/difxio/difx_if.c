@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2010 by Walter Brisken                             *
+ *   Copyright (C) 2007-2010, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -75,10 +75,7 @@ DifxIF *newDifxIFArray(int nIF)
 
 void deleteDifxIFArray(DifxIF *di)
 {
-	if(di)
-	{
-		free(di);
-	}
+	free(di);
 }
 
 void fprintDifxIF(FILE *fp, const DifxIF *di)

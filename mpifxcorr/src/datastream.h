@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006 by Adam Deller                                     *
+ *   Copyright (C) 2006, 2015 by Adam Deller                                     *
  *                                                                         *
  *   This program is free for non-commercial use: see the license file     *
  *   at http://astronomy.swin.edu.au:~adeller/software/difx/ for more      *
@@ -172,7 +172,7 @@ protected:
   const int databufferfactor, numdatasegments;
   int activescan, activesec, activens;
   int streamnum, atsegment, readscan, readseconds, corrstartday, corrstartseconds, readbytes, readnanoseconds, intclockseconds;
-  uint32_t bufferbytes; // Maybe should be 64bit, but that then will fail on 32bit machines
+  uint_fast32_t bufferbytes; // Maybe should be 64bit, but that then will fail on 32bit machines
   long long estimatedbytes;
   bool dataremaining;
   readinfo * bufferinfo;

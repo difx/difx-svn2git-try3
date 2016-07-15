@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2015 by Walter Brisken                             *
+ *   Copyright (C) 2009-2013 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -36,7 +36,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <vexdatamodel.h>
+#include "vextables.h"
+#include "vexload.h"
 
 const std::string program("vexpeek");
 const std::string version("0.7");
@@ -121,7 +122,7 @@ void antennaSummary(const VexData *V, int doFormat, int doUsage)
 					const VexSetup *S = M->getSetup(it->first);
 					if(S)
 					{
-						af[it->first] = VexStream::DataFormatNames[S->streams[0].format];
+						af[it->first] = S->formatName;
 					}
 				}
 			}
@@ -229,6 +230,7 @@ int testVex(const std::string &vexFile)
 int main(int argc, char **argv)
 {
 	VexData *V;
+	CorrParams *P;
 	int v;
 	int nWarn = 0;
 	int verbose = 0;
@@ -300,7 +302,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	V = loadVexFile(std::string(fileName), &nWarn);
+	P = new CorrParams();
+	P->defaultSetup();
+	P->minSubarraySize = 1;
+	P->vexFile = fileName;
+
+	V = loadVexFile(*P, &nWarn);
 
 	if(doBandList)
 	{

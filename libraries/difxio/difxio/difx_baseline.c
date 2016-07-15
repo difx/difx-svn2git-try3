@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2010 by Walter Brisken                             *
+ *   Copyright (C) 2008-2010, 2015 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -52,10 +52,7 @@ void DifxBaselineAllocFreqs(DifxBaseline *b, int nFreq)
 		fprintf(stderr, "Error: DifxBaselineAllocFreqs: b = 0\n");
 		return;
 	}
-	if(b->nPolProd)
-	{
-		free(b->nPolProd);
-	}
+	free(b->nPolProd);
 	if(b->bandA)
 	{
 		for(i = 0; i < b->nFreq; i++)
@@ -106,25 +103,22 @@ void DifxBaselineAllocPolProds(DifxBaseline *b, int freq, int nPol)
 		return;
 	}
 
-	if(b->bandA[freq])
-	{
-		free(b->bandA[freq]);
-	}
-	if(b->bandB[freq])
-	{
-		free(b->bandB[freq]);
-	}
+	free(b->bandA[freq]);
+	free(b->bandB[freq]);
 
-	b->nPolProd[freq] = nPol;
+	/* b->nPolProd[freq] = nPol; */
 	if(nPol > 0)
 	{
+		b->nPolProd[freq] = nPol;
 		b->bandA[freq] = (int *)calloc(nPol, sizeof(int));
 		b->bandB[freq] = (int *)calloc(nPol, sizeof(int));
 	}
 	else
 	{
+		b->nPolProd[freq] = 0;
 		b->bandA[freq] = 0;
 		b->bandB[freq] = 0;
+		
 	}
 }
 
@@ -132,19 +126,13 @@ void deleteDifxBaselineInternals(DifxBaseline *db)
 {
 	int f;
 
-	if(db->nPolProd)
-	{
-		free(db->nPolProd);
-		db->nPolProd = 0;
-	}
+	free(db->nPolProd);
+	db->nPolProd = 0;
 	if(db->bandA)
 	{
 		for(f = 0; f < db->nFreq; f++)
 		{
-			if(db->bandA[f])
-			{
-				free(db->bandA[f]);
-			}
+			free(db->bandA[f]);
 		}
 		free(db->bandA);
 		db->bandA = 0;
@@ -153,10 +141,7 @@ void deleteDifxBaselineInternals(DifxBaseline *db)
 	{
 		for(f = 0; f < db->nFreq; f++)
 		{
-			if(db->bandB[f])
-			{
-				free(db->bandB[f]);
-			}
+			free(db->bandB[f]);
 		}
 		free(db->bandB);
 		db->bandB = 0;
@@ -247,41 +232,58 @@ void copyDifxBaseline(DifxBaseline *dest, const DifxBaseline *src,
 {
 	int f, p;
 
-	if(datastreamIdRemap)
+	if(dest != src)
 	{
-		dest->dsA   = datastreamIdRemap[src->dsA];
-		dest->dsB   = datastreamIdRemap[src->dsB];
-	}
-	else
-	{
-		dest->dsA = src->dsA;
-		dest->dsB = src->dsB;
-	}
-
-	DifxBaselineAllocFreqs(dest, src->nFreq);
-	for(f = 0; f < dest->nFreq; f++)
-	{
-		DifxBaselineAllocPolProds(dest, f, src->nPolProd[f]);
-		for(p = 0; p < dest->nPolProd[f]; p++)
+		deleteDifxBaselineInternals(dest);
+		*dest = *src;
+		if(datastreamIdRemap)
 		{
-			dest->bandA[f][p] = src->bandA[f][p];
-			dest->bandB[f][p] = src->bandB[f][p];
+			dest->dsA   = datastreamIdRemap[src->dsA];
+			dest->dsB   = datastreamIdRemap[src->dsB];
 		}
+		else
+		{
+			dest->dsA = src->dsA;
+			dest->dsB = src->dsB;
+		}
+
+		dest->nPolProd = NULL;
+		dest->bandA = NULL;
+		dest->bandB = NULL;
+		DifxBaselineAllocFreqs(dest, src->nFreq);
+		for(f = 0; f < dest->nFreq; f++)
+		{
+			DifxBaselineAllocPolProds(dest, f, src->nPolProd[f]);
+			for(p = 0; p < dest->nPolProd[f]; p++)
+			{
+				dest->bandA[f][p] = src->bandA[f][p];
+				dest->bandB[f][p] = src->bandB[f][p];
+			}
+		}
+	}
+	else if(datastreamIdRemap)
+	{
+		dest->dsA   = datastreamIdRemap[dest->dsA];
+		dest->dsB   = datastreamIdRemap[dest->dsB];
 	}
 }
 
 void moveDifxBaseline(DifxBaseline *dest, DifxBaseline *src)
 {
-	dest->dsA = src->dsA;
-	dest->dsB = src->dsB;
-	dest->nPolProd = src->nPolProd;
-	dest->bandA = src->bandA;
-	dest->bandB = src->bandB;
+	if(dest != src)
+	{
+		*dest = *src;
+		/* dest->dsA = src->dsA; */
+		/* dest->dsB = src->dsB; */
+		/* dest->nPolProd = src->nPolProd; */
+		/* dest->bandA = src->bandA; */
+		/* dest->bandB = src->bandB; */
 
-	/* "unlink" internal structures */
-	src->nPolProd = 0;
-	src->bandA = 0;
-	src->bandB = 0;
+		/* "unlink" internal structures */
+		src->nPolProd = 0;
+		src->bandA = 0;
+		src->bandB = 0;
+	}
 }
 
 int simplifyDifxBaselines(DifxInput *D)

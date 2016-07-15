@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2012 by John Morgan                                     *
+ *   Copyright (C) 2012, 2015 by John Morgan                                     *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -141,13 +141,15 @@ int getMergedDifxInput(int argc, char **argv, DifxInput *D)
 
 int main(int argc, char **argv)
 {
-	int error;
+	/* int error; */
 	DifxInput *D = 0;
 	DifxInput *D1 = 0;
 	DifxInput *D2 = 0;
-	DifxAntenna *da = 0;
+	/* DifxAntenna *da = 0; */
 	//FIXME need to choose phase centre and time increment at command line!!
-	int n, s, a, np, dsId, antId;
+	int n, s, a;
+	/* int np; */
+	int dsId, antId;
 	int phaseCentre = 0;
 	int tInc;
 	int new_scan= 1;
@@ -155,8 +157,8 @@ int main(int argc, char **argv)
 	double distance, pangle; 
 	int i, l;
 	int verbose = 0;
-	int mergable, compatible;
-	int nJob = 0;
+	/* int mergable, compatible; */
+	/* int nJob = 0; */
 
 	char *baseFile[MAX_INPUT_FILES];
 	int nBaseFile = 0;
@@ -356,15 +358,17 @@ int main(int argc, char **argv)
 	for(s = 0; s < D->nScan; ++s)
 	{
 		const DifxScan *scan;
-		const DifxJob *job;
+		/* const DifxJob *job; */
 		const DifxConfig *config;
 		const DifxPolyModel *im_pointing, *im_source;
-		int configId, jobId, terms;
+		int configId;
+		/* int jobId; */
+		int terms;
 		double mjd, dt;
 		double az_pointing, el_pointing, az_source, el_source;
 		scan = D->scan + s;
-		jobId = scan->jobId;
-		job = D->job + jobId;
+		/* jobId = scan->jobId; */
+		/* job = D->job + jobId; */
 		configId = scan->configId;
 
 		if(configId < 0)
@@ -383,7 +387,7 @@ int main(int argc, char **argv)
 
 		if(scan->im)
 		{
-			np = scan->nPoly;
+			/* np = scan->nPoly; */
 		}
 		else
 		{
@@ -419,8 +423,8 @@ int main(int argc, char **argv)
 			for(a = 0; a < config->nAntenna; ++a)
 			//for(a = 0; a < 1; ++a)
 			{
-				const DifxAntenna *da;
-				const DifxPolyModel *P;
+				/* const DifxAntenna *da; */
+				/* const DifxPolyModel *P; */
 				int dsId, antId;
 
 				dsId = config->ant2dsId[a];
@@ -436,7 +440,7 @@ int main(int argc, char **argv)
 					continue;
 				}
 
-				da = D->antenna + antId;
+				/* da = D->antenna + antId; */
 
 				if(scan->im[antId] == 0)
 				{

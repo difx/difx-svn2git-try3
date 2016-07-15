@@ -55,6 +55,8 @@ or
 | startSeries    | int    |       | 20         | the default starting number for jobs created |
 | sendLength     | float  | sec   | 0.262144   | roughly the amount of data to send at a time from datastream processes to core processes |
 | antennas       | string |       | all ants.  | a comma or whitespace separated list of antennas to include in correlation |
+| DelayPolyOrder | int    |       | 5          | the delay model polynomial order to use (\Sum_{i=0}^{DelayPolyOder} a_i (x-x_0)^i
+| DelayPolyInterval | int | sec   | 120        | the interval between subsequent delay polynomials
 
 ==== SOURCE sections ====
 
@@ -71,9 +73,38 @@ or equivalently
 
 ^ Parameter name ^ Type   ^ Units ^ Default ^ Comments ^
 | ra             |        | J2000 |         | right ascension, e.g. 12h34m12.6s |
+| RA             |        | J2000 |         | alternate form for ra |
 | dec            |        | J2000 |         | declination, e.g. 34d12'23.1" |
+| Dec            |        | J2000 |         | alternate form for dec |
 | name           | string |       |         | new name for source |
 | calCode        | char   |       | ' '     | calibration code, typically A, B, C for calibrators, G for a gated pulsar, or blank for normal target | 
+| doPointingCentre | string | bool | ''False'' | ??? |
+| doPointingCenter | string | bool | ''False'' | US English equivalent for doPointingCentre |
+| addPhaseCentre   | string |     |           | Complicated.  See below. |
+| addPhaseCenter   | string |     |           | US English equivalent for addPhaseCentre |
+| ephemType      | string |       |         | string giving the type of ephemeris for spacecraft/Solar system object.  Currently supported values are ''SPICE'' and ''RUSSCF'' |
+| ephemObject    | string |       |         | name of the spacecraft/Solar system object in the ephemeris |
+| ephemFile      | string |       |         | filename of the ephemeris containing the spacecraft/Solar system object data |
+| orientationFile | string |      |         | filename of the file containing the spacecraft/Solar system orientation (pointing) data |
+| naifFile       | string |       |         | name of the Naif file for SPICE spacecraft/Solar system object ephemeri |
+| ephemDeltaT    | float  | sec   | 20.0    | Native interval in time at which the provided spacecraft/Solar system object ephemiers has tabulated positions of the object |
+| sc_epoch       | string |       |         | optional epoch specification for spacecraft/Solar system object correlation, as a data/time string |
+
+
+Detailed specification for addPhaseCentre and addPhaseCenter:  These parameters allow you to specify an additional phase center to be correlated for this datastream.  In principle, all parameters (except addPhaseCentre and addPhaseCenter) may be specified inside of this single parameter key=value string.  But note that in order to get around the restriction of no internal whitespaces for the value string, a special entry system is used.  For example, to add an additional correlation phase center for J1010-1212, you can say
+
+addPhaseCenter = name@1010-1212/RA@10:10:21.1/Dec@-12:12:00.34
+
+parameter key=value pairs are separated by the '/' character.  And the '@' character is used instead of '='.
+
+Allowable date/time formats for sc_epoch include
+
+^ Type                       ^  Example value           ^
+| decimal mjd                |  54345.341944            |
+| ISO 8601 dateTtime strings |  2009-03-08T12:34:56.121 |
+| VLBA-like time             |  2009MAR08-12:34:56.121  |
+| vex time                   |  2009y061d12h34m56.121s  |
+
 
 ==== SETUP sections ====
 
@@ -83,6 +114,9 @@ Setup sections are enclosed in braces after the word SETUP and a name given to t
 | tInt           | float  | sec   | 2       | integration time |
 | nChan          | int    |       | 16      | number of channels per spectral window; currently must be a power of 2 |
 | doPolar        | bool   |       | True    | correlate cross hands when possible? |
+| doAuto         | bool   |       | True    | write out autocorrelations |
+| doMSAcalibration | bool |       | False   | calculate the mount-source angle using the delay modeling software through calcif2 (using CALC), and apply the corrections to the antenna gains (phases) in the FITS (delay) model components (MC) table when converting to FITS files |
+| MC_tab_interval | float | sec   | 0       | DelayPolyInterval  The time interval, in seconds, at which to report the (delay) model component (MC table) values in the output FITS files.  The default value of 0.0 results in the tabulated values occuring at DelayPolyInterval seconds.  Note that in any case, the interval will be no longer than DelayPolyInterval seconds. |
 | blocksPerSend  | int    |       |         | the mpifxcorr BLOCKSPERSEND parameter; defaults to a value that depends on other parameters |
 | specAvg        | int    |       | 1       | how many channels to average together after correlation |
 | startChan      | int    |       | 0       | first (unaveraged) channel to include in output |
@@ -127,7 +161,142 @@ Note that source names and calibration codes reassigned by source sections are n
 
 ==== ANTENNA sections ====
 
-(Not yet implemented) An antenna section will allow properties of an individual antenna, such as position, name, or clock/LO offsets to be adjusted.  
+An antenna section will allow properties of an individual antenna, such as position, name, or clock/LO offsets to be adjusted.  
+
+^ Parameter name ^ Type   ^ Units ^ Default ^ Comments ^
+| name           | string |       |         | name to use for the antenna within DiFX and for data output from the correlation.  This defaults to the name in the VEX file |
+| newName        | string |       |         | alternate key name for name |
+| calcName       | string |       |         | name to provide to the delay calculation program (CALC for this version of DiFX) to specify the antenna.  The name, rather than the antenna position, is used to get ocean loading constants, and so on.  Note that this parameter also allows multiple data recorders recording the same signal at an antenna to be correlated against one another, such as for hardware testing |
+| polSwap        | string | bool  | ''False'' | should polarizations be swapped? |
+| clockOffset    | float  | \mu s |         | clock offset to override VEX information |
+| clock0         | float  | \mu s |         | alternate key name for clockOffset |
+| sampling       | string |       | ''REAL'' | data sampling type.  May be one of ''REAL'' or ''COMPLEX'' |
+| clockRate      | float  | \mu s/s |         | clock rate to override VEX information |
+| clock1         | float  | \mu s/s |       | alternate key name for clockRate |
+| clock2         | float  | \mu s/s^2 |     | clock information to override VEX information |
+| clock3         | float  | \mu s/s^3 |     | clock information to override VEX information |
+| clock4         | float  | \mu s/s^4 |     | clock information to override VEX information |
+| clock5         | float  | \mu s/s^5 |     | clock information to override VEX information |
+| clockEpoch     | string |       |         | epoch to define clock offset zero point.  See below for date/time input. |
+| deltaClock     | float  | \mu s |         | add an offset to the VEX clock offset, rather than specifying the full value to replace the VEX value |
+| deltaClockRate | float  | \mu s/s         | add an offset to the VEX clock rate, rather than specifying the full value to replace the VEX value |
+| X              | float  | m     |         | Earth-centered, crust fixed, x-axis cartesian position coordinate of the antenna |
+| x              | float  | m     |         | alternate key name for X |
+| Y              | float  | m     |         | Earth-centered, crust fixed, y-axis cartesian position coordinate of the antenna |
+| y              | float  | m     |         | alternate key name for Y |
+| Z              | float  | m     |         | Earth-centered, crust fixed, z-axis cartesian position coordinate of the antenna |
+| z              | float  | m     |         | alternate key name for Z |
+| format         | string |       |         | recording format.  The input value is converted to al caps internally.  Suported values are ''VLBA*'', ''VLBN*'', ''MKIV*'', ''MARK5B'', ''S2'', ''LBASTD'', ''LBAVSOP'', ''VDIF*'', ''INTERLACEDVDIF*'' |
+| file           | string |       |         | filename of the antenna datastream, when there is just a single file |
+| files          | string |       |         | alternate key name for file (should this be changed to filelist?) |
+| filelist       | string |       |         | filename of a text file of filenames listing multiple datastream files |
+| networkPort    | int    |       |         | network port to listen to for network datastreams |
+| windowSize     | int    |       |         | TCP window size |
+| UDP_MTU        | int    |       |         | UDP window size |
+| module         | string |       |         | name of the module (such as a Mark5 module) to use for correlation |
+| vsn            | string |       |         | alternate key name for module |
+| phaseCalInt    | int    | MHz   |         | phase cal tone interval |
+| toneGuard      | float  | MHz   |         | guard frequency range to avoid band edges |
+| toneSelection  | string |       |         | tone selection type.  Allowed values are ''vex'', ''none'', ''ends'', ''all'', ''smart'', and ''most'' |
+| tcalFreq       | float  | Hz    |         | frequency for Tcal switching cycle (e.g. 80 Hz for VLBA ) |
+| freqClockOffs  | float  | \mu s?? |       | clock offsets for individual frequencies.  May be specified multiple times. |
+| loOffsets      | float  | MHz?? |         | LO offsets for individual frequencies.  May be specified multiple times. |
+| addZoomFreq    | string |       |         | Adds zoom frequencies.  May be specified multiple times.  See below. |
+| ephemType      | string |       |         | string giving the type of ephemeris for spacecraft antenna.  Currently supported values are ''SPICE'' and ''RUSSCF'' |
+| ephemObject    | string |       |         | name of the spacecraft in the ephemeris |
+| ephemFile      | string |       |         | filename of the ephemeris containing the spacecraft data |
+| orientationFile | string |      |         | filename of the file containing the spacecraft/Solar system orientation (pointing) data |
+| naifFile       | string |       |         | name of the Naif file for SPICE spacecraft ephemeri |
+| JPLplanetaryephem | string |    |         | filename of the JPL (SPICE/NAIF) planetary ephemeris data for the major planets and Moon (currently de421.bsp is suggested) |
+| ephemDeltaT    | float  | sec   | 20.0    | Native interval in time at which the provided spacecraft ephemiers has tabulated positions of the object |
+| SC_time_type   | string |       |         | type of time information for the spacecraft datastream.  See below. |
+| SC_GS_clock_break | string |    |         | date/time pair and optional clock fudge offset for the ''GroundReception'' SC_time_type.  This specifies the starting time for which the time marking is valid, and the time instant at which time timestamp was synced, in a sub-key@value seqeuence.  For example, SC_GS_clock_break=start@54345.341944/sync@54345.341944/clockfudge@0.0.  This parameter may be specified multiple times to provide multiple clock breaks.  See below for the allowed time formats. The clock fudge value has units of microseconds. |
+| SC_rec_delay   | float  | sec   |         | time between the reception of the wavefront by the spacecraft antenna and the transmission of the data corresponding to that electric field value by the spacecraft ground data link antenna |
+| GS_name        | string |       |         | name of the ground recording station |
+| GS_calcName    | string |       |         | name of the ground recording station to use itnernally within DiFX |
+| GS_X           | float  | m     |         | Earth-centered, crust fixed, x-axis cartesian position coordinate of the recording station |
+| GS_x           | float  | m     |         | alternate key name for GS_X |
+| GS_Y           | float  | m     |         | Earth-centered, crust fixed, y-axis cartesian position coordinate of the recording station |
+| GS_y           | float  | m     |         | alternate key name for GS_Y |
+| GS_Z           | float  | m     |         | Earth-centered, crust fixed, z-axis cartesian position coordinate of the recording station |
+| GS_z           | float  | m     |         | alternate key name for GS_Z |
+| GS_dX          | float  | m/yr  |         | Earth-centered, crust fixed, x-axis cartesian velocity coordinate of the recording station |
+| GS_dx          | float  | m/yr  |         | alternate key name for GS_dX |
+| GS_dY          | float  | m/yr  |         | Earth-centered, crust fixed, y-axis cartesian velocity coordinate of the recording station |
+| GS_dy          | float  | m/yr  |         | alternate key name for GS_dY |
+| GS_dZ          | float  | m/yr  |         | Earth-centered, crust fixed, z-axis cartesian velocity coordinate of the recording station |
+| GS_dz          | float  | m/yr  |         | alternate key name for GS_dZ |
+| GS_pos_epoch   | string |       |         | date/time epoch for the zero point of the ground recording station position/velocity.  See below for date/time formats. |
+| GS_axisType    | string |       |         | Mount axis type of the ground recording station.  Allowed values are ''AZEL'', ''EQUA'', ''XYEW'', ''NASR'', ''NASL'', and ''XYNS'' |
+| GS_axisOffset0 | float  | m     |         | ground recording station axis offset for the 0th axis |
+| GS_axisOffset1 | float  | m     |         | ground recording station axis offset for the 1st axis (not supported by CALC 9) |
+| GS_axisOffset2 | float  | m     |         | ground recording station axis offset for the 2nd axis (not supported by CALC 9) |
+| GS_clock0      | float  | \mu s |         | ground recording station clock offset |
+| GS_clock1      | float  | \mu s/s |       | ground recording station clock rate |
+| GS_clock2      | float  | \mu s/s^2 |     | ground recording station clock poly |
+| GS_clock3      | float  | \mu s/s^3 |     | ground recording station clock poly |
+| GS_clock4      | float  | \mu s/s^4 |     | ground recording station clock poly |
+| GS_clock5      | float  | \mu s/s^5 |     | ground recording station clock poly |
+| GS_clockEpoch  | string |       |         | epoch to define ground station clock offset zero point.  See below for date/time input. |
+| SC_pos_offsetEpoch  | string |  |         | epoch to define spacecraft position offset zero point.  See below for date/time input. |
+| SC_pos_offset0 | string | m     |         | spacecraft position offset vector (position) as NUMBER/NUMBER/NUMBER with no whitespace |
+| SC_pos_offset1 | string | m/s   |         | spacecraft position offset vector (velocity) as NUMBER/NUMBER/NUMBER with no whitespace |
+| SC_pos_offset2 | string | m/s^2 |         | spacecraft position offset vector (acceleration) as NUMBER/NUMBER/NUMBER with no whitespace |
+| SC_pos_offset3 | string | m/s^3 |         | spacecraft position offset vector (jerk) as NUMBER/NUMBER/NUMBER with no whitespace |
+| SC_pos_offset4 | string | m/s^4 |         | spacecraft position offset vector (snap) as NUMBER/NUMBER/NUMBER with no whitespace |
+| SC_pos_offset5 | string | m/s^5 |         | spacecraft position offset vector (crackle) as NUMBER/NUMBER/NUMBER with no whitespace |
+| SC_pos_offset6 | string | m/s^6 |         | spacecraft position offset vector (pop) as NUMBER/NUMBER/NUMBER with no whitespace --- *NOTE THAT POP IS NOT ACTUALLY IMPLEMENTED*, but it seemed sad to leave him out |
+
+
+
+
+Zoom frequencies are specified in a special way.  In order to get around the restriction of no internal whitespaces for the value string, a special entry system is used.  For example, to add a zoom frequency, you can say
+
+addZoomFreq = freq@1649.99/bw@1.0/specAvg@8
+
+parameter key=value pairs are separated by the '/' character.  And the '@' character is used instead of '='.  Allowable parameter keys for addZoomFreq include
+
+^ Parameter name ^ Type   ^ Units ^ Default ^ Comments ^
+| freq           | float  | MHz   |         | ??? |
+| FREQ           | float  | MHz   |         | alternative key name for freq |
+| bw             | float  | MHz   |         | ??? |
+| BW             | float  | MHz   |         | alternative key name for bw |
+| noparent       | string | bool  | ''False'' | ??? Do not correlate the parent |
+| NOPARENT       | string | bool  | ''False'' | alternative key name for noparent |
+| specAvg        | int    |       | -1      | ??? |
+| SPECAVG        |int     |       | -1      | alternative key name for specAvg |
+| specavg        |int     |       | -1      | alternative key name for specAvg |
+
+the freq and bw keys are required.
+
+Spacecraft ground station clock breaks are also specified in this special way.  In order to get around the restriction of no internal whitespaces for the value string, a special entry system is used.  For example, to add a spacecraft ground station clock break, you can say
+
+SC_GS_clock_break=start@54345.341944/sync@54345.341944/clockfudge@0.0
+
+parameter key=value pairs are separated by the '/' character.  And the '@' character is used instead of '='.  Allowable parameter keys for SC_GS_clock_break include
+
+^ Parameter name ^ Type   ^ Units ^ Default ^ Comments ^
+| start          | string |       |         | Start time for which the clock break is valid.  See below for allowable date/time formats. |
+| sync           | string |       |         | Time instant at which time timestamp for the spacecraft datastream was synced.  See below for allowable date/time formats. |
+| clockfudge     | float  | \mu s | 0.0     | Clock fudge offset (inserted to compensate for Pushchino hardware errors that sometimes introduce recorded timestamps that are off by up to milliseconds for RadioAstron recording) |
+
+
+Note that the JPLplanetaryephem planetary ephemeris is used *only* for spacecraft time frame calculations.  It is *not* used in the generation of geometrical delays by the CALC program.  CALC uses its own planetary ephemeris.
+
+SC_time_type:  ''Local'' means that the timestamps are recorded using a local clock on the spacecraft.  ''GroundReception'' means that the spacecraft has its own clock to derive the LO and sampling frequencies, but that the ground station marks the timestamp of the datastream using a local clock at some specific instant in time.  From that instant onward (and possibly back in time), the sampling clock runs at the spacecraft clock frequency, but the clock offset is determined by the clock offset of the ground recording station and the time delay between the spacecraft and the recording station at the time of time marking.  ''GroundClock'' means that the spacecraft LO and sampling frequencies are derived from a clock signal sent to the spacecraft by some ground station, vastly complicating the clock offset, clock rate, and delay model calculation for the changing spacecraft position and velocity relative to the ground station.
+
+Note that unlike the clock polynomials, the position offset series represents the physical position, velocity, acceleration, and so on, values.  The series is evaluated as \Delta\boldsymbol{x} = (\Delta t)^0 \boldsymbol{x} + (\Delta t)^1 \boldsymbol{v} + \frac{(\Delta t)^2}{2} \boldsymbol{a} + \frac{(\Delta t)^2}{6} \boldsymbol{j} + \ldots
+
+Allowable date/time formats for SC_GS_clock_break, GS_pos_epoch include, GS_clockEpoch
+
+^ Type                       ^  Example value           ^
+| decimal mjd                |  54345.341944            |
+| ISO 8601 dateTtime strings |  2009-03-08T12:34:56.121 |
+| VLBA-like time             |  2009MAR08-12:34:56.121  |
+| vex time                   |  2009y061d12h34m56.121s  |
+
+
+
 
 ===== Command line arguments =====
 

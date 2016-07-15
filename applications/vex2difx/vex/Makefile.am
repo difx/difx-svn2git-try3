@@ -6,7 +6,12 @@ BUILT_SOURCES = \
 	vex_parse.tab.h \
 	vex_parse.c 
 
-noinst_LTLIBRARIES = \
+library_includedir = $(includedir)
+library_include_HEADERS = \
+	vex_parse.h \
+	vex.h 
+
+lib_LTLIBRARIES = \
 	libvex.la
 
 vex_parse.tab.h: $(srcdir)/vex_parse.y
@@ -21,9 +26,10 @@ libvex_la_SOURCES = \
 	vex_get.c \
 	vex_put.c \
 	vex_util.c \
-	vex_parse.h \
-	vex_parse.y \
-	vex.h \
+	$(srcdir)/vex_parse.y \
 	vex.yy.l
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = vex.pc
 
 CLEANFILES = vex_parse.tab.[ch] vex_parse.[ch] vex.yy.c

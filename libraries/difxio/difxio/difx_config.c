@@ -1,20 +1,20 @@
 /***************************************************************************
- *   Copyright (C) 2008-2010 by Walter Brisken                             *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *	 Copyright (C) 2008-2010, 2014, 2015 by Walter Brisken							 *
+ *																		   *
+ *	 This program is free software; you can redistribute it and/or modify  *
+ *	 it under the terms of the GNU General Public License as published by  *
+ *	 the Free Software Foundation; either version 3 of the License, or	   *
+ *	 (at your option) any later version.								   *
+ *																		   *
+ *	 This program is distributed in the hope that it will be useful,	   *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of		   *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the		   *
+ *	 GNU General Public License for more details.						   *
+ *																		   *
+ *	 You should have received a copy of the GNU General Public License	   *
+ *	 along with this program; if not, write to the						   *
+ *	 Free Software Foundation, Inc.,									   *
+ *	 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.			   *
  ***************************************************************************/
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
@@ -56,10 +56,7 @@ void DifxConfigAllocDatastreamIds(DifxConfig *dc, int nDatastream, int start)
 {
 	int i;
 
-	if(dc->datastreamId)
-	{
-		free(dc->datastreamId);
-	}
+	free(dc->datastreamId);
 	dc->datastreamId = (int *)malloc((nDatastream+1)*sizeof(int));
 	dc->datastreamId[nDatastream] = -1;
 	for(i = 0; i < nDatastream; i++)
@@ -73,10 +70,7 @@ void DifxConfigAllocBaselineIds(DifxConfig *dc, int nBaseline, int start)
 {
 	int i;
 
-	if(dc->baselineId)
-	{
-		free(dc->baselineId);
-	}
+	free(dc->baselineId);
 	dc->baselineId = (int *)malloc((nBaseline+1)*sizeof(int));
 	dc->baselineId[nBaseline] = -1;
 	for(i = 0; i < nBaseline; i++)
@@ -88,36 +82,18 @@ void DifxConfigAllocBaselineIds(DifxConfig *dc, int nBaseline, int start)
 
 void deleteDifxConfigInternals(DifxConfig *dc)
 {
-	if(dc->IF)
-	{
-		free(dc->IF);
-		dc->IF = 0;
-	}
-	if(dc->datastreamId)
-	{
-		free(dc->datastreamId);
-		dc->datastreamId = 0;
-	}
-	if(dc->baselineId)
-	{
-		free(dc->baselineId);
-		dc->baselineId = 0;
-	}
-	if(dc->freqId2IF)
-	{
-		free(dc->freqId2IF);
-		dc->freqId2IF = 0;
-	}
-	if(dc->ant2dsId)
-	{
-		free(dc->ant2dsId);
-		dc->ant2dsId = 0;
-	}
-	if(dc->freqIdUsed)
-	{
-		free(dc->freqIdUsed);
-		dc->freqIdUsed = 0;
-	}
+	deleteDifxIFArray(dc->IF);
+	dc->IF = 0;
+	free(dc->datastreamId);
+	dc->datastreamId = 0;
+	free(dc->baselineId);
+	dc->baselineId = 0;
+	free(dc->freqId2IF);
+	dc->freqId2IF = 0;
+	free(dc->freqIdUsed);
+	dc->freqIdUsed = 0;
+	free(dc->ant2dsId);
+	dc->ant2dsId = 0;
 }
 
 void deleteDifxConfigArray(DifxConfig *dc, int nConfig)
@@ -314,7 +290,7 @@ int DifxConfigCalculateDoPolar(DifxConfig *dc, DifxBaseline *db)
 
 	if(first)
 	{
-		printf("\nWARNING: DifxConfigCalculateDoPolar is being called.  This function is fundamentally flawed.  DifxInputCalculateDoPolar should be used instead.  Please report this!\n\n");
+		printf("\nWARNING: DifxConfigCalculateDoPolar is being called.	This function is fundamentally flawed.	DifxInputCalculateDoPolar should be used instead.  Please report this!\n\n");
 		first = 0;
 	}
 
@@ -355,23 +331,23 @@ int DifxConfigGetPolId(const DifxConfig *dc, char polName)
 }
 
 /* Inputs:
- *   D         -- pointer to DifxInput structure
- *   configId  -- index for D->config (must be in [0 to D->nConfig-1])
- *   antennaId -- index to D->antenna (must be in [0 to D->nAntenna-1])
- *   recBand   -- record band number for specified antenna.  This is
- *                index to the datastream "local frequency table"
+ *	 D		   -- pointer to DifxInput structure
+ *	 configId  -- index for D->config (must be in [0 to D->nConfig-1])
+ *	 antennaId -- index to D->antenna (must be in [0 to D->nAntenna-1])
+ *	 recBand   -- record band number for specified antenna.	 This is
+ *				  index to the datastream "local frequency table"
  * Outputs:
- *   freqId    -- index to D->freq (in [0 to D->nFreq-1])
- *                or -1 on out of range
- *   polId     -- polarization ID for config.  pols are prioritized
- *                in order R, L, X, Y.  Value is 0 or 1
- *                or -1 on out of range
+ *	 freqId	   -- index to D->freq (in [0 to D->nFreq-1])
+ *				  or -1 on out of range
+ *	 polId	   -- polarization ID for config.  pols are prioritized
+ *				  in order R, L, X, Y.	Value is 0 or 1
+ *				  or -1 on out of range
  * Return:
- *   0         -- success
- *   <0        -- some error occurred
+ *	 0		   -- success
+ *	 <0		   -- some error occurred
  */
 int DifxConfigRecBand2FreqPol(const DifxInput *D, int configId,
-	int antennaId, int recBand, int *freqId, int *polId)
+							  int antennaId, int recBand, int *freqId, int *polId)
 {
 	DifxConfig *dc;
 	DifxDatastream *ds = 0;
@@ -436,15 +412,56 @@ int DifxConfigRecBand2FreqPol(const DifxInput *D, int configId,
 }
 
 void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
-	const int *baselineIdRemap, const int *datastreamIdRemap, 
-	const int *pulsarIdRemap)
+					const int *baselineIdRemap, const int *datastreamIdRemap, 
+					const int *pulsarIdRemap)
 {
 	int i, n, a;
 
-	dest->nAntenna = src->nAntenna;
+	if(dest != src)
+	{
+		deleteDifxConfigInternals(dest);
+		*dest = *src;
+		dest->baselineId = (int *)calloc(dest->nBaseline+1, sizeof(int));
+		dest->datastreamId = (int *)calloc(dest->nDatastream+1, sizeof(int));
+		/* dest->nAntenna = src->nAntenna; */
+		if(src->ant2dsId)
+		{
+			dest->ant2dsId = (int *)malloc((src->nAntenna+1)*sizeof(int));
+		}
+		if(src->IF)
+		{
+			dest->IF = newDifxIFArray(dest->nIF);
+			for(i = 0; i < dest->nIF; ++i)
+			{
+				dest->IF[i] = src->IF[i];
+			}
+		}
+		i=0;
+		if(src->freqId2IF)
+		{
+			while(src->freqId2IF[i] != -2)
+			{
+				++i;
+			}
+			++i;
+			dest->freqId2IF = (int *)malloc(i*sizeof(int));
+			for(a = 0; a < i; ++a)
+			{
+				dest->freqId2IF[a] = src->freqId2IF[a];
+			}
+		}
+		--i;
+		if((src->freqIdUsed) && (i>0))
+		{
+			dest->freqIdUsed = (int *)malloc(i*sizeof(int));
+			for(a = 0; a < i; ++a)
+			{
+				dest->freqIdUsed[a] = src->freqIdUsed[a];
+			}
+		}
+	}
 	if(src->ant2dsId)
 	{
-		dest->ant2dsId = (int *)malloc((src->nAntenna+1)*sizeof(int));
 		for(a = 0; a < src->nAntenna; a++)
 		{
 			if(src->ant2dsId[a] < 0)
@@ -464,35 +481,34 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 		dest->ant2dsId[src->nAntenna] = -1;
 	}
 
-	dest->tInt = src->tInt;
-	dest->subintNS = src->subintNS;
-	dest->guardNS = src->guardNS;
-	snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name);
-	dest->fringeRotOrder = src->fringeRotOrder;
-	dest->strideLength = src->strideLength;
-	dest->xmacLength = src->xmacLength;
-	dest->numBufferedFFTs = src->numBufferedFFTs;
+	/* dest->tInt = src->tInt; */
+	/* dest->subintNS = src->subintNS; */
+	/* dest->guardNS = src->guardNS; */
+	/* snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name); */
+	/* dest->fringeRotOrder = src->fringeRotOrder; */
+	/* dest->strideLength = src->strideLength; */
+	/* dest->xmacLength = src->xmacLength; */
+	/* dest->numBufferedFFTs = src->numBufferedFFTs; */
 	if(pulsarIdRemap && src->pulsarId >= 0)
 	{
 		dest->pulsarId = pulsarIdRemap[src->pulsarId];
 	}
-	else
+	else if(dest != src)
 	{
 		dest->pulsarId = src->pulsarId;
 	}
-	dest->nPol = src->nPol;
-	for(i = 0; i < dest->nPol; i++)
-	{
-		dest->pol[i] = src->pol[i];
-	}
-	dest->doPolar = src->doPolar;
-	dest->doAutoCorr = src->doAutoCorr;
-	dest->quantBits = src->quantBits;
-	dest->nBaseline = src->nBaseline;
-	dest->nDatastream = src->nDatastream;
+	/* dest->nPol = src->nPol; */
+	/* for(i = 0; i < dest->nPol; i++) */
+	/* { */
+	/* 	dest->pol[i] = src->pol[i]; */
+	/* } */
+	/* dest->doPolar = src->doPolar; */
+	/* dest->doAutoCorr = src->doAutoCorr; */
+	/* dest->quantBits = src->quantBits; */
+	/* dest->nBaseline = src->nBaseline; */
+	/* dest->nDatastream = src->nDatastream; */
 
 	n = dest->nBaseline;
-	dest->baselineId = (int *)calloc(n+1, sizeof(int));
 	dest->baselineId[n] = -1;
 	if(baselineIdRemap)
 	{
@@ -502,7 +518,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 				baselineIdRemap[src->baselineId[i]];
 		}
 	}
-	else
+	else if(dest != src)
 	{
 		for(i = 0; i < n; i++)
 		{
@@ -511,7 +527,6 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	}
 	
 	n = dest->nDatastream;
-	dest->datastreamId = (int *)calloc(n+1, sizeof(int));
 	dest->datastreamId[n] = -1;
 	if(datastreamIdRemap)
 	{
@@ -521,7 +536,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 				datastreamIdRemap[src->datastreamId[i]];
 		}
 	}
-	else
+	else if(dest != src)
 	{
 		for(i = 0; i < n; i++)
 		{
@@ -532,15 +547,19 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 
 void moveDifxConfig(DifxConfig *dest, DifxConfig *src)
 {
-	memcpy(dest, src, sizeof(DifxConfig));
+	if(dest != src)
+	{
+		*dest = *src;
+		/* memcpy(dest, src, sizeof(DifxConfig)); */
 
-	/* unlink some pointers to prevent double freeing */
-	src->datastreamId = 0;
-	src->baselineId = 0;
-	src->IF = 0;
-	src->freqId2IF = 0;
-	src->freqIdUsed = 0;
-	src->ant2dsId = 0;
+		/* unlink pointers to prevent double freeing */
+		src->datastreamId = 0;
+		src->baselineId = 0;
+		src->IF = 0;
+		src->freqId2IF = 0;
+		src->freqIdUsed = 0;
+		src->ant2dsId = 0;
+	}
 }
 
 int simplifyDifxConfigs(DifxInput *D)
@@ -619,9 +638,9 @@ int simplifyDifxConfigs(DifxInput *D)
 }
 
 DifxConfig *mergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
-	const DifxConfig *dc2, int ndc2, int *configIdRemap,
-	const int *baselineIdRemap, const int *datastreamIdRemap,
-	const int *pulsarIdRemap, int *ndc)
+								  const DifxConfig *dc2, int ndc2, int *configIdRemap,
+								  const int *baselineIdRemap, const int *datastreamIdRemap,
+								  const int *pulsarIdRemap, int *ndc)
 {
 	int i, j;
 	DifxConfig *dc;
@@ -648,8 +667,8 @@ DifxConfig *mergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
 		if(configIdRemap[j] >= ndc1)
 		{
 			copyDifxConfig(dc + configIdRemap[j], dc2 + j,
-				baselineIdRemap, datastreamIdRemap, 
-				pulsarIdRemap);
+						   baselineIdRemap, datastreamIdRemap, 
+						   pulsarIdRemap);
 		}
 	}
 
@@ -657,7 +676,7 @@ DifxConfig *mergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
 }
 
 int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const DifxPulsar *pulsar,
-	const DifxPhasedArray *phasedarray)
+						 const DifxPhasedArray *phasedarray)
 {
 	int i, j;
 	int n;
@@ -671,23 +690,21 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		config = dc + i;
 
 		writeDifxLine(out, "CONFIG NAME", config->name);
-		writeDifxLineDouble(out, "INT TIME (SEC)", "%8.6f",
-			config->tInt);
+		writeDifxLineDouble(out, "INT TIME (SEC)", "%14.12f", config->tInt);
 		writeDifxLineInt(out, "SUBINT NANOSECONDS", config->subintNS);
 		writeDifxLineInt(out, "GUARD NANOSECONDS", config->guardNS);
 		writeDifxLineInt(out, "FRINGE ROTN ORDER", config->fringeRotOrder);
 		writeDifxLineInt(out, "ARRAY STRIDE LENGTH", config->strideLength);
 		writeDifxLineInt(out, "XMAC STRIDE LENGTH", config->xmacLength);
 		writeDifxLineInt(out, "NUM BUFFERED FFTS", config->numBufferedFFTs);
-		if(config->doAutoCorr)
-			writeDifxLine(out, "WRITE AUTOCORRS", "TRUE");
-		else
-			writeDifxLine(out, "WRITE AUTOCORRS", "FALSE");
+		writeDifxLineBoolean(out, "WRITE AUTOCORRS", config->doAutoCorr);
+		writeDifxLineBoolean(out, "WRITE MSA CALIB", config->doMSAcalibration);
+		writeDifxLineDouble(out, "MC TABLE INTERVAL", "%12.9f", config->MC_table_output_interval);
 		if(config->pulsarId >= 0 && pulsar)
 		{
 			writeDifxLine(out, "PULSAR BINNING", "TRUE");
 			writeDifxLine(out, "PULSAR CONFIG FILE", 
-				pulsar[config->pulsarId].fileName);
+						  pulsar[config->pulsarId].fileName);
 		}
 		else
 		{
@@ -697,7 +714,7 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		{
 			writeDifxLine(out, "PHASED ARRAY", "TRUE");
 			writeDifxLine(out, "PHASED ARRAY CONNFIG FILE", 
-				phasedarray[config->phasedArrayId].fileName);
+						  phasedarray[config->phasedArrayId].fileName);
 		}
 		else
 		{
@@ -706,12 +723,12 @@ int writeDifxConfigArray(FILE *out, int nConfig, const DifxConfig *dc, const Dif
 		for(j = 0; j < config->nDatastream; j++)
 		{
 			writeDifxLineInt1(out, "DATASTREAM %d INDEX", j,
-				config->datastreamId[j]);
+							  config->datastreamId[j]);
 		}
 		for(j = 0; j < config->nBaseline; j++)
 		{
 			writeDifxLineInt1(out, "BASELINE %d INDEX", j,
-				config->baselineId[j]);
+							  config->baselineId[j]);
 		}
 
 		n += (10 + config->nDatastream + config->nBaseline);

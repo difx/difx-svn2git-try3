@@ -66,7 +66,6 @@ class MainWindow(GenericWindow):
         self.labelOptionsDlg= LabelOptionsWindow(self,rootWidget)
         self.databaseOptionsDlg= DatabaseOptionsWindow(self,rootWidget)
         self.scanModulesDlg = ScanModulesWindow(self, rootWidget)
-	self.editExpDlg = EditExperimentsWindow(self, rootWidget)
         
         self.defaultBgColor = rootWidget["background"]
         self.isConnected = False
@@ -77,7 +76,6 @@ class MainWindow(GenericWindow):
         self.filterDirLess = IntVar()
         self.filterUnscanned = IntVar()
         self.filterExpVar = StringVar()
-        self.filterModuleTypeVar = StringVar()
         
         self.expFilterItems = []
         self.labelSizeX = 320
@@ -85,14 +83,6 @@ class MainWindow(GenericWindow):
         self.moduleFilter = ""
         self.slotFilter = ""
         self.forceCheckout = False
-        self.moduleTypes = ['all','SATA','PATA','Mark6']
-        
-        self.filterModuleTypeVar.set(self.moduleTypes[0])
-        
-        # regular expressions for matching various VSN types
-        self.patternSataVSN = re.compile('([a-zA-Z]+[-]\d+)')
-        self.patternPataVSN = re.compile('([a-zA-Z]+[\+]\d+)')
-        self.patternMark6VSN = re.compile('([a-zA-Z]+[%]\d+)')
                 
     def show(self):
         
@@ -116,33 +106,27 @@ class MainWindow(GenericWindow):
         self.rootWidget.config(menu=menubar)
         
         # frames
-        self.frmFilter = LabelFrame(self.rootWidget, text="Filter")
-        self.frmMain = LabelFrame(self.rootWidget, text="Modules")
+        self.frmMain = LabelFrame(self.rootWidget, text="Filter")
         self.frmDetail = LabelFrame(self.rootWidget, text="Detail")
-        frmAction = LabelFrame(self.rootWidget, text="Actions")
+        self.frmEditExperiment = Frame(self.frmDetail)
         frmStatus = LabelFrame(self.rootWidget, text="Status")
-        
         
         self.btnQuit = Button(self.rootWidget, text="Exit", command=self.rootWidget.destroy)
         
-        # widgets on frmFilter       
-        self.chkRelease = Checkbutton(self.frmFilter, text = "show releasable modules", variable = self.filterReleaseList, command=self.updateSlotListbox)
-        self.chkDirLess = Checkbutton(self.frmFilter, text = "show modules without .dir file", variable = self.filterDirLess, command=self.updateSlotListbox)
-        self.chkUnscanned = Checkbutton(self.frmFilter, text = "show modules with unscanned .dir files", variable = self.filterUnscanned, command=self.updateSlotListbox)
-        self.cboModuleType = OptionMenu(self.frmFilter, self.filterModuleTypeVar, *self.moduleTypes, command=self.applyModuleFilter)
+        #widgets on frmMain       
+        self.chkRelease = Checkbutton(self.frmMain, text = "releasable modules", variable = self.filterReleaseList, command=self.updateSlotListbox)
+        self.chkDirLess = Checkbutton(self.frmMain, text = "modules w/o .dir", variable = self.filterDirLess, command=self.updateSlotListbox)
+        self.chkUnscanned = Checkbutton(self.frmMain, text = "unscanned .dir", variable = self.filterUnscanned, command=self.updateSlotListbox)
         
-        # widgets on frmMain
-	colList = []
-	colList.append(ListboxColumn("slot",4, searchable=True))
-	colList.append(ListboxColumn("vsn",6, searchable=True))
-        colList.append(ListboxColumn("station",3, sortable=True))
-        colList.append(ListboxColumn("experiments",30))
-        colList.append(ListboxColumn("scans",3))
-        colList.append(ListboxColumn("capacity",4) )
-        colList.append(ListboxColumn("datarate",4))
-        colList.append(ListboxColumn("received",15))
-	columns = tuple(colList)
-        self.grdSlot = MultiListbox(self.frmMain, 16, *columns)
+        col1 = ListboxColumn("slot",10, searchable=True)
+        col2 = ListboxColumn("vsn",10, sortable=True)
+        col3 = ListboxColumn("station",4, sortable=True)
+        col4 = ListboxColumn("experiments",30)
+        col5 = ListboxColumn("scans",4)
+        col6 = ListboxColumn("capacity",5) 
+        col7 = ListboxColumn("datarate",5)
+        col8 = ListboxColumn("received",15)
+        self.grdSlot = MultiListbox(self.frmMain, col1, col2, col3, col4, col5, col6, col7, col8)
         self.grdSlot.bindEvent("<ButtonRelease-1>", self.selectSlotEvent)
         self.btnNewModule = Button (self.frmMain, text="Check-in module", command=self.checkinModule)
           
@@ -166,7 +150,6 @@ class MainWindow(GenericWindow):
         Label(self.frmDetail, text = "comments: ").grid(row=8, column=0, sticky=W) 
         self.txtLocationContent = Entry(self.frmDetail, text = "", state=DISABLED)
         self.btnChangeSlot = Button(self.frmDetail, text = "Change slot", state=DISABLED, command=self.showChangeSlotWindow)
-        
         self.lblVSNContent = Entry(self.frmDetail, text = "", state=DISABLED)
         self.lblStationContent = Entry(self.frmDetail, text = "", state=DISABLED)
         self.lblCapacityContent = Entry(self.frmDetail, text = "", state=DISABLED)
@@ -175,36 +158,34 @@ class MainWindow(GenericWindow):
         scrollCboExperiments = Scrollbar(self.frmDetail)
         self.cboExperiments =  Listbox(self.frmDetail, height=3, yscrollcommand=scrollCboExperiments.set, selectmode=MULTIPLE, state=DISABLED)
         scrollCboExperiments.config(command=self.cboExperiments.yview)
-        self.btnEditExp = Button (self.frmDetail, text="Change experiments", command=self.showEditExperimentsWindow,state=DISABLED)
         self.txtComment = Text(self.frmDetail, height=3, width=25)
+        self.btnDeleteModule = Button(self.frmDetail, text="Check-out module", command=self.checkOutModule, state=DISABLED)
+        self.btnEditModule = Button(self.frmDetail, text="Update details", command=self.updateModule, state=DISABLED)
+        self.btnPrintLibraryLabel = Button (self.frmDetail, text="Print library label", command=self.printLibraryLabel,state=DISABLED)
+        self.btnPrintVSNLabel = Button (self.frmDetail, text="Print VSN label", command=self.printVSNLabel,state=DISABLED)
+        self.btnRescan = Button (self.frmDetail, text="Rescan directory", command=self.rescanModuleEvent,state=DISABLED)
+        self.btnExpad = Button (self.frmDetail, text="Show exp. details", command=self.showExpDetailEvent,state=DISABLED) 
+        # widgets on frmEditExperiment
+        scrollCboFreeExperiments = Scrollbar(self.frmEditExperiment)
+        self.cboFreeExperiments = Listbox(self.frmEditExperiment, height=3, yscrollcommand=scrollCboFreeExperiments.set, selectmode=MULTIPLE)
+        scrollCboFreeExperiments.config(command=self.cboFreeExperiments.yview)
+        self.btnAddExperiments = Button(self.frmEditExperiment, text="<<", command=self.addExperimentEvent)
+        self.btnRemoveExperiments = Button(self.frmEditExperiment, text=">>", command=self.removeExperimentEvent)
+         
         
-        # widgets on frmAction
-        self.btnDeleteModule = Button(frmAction, text="Check-out module", command=self.checkOutModule, state=DISABLED)
-        self.btnEditModule = Button(frmAction, text="Update details", command=self.updateModule, state=DISABLED)
-        self.btnPrintLibraryLabel = Button (frmAction, text="Print library label", command=self.printLibraryLabel,state=DISABLED)
-        self.btnPrintVSNLabel = Button (frmAction, text="Print VSN label", command=self.printVSNLabel,state=DISABLED)
-        self.btnRescan = Button (frmAction, text="Rescan directory", command=self.rescanModuleEvent,state=DISABLED)
-        self.btnExpad = Button (frmAction, text="Show exp. details", command=self.showExpDetailEvent,state=DISABLED) 
-	
-        # arrange objects on grid     
-        self.frmFilter.grid(row=3,column=0, sticky=E+W+N+S,padx=2,pady=2) 
-        self.frmMain.grid(row=1,rowspan=2,column=0, sticky=E+W+N+S, padx=2,pady=2)   
-        self.frmDetail.grid(row=1, column=3, sticky=E+W+N+S, padx=2,pady=2 )
-        frmAction.grid(row=2,column=3,sticky=N+S+E+W, padx=2,pady=2)
-        frmStatus.grid(row=3,column=3,sticky=N+S+E+W, padx=2,pady=2)
-        self.btnQuit.grid(row=10,column=0, columnspan=4, sticky=E, padx=2,pady=2)
-        
-        # arrange objects on frmFilter
-        Label(self.frmFilter, text = "state: ").grid(row=1, column=0, sticky=W)
-        self.chkRelease.grid(row=1, column=1, sticky=W)
-        self.chkDirLess.grid(row=2, column=1, sticky=W)
-        self.chkUnscanned.grid(row=3, column=1, sticky=W)
-        Label(self.frmFilter, text = "module type: ").grid(row=10, column=0, sticky=W)
-        self.cboModuleType.grid(row=10,column=1, sticky=W)
+        # arrange objects on grid       
+        self.frmMain.grid(row=1,rowspan=2,column=0, sticky=E+W+N+S)   
+        self.frmDetail.grid(row=1, column=3, sticky=E+W+N+S )
+        frmStatus.grid(row=2,column=3,sticky=N+S+E+W)
+        self.frmEditExperiment.grid(row=6, column=3, sticky=N+W )
+        self.btnQuit.grid(row=10,columnspan=5, pady=5, padx=10, sticky=E)
         
         # arrange objects on frmMain
+        self.chkRelease.grid(row=1, column=0, columnspan=3, sticky=W)
+        self.chkDirLess.grid(row=2, column=0, columnspan=3, sticky=W)
+        self.chkUnscanned.grid(row=3, column=0, columnspan=3, sticky=W)
         self.grdSlot.grid(row=10, column=0, sticky=N+S+E+W)
-        self.btnNewModule.grid(row=20, columnspan=2, sticky=E+W+S, pady=5, padx=5)        
+        self.btnNewModule.grid(row=20, columnspan=2, sticky=E+W, pady=5, padx=5)        
         
         # arrage objects on frmStatus
         self.lblNumDirLess.grid(row=0, column=1, sticky=W)
@@ -213,24 +194,30 @@ class MainWindow(GenericWindow):
         self.btnRefresh.grid(row=2,  column=0, columnspan=3, sticky=E+W, padx=5)
         
         #arrange objects on frmDetail
-        self.txtLocationContent.grid(row=0, column=1,columnspan=2, sticky=E+W)
-        self.btnChangeSlot.grid(row=0, column=3, sticky=E+W)
-        self.lblVSNContent.grid(row=1, column=1, columnspan=3, sticky=E+W)
-        self.lblStationContent.grid(row=2, column=1, columnspan=3, sticky=E+W)
-        self.lblCapacityContent.grid(row=3, column=1, columnspan=3, sticky=E+W)
-        self.lblDatarateContent.grid(row=4, column=1, columnspan=3, sticky=E+W)
-        self.lblReceivedContent.grid(row=5, column=1, columnspan=3, sticky=E+W)
-        self.cboExperiments.grid(row=6, column=1, sticky=E+W+N+S)
-        scrollCboExperiments.grid(row=6,column=2, rowspan=2, sticky=W+N+S)
-        self.btnEditExp.grid(row=6, column=3, sticky=E)
-        self.txtComment.grid(row=8, column=1, columnspan=3, sticky=E+W)
+        self.txtLocationContent.grid(row=0, column=1, sticky=E+W)
+        self.btnChangeSlot.grid(row=0, column=2, sticky=E+W)
+        self.lblVSNContent.grid(row=1, column=1, columnspan=2, sticky=E+W)
+        self.lblStationContent.grid(row=2, column=1, columnspan=2, sticky=E+W)
+        self.lblCapacityContent.grid(row=3, column=1, columnspan=2, sticky=E+W)
+        self.lblDatarateContent.grid(row=4, column=1, columnspan=2, sticky=E+W)
+        self.lblReceivedContent.grid(row=5, column=1, columnspan=2, sticky=E+W)
+        self.cboExperiments.grid(row=6, column=1, columnspan=2, sticky=E+W+N+S)
+        scrollCboExperiments.grid(row=6,column=3, rowspan=2, sticky=W+N+S)
+        self.txtComment.grid(row=8, column=1, columnspan=2, sticky=E+W)
         self.btnEditModule.grid(row=20, column=0, sticky=E+W)
         self.btnDeleteModule.grid(row=20, column=1, sticky=E+W)
         self.btnRescan.grid(row=20,column=2, sticky=E+W)
         self.btnPrintLibraryLabel.grid(row=21,column=0, sticky=E+W)
         self.btnPrintVSNLabel.grid(row=21,column=1, sticky=E+W)
         self.btnExpad.grid(row=21,column=2, sticky=E+W)
-	
+        
+        # arrange objects on frmEditExperiment
+        self.cboFreeExperiments.grid(row=0, column=1, rowspan=2, sticky=W+N+S)
+        scrollCboFreeExperiments.grid(row=0,column=2, rowspan=2, sticky=W+N+S)
+        self.btnAddExperiments.grid(row=0, column=0, sticky=W)
+        self.btnRemoveExperiments.grid(row=1, column=0, sticky=W)
+        self.frmEditExperiment.grid_remove()
+        
         # bind events to widgets
         self.txtLocationContent.bind("<KeyRelease>", self.editModuleDetailsEvent)
         self.lblVSNContent.bind("<KeyRelease>", self.editModuleDetailsEvent)
@@ -238,6 +225,7 @@ class MainWindow(GenericWindow):
         self.lblCapacityContent.bind("<KeyRelease>", self.editModuleDetailsEvent)
         self.lblDatarateContent.bind("<KeyRelease>", self.editModuleDetailsEvent)
         self.lblReceivedContent.bind("<KeyRelease>", self.editModuleDetailsEvent)
+        self.cboExperiments.bind("<ButtonRelease-1>", self.selectExperimentEvent)
         self.txtComment.bind("<KeyRelease>", self.editModuleDetailsEvent)
     
     def printVSNLabel(self):
@@ -330,11 +318,13 @@ class MainWindow(GenericWindow):
                 if (exp != None):
                     slot.module.experiments.append(exp)
             
+            #session.update(slot)
             session.commit()
             session.flush()
         
         session.close()
         
+        self.frmEditExperiment.grid_remove()
         self.moduleEdit = 0
         self._saveModuleDetails()
         self.editModuleDetailsEvent(None)
@@ -345,13 +335,9 @@ class MainWindow(GenericWindow):
         self.cboExpFilter.configure(text=item)
         self.filterExpVar.set(item)
       
-        self.updateSlotListox()
-        
-
-    def applyModuleFilter(self, value):
-        
         self.updateSlotListbox()
         
+           
     def updateSlotListbox(self):
         
         session = dbConn.session()
@@ -370,23 +356,12 @@ class MainWindow(GenericWindow):
         
         self.grdSlot.clearData()
         
-        # check setting of moduleType filter
-        if (self.filterModuleTypeVar.get() == "SATA"):
-            pattern = self.patternSataVSN
-        elif (self.filterModuleTypeVar.get() == "PATA"):
-            pattern = self.patternPataVSN
-        elif (self.filterModuleTypeVar.get() == "Mark6"):
-            pattern = self.patternMark6VSN
-        else:
-            pattern = None
-        
         for slot in slots:
-                             
-            # check if module matches the filtered module type
-            if (pattern != None):
-                 
-                if not pattern.match(slot.module.vsn):
-                    continue
+            
+            expList = []
+            for exp in slot.module.experiments:
+                    expList.append(exp.code)
+                    
                     
             #check if "released" checkbox is activated
             if (self.filterReleaseList.get()):
@@ -405,11 +380,6 @@ class MainWindow(GenericWindow):
             if (self.filterUnscanned.get()):
                 if (slot.module.numScans != None):
                     continue
-            
-            expList = []
-            for exp in slot.module.experiments:
-                    expList.append(exp.code)
-            
          
             self.grdSlot.appendData((slot.location, slot.module.vsn, slot.module.stationCode, " ".join(expList), slot.module.numScans, slot.module.capacity, slot.module.datarate, slot.module.received))
             
@@ -453,7 +423,6 @@ class MainWindow(GenericWindow):
         self.cboExperiments["state"] = NORMAL
         self.txtComment["state"] = NORMAL
         self.btnChangeSlot["state"] = NORMAL
-	self.btnEditExp["state"] = DISABLED
         
         self.txtLocationContent.delete(0,END)
         self.lblVSNContent.delete(0,END)
@@ -463,6 +432,8 @@ class MainWindow(GenericWindow):
         self.lblReceivedContent.delete(0,END)
         self.cboExperiments.delete(0, END)
         self.txtComment.delete(1.0, END)
+        
+        self.frmEditExperiment.grid_remove()
         
         if self.selectedSlotIndex == -1:
             self.clearSlotSelection()
@@ -475,8 +446,6 @@ class MainWindow(GenericWindow):
         self.btnRescan["state"] = NORMAL
         self.btnPrintLibraryLabel["state"] = NORMAL
         self.btnDeleteModule["state"] = NORMAL
-	self.btnEditExp["state"] = NORMAL
-        
         
         session = dbConn.session()
         slot = model.Slot()  
@@ -498,6 +467,14 @@ class MainWindow(GenericWindow):
                 assignedCodes.append(experiment.code)
                 self.cboExperiments.insert(END, experiment.code)
                 
+            # update listbox containing unassigned experiments
+            freeExps = getActiveExperimentCodes(session)
+            self.cboFreeExperiments.delete(0,END)
+            for code in freeExps:
+                if code in assignedCodes:
+                    continue
+                self.cboFreeExperiments.insert(END, code)
+
 	    if len(assignedCodes) > 0:
 		self.btnExpad["state"] = NORMAL
                 
@@ -549,6 +526,8 @@ class MainWindow(GenericWindow):
         self.lblReceivedContent["bg"] = self.defaultBgColor
         self.cboExperiments["bg"] = self.defaultBgColor
         self.txtComment["bg"] = self.defaultBgColor
+        
+        self.frmEditExperiment.grid_remove()
         
         # save contents of the Detail form fields
         self._saveModuleDetails
@@ -625,6 +604,41 @@ class MainWindow(GenericWindow):
         
         self.updateSlotListbox()
         
+    def selectExperimentEvent(self, Event):
+        
+        if (self.selectedSlotIndex == -1):
+            return
+        
+        self.frmEditExperiment.grid()
+        
+    def removeExperimentEvent(self):
+        
+        if (len(self.cboExperiments.curselection()) == 0):
+            return
+        selection = list(self.cboExperiments.curselection())
+        selection.reverse()
+        for exp in selection:
+            code = self.cboExperiments.get(exp)
+            self.cboExperiments.delete(exp)
+            self.cboFreeExperiments.insert(END, code)
+        
+        self.editModuleDetailsEvent(None)
+        
+    def addExperimentEvent(self):
+        
+        if (len(self.cboFreeExperiments.curselection()) == 0):
+            return
+        
+        selection = list(self.cboFreeExperiments.curselection())
+        selection.reverse()
+        
+        for exp in selection:
+            code = self.cboFreeExperiments.get(exp)
+            self.cboFreeExperiments.delete(exp)
+            self.cboExperiments.insert(END, code)   
+        
+        self.editModuleDetailsEvent(None)
+ 
     def showExpDetailEvent(self):
 
 	if self.selectedSlotIndex == -1:
@@ -657,24 +671,13 @@ class MainWindow(GenericWindow):
         self.scanModulesDlg.scanModules(slot.module)
         
         session.close()
-        
-    def assignExperimentEvent(self):
-        
-        if self.selectedSlotIndex == -1:
-            return
-        
-        session = dbConn.session()
-        
-        slot = getSlotByLocation(session, self.grdSlot.get(self.selectedSlotIndex)[0])
-        
-        self.scanModulesDlg.scanModules(slot.module)
-        
-        session.close()
 
       
     def scanModuleEvent(self):
        
         self.scanModulesDlg.scanModules()
+      #  self.refreshStatusEvent()
+      #  self.updateSlotListbox()
             
             
     def refreshStatusEvent(self):
@@ -726,6 +729,7 @@ class MainWindow(GenericWindow):
             if (tkMessageBox.askyesno("Cancel unsaved changes", "There are unsaved changes in the module details\nAre you sure you want to abandon these?") == False):
                 self.grdSlot.selection_clear(self.grdSlot.curselection())
                 self.grdSlot.selection_set(self.selectedSlotIndex)
+                self.frmEditExperiment.grid_remove()
                 return
             else:
                 self._saveModuleDetails()
@@ -739,6 +743,7 @@ class MainWindow(GenericWindow):
         self.updateSlotDetails()
 
     def searchSlotEvent(self, Event):
+        #self.slotFilter = upper(strip(self.txtSearchSlot.get()))
         self.updateSlotListbox()
     
     def searchModuleEvent(self, Event):
@@ -834,20 +839,6 @@ class MainWindow(GenericWindow):
         self.databaseOptionsDlg.config = self.config
         self.databaseOptionsDlg.show()
     
-    def showEditExperimentsWindow(self):
-
-        if (self.selectedSlotIndex < 0):
-            return
-        
-        session = dbConn.session()
-        slot = model.Slot()
-        slot = getSlotByLocation(session, self.grdSlot.get(self.selectedSlotIndex)[0])
-                
-        self.editExpDlg.selectedSlotId = slot.id
-        self.editExpDlg.show()
-        
-        session.close()
-
     def showChangeSlotWindow(self):
         
         if (self.selectedSlotIndex < 0):
@@ -857,6 +848,7 @@ class MainWindow(GenericWindow):
         slot = model.Slot()
         slot = getSlotByLocation(session, self.grdSlot.get(self.selectedSlotIndex)[0])
                 
+        #self.changeSlotDlg.selectedSlot = slot  
         self.changeSlotDlg.selectedSlotId = slot.id
         self.changeSlotDlg.show()
         
@@ -882,6 +874,7 @@ class CheckoutWindow(GenericWindow):
         self.dlg.grab_set()
         
         self._setupWidgets()
+        #self.updateExperimentListbox()
         
     def _setupWidgets(self):
         
@@ -969,6 +962,7 @@ class CheckinWindow(GenericWindow):
             
         session.close()
 
+        #frame = LabelFrame(self.dlg)
         btnOK = Button(self.dlg, text="OK", command=self._persistSlot)
         btnCancel = Button(self.dlg, text="Cancel", command=self.dlg.destroy)
         btnAddExp = Button(self.dlg, text="Add exp.", command=self._addExperiment)
@@ -979,6 +973,7 @@ class CheckinWindow(GenericWindow):
         self.lstExp.grid(row=3, column=1)
         chkPrintLibLabel.grid(row=4,column=1, sticky=W)
 
+        #frame.grid(row=10, column=0, columnspan=4, sticky=E+W)
         btnOK.grid(row=10, column=1, sticky=W,pady=7)
         btnCancel.grid(row=10, column=3, sticky=E+W)
         btnAddExp.grid(row=3, column=3, sticky=E+W)
@@ -990,7 +985,7 @@ class CheckinWindow(GenericWindow):
         
     def _splitVSNLabelScan(self):
         
-        m = re.match('([a-zA-Z]+[%\+-]\d+)/(\d+)/(.+)', self.txtVSN.get().lstrip())
+        m = re.match('([a-zA-Z]+[\+-]\d+)/(\d+)/(.+)', self.txtVSN.get().lstrip())
      
         if (m != None):
             vsn = upper(m.group(1))
@@ -1086,6 +1081,7 @@ class ChangeSlotWindow(GenericWindow):
         # call super class constructor
         super( ChangeSlotWindow, self ).__init__(parent, rootWidget) 
         
+        #self.selectedSlot = None
         self.selectedSlotId = -1
         self.chkPrintLibLabelVar = IntVar()
         self.chkPrintLibLabelVar.set(1)
@@ -1128,6 +1124,7 @@ class ChangeSlotWindow(GenericWindow):
         Button(self.dlg, text="Cancel", command=self.dlg.destroy).grid(row=10, column=1, sticky=E+W) 
         
         # populate slot list
+        session = dbConn.session()
         ciSlotItems = getEmptySlots(session)
         for instance in ciSlotItems:
             self.lstSlot.insert(END, instance.location)
@@ -1266,209 +1263,6 @@ class DatabaseOptionsWindow(GenericWindow):
             
         self.dlg.destroy()
  
-class EditExperimentsWindow(GenericWindow):
-
-    def __init__(self, parent, rootWidget=None):
-
-        # call super class constructor
-        super( EditExperimentsWindow, self ).__init__(parent, rootWidget)
-        
-        self.selectedSlotId = -1
-        self.selectedSlot = None
-        self.initialCodes = []
-        
-    def show(self):
-
-        # create modal dialog
-        self.dlg = Toplevel(self.rootWidget, takefocus=True)
-        self.dlg.title("Edit experiment list")
-        self.dlg.transient(self.rootWidget)
-        self.dlg.state("normal")
-        self.dlg.grab_set()
-
-
-        self._setupWidgets()
-
-    def _setupWidgets(self):
-        
-        if self.selectedSlotId == -1:
-            return
-         
-        session = dbConn.session()     
-        self.selectedSlot = getSlotById(session, self.selectedSlotId)
-        
-        # frmModule
-        frmModule = LabelFrame(self.dlg, text="Module")
-        frmModule.grid(row=1, column=1, sticky=W)
-        Label(frmModule, text=self.selectedSlot.module.vsn).grid(row=1, column=1, sticky=W)
-        
-        # frmAssigned
-        frmAssigned = LabelFrame(self.dlg, text="Assigned")
-        frmAssigned.grid(row=2, column=1,sticky=W)     
-        scrollCboExperiments = Scrollbar(frmAssigned)
-        self.cboExperiments =  Listbox(frmAssigned, height=15, yscrollcommand=scrollCboExperiments.set, selectmode=MULTIPLE)
-	
-        #frmButtons
-        frmButtons = Frame(self.dlg)
-        frmButtons.grid(row=2, column=2,sticky=W)   
-        self.btnAddExperiments = Button(frmButtons, text="<<", command=self.addExperimentEvent)
-        self.btnRemoveExperiments = Button(frmButtons, text=">>", command=self.removeExperimentEvent)
-        
-        # frmFree
-        frmFree = LabelFrame(self.dlg, text="Available")
-        frmFree.grid(row=2, column=3,sticky=W)     
-        scrollCboFreeExperiments = Scrollbar(frmFree)       
-        self.cboFreeExperiments = Listbox(frmFree, height=15, yscrollcommand=scrollCboFreeExperiments.set, selectmode=MULTIPLE)
-        
-        #frmBottom
-        frmBottom = Frame(self.dlg)
-        frmBottom.grid(row=3, column=1,columnspan=3, sticky=E)
-        btnOK = Button(frmBottom, text="OK", command=self._persistExperiments)
-        btnCancel = Button(frmBottom, text="Cancel", command=self.dlg.destroy)
-        
-        scrollCboExperiments.config(command=self.cboExperiments.yview)
-        scrollCboFreeExperiments.config(command=self.cboFreeExperiments.yview)
-        
-	self.cboExperiments.grid(row=5, column=1, rowspan=2, sticky=E+W+N+S)
-        self.cboFreeExperiments.grid(row=5, column=5, rowspan=2, sticky=W+N+S)
-        scrollCboExperiments.grid(row=5,column=3, rowspan=2, sticky=W+N+S)
-        scrollCboFreeExperiments.grid(row=5,column=7, rowspan=2, sticky=W+N+S)
-        self.btnAddExperiments.grid(row=5, column=4, sticky=N)
-        self.btnRemoveExperiments.grid(row=6, column=4, sticky=N)
-        
-        btnCancel.grid(row=1, column=1, sticky=W)
-        btnOK.grid(row=1, column=2, sticky=E)
-        
-        
-        # obtain assigned experiments from DB
-        self.initialCodes = self.loadExperimentCodes()
-        selectedCodes = self.initialCodes
-
-        self.updateExperiments(selectedCodes)
-        
-        
-        session.close()
-        
-    def _persistExperiments(self):
-        """
-        Stores the currently selected experiments for the module into the database
-        """
-        
-        if self.selectedSlotId == -1:
-            return
-        
-        # get all currently selected experiments 
-        codes = sorted(self.cboExperiments.get(0, END))
-        
-        if codes != sorted(self.initialCodes):
-            session = dbConn.session()
-            
-            slot = model.Slot()
-            slot = getSlotById(session, self.selectedSlotId)
-        
-            if (slot > 0):
-                # remove all experiment assigments of this module
-                slot.module.experiments = []
-                for expItem in codes:
-                    exp = getExperimentByCode(session, expItem)
-
-                    if (exp != None):
-                        slot.module.experiments.append(exp)
-
-                session.commit()
-                session.flush()
-            
-            session.close()
-            
-        self.parent.updateSlotListbox()
-        
-        self.dlg.destroy()
-         
-       
-    def loadExperimentCodes(self):
-        """
-        Loads the experiments assigned to the current module from database.
-        Returns an array of strings containing the experiment codes
-        """
-        assignedCodes = []
-        
-        if self.selectedSlot == None:
-            return assignedCodes
-        
-        for experiment in self.selectedSlot.module.experiments:
-                assignedCodes.append(experiment.code)
-        
-        return assignedCodes
-
-    def updateExperiments(self, selectedCodes):
-        """
-        Updates the contents of the listboxes holding the assigned and available
-        experiment codes.
-        
-        selectedCodes: array of experiment codes to be filled in the listbox holding the assigned experiments
-        """
-        
-        if self.selectedSlot == None:
-            return
-                 
-        # update experiment listbox
-        self.cboExperiments.delete(0,END)
-        for experiment in selectedCodes:
-            self.cboExperiments.insert(END, experiment)
-                
-        # update listbox containing unassigned experiments
-        session = dbConn.session() 
-        freeExps = getActiveExperimentCodes(session)
-        self.cboFreeExperiments.delete(0,END)
-        for code in freeExps:
-            if code in selectedCodes:
-                continue
-            self.cboFreeExperiments.insert(END, code)
-        
-        session.close()
-        
-    def removeExperimentEvent(self):
-        """
-        Removes an experiment code from the listbox of the assigned epxeriments
-        """
-        
-        if (len(self.cboExperiments.curselection()) == 0):
-            return
-        
-        selection = list(self.cboExperiments.curselection())
-        selection.reverse()
-        
-        for exp in selection:
-            self.cboExperiments.delete(exp)
-        
-        # get all assigned experiments
-        exps = self.cboExperiments.get(0, END)
-        
-        self.updateExperiments(exps)
-        
-        
-    def addExperimentEvent(self):
-        """
-        Adds an experiment code to the listbox of the assigned epxeriments
-        """
-        
-        if (len(self.cboFreeExperiments.curselection()) == 0):
-            return
-        
-        selection = list(self.cboFreeExperiments.curselection())
-        selection.reverse()
-        
-        
-        for exp in selection:
-            code = self.cboFreeExperiments.get(exp)
-            self.cboExperiments.insert(END, code)   
-            
-        # get all assigned experiments
-        exps = self.cboExperiments.get(0, END)
-        
-        self.updateExperiments(exps)
-	
-
 class ScanModulesWindow(GenericWindow):
  
     def __init__(self, parent, rootWidget=None):
@@ -1621,7 +1415,13 @@ class ScanModulesWindow(GenericWindow):
 
                 self.checkList.append(checkModule)
                 
+          #  elif (difxdir.getParseErrorCount() > 0):
+          #      warnModule = self.CheckModuleItem()
+          #      warnModule.vsn = module.vsn
+          #      self.manualList.append(warnModule)
+                
             else:
+                #print "scanned ", module.vsn
                 # update module information
                 module.numScans = difxdir.getScanCount()
                 module.stationCode = difxdir.getStationCode()
@@ -1640,6 +1440,11 @@ class ScanModulesWindow(GenericWindow):
             
         session.close()
             
+       # self.parent.refreshStatusEvent()
+      #  self.parent.updateSlotListbox()
+            
+    
+     
     def updateModuleEvent(self):
         
         session = dbConn.session()
@@ -1788,6 +1593,7 @@ class AddExperimentWindow(GenericWindow):
         
         self.parent.dlg.grab_set()
         self.parent.updateExperimentListbox()
+       # self.parent.parent.updateExpFilter()
         self.parent.txtVSN.focus_set()
         self.dlg.destroy()
         

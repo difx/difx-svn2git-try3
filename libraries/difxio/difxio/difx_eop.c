@@ -72,10 +72,7 @@ DifxEOP *newDifxEOPArray(int nEOP)
 
 void deleteDifxEOPArray(DifxEOP *de)
 {
-	if(de)
-	{
-		free(de);
-	}
+	free(de);
 }
 
 void fprintDifxEOP(FILE *fp, const DifxEOP *de)
@@ -110,7 +107,11 @@ void printDifxEOPSummary(const DifxEOP *de)
 
 void copyDifxEOP(DifxEOP *dest, const DifxEOP *src)
 {
-	memcpy(dest, src, sizeof(DifxEOP));
+	if(dest != src)
+	{
+		*dest = *src;
+		/* memcpy(dest, src, sizeof(DifxEOP)); */
+	}
 }
 
 int isSameDifxEOP(const DifxEOP *de1, const DifxEOP *de2)
@@ -310,9 +311,9 @@ int writeDifxEOPArray(FILE *out, int nEOP, const DifxEOP *de)
 	{
 		writeDifxLineInt1(out, "EOP %d TIME (mjd)", i, de[i].mjd);
 		writeDifxLineInt1(out, "EOP %d TAI_UTC (sec)", i, de[i].tai_utc);
-		writeDifxLineDouble1(out, "EOP %d UT1_UTC (sec)", i, "%8.6f", de[i].ut1_utc);
-		writeDifxLineDouble1(out, "EOP %d XPOLE (arcsec)", i, "%8.6f", de[i].xPole);
-		writeDifxLineDouble1(out, "EOP %d YPOLE (arcsec)", i, "%8.6f", de[i].yPole);
+		writeDifxLineDouble1(out, "EOP %d UT1_UTC (sec)", i, "%19.16f", de[i].ut1_utc);
+		writeDifxLineDouble1(out, "EOP %d XPOLE (arcsec)", i, "%19.16f", de[i].xPole);
+		writeDifxLineDouble1(out, "EOP %d YPOLE (arcsec)", i, "%19.16f", de[i].yPole);
 	}
 
 	return 5*nEOP + 1;

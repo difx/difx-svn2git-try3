@@ -1,17 +1,18 @@
-if ENABLE_PYTHON_CTYPES
-PYTHON_OPT = python
-endif
-
 SUBDIRS = \
 	mark5access \
 	bbsum \
 	examples \
-	doc \
-        $(PYTHON_OPT)
+	doc
+
+if ENABLE_PYTHON_CTYPES
+SUBDIRS += python
+endif
 
 EXTRA_DIST = \
 	TODO \
 	mark5access.spec.in
+
+DIST_SUBDIRS = $(SUBDIRS) python
 
 dist-hook: mark5access.spec
 	cp mark5access.spec $(distdir)

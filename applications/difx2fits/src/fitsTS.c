@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2013 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2013, 2015 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -55,15 +55,15 @@ static void nanify(float X[2][array_MAX_BANDS])
 	 * wants, namely 0xFFFFFFFF */
 	union
 	{
-		int32_t i32;
+		uint32_t u32;
 		float f;
-	} nan;
-	nan.i32 = -1;
+	} fitsnan;
+	fitsnan.u32 = UINT32_C(0xFFFFFFFF);
 	
 	for(i = 0; i < array_MAX_BANDS; ++i)
 	{
-		X[0][i] = nan.f;
-		X[1][i] = nan.f;
+		X[0][i] = fitsnan.f;
+		X[1][i] = fitsnan.f;
 	}
 }
 
@@ -288,7 +288,7 @@ static int populateDifxTSys(float tSys[][array_MAX_BANDS], const DifxInput *D, i
 				if(polId < 0 || freqId < 0 || freqId >= D->nFreq)
 				{
 					fprintf(stderr, "Developer error: derived freqId and polId (%d,%d) are not legit.  From recBand=%d.\n", 
-						freqId, polId, r);
+					        freqId, polId, r);
 
 					exit(EXIT_FAILURE);
 				}
@@ -369,7 +369,7 @@ static int getDifxTsys(const DifxInput *D, struct fits_keywords *p_fits_keys, in
 	if(v >= DIFXIO_FILENAME_LENGTH)
 	{
 		fprintf(stderr, "Developer error: getDifxTsys jobId=%d antId=%d origDsId=%d filename length wanted to be %d bytes long, not %d\n",
-			jobId, antId, origDsId, v, DIFXIO_FILENAME_LENGTH);
+		        jobId, antId, origDsId, v, DIFXIO_FILENAME_LENGTH);
 		
 		return -1;
 	}
@@ -509,7 +509,7 @@ static int getDifxTsys(const DifxInput *D, struct fits_keywords *p_fits_keys, in
 		else if(scanId >= 0 && n != nRecBand)	/* bail if the wrong number of measurements were found */
 		{
 			fprintf(stderr, "Developer error: getDifxTsys: antId=%d origDsId=%d scanId=%d n=%d nRecBand=%d mjd1=%12.6f mjd2=%12.6f\n",
-				antId, origDsId, scanId, n, nRecBand, mjd1, mjd2);
+			        antId, origDsId, scanId, n, nRecBand, mjd1, mjd2);
 
 			exit(EXIT_FAILURE);
 		}
@@ -626,7 +626,7 @@ static int populateTSys(float tSys[][array_MAX_BANDS], const DifxInput *D, int c
 				if(polId < 0 || freqId < 0 || freqId >= D->nFreq)
 				{
 					fprintf(stderr, "Developer error: derived freqId and polId (%d,%d) are not legit.  From recBand=%d.\n", 
-						freqId, polId, r);
+					        freqId, polId, r);
 
 					exit(EXIT_FAILURE);
 				}
@@ -814,18 +814,18 @@ const DifxInput *DifxInput2FitsTS(const DifxInput *D, struct fits_keywords *p_fi
 	
 	/*  define the flag FITS table columns */
 	struct fitsBinTableColumn columns[] =
-	{
-		{"TIME", "1D", "time of center of interval", "DAYS"},
-		{"TIME_INTERVAL", "1E", "time span of datum", "DAYS"},
-		{"SOURCE_ID", "1J", "source id number from source tbl", 0},
-		{"ANTENNA_NO", "1J", "antenna id from array geom. tbl", 0},
-		{"ARRAY", "1J", "????", 0},
-		{"FREQID", "1J", "freq id from frequency tbl", 0},
-		{"TSYS_1", bandFormFloat, "system temperature", "K"},
-		{"TANT_1", bandFormFloat, "antenna temperature", "K"},
-		{"TSYS_2", bandFormFloat, "system temperature", "K"},
-		{"TANT_2", bandFormFloat, "antenna temperature", "K"}
-	};
+		{
+			{"TIME", "1D", "time of center of interval", "DAYS"},
+			{"TIME_INTERVAL", "1E", "time span of datum", "DAYS"},
+			{"SOURCE_ID", "1J", "source id number from source tbl", 0},
+			{"ANTENNA_NO", "1J", "antenna id from array geom. tbl", 0},
+			{"ARRAY", "1J", "????", 0},
+			{"FREQID", "1J", "freq id from frequency tbl", 0},
+			{"TSYS_1", bandFormFloat, "system temperature", "K"},
+			{"TANT_1", bandFormFloat, "antenna temperature", "K"},
+			{"TSYS_2", bandFormFloat, "system temperature", "K"},
+			{"TANT_2", bandFormFloat, "antenna temperature", "K"}
+		};
 
 	int nColumn;
 	int nRowBytes;

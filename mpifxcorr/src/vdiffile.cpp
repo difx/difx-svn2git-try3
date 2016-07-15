@@ -34,16 +34,22 @@
 
 #include <unistd.h>
 
+#ifdef WORDS_BIGENDIAN
+#define FILL_PATTERN 0x44332211UL
+#else
+#define FILL_PATTERN 0x11223344UL
+#endif
+
 
 /* TODO: 
    - make use of activesec and activescan
- */
+*/
 
 
 /// VDIFDataStream -------------------------------------------------------
 
 VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
- : DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+		: DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	//each data buffer segment contains an integer number of frames, because thats the way config determines max bytes
 	lastconfig = -1;
@@ -228,11 +234,11 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 	bufferindex = atsegment*readbytes + framesin*framebytes;
 
 	//if we are right at the end of the last segment, and there is a jump after this segment, bail out
-	if(bufferindex == bufferbytes)
+	if(uint_fast32_t(bufferindex) == bufferbytes)
 	{
 		if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
 		   ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
-		   bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
+		    bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
 		{
 			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
 			
@@ -244,7 +250,7 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 		}
 	}
 
-	if(bufferindex > bufferbytes) /* WFB: this was >= */
+	if(uint_fast32_t(bufferindex) > bufferbytes) /* WFB: this was >= */
 	{
 		cfatal << startl << "VDIFDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
 		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
@@ -591,19 +597,19 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 
 		++nt;
 
-                // feed switched power detector
+		// feed switched power detector
 		if(nt % switchedpowerincrement == 0)
 		{
 			struct mark5_stream *m5stream = new_mark5_stream_absorb(
-				new_mark5_stream_memory(buf, bufferinfo[buffersegment].validbytes),
-				new_mark5_format_generic_from_string(formatname) );
+			                                                        new_mark5_stream_memory(buf, bufferinfo[buffersegment].validbytes),
+			                                                        new_mark5_format_generic_from_string(formatname) );
 			if(m5stream)
 			{
 				mark5_stream_fix_mjd(m5stream, config->getStartMJD());
 				switchedpower->feed(m5stream);
 				delete_mark5_stream(m5stream);
 			}
-                }
+		}
 	}
 }
 
@@ -612,7 +618,7 @@ void VDIFDataStream::loopfileread()
 	int perr;
 	int numread = 0;
 
-cverbose << startl << "Starting loopfileread()" << endl;
+	cverbose << startl << "Starting loopfileread()" << endl;
 
 	//lock the outstanding send lock
 	perr = pthread_mutex_lock(&outstandingsendlock);
@@ -626,7 +632,7 @@ cverbose << startl << "Starting loopfileread()" << endl;
 	keepreading = true;
 	while(!dataremaining && keepreading)
 	{
-cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] << endl;
+		cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] << endl;
 		openfile(bufferinfo[0].configindex, filesread[bufferinfo[0].configindex]++);
 		if(!dataremaining)
 		{
@@ -634,7 +640,7 @@ cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] <<
 		}
 	}
 
-cverbose << startl << "Opened first usable file" << endl;
+	cverbose << startl << "Opened first usable file" << endl;
 
 	if(keepreading)
 	{
@@ -662,7 +668,7 @@ cverbose << startl << "Opened first usable file" << endl;
 		diskToMemory(numread++);
 	}
 
-cverbose << startl << "Opened first usable file" << endl;
+	cverbose << startl << "Opened first usable file" << endl;
 
 	while(keepreading && (bufferinfo[lastvalidsegment].configindex < 0 || filesread[bufferinfo[lastvalidsegment].configindex] <= confignumfiles[bufferinfo[lastvalidsegment].configindex]))
 	{
@@ -704,7 +710,7 @@ cverbose << startl << "Opened first usable file" << endl;
 		}
 		if(keepreading)
 		{
-cverbose << startl << "keepreading is true" << endl;
+			cverbose << startl << "keepreading is true" << endl;
 			input.close();
 
 			//if we need to, change the config
@@ -733,7 +739,7 @@ cverbose << startl << "keepreading is true" << endl;
 				for(int i=config->getNumConfigs()-1;i>=0;i--)
 				{
 					if(config->getDDataFileNames(i, streamnum) == config->getDDataFileNames(lowestconfigindex, streamnum))
-					lowestconfigindex = i;
+						lowestconfigindex = i;
 				}
 				openfile(lowestconfigindex, filesread[lowestconfigindex]++);
 				bool skipsomefiles = (config->getScanConfigIndex(readscan) < 0)?true:false;

@@ -3,7 +3,10 @@ AM_CONFIG_HEADER([config.h])
 
 AM_INIT_AUTOMAKE
 
+AC_LANG_CPLUSPLUS
 AC_PROG_CC
+AC_PROG_CXX
+AC_LANG(C++)
 AM_SANITY_CHECK
 
 AC_CHECK_LIB(m, erf,,[AC_MSG_ERROR("need libm")])
@@ -15,8 +18,12 @@ if test "$hasgsl" == "true"; then
 fi
 AM_CONDITIONAL(WITH_GSL, $hasgsl)
 
+AC_CHECK_LIB(pthread, pthread_create,,[AC_MSG_ERROR("need libpthread")])
+
+
 LIBS="${LIBS} ${DIFXIO_LIBS} ${GSL_LIBS}"
 CFLAGS="${CFLAGS} ${DIFXIO_CFLAGS} ${GSL_CFLAGS}"
+CXXFLAGS="${CXXFLAGS} ${DIFXIO_CFLAGS} ${GSL_CFLAGS}"
 
 AC_OUTPUT([ \
 	Makefile \

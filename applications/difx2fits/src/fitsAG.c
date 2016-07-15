@@ -123,6 +123,7 @@ const DifxInput *DifxInput2FitsAG(const DifxInput *D, struct fits_keywords *p_fi
 	fitsWriteFloat(out, "ARRAYY", 0.0, "");
 	fitsWriteFloat(out, "ARRAYZ", 0.0, "");
 	fitsWriteString(out, "ARRNAM", "VLBA", "");
+#warning "put in optional keyword to decribe the actual array, not the software check used by AIPS"	
 	fitsWriteInteger(out, "NUMORB", 0, "");
 	fitsWriteFloat(out, "FREQ", p_fits_keys->ref_freq, "");
 	fitsWriteString(out, "FRAME", "GEOCENTRIC", "");
