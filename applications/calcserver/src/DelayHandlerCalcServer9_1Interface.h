@@ -25,6 +25,9 @@
 #define DelayHandlerCalcServer9_1Interface_h
 
 // INCLUDES
+#ifndef __STDC_FORMAT_MACROS
+#  define __STDC_FORMAT_MACROS // For non-compliant C++ compilers
+#endif
 #ifndef __STDC_CONSTANT_MACROS
 #  define __STDC_CONSTANT_MACROS
 #endif
