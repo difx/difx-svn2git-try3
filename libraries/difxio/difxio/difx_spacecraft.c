@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2008-2015 by Walter Brisken                             *
- *                 2012-2015 by James M Anderson                           *
+ *   Copyright (C) 2008-2016 by Walter Brisken                             *
+ *                 2012-2016 by James M Anderson                           *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -2203,8 +2203,9 @@ int read_Russian_scf_file(const char * const filename,
 			MJD = MJDi + frac_day;
 			/* allow 1 second fudge factor, \sim 1.1574E-5 days */
 			if(MJD > MJD_start + ONE_SECOND_IN_DAYS) {
-				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' START_TIME '%s', MJD %.6f is after required start MJD %.6f\n", filename, line+16, MJD, MJD_start);
-				goto read_Russian_scf_file_fail;
+				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' START_TIME '%s', MJD %.6f is after required start MJD %.6f from DiFX\n", filename, line+16, MJD, MJD_start);
+				// goto read_Russian_scf_file_fail;
+				fprintf(stderr, "Error: check the schedule to make sure that the spacecraft is not actually being used at this time\n");
 			}
 			table_MJD_start = MJD;
 			check_flags |= 0x20;
@@ -2221,8 +2222,9 @@ int read_Russian_scf_file(const char * const filename,
 			MJD = MJDi + frac_day;
 			/* allow 1 second fudge factor, \sim 1.1574E-5 days */
 			if(MJD < MJD_end - ONE_SECOND_IN_DAYS) {
-				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' STOP_TIME '%s', MJD %.6f is before required end MJD %.6f\n", filename, line+16, MJD, MJD_end);
-				goto read_Russian_scf_file_fail;
+				fprintf(stderr, "Error: read_Russian_scf_file: RUSSCF file '%s' STOP_TIME '%s', MJD %.6f is before required end MJD %.6f from DiFX\n", filename, line+16, MJD, MJD_end);
+				// goto read_Russian_scf_file_fail;
+				fprintf(stderr, "Error: check the schedule to make sure that the spacecraft is not actually being used at this time\n");
 			}
 			table_MJD_end = MJD;
 			check_flags |= 0x40;

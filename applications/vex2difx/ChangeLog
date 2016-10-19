@@ -1,3 +1,10 @@
+2016-10-19  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/vex2difx.cpp: Fix spacecraft antenna handling to not die
+	when the ephemeris does not contain data for the whole experiment
+	timerange --- stopgap fix until more time is available to code
+	checking whether the spacecraft is being used.
+
 2015-07-22  James Anderson  <anderson@gfz-potsdam.de>
 
 	* src/corrparams.cpp:

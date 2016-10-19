@@ -1,3 +1,10 @@
+2016-10-19  James Anderson  <anderson@gfz-potsdam.de>
+
+	* difxio/difx_spacecraft.c: Don't barf when ephemeris does not
+	contain entries for requested epoch --- vex2difx now requests
+	ephemeris for the entire expreiment, even if the spacecraft is not
+	used for the full experiment
+
 2015-07-22  James Anderson  <anderson@gfz-potsdam.de>
 
 	* difxio/difx_spacecraft.c:

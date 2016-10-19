@@ -23,6 +23,7 @@ setenv MPICXX $DIFXMPIDIR/bin/mpicxx
 ####### Comment out if not desired ##########
 setenv USEGFORTRAN "yes"
 
+setenv SPICE_ROOT /cluster/spice/cspice
 ####### PERL VERSION/SUBVERSION #############
 set perlver="5"
 set perlsver="5.10.1"
@@ -37,6 +38,17 @@ setenv DIFX_BINARY_PORT 50202
 
 ####### CALC SERVER NAME ######### 
 setenv CALC_SERVER localhost
+setenv DIFX_DELAY_SERVER localhost
+if ( -f "${DIFXROOT}/bin/setupCALCservers" ) then
+  source "${DIFXROOT}/bin/setupCALCservers"
+endif
+if ( $OSTYPE == "linux" || $OSTYPE == "linux-gnu") then
+  setenv DIFX_NUMBERCALCSERVERTHREADS `grep -c ^processor /proc/cpuinfo`
+  setenv DIFX_CALCIF2_NUM_CALC_THREADS ${DIFX_NUMBERCALCSERVERTHREADS}
+else
+  setenv DIFX_NUMBERCALCSERVERTHREADS 4
+  setenv DIFX_CALCIF2_NUM_CALC_THREADS 4
+endif
 
 ####### MPI RUNTIME OPTIONS #################
 ####### Uncomment and modify if needed, #####

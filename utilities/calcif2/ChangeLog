@@ -1,3 +1,7 @@
+2016-10-19  James Anderson  <anderson@gfz-potsdam.de>
+
+	* src/DelayHandlerCalcServer9_1.cpp (DiFX): check initialization code
+
 2015-07-07  James Anderson  <anderson@gfz-potsdam.de>
 
 	* utils/compareDiFXims.c:

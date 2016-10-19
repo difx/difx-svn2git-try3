@@ -1,5 +1,5 @@
 /***************************************************************************
- *	 Copyright (C) 2009-2015 by Walter Brisken & Adam Deller			   *
+ *	 Copyright (C) 2009-2016 by Walter Brisken & Adam Deller			   *
  *																		   *
  *	 This program is free software; you can redistribute it and/or modify  *
  *	 it under the terms of the GNU General Public License as published by  *
@@ -2372,7 +2372,6 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			{
                 // give the spacecraft table the right name so it can be linked to the source
 				snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", phaseCentre->difxName.c_str());
-				cerr << "JMA DEBUG: spacecraft is named from source '" << phaseCentre->difxName.c_str() << "'" << endl;
 
 				const char* naifFile = NULL;
 				if(phaseCentre->naifFile.empty())
@@ -2616,7 +2615,6 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 			{
 				// give the spacecraft table the right name so it can be linked to the antenna
 				snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", antennaSetup->difxName.c_str());
-				cerr << "JMA DEBUG: spacecraft is named from antenna '" << antennaSetup->difxName.c_str() << "'" << endl;
 
 				const char* naifFile = NULL;
 				if(antennaSetup->naifFile.empty())
@@ -2802,7 +2800,7 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 				if(ds->spacecraft_time_type == SpacecraftTimeGroundReception) {
 					double mjd_sync = ds->GS_mjd_sync + ds->GS_dayfraction_sync;
 					if(mjd_sync == 0.0) {
-						cerr << "No sync time provided for ground reception syncing of spacecraft clock for scan start at MJD " << ephem_mjd_start << endl;
+						cerr << "Warning: No sync time provided for ground reception syncing of spacecraft clock for scan start at MJD " << ephem_mjd_start << endl;
 					}
 					else {
 						if(mjd_sync < ephem_mjd_start + 1E-6) {
@@ -2820,7 +2818,9 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 
 					if(ds->spacecraft_time_type == SpacecraftTimeGroundReception)
 					{
-						v = computeDifxSpacecraftAntennaEphemeris(ds, ds->GS_mjd_sync + ds->GS_dayfraction_sync-1E-6, DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER*deltat + 2E-6, DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER, 
+						double mjd_sync = ds->GS_mjd_sync + ds->GS_dayfraction_sync;
+						if(mjd_sync != 0.0) {
+							v = computeDifxSpacecraftAntennaEphemeris(ds, ds->GS_mjd_sync + ds->GS_dayfraction_sync-1E-6, DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER*deltat + 2E-6, DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER, 
 						                                          antennaSetup->ephemObject.c_str(),
 						                                          antennaSetup->ephemType.c_str(),
 						                                          naifFile,
@@ -2828,6 +2828,15 @@ static int writeJob(const VexJob& J, const VexData *V, const CorrParams *P, int 
 						                                          antennaSetup->orientationFile.c_str(),
 						                                          antennaSetup->JPLplanetaryephem.c_str(),
 						                                          antennaSetup->ephemClockError);
+						}
+						else
+						{
+							// Output garbage information
+							ds->nPoint = DIFXIO_SPACECRAFT_ANTENNA_POLY_ORDER;
+							ds->pos = (sixVector *)calloc(ds->nPoint, sizeof(sixVector));
+							ds->SCAxisVectors = (spacecraftAxisVectors *)calloc(ds->nPoint, sizeof(spacecraftAxisVectors));
+							v=0;
+						}
 					}
 					else
 					{

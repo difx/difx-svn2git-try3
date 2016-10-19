@@ -33,8 +33,20 @@ export DIFX_MESSAGE_PORT=50201
 export DIFX_BINARY_GROUP=224.2.2.1
 export DIFX_BINARY_PORT=50202
 
-####### CALC SERVER NAME ######### 
+####### CALC SERVER NAME #########
 export CALC_SERVER=localhost
+export DIFX_DELAY_SERVER=localhost
+if [ -f "${DIFXROOT}/bin/setupCALCservers" ]; then
+  source "${DIFXROOT}/bin/setupCALCservers"
+fi
+if [ "$OSTYPE" = "linux" -o "$OSTYPE" = "linux-gnu" ]
+then
+  export DIFX_NUMBERCALCSERVERTHREADS=`grep -c ^processor /proc/cpuinfo`
+  export DIFX_CALCIF2_NUM_CALC_THREADS="${DIFX_NUMBERCALCSERVERTHREADS}"
+else
+  export DIFX_NUMBERCALCSERVERTHREADS=4
+  export DIFX_CALCIF2_NUM_CALC_THREADS=4
+fi
 
 ####### MPI RUNTIME OPTIONS #################
 ####### Uncomment and modify if needed, #####
