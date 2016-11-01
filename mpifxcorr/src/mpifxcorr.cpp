@@ -52,6 +52,7 @@
 #include <difxmessage.h>
 #include <unistd.h>
 #include "alert.h"
+#include <errno.h>
 
 //act on an XML command message which was received
 bool actOnCommand(Configuration * config, DifxMessageGeneric * difxmessage) {
@@ -230,7 +231,8 @@ static void generateIdentifier(const char *inputfile, char *identifier)
 int main(int argc, char *argv[])
 {
   MPI_Comm world, return_comm;
-  int numprocs, myID, numdatastreams, numcores, perr;
+  int numprocs, myID, numdatastreams, numcores, perr, perc, prv = -1;
+  void *prvp = &prv;
   double t1, t2;
   Configuration * config;
   FxManager * manager = 0;
@@ -344,7 +346,7 @@ int main(int argc, char *argv[])
       csevere << startl << "Error creating command monitoring thread!" << endl;
     else {
       //wait for commandmonthread to be initialised
-      while(!config->commandThreadInitialised()) {
+      while(!config->commandThreadInitialised() && !config->commandThreadFailed()) {
 	usleep(1);
       }
     }
@@ -429,13 +431,17 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
   MPI_Finalize();
+
   if (isDifxMessageInUse()) {
     if(myID == 0) difxMessageSendDifxParameter("keepacting", "false", DIFX_MESSAGE_ALLMPIFXCORR);
-    sleep(1); // Give threads a chance to quit
-    perr = pthread_cancel(commandthread);
-    if (perr !=0) csevere << startl << "Error in cancelling commandthread!!!" << endl;
-    perr = pthread_join(commandthread, NULL);
-    if(perr != 0) csevere << startl << "Error in closing commandthread!!!" << endl;
+    //sleep(1); // Give threads a chance to quit
+    perc = pthread_cancel(commandthread);
+    if(perc != 0 && perc != ESRCH) csevere << startl << "Error(" << perc << ") in cancelling commandthread!!!" << endl;
+    perr = pthread_join(commandthread, &prvp);
+    if(perr != 0) csevere << startl << "Error(" << perr << ") in closing commandthread!!!" << endl;
+    if(prvp == PTHREAD_CANCELED) cverbose << startl << "Command thread cancelled" << endl;
+    else if (perc == ESRCH) cverbose << startl << "Command thread died by cancellation" << endl;
+    else cverbose << startl << "Command thread return value " << prv << endl;
   }
 
   delete [] coreids;
