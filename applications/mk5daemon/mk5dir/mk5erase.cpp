@@ -651,7 +651,7 @@ int mk5erase(const char *vsn, enum ConditionMode mode, int verbose, int dirVersi
 	}
 
 	/* set operational mode */
-	WATCHDOGTEST( XLRSetMode(xlrDevice, SS_MODE_PCI) );
+//	WATCHDOGTEST( XLRSetMode(xlrDevice, SS_MODE_PCI) );
 	WATCHDOGTEST( XLRGetDeviceStatus(xlrDevice, &devStatus) );
 	WATCHDOGTEST( XLRClearOption(xlrDevice, SS_OPT_SKIPCHECKDIR) );
 	WATCHDOGTEST( XLRGetBankStatus(xlrDevice, bank, &bankStatus) );
