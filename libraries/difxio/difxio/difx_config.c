@@ -443,13 +443,23 @@ int DifxConfigRecBand2FreqPol(const DifxInput *D, int configId,
 	return 0;
 }
 
+/**
+ * copies the contents of the src DifxConfig object to the dest DifxConfig object.
+ * In case any of the mapping tables (baselineIdRemap, datastreamIdRemap, pulsarIdRemap) 
+ * is not NULL the corresponding mapping operation will be applied during the copy process.
+ * @param[out] dest the destination DifxConfig object
+ * @param src the source DifxConfig object
+ * @param baselineIdRemap
+ * @param datastreamIdRemap
+ * @param pulsarIdRemap
+ */
 void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	const int *baselineIdRemap, const int *datastreamIdRemap, 
 	const int *pulsarIdRemap)
 {
 	int i, n, a;
-
-	dest->nAntenna = src->nAntenna;
+     
+	dest->nAntenna = src->nAntenna;        
 	if(src->ant2dsId)
 	{
 		dest->ant2dsId = (int *)malloc((src->nAntenna+1)*sizeof(int));
@@ -459,6 +469,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 			{
 				dest->ant2dsId[a] = src->ant2dsId[a];
 			}
+                        // remap the antenna ids
 			else if(datastreamIdRemap) 
 			{
 				dest->ant2dsId[a] = 
@@ -480,6 +491,8 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	dest->strideLength = src->strideLength;
 	dest->xmacLength = src->xmacLength;
 	dest->numBufferedFFTs = src->numBufferedFFTs;
+        
+        // remap the pulsar ids
 	if(pulsarIdRemap && src->pulsarId >= 0)
 	{
 		dest->pulsarId = pulsarIdRemap[src->pulsarId];
@@ -499,6 +512,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 	dest->nBaseline = src->nBaseline;
 	dest->nDatastream = src->nDatastream;
 
+        // remap the baseline ids
 	n = dest->nBaseline;
 	dest->baselineId = (int *)calloc(n+1, sizeof(int));
 	dest->baselineId[n] = -1;
@@ -518,6 +532,7 @@ void copyDifxConfig(DifxConfig *dest, const DifxConfig *src,
 		}
 	}
 	
+        // remap the datastreams
 	n = dest->nDatastream;
 	dest->datastreamId = (int *)calloc(n+1, sizeof(int));
 	dest->datastreamId[n] = -1;
@@ -625,16 +640,182 @@ int simplifyDifxConfigs(DifxInput *D)
 
 	return n0 - D->nConfig;
 }
+/**
+ * Do a full merge of two DifxConfig arrays. Full merging is only allowed If the input DifxConfig arrays contain 
+ * a single configuration each.
+ * Note: This code does not populate the IF array. Call generateAipsIFs to do this.
+ * @param dc1 the first DiFXConfig array
+ * @param ndc1 the number of configurations stored in dc1
+ * @param dc2 the second DiFXConfig array
+ * @param ndc2 the number of configurations stored in dc2
+ * @param[in] configIdRemap mapping table populated by mergeDifxConfigArrays
+ * @param[in] baselineIdRemap mapping table populated by mergeDifxBaselineArrays
+ * @param[in] datastreamIdRemap mapping table populated by mergeDifxDatastreamArrays
+ * @param[in] pulsarIdRemap mapping table populated by mergeDifxPulsarArrays
+ * @param[out] ndc
+ * @param[in] mergeOptions
+ * @return the merged DiFXConfig object
+ */
+DifxConfig *fullMergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
+        const DifxConfig *dc2, int ndc2, int *configIdRemap, const int *antennaIdRemap,
+        const int *baselineIdRemap, const int *datastreamIdRemap,
+        const int *pulsarIdRemap, int *ndc, const  DifxMergeOptions *mergeOptions, const int nAntenna, const int nDatastreams, const int nBaselines)
+{
+        int i, j;
+        DifxConfig *dc;
+        
+        // if running in IF merging mode allow only one config per input
 
+        if ((ndc1 > 1) || (ndc2 > 1))
+        {
+            fprintf(stderr, "Error: One of the jobs contains multiple configurations. Full merging of multiple configurations is not possible.");				
+            exit(EXIT_FAILURE);                
+        }
+
+        
+        *ndc = 1;
+        dc = newDifxConfigArray(*ndc);
+        
+        // copy dc1 to output config
+	copyDifxConfig(dc, dc1, 0, 0, 0);
+        
+        // allow only one freq setup
+        dc->fitsFreqId = 0;
+        
+        // all below done by copy operation
+        snprintf(dc->name, DIFXIO_NAME_LENGTH, "%s", dc2->name);      
+
+        dc->nAntenna = nAntenna;
+        dc->nDatastream = nDatastreams;      
+	dc->nBaseline = nBaselines;
+	
+        // if pulsarIds are not identical full merge is not possible
+        if(pulsarIdRemap && dc2->pulsarId >= 0)
+	{
+		if (dc->pulsarId != pulsarIdRemap[dc2->pulsarId])
+                {
+                    fprintf(stderr, "Error: Full merging of configurations is not possible due to differing pulsarIds.");				
+                    exit(EXIT_FAILURE);                     
+                }                 
+	}
+         // if phasedArrayId are not identical full merge is not possible
+	if (dc->phasedArrayId != dc2->phasedArrayId)
+        {
+            fprintf(stderr, "Error: Full merging of configurations is not possible due to differing phasedArrayIds.");				
+            exit(EXIT_FAILURE);                     
+        }
+        
+        // merge datastreamIds
+        if(datastreamIdRemap)
+	{
+                int size = nDatastreams;
+                dc->datastreamId = (int *)realloc(dc->datastreamId, (size+1) * sizeof(int));
+                
+                // copy the remaining datastreamIds from dc2
+                int idx=0;
+                for (i=0; i < dc2->nDatastream; i++)
+                {
+                    if (datastreamIdRemap[i] >= dc1->nDatastream)
+                    {
+                        dc->datastreamId[idx+dc1->nDatastream] =  datastreamIdRemap[i];
+                        ++idx;
+                    }
+                }
+               
+                dc->datastreamId[size] = -1;
+	}
+        
+        // merge baselineIds    
+        if(baselineIdRemap)
+	{
+                int size = nBaselines;
+                dc->baselineId = (int *)realloc(dc->baselineId, (size+1) * sizeof(int));
+                
+                // copy the remaining baselineIds from dc2
+                int idx=0;
+                for (i=0; i < dc2->nBaseline; i++)
+                {
+                    if (baselineIdRemap[i] >= dc1->nBaseline)
+                    {
+                        dc->baselineId[idx+dc1->nBaseline] =  baselineIdRemap[i];
+                        ++idx;
+                    }
+                }
+                dc->baselineId[size] = -1;
+	} 
+        
+
+        // merge ant2dsId
+        dc->ant2dsId = realloc(dc->ant2dsId, (nAntenna+1) * sizeof(int));
+
+        // construct the remaining mappings from dc2 based on antenna and datastream re-mappings
+        for (i=0; i < dc2->nAntenna; i++)
+        {              
+                // find re-mapped antennaId
+                int remapAntennaId = antennaIdRemap[i];
+                
+                // find re-mapped datastreamId
+                int remapDatastreamId = datastreamIdRemap[dc2->ant2dsId[i]];
+                
+                if (remapAntennaId >= dc1->nAntenna)
+                {
+                    dc->ant2dsId[remapAntennaId] = remapDatastreamId;
+                }
+        }
+        dc->ant2dsId[nAntenna] = -1;
+        
+        
+ /*       for(i =0; i < nDatastreams; i++)
+	{
+                printf ("HR - datastream %d = %d\n", i, dc->datastreamId[i]); 
+	}
+        for(i = 0; i < nBaselines; i++)
+	{
+                printf ("HR - baseline %d = %d\n", i, dc->baselineId[i]); 
+	}
+        
+        for(i = 0; i < nAntenna; i++)
+	{
+                printf ("HR - antenna %d ->ds  %d\n", i, dc->ant2dsId[i]); 
+	}
+*/
+        
+        return dc;        
+}
+
+/**
+ * concatenate two DifxConfig arrays. The output array contains all the input DifxConfigs.
+ * In case any of the remapping tables is not 0 remapping will be applied to the second DifxConfig array.
+ * @param dc1 array of DifxConfig objects belonging to first DifxInput
+ * @param ndc1 number of configurations in the parent DifxInput object that contains dc1
+ * @param dc2 array of DifxConfig objects belonging to second DifxInput
+ * @param ndc2 number of configurations in the parent DifxInput object that contains dc2
+ * @param configIdRemap 
+ * @param baselineIdRemap
+ * @param datastreamIdRemap
+ * @param pulsarIdRemap
+ * @param[out] ndc the number of configurations contained in the merged DifxConfig object
+ * @return the merged DifxConfig object
+ */
 DifxConfig *mergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
 	const DifxConfig *dc2, int ndc2, int *configIdRemap,
 	const int *baselineIdRemap, const int *datastreamIdRemap,
-	const int *pulsarIdRemap, int *ndc)
+	const int *pulsarIdRemap, int *ndc, const  DifxMergeOptions *mergeOptions)
 {
 	int i, j;
 	DifxConfig *dc;
 
 	*ndc = ndc1;
+        
+        // if running in IF merging mode allow only one config per input
+        if (mergeOptions->freqMergeMode == FreqMergeModeUnion)
+        {
+            if ((ndc1 > 1) || (ndc2 > 1))
+            {
+                fprintf(stderr, "Error: One of the jobs contains multiple configurations. Merging of multiple configurations is not possible when running in frequency merging mode.");				
+		exit(EXIT_FAILURE);                
+            }
+        }
 
 	for(j = 0; j < ndc2; j++)
 	{
@@ -644,13 +825,13 @@ DifxConfig *mergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
 
 	dc = newDifxConfigArray(*ndc);
 	
-	/* copy df1 */
+	// copy dc1 
 	for(i = 0; i < ndc1; i++)
 	{
 		copyDifxConfig(dc + i, dc1 + i, 0, 0, 0);
 	}
 
-	/* copy df2 */
+	// copy dc2 applying the remap tables
 	for(j = 0; j < ndc2; j++)
 	{
 		if(configIdRemap[j] >= ndc1)

@@ -383,12 +383,16 @@ int polMaskValue(char polName)
 	}
 }
 
-/* This function populates four array fields (and their
- * scalar-valued companions) in a DifxConfig object:
- *   freqId2IF[]
- *   freqIdUsed[]
- *   IF[]
- *   pol[]
+/**
+ * This function populates four array fields (and their scalar-valued companions) in a DifxConfig object:
+ * freqId2IF[]
+ * freqIdUsed[]
+ * IF[]
+ * pol[]
+ * 
+ * @param D DifxInput object
+ * @param configId index of the DiFXConfig object
+ * @return -1 in case of error, 0 otherwise
  */
 static int generateAipsIFs(DifxInput *D, int configId)
 {
@@ -632,6 +636,10 @@ static int generateAipsIFs(DifxInput *D, int configId)
 			++dc->nIF;
 		}
 	}
+        
+        int i;
+        for (i = 0; i < dc->nIF; i++)
+            printf ("HR - %d %f \n", i, dc->IF[i].freq);
 
 	/* Set reference frequency to the bottom edge of the first frequency */
 	D->refFreq = dc->IF[0].freq;
@@ -3172,6 +3180,12 @@ static void setGlobalValues(DifxInput *D)
 	}
 }
 
+/**
+ * @brief Determines whether the IF setups of two configurations are identical.
+ * @param[in] C1 pointer to the 1st DifxConfig object
+ * @param[in] C2 pointer to the 2nd DifxConfig object
+ * @return 1 if the IF setups are identical, 0 otherwise
+ **/
 static int sameFQ(const DifxConfig *C1, const DifxConfig *C2)
 {
 	int i;
@@ -3213,7 +3227,7 @@ static int sameFQ(const DifxConfig *C1, const DifxConfig *C2)
 	return 1;
 }
 
-static int calcFreqIds(DifxInput *D)
+static int calcFreqIds(DifxInput *D, const  DifxMergeOptions *mergeOptions)
 {
 	int configId;
 	int nFQ = 0;
@@ -3243,14 +3257,18 @@ static int calcFreqIds(DifxInput *D)
 		D->config[configId].fitsFreqId = -1;
 		for(configId2 = 0; configId2 < configId; ++configId2)
 		{
-			if(sameFQ(&(D->config[configId]), &(D->config[configId2])))
+			printf ("HR - calcFreqIds - %d %d\n", configId, configId2);
+			//if((sameFQ(&(D->config[configId]), &(D->config[configId2]))) || (mergeOptions->freqMergeMode == FreqMergeModeUnion))
+                        if(sameFQ(&(D->config[configId]), &(D->config[configId2])))
 			{
+				printf ("HR - calcFreqIds - same\n" );
 				D->config[configId].fitsFreqId = D->config[configId2].fitsFreqId;
 				configId2 = configId; /* terminate inner loop */
 			}
 		}
 		if(D->config[configId].fitsFreqId == -1)
 		{
+			printf ("HR - calcFreqIds - no match\n" );
 			D->config[configId].fitsFreqId = nFQ;
 			++nFQ;
 		}
@@ -3259,10 +3277,10 @@ static int calcFreqIds(DifxInput *D)
 	return nFQ;
 }
 
-DifxInput *updateDifxInput(DifxInput *D)
+DifxInput *updateDifxInput(DifxInput *D, const  DifxMergeOptions *mergeOptions)
 {
 	D = deriveDifxInputValues(D);
-	calcFreqIds(D);
+	calcFreqIds(D, mergeOptions);
 	D = deriveFitsSourceIds(D);
 	setGlobalValues(D);
 	setOrbitingAntennas(D);

@@ -694,7 +694,7 @@ int isDifxIFInsideDifxFreq(const DifxIF *di, const DifxFreq *df);
 void copyDifxFreq(DifxFreq *dest, const DifxFreq *src);
 int simplifyDifxFreqs(DifxInput *D);
 DifxFreq *mergeDifxFreqArrays(const DifxFreq *df1, int ndf1,
-	const DifxFreq *df2, int ndf2, int *freqIdRemap, int *ndf);
+	const DifxFreq *df2, int ndf2, int *freqIdRemap, int *ndf, const  DifxMergeOptions *mergeOptions);
 int writeDifxFreqArray(FILE *out, int nFreq, const DifxFreq *df);
 
 /* DifxAntenna functions */
@@ -820,7 +820,11 @@ int simplifyDifxConfigs(DifxInput *D);
 DifxConfig *mergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
 	const DifxConfig *dc2, int ndc2, int *configIdRemap,
 	const int *baselineIdRemap, const int *datastreamIdRemap,
-	const int *pulsarIdRemap, int *ndc);
+	const int *pulsarIdRemap, int *ndc, const  DifxMergeOptions *mergeOptions);
+DifxConfig *fullMergeDifxConfigArrays(const DifxConfig *dc1, int ndc1,
+	const DifxConfig *dc2, int ndc2, int *configIdRemap, const int *antennaIdRemap,
+	const int *baselineIdRemap, const int *datastreamIdRemap,
+	const int *pulsarIdRemap, int *ndc, const  DifxMergeOptions *mergeOptions, const int nAntenna, const int nDatastreams, const int nBaselines);
 int DifxConfigCalculateDoPolar(DifxConfig *dc, DifxBaseline *db);
 int DifxConfigGetPolId(const DifxConfig *dc, char polName);
 int DifxConfigRecBand2FreqPol(const DifxInput *D, int configId,
@@ -947,7 +951,7 @@ void DifxConfigMapAntennas(DifxConfig *dc, const DifxDatastream *ds);
 DifxInput *loadDifxInput(const char *filePrefix);
 DifxInput *loadDifxCalc(const char *filePrefix);
 DifxInput *allocateSourceTable(DifxInput *D, int length);
-DifxInput *updateDifxInput(DifxInput *D);
+DifxInput *updateDifxInput(DifxInput *D, const  DifxMergeOptions *mergeOptions);
 int areDifxInputsCompatible(const DifxInput *D1, const DifxInput *D2, const DifxMergeOptions *mergeOptions);
 DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, const DifxMergeOptions *mergeOptions);
 int isAntennaFlagged(const DifxJob *J, double mjd, int antennaId);

@@ -520,24 +520,29 @@ int simplifyDifxFreqs(DifxInput *D)
 	}
 }
 
-/* merge two DifxFreq tables into an new one.  freqIdRemap will contain the
+/** 
+ * @brief merge two DifxFreq tables into an new one.  freqIdRemap will contain the
  * mapping from df2's old freq entries to that of the merged set
- */
-DifxFreq *mergeDifxFreqArrays(const DifxFreq *df1, int ndf1, const DifxFreq *df2, int ndf2, int *freqIdRemap, int *ndf)
+ **/
+DifxFreq *mergeDifxFreqArrays(const DifxFreq *df1, int ndf1, const DifxFreq *df2, int ndf2, int *freqIdRemap, int *ndf, const  DifxMergeOptions *mergeOptions)
 {
 	DifxFreq *df;
 	int i, j;
 
 	*ndf = ndf1;
 
+	//printf ("HR - mergeDiFXFreqArrays \n");
 	/* first identify entries that differ and assign new freqIds to them */
 	for(j = 0; j < ndf2; ++j)
 	{
 		for(i = 0; i < ndf1; ++i)
 		{
-			if(isSameDifxFreq(df1 + i, df2 + j))
+			//printf ("HR - processing %d=%f %d=%f \n",j,(df2 + j)->freq, i, (df1 + i)->freq);
+			//if((isSameDifxFreq(df1 + i, df2 + j)) || (mergeOptions->freqMergeMode == FreqMergeModeUnion))
+			if(isSameDifxFreq(df1 + i, df2 + j)) 
 			{
 				freqIdRemap[j] = i;
+				//printf ("HR - using freqid %d \n",i);
 				break;
 			}
 		}

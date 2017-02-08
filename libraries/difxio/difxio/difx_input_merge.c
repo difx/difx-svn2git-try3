@@ -197,7 +197,7 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, const DifxM
 
 	/* merge DifxFreq table */
 	D->freq = mergeDifxFreqArrays(D1->freq, D1->nFreq,
-		D2->freq, D2->nFreq, freqIdRemap, &(D->nFreq));
+		D2->freq, D2->nFreq, freqIdRemap, &(D->nFreq), mergeOptions);
 
 	/* merge DifxDatastream table */
 	D->datastream = mergeDifxDatastreamArrays(D1->datastream, 
@@ -215,11 +215,22 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, const DifxM
 		D2->pulsar, D2->nPulsar, pulsarIdRemap, &(D->nPulsar));
 
 	/* merge DifxConfig table */
-	D->config = mergeDifxConfigArrays(D1->config, D1->nConfig, 
+        // if IF merging is requested do a full merge of the DifxConfig tables
+        if (mergeOptions->freqMergeMode == FreqMergeModeUnion)
+        {
+            D->config = fullMergeDifxConfigArrays(D1->config, D1->nConfig, 
+		D2->config, D2->nConfig, configIdRemap, antennaIdRemap,
+		baselineIdRemap, datastreamIdRemap, pulsarIdRemap, 
+		&(D->nConfig), mergeOptions, D->nAntenna, D->nDatastream, D->nBaseline);         
+        }
+        else
+        {
+            D->config = mergeDifxConfigArrays(D1->config, D1->nConfig, 
 		D2->config, D2->nConfig, configIdRemap, 
 		baselineIdRemap, datastreamIdRemap, pulsarIdRemap, 
-		&(D->nConfig));
-
+		&(D->nConfig), mergeOptions);
+        }
+        
         /* merge DifxSource table */
 	D->source = mergeDifxSourceArrays(D1->source, D1->nSource,
 		D2->source, D2->nSource, sourceIdRemap, &(D->nSource));

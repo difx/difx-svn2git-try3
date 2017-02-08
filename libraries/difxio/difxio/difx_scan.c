@@ -370,8 +370,19 @@ void copyDifxScan(DifxScan *dest, const DifxScan *src, const int *sourceIdRemap,
 	}
 }
 
-/* Merge sort the two lists of scans.  This is intended to allow merging of
+/**
+ * Merge sort the two lists of scans.  This is intended to allow merging of
  * more than two DifxInputs in any order.
+ * @param ds1
+ * @param nds1
+ * @param ds2
+ * @param nds2
+ * @param sourceIdRemap
+ * @param jobIdRemap
+ * @param configIdRemap
+ * @param antennaIdRemap
+ * @param nds
+ * @return 
  */
 DifxScan *mergeDifxScanArrays(const DifxScan *ds1, int nds1,
 	const DifxScan *ds2, int nds2, const int *sourceIdRemap, 
