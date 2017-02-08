@@ -32,7 +32,7 @@
 #include "config.h"
 #include "difx2fits.h"
 
-const DifxInput *DifxInput2FitsFR(const DifxInput *D,
+const DifxInput *DifxInput2FitsFR(const DifxInput *D, const int verbose,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
 {
 	char bandFormDouble[8];
@@ -116,7 +116,8 @@ const DifxInput *DifxInput2FitsFR(const DifxInput *D,
 			bbChan[i] = 0;	/* vistigial */
 			/* correct for skipping some channels */
 			bandFreq[i] += netSide[i]*IF->bw*D->startChan*1.0e6/(double)(D->nInChan);
-			//printf("Writing IF with freq %f, chanBW %f, bandBW %f\n", bandFreq[i], chanBW[i], bandBW[i]);
+			if (verbose > 2)
+				printf("Writing IF with freq %f, chanBW %f, bandBW %f\n", bandFreq[i], chanBW[i], bandBW[i]);
 		}
 		
 		/* pointer to the buffer for FITS records */
