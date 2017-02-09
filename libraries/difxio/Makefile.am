@@ -1,7 +1,5 @@
 SUBDIRS = \
-	difxio \
-	utils \
-	tests
+	difxio 
 
 EXTRA_DIST = \
 	difxio.spec.in
