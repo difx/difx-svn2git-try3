@@ -36,6 +36,8 @@ Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedb
 
   fanout = config->genMk5FormatName(format, nrecordedbands, recordedbw, nbits, sampling, framebytes, conf->getDDecimationFactor(confindex, dsindex), conf->getDNumMuxThreads(confindex, dsindex), formatname);
   invalid = 0;
+
+  cout << "DEBUG:  format==" << formatname << endl;
   if(fanout < 0)
     initok = false;
   else
