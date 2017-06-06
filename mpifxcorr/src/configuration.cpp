@@ -479,7 +479,7 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
 	  sprintf(formatname, "VDIFL_%d-%d-%d-%d", framebytes-VDIF_LEGACY_HEADER_BYTES, mbps, nchan, nbits);
       break;
     case CODIF:
-        sprintf(formatname, "CODIF");
+      sprintf(formatname, "CODIF_%d-%d-%d", framebytes-CODIF_HEADER_BYTES, nchan, nbits);
       break;
     default:
       cfatal << startl << "genMk5FormatName : unsupported format encountered" << endl;
