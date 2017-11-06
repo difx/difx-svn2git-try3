@@ -2618,7 +2618,8 @@ bool Configuration::consistencyCheck()
       double nsaccumulate = 0.0;
       do {
         nsaccumulate += dsdata->bytespersampledenom*samplens;
-      } while (!(fabs(nsaccumulate - int(nsaccumulate)) < Mode::TINY));
+	if (nsaccumulate> 1e6) return false;
+      } while (!(fabs(nsaccumulate - int(nsaccumulate+0.5)) < Mode::TINY));
       cdebug << startl << "NS accumulate is " << nsaccumulate << " and max geom slip is " << model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001 << ", maxnsslip is " << dsdata->maxnsslip << endl;
       nsaccumulate += model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001;
       if(nsaccumulate > dsdata->maxnsslip)
@@ -2676,9 +2677,9 @@ bool Configuration::consistencyCheck()
       sampletimens = 1000.0/(2.0*freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].bandwidth);
       ffttime = sampletimens*freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].numchannels*2;
       numffts = configs[i].subintns/ffttime;
-      if(ffttime - (int)(ffttime+0.5) > 0.00000001 || ffttime - (int)(ffttime+0.5) < -0.000000001)
+      if(fabs(ffttime - (int)(ffttime+0.5)) > 0.00000001)
       {
-        if(mpiid == 0) //only write one copy of this error message
+        if(mpiid == 0)  //only write one copy of this error message
           cfatal << startl << "FFT chunk time for config " << i << ", datastream " << j << " is not a whole number of nanoseconds (" << ffttime << ") - aborting!!!" << endl;
         return false;
       }
