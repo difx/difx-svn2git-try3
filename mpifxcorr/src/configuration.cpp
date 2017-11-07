@@ -540,7 +540,7 @@ void Configuration::getFrameInc(int configindex, int configdatastreamindex, int 
   ns = int(1.0e9*(seconds - sec));
 }
 
-int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex) const
+double Configuration::getFramesPerSecond(int configindex, int configdatastreamindex) const
 {
   int nchan, qb, decimationfactor;
   int payloadsize;
@@ -552,8 +552,8 @@ int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex
   decimationfactor = getDDecimationFactor(configindex, configdatastreamindex);
   payloadsize = getFramePayloadBytes(configindex, configdatastreamindex);
 
-  // This will always work out to be an integer
-  return int(samplerate*nchan*qb*decimationfactor/(8*payloadsize) + 0.5); // Works for complex data
+  // This will always work out to be an integer -  CJP 7/11/17 Not for CODIF - change to double
+  return samplerate*nchan*qb*decimationfactor/(8*payloadsize); // Works for complex data
 }
 
 int Configuration::getMaxDataBytes() const

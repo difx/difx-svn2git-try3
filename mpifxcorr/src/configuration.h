@@ -450,7 +450,7 @@ public:
   * @param configindex The index of the configuration being used (from the table in the input file)
   * @param configdatastreamindex The index of the datastream (from the table in the input file)
   */
-  int getFramesPerSecond(int configindex, int configdatastreamindex) const;
+  double getFramesPerSecond(int configindex, int configdatastreamindex) const;
 
  /**
   * @return The number of payload bytes in a data frame
@@ -773,7 +773,7 @@ private:
     int bytespersampledenom;
     int framesamples;
     int framebytes;
-    int framespersecond;
+    double framespersecond;
     int nummuxthreads;
     int * muxthreadmap;
     bool filterbank;

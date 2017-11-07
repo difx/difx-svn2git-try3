@@ -269,7 +269,7 @@ void Mk5DataStream::updateConfig(int segmentindex)
     return;
 
   int framebytes = config->getFrameBytes(bufferinfo[segmentindex].configindex, streamnum);
-  int framespersecond = config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum);
+  double framespersecond = config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum);
   if(config->isDMuxed(bufferinfo[segmentindex].configindex, streamnum)) {
     framebytes = (framebytes - VDIF_HEADER_BYTES)*config->getDNumMuxThreads(bufferinfo[segmentindex].configindex, streamnum) + VDIF_HEADER_BYTES;
     framespersecond /= config->getDNumMuxThreads(bufferinfo[segmentindex].configindex, streamnum);
