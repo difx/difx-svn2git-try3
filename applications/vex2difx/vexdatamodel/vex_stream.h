@@ -45,6 +45,7 @@ public:
 		FormatNone = 0,		// no format specified
 		FormatVDIF,
 		FormatLegacyVDIF,
+		FormatCODIF,
 		FormatMark5B,
 		FormatVLBA,
 		FormatVLBN,

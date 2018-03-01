@@ -58,8 +58,8 @@ bool VexStream::Init()
 		exit(EXIT_FAILURE);
 	}
 
-	// of form <fmt>/<size>/<bits>		VDIF only
-	v = regcomp(&matchType2, "^([A-Z]*VDIF[A-Z]*)/([1-9]+[0-9]*)/([1-9]+[0-9]*)$", REG_EXTENDED);
+	// of form <fmt>/<size>/<bits>		VDIF or CODIF
+	v = regcomp(&matchType2, "^([A-Z]*DIF[A-Z]*)/([1-9]+[0-9]*)/([1-9]+[0-9]*)$", REG_EXTENDED);
 	if(v != 0)
 	{
 		std::cerr << "Developer Error: VexStream::Init(): compiling matchType2 failed" << std::endl;
@@ -67,8 +67,8 @@ bool VexStream::Init()
 		exit(EXIT_FAILURE);
 	}
 
-	// of form <fmt><size>			VDIF only
-	v = regcomp(&matchType3, "^([A-Z]*VDIF[A-Z]*)([1-9]+[0-9]*)$", REG_EXTENDED);
+	// of form <fmt><size>			VDIF or CODIF
+	v = regcomp(&matchType3, "^([A-Z]*DIF[A-Z]*)([1-9]+[0-9]*)$", REG_EXTENDED);
 	if(v != 0)
 	{
 		std::cerr << "Developer Error: VexStream::Init(): compiling matchType3 failed" << std::endl;
@@ -129,6 +129,7 @@ char VexStream::DataFormatNames[NumDataFormats+1][16] =
 	"NONE",
 	"VDIF",
 	"VDIFL",
+	"CODIF",
 	"MARK5B",
 	"VLBA",
 	"VLBN",
@@ -168,6 +169,11 @@ enum VexStream::DataFormat VexStream::stringToDataFormat(const std::string &str)
 	{
 		return FormatLegacyVDIF;
 	}
+	else if(strcasecmp(str.c_str(), "CODIF") == 0)
+	{
+		printf("Is CODIF\n");
+		return FormatCODIF;
+	}
 	else if(strcasecmp(str.c_str(), "Mark5B") == 0 ||
 	        strcasecmp(str.c_str(), "MK5B") == 0)
 	{
@@ -204,6 +210,7 @@ enum VexStream::DataFormat VexStream::stringToDataFormat(const std::string &str)
 		return FormatS2;
 	}
 
+	std::cout << str << std::endl;
 	return NumDataFormats;
 }
 
@@ -273,7 +280,7 @@ static int matchInt(const std::string &str, const regmatch_t &match)
 // INTERLACEDVDIF/0:1:16:17/1032/2
 void VexStream::setVDIFSubformat(const std::string &str)
 {
-	if(strcasecmp(str.c_str(), "VDIFC") == 0 || strcasecmp(str.c_str(), "INTERLACEDVDIFC") == 0)
+	if(strcasecmp(str.c_str(), "VDIFC") == 0 || strcasecmp(str.c_str(), "INTERLACEDVDIFC") == 0 || strcasecmp(str.c_str(), "CODIFC") == 0)
 	{
 		dataSampling = SamplingComplex;
 	}
@@ -550,6 +557,7 @@ int VexStream::dataFrameSize() const
 	{
 	case FormatVDIF:
 	case FormatLegacyVDIF:
+	case FormatCODIF:
 		s = VDIFFrameSize;
 		break;
 	case FormatVLBA:
@@ -579,7 +587,7 @@ int VexStream::dataFrameSize() const
 
 bool isVDIFFormat(VexStream::DataFormat format)
 {
-	return (format == VexStream::FormatVDIF || format == VexStream::FormatLegacyVDIF);
+	return (format == VexStream::FormatVDIF || format == VexStream::FormatLegacyVDIF || format == VexStream::FormatCODIF);
 }
 
 std::ostream& operator << (std::ostream &os, const VexStream &x)
