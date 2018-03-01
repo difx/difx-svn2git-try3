@@ -479,7 +479,12 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
 	  sprintf(formatname, "VDIFL_%d-%d-%d-%d", framebytes-VDIF_LEGACY_HEADER_BYTES, mbps, nchan, nbits);
       break;
     case CODIF:
-      sprintf(formatname, "CODIF_%d-%d-%d", framebytes-CODIF_HEADER_BYTES, nchan, nbits);
+      /* FIXME: Do the format name properly, not hardcoded! */
+      if (sampling==COMPLEX)
+        sprintf(formatname, "CODIFC_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, 125000, 27, nchan, nbits);
+      else
+        //sprintf(formatname, "CODIF_%d-%d-%d/%d-%d", framebytes-CODIF_HEADER_BYTES, nchan, nbits, 1, 1); //need to change 1,1 to num/denom of period
+        sprintf(formatname, "CODIF_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, 125000, 27, nchan, nbits);
       break;
     default:
       cfatal << startl << "genMk5FormatName : unsupported format encountered" << endl;
