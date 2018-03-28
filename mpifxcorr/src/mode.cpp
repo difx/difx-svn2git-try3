@@ -678,7 +678,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
   //cout << "bytesperblockdenominator for " << datastreamindex << " is " << bytesperblockdenominator << endl;
   if(nearestsample < -1 || (((nearestsample + fftchannels)/samplesperblock)*bytesperblocknumerator)/bytesperblockdenominator > datalengthbytes)
   {
-    cerror << startl << "MODE error for datastream " << datastreamindex << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample << ", the max bytes should be " << datalengthbytes << ".  offsetseconds was " << offsetseconds << ", offsetns was " << offsetns << ", index was " << index << ", average delay was " << averagedelay << ", datasec was " << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
+    cerror << startl << "MODE error for datastream " << datastreamindex << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample << ", the max bytes should be " << datalengthbytes << " and hence last sample should be " << (datalengthbytes*bytesperblockdenominator)/(bytesperblocknumerator*samplesperblock)  << " (fftchannels is " << fftchannels << "), offsetseconds was " << offsetseconds << ", offsetns was " << offsetns << ", index was " << index << ", average delay was " << averagedelay << ", datasec was " << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
     for(int i=0;i<numrecordedbands;i++)
     {
       status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
@@ -1099,6 +1099,11 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
         indices[count++] = j;
         switch(fringerotationorder) {
           case 0: //post-F
+            if (usecomplex) {
+              cfatal << startl << "Post-F (0th order) fringe rotation not currently supported for complex sampled data!" << endl;
+              exit(1);
+            }
+              
             fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j][subloopindex]:fftoutputs[j][subloopindex];
 
             //do the fft

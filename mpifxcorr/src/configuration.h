@@ -160,6 +160,8 @@ public:
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].maxrecordedpcaltones; }
   inline int getDNumBits(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numbits; }
+  inline int getDAlignmentSeconds(int configindex, int configdatastreamindex) const
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].alignmentseconds; }
   //inline int getDFramesPerSecond(int configindex, int configdatastreamindex) const
   //  { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].framespersecond; }
   inline int getDNumMuxThreads(int configindex, int configdatastreamindex) const
@@ -468,10 +470,11 @@ public:
   * @param sampling The type of data sampling (real or complex)
   * @param framebytes The number of bytes in a frame
   * @param decimationfactor The number of samples to throw away during unpacking
+  * @param alignmentseconds The number of seconds between samples landing on an integer second boundary
   * @param numthreads The number of (interlaced) threads
   * @param formatname character array representing format name (set during method)
   */
-  int genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int numthreads, char *formatname) const;
+  int genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int alignmentseconds, int numthreads, char *formatname) const;
 
  /**
   * @return The Model object which contains geometric model information
@@ -774,6 +777,7 @@ private:
     int framesamples;
     int framebytes;
     double framespersecond;
+    int alignmentseconds; // defaulted to 1, but can be >1 for CODIF.
     int nummuxthreads;
     int * muxthreadmap;
     bool filterbank;

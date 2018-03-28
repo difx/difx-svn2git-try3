@@ -397,9 +397,9 @@ Configuration::~Configuration()
   delete [] numprocessthreads;
 }
 
-int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int numthreads, char *formatname) const
+int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int alignmentseconds, int numthreads, char *formatname) const
 {
-  int fanout=1, mbps;
+  int fanout=1, mbps, framesperperiod;
 
   mbps = int(2*nchan*bw*nbits + 0.5);
 
@@ -480,11 +480,16 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
       break;
     case CODIF:
       /* FIXME: Do the format name properly, not hardcoded! */
-      if (sampling==COMPLEX)
-        sprintf(formatname, "CODIFC_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, 125000, 27, nchan, nbits);
-      else
+      framesperperiod = (int)(1e6*bw*nchan*alignmentseconds*nbits / ((framebytes-CODIF_HEADER_BYTES) * 8) + 0.5);
+      if (sampling==COMPLEX) {
+        framesperperiod = (int)(1e6*bw*nchan*alignmentseconds*nbits*2 / ((framebytes-CODIF_HEADER_BYTES) * 8) + 0.5);
+        cverbose << startl << bw << ", " << nchan << ", " << alignmentseconds << ", " << nbits << formatname << endl;
+        sprintf(formatname, "CODIFC_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, framesperperiod, alignmentseconds, nchan, nbits);
+      }
+      else {
         //sprintf(formatname, "CODIF_%d-%d-%d/%d-%d", framebytes-CODIF_HEADER_BYTES, nchan, nbits, 1, 1); //need to change 1,1 to num/denom of period
-        sprintf(formatname, "CODIF_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, 125000, 27, nchan, nbits);
+        sprintf(formatname, "CODIF_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, framesperperiod, alignmentseconds, nchan, nbits);
+      }
       break;
     default:
       cfatal << startl << "genMk5FormatName : unsupported format encountered" << endl;
@@ -1338,6 +1343,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     datastreamtable[i].numdatafiles = 0; //default in case its a network datastream
     datastreamtable[i].tcpwindowsizekb = 0; //default in case its a file datastream
     datastreamtable[i].portnumber = -1; //default in case its a file datastream
+    datastreamtable[i].alignmentseconds = 1; //default
 
     //get configuration index for this datastream
     for(int c=0; c<numconfigs; c++)
@@ -1401,8 +1407,13 @@ bool Configuration::processDatastreamTable(ifstream * input)
       datastreamtable[i].format = INTERLACEDVDIF;
       datastreamtable[i].ismuxed = true;
       setDatastreamMuxInfo(i, line.substr(15,string::npos));
-    } else if(line == "CODIF") {
+    } else if(line.substr(0,5)  == "CODIF") {
       datastreamtable[i].format = CODIF;
+      if(line.length() < 6) {
+        cfatal << startl << "Data format " << line << " too short, expected alignment period info, see vex2difx documentation" << endl;
+        return false;
+      }
+      datastreamtable[i].alignmentseconds = atoi(line.substr(5,string::npos).c_str());
     }
     else
     {
