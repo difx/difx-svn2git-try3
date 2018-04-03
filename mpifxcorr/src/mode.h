@@ -315,6 +315,8 @@ protected:
 
   f32 * stepchannelfreqs;
   f32 * lsbstepchannelfreqs;
+  f32 * dsbstepchannelfreqs;
+  f32 * ldsbstepchannelfreqs;
   f32 * stepfracsamparg;
   f32 * stepfracsampsin;
   f32 * stepfracsampcos;

@@ -89,7 +89,19 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
   fractionalLoFreq = false;
   for(int i=0;i<numrecordedfreqs;i++)
   {
-    if(config->getDRecordedFreq(configindex, datastreamindex, i) - int(config->getDRecordedFreq(configindex, datastreamindex, i)) > TINY)
+    double loval = config->getDRecordedFreq(configindex, datastreamindex, i);
+    if(usedouble)
+    {
+      if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) 
+      {
+        loval -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
+      } 
+      else 
+      {
+        loval += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
+      }
+    }
+    if(fabs(loval - int(loval + 0.5)) > TINY)
       fractionalLoFreq = true;
   }
 
@@ -302,11 +314,15 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     stepfracsampcplx = vectorAlloc_cf32(numfracstrides/2);
     stepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
     lsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
+    dsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
+    ldsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
     estimatedbytes += (5*2+4)*numfracstrides;
 
     for(int i=0;i<numfracstrides/2;i++) {
       stepchannelfreqs[i] = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels);
       lsbstepchannelfreqs[i] = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels);
+      dsbstepchannelfreqs[i] = (float)(TWO_PI*((i*arraystridelength*recordedbandwidth)/recordedbandchannels - recordedbandwidth/2.0));
+      ldsbstepchannelfreqs[i] = (float)(-TWO_PI*((((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels + recordedbandwidth/2.0));
     }
 
     deltapoloffsets = false;
@@ -552,6 +568,8 @@ Mode::~Mode()
   vectorFree(stepfracsampcplx);
   vectorFree(stepchannelfreqs);
   vectorFree(lsbstepchannelfreqs);
+  vectorFree(dsbstepchannelfreqs);
+  vectorFree(ldsbstepchannelfreqs);
 
   vectorFree(fracsamprotatorA);
   if (deltapoloffsets) vectorFree(fracsamprotatorB);
@@ -824,10 +842,28 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     //updated so that Nyquist channel is not accumulated for either USB or LSB data
     //and is excised entirely, so both USB and LSB data start at the same place (no sidebandoffset)
     currentstepchannelfreqs = stepchannelfreqs;
-    if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+    if(usedouble)
+    {
+      if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+      {
+        currentstepchannelfreqs = ldsbstepchannelfreqs;
+      }
+      else
+      {
+        currentstepchannelfreqs = dsbstepchannelfreqs;
+      }
+    }
+    else
+    {
+      if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+      {
+        currentstepchannelfreqs = lsbstepchannelfreqs;
+      }
+    }
+    /*if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
     {
       currentstepchannelfreqs = lsbstepchannelfreqs;
-    }
+    }*/
 
     looff = false;
     isfraclooffset = false;
@@ -844,9 +880,9 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     lofreq = config->getDRecordedFreq(configindex, datastreamindex, i);
     if (usecomplex && usedouble) {
       if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i);
+	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       } else {
-	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i);
+	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       }
     }
 
