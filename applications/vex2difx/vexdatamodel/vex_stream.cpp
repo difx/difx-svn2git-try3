@@ -42,6 +42,7 @@ regex_t VexStream::matchType5;
 regex_t VexStream::matchType6;
 regex_t VexStream::matchType7;
 regex_t VexStream::matchType8;
+regex_t VexStream::matchType9;
 
 bool VexStream::isInit(Init());	// force execution of the function below to initialize regular expressions
 bool VexStream::Init()
@@ -121,6 +122,16 @@ bool VexStream::Init()
 		exit(EXIT_FAILURE);
 	}
 
+        // of form CODIF[C]/[period seconds]/<size bytes>/<bits>          CODIF only
+        v = regcomp(&matchType9, "^(CODIF[A-Z]*)/([1-9]+[0-9]*)/([1-9]+[0-9]*)/([1-9]+[0-9]*)$", REG_EXTENDED);
+        if(v != 0)
+        {
+                std::cerr << "Developer Error: VexStream::Init(): compiling matchType2 failed" << std::endl;
+
+                exit(EXIT_FAILURE);
+        }
+
+
 	return true;
 }
 
@@ -169,7 +180,7 @@ enum VexStream::DataFormat VexStream::stringToDataFormat(const std::string &str)
 	{
 		return FormatLegacyVDIF;
 	}
-	else if(strcasecmp(str.c_str(), "CODIF") == 0)
+	else if(strcasecmp(str.substr(0,5).c_str(), "CODIF") == 0)
 	{
 		printf("Is CODIF\n");
 		return FormatCODIF;
@@ -210,7 +221,6 @@ enum VexStream::DataFormat VexStream::stringToDataFormat(const std::string &str)
 		return FormatS2;
 	}
 
-	std::cout << str << std::endl;
 	return NumDataFormats;
 }
 
@@ -284,7 +294,7 @@ void VexStream::setVDIFSubformat(const std::string &str)
 	{
 		dataSampling = SamplingComplex;
 	}
-	else if(strcasecmp(str.c_str(), "VDIFD") == 0 || strcasecmp(str.c_str(), "INTERLACEDVDIFD") == 0)
+	else if(strcasecmp(str.c_str(), "VDIFD") == 0 || strcasecmp(str.c_str(), "INTERLACEDVDIFD") == 0 || strcasecmp(str.c_str(), "CODIFD") == 0)
 	{
 		dataSampling = SamplingComplexDSB;
 	}
@@ -397,7 +407,6 @@ bool VexStream::parseFormatString(const std::string &formatName)
 	}
 	else if(regexec(&matchType6, formatName.c_str(), 5, match, 0) == 0)
 	{
-
 		// of form <fmt>-<Mbps>-<nChan>-<bits>
 		format = stringToDataFormat(formatName.substr(0, match[1].rm_eo));
 		if(format == NumDataFormats)
@@ -454,6 +463,22 @@ bool VexStream::parseFormatString(const std::string &formatName)
 
 		return true;
 	}
+        else if(regexec(&matchType9, formatName.c_str(), 5, match, 0) == 0)
+        {
+                // of form CODIF[C or D]/<period seconds>/<size>/<bits>
+                format = stringToDataFormat(formatName.substr(0, match[1].rm_eo));
+                if(format == NumDataFormats)
+                {
+                        return false;
+                }
+                setVDIFSubformat(formatName.substr(0, match[1].rm_eo));
+		alignmentPeriod = matchInt(formatName, match[2]);
+                VDIFFrameSize = matchInt(formatName, match[3]);
+                nBit = matchInt(formatName, match[4]);
+                singleThread = isSingleThreadVDIF(formatName.substr(0, match[1].rm_eo));
+
+                return true;
+        }
 	else
 	{
 		// of form <fmt>
@@ -534,6 +559,10 @@ int VexStream::snprintDifxFormatName(char *outString, int maxLength) const
 			
 			n = snprintf(outString, maxLength, "%s", fn.str().c_str());
 		}
+	}
+	else if(format == FormatCODIF)
+	{
+		n = snprintf(outString, maxLength, "%s%d", DataFormatNames[format], alignmentPeriod);
 	}
 	else if(format == FormatS2)
 	{

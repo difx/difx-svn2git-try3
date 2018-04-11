@@ -60,7 +60,7 @@ public:
 
 	static char DataFormatNames[NumDataFormats+1][16];
 
-	VexStream() : sampRate(0.0), nBit(0), nRecordChan(0), VDIFFrameSize(0), singleThread(false), dataSampling(SamplingReal), dataSource(DataSourceUnspecified) {}
+	VexStream() : sampRate(0.0), nBit(0), nRecordChan(0), VDIFFrameSize(0), singleThread(false), dataSampling(SamplingReal), dataSource(DataSourceUnspecified), alignmentPeriod(1) {}
 	double dataRateMbps() const { return sampRate*nBit*nRecordChan/1000000.0; }
 	static enum DataFormat stringToDataFormat(const std::string &str);
 	static bool isSingleThreadVDIF(const std::string &str);
@@ -81,6 +81,7 @@ public:
 	unsigned int nThread;		// number of threads
 	unsigned int fanout;		// 1, 2 or 4 (VLBA, Mark4 and related formats only)
 	unsigned int VDIFFrameSize;	// size of one logical block of data
+	unsigned int alignmentPeriod;   // in seconds; always 1 for VDIF, can be >1 for CODIF
 	bool singleThread;		// true for single thread VDIF
 	std::vector<int> threads;	// ordered list of threads for VDIF
 	enum DataFormat format;
@@ -98,6 +99,7 @@ private:
 	static regex_t matchType6;	// of form <fmt>-<Mbps>-<nChan>-<bits>
 	static regex_t matchType7;	// of form <fmt>1_<fanout>-<Mbps>-<nChan>-<bits> (VLBA, VLBN, Mark4 only)
 	static regex_t matchType8;	// of form <fmt>/<size> or <fmt>-<size>
+        static regex_t matchType9;      // of form <fmt>/<period seconds>/<size>/<bits> (CODIF specific)
 };
 
 bool isVDIFFormat(VexStream::DataFormat format);
