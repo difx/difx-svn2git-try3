@@ -2634,7 +2634,12 @@ bool Configuration::consistencyCheck()
       double nsaccumulate = 0.0;
       do {
         nsaccumulate += dsdata->bytespersampledenom*samplens;
-	if (nsaccumulate> 1e6) return false;
+	if (nsaccumulate> 1e6)
+        {
+          if(mpiid == 0) //only write one copy of this error message
+            cfatal << startl << "Accumulate time between integer number of nanoseconds is too long (check bandwidth values specified) - aborting!!!" << endl;
+          return false;
+        }
       } while (!(fabs(nsaccumulate - int(nsaccumulate+0.5)) < Mode::TINY));
       cdebug << startl << "NS accumulate is " << nsaccumulate << " and max geom slip is " << model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001 << ", maxnsslip is " << dsdata->maxnsslip << endl;
       nsaccumulate += model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001;
