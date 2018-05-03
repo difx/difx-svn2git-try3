@@ -59,7 +59,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     usedouble=0;
   }
 
-
   //Uses bitwise test to check if numchannels is power of 2
   if(!(fftchannels & (fftchannels - 1)))
   {
@@ -101,8 +100,10 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
         loval += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       }
     }
-    if(fabs(loval - int(loval + 0.5)) > TINY)
+    if(fabs(loval - int(loval + 0.5)) > TINY) {
       fractionalLoFreq = true;
+      cinfo << startl << "Fractional LO freq is TRUE" << endl;
+    }
   }
 
   //check whether LO offset correction will decorrelate too badly, if used
@@ -299,13 +300,15 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     subfracsampsin = vectorAlloc_f32(arraystridelength);
     subfracsampcos = vectorAlloc_f32(arraystridelength);
     subchannelfreqs = vectorAlloc_f32(arraystridelength);
-    estimatedbytes += 5*4*arraystridelength;
+    ldsbsubchannelfreqs = vectorAlloc_f32(arraystridelength);
+    estimatedbytes += 6*4*arraystridelength;
     /*cout << "subfracsamparg is " << subfracsamparg << endl;
     cout << "subfracsampsin is " << subfracsampsin << endl;
     cout << "subfracsampcos is " << subfracsampcos << endl;
     cout << "subchannelfreqs is " << subchannelfreqs << endl; */
     for(int i=0;i<arraystridelength;i++) {
       subchannelfreqs[i] = (float)((TWO_PI*(i)*recordedbandwidth)/recordedbandchannels);
+      ldsbsubchannelfreqs[i] = (float)((-TWO_PI*(i)*recordedbandwidth)/recordedbandchannels);
     }
 
     stepfracsamparg = vectorAlloc_f32(numfracstrides/2);
@@ -316,13 +319,14 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     lsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
     dsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
     ldsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
-    estimatedbytes += (5*2+4)*numfracstrides;
+    estimatedbytes += (7*2+4)*numfracstrides;
 
     for(int i=0;i<numfracstrides/2;i++) {
-      stepchannelfreqs[i] = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels);
-      lsbstepchannelfreqs[i] = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels);
-      dsbstepchannelfreqs[i] = (float)(TWO_PI*((i*arraystridelength*recordedbandwidth)/recordedbandchannels - recordedbandwidth/2.0));
-      ldsbstepchannelfreqs[i] = (float)(-TWO_PI*((((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels + recordedbandwidth/2.0));
+      stepchannelfreqs[i]     = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels);
+      dsbstepchannelfreqs[i]  = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels - TWO_PI*recordedbandwidth/2.0);
+      lsbstepchannelfreqs[i]  = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels);
+      //ldsbstepchannelfreqs[i] = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels + TWO_PI*recordedbandwidth/2.0);
+      ldsbstepchannelfreqs[i] = -dsbstepchannelfreqs[i];
     }
 
     deltapoloffsets = false;
@@ -561,6 +565,7 @@ Mode::~Mode()
   vectorFree(subfracsampsin);
   vectorFree(subfracsampcos);
   vectorFree(subchannelfreqs);
+  vectorFree(ldsbsubchannelfreqs);
 
   vectorFree(stepfracsamparg);
   vectorFree(stepfracsampsin);
@@ -659,6 +664,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
   int status, count, nearestsample, integerdelay, RcpIndex, LcpIndex, intwalltime;
   cf32* fftptr;
   f32* currentstepchannelfreqs;
+  f32* currentsubchannelfreqs;
   int indices[10];
   bool looff, isfraclooffset;
   //cout << "For Mode of datastream " << datastreamindex << ", index " << index << ", validflags is " << validflags[index/FLAGS_PER_INT] << ", after shift you get " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
@@ -686,6 +692,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
   walltimesecs = model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds + offsetns/1.0e9 + fftstartmicrosec/1.0e6;
   intwalltime = static_cast<int>(walltimesecs);
   fracwalltime = walltimesecs - intwalltime;
+  //cinfo << startl << "ATD: fftstartmicrosec " << fftstartmicrosec << ", sampletime " << sampletime << ", fftchannels " << fftchannels << ", bytesperblocknumerator " << bytesperblocknumerator << ", nearestsample " << nearestsample << endl;
 
   //if we need to, unpack some more data - first check to make sure the pos is valid at all
   //cout << "Datalengthbytes for " << datastreamindex << " is " << datalengthbytes << endl;
@@ -842,11 +849,13 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     //updated so that Nyquist channel is not accumulated for either USB or LSB data
     //and is excised entirely, so both USB and LSB data start at the same place (no sidebandoffset)
     currentstepchannelfreqs = stepchannelfreqs;
+    currentsubchannelfreqs = subchannelfreqs;
     if(usedouble)
     {
       if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
       {
         currentstepchannelfreqs = ldsbstepchannelfreqs;
+        currentsubchannelfreqs = ldsbsubchannelfreqs;
       }
       else
       {
@@ -860,10 +869,6 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
         currentstepchannelfreqs = lsbstepchannelfreqs;
       }
     }
-    /*if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
-    {
-      currentstepchannelfreqs = lsbstepchannelfreqs;
-    }*/
 
     looff = false;
     isfraclooffset = false;
@@ -878,9 +883,11 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
 
     //get ready to apply fringe rotation, if it is pre-F
     lofreq = config->getDRecordedFreq(configindex, datastreamindex, i);
-    if (usecomplex && usedouble) {
+    if (usecomplex && usedouble) // need to adjust the LO frequency relative to the band edge
+    {
       if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
 	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
+        lofreq = -lofreq; // I'm still a little confused by this, but 'double sideband' lower sideband is confusing...
       } else {
 	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       }
@@ -1034,7 +1041,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     }
 
     // Note recordedfreqclockoffsetsdata will usually be zero, but avoiding if statement
-    status = vectorMulC_f32(subchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] + recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength);
+    status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] + recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength);
     if(status != vecNoErr) {
       csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
       exit(1);
@@ -1081,7 +1088,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
 
     // Repeat the post F correction steps if each pol is different
     if (deltapoloffsets) {
-      status = vectorMulC_f32(subchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength); 
+      status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength); 
       if(status != vecNoErr) {
 	csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
 	exit(1);
@@ -1166,6 +1173,8 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
           case 2: // Quadratic
             if (usecomplex) {
               status = vectorMul_cf32(complexrotator, &unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
+              // The following can be uncommented (and the above commented) if wanting to 'turn off' fringe rotation for testing in the complex case
+              //status = vectorCopy_cf32(&unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
               if (status != vecNoErr)
                 csevere << startl << "Error in complex fringe rotation" << endl;
             } else {
