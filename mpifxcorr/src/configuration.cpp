@@ -483,7 +483,6 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
       framesperperiod = (int)(1e6*bw*nchan*alignmentseconds*nbits / ((framebytes-CODIF_HEADER_BYTES) * 8) + 0.5);
       if (sampling==COMPLEX) {
         framesperperiod = (int)(1e6*bw*nchan*alignmentseconds*nbits*2 / ((framebytes-CODIF_HEADER_BYTES) * 8) + 0.5);
-        cverbose << startl << bw << ", " << nchan << ", " << alignmentseconds << ", " << nbits << formatname << endl;
         sprintf(formatname, "CODIFC_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, framesperperiod, alignmentseconds, nchan, nbits);
       }
       else {

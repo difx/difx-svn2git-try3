@@ -102,7 +102,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     }
     if(fabs(loval - int(loval + 0.5)) > TINY) {
       fractionalLoFreq = true;
-      cinfo << startl << "Fractional LO freq is TRUE" << endl;
     }
   }
 
