@@ -113,8 +113,9 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
             cfatal << startl << "Input file out of order!  Attempted to read configuration details without knowledge of common settings - aborting!!!" << endl;
           consistencyok = false;
         }
-        else
+        else {
           consistencyok = processConfig(input);
+	}
         break;
       case RULE:
         if(!configread) {
@@ -122,8 +123,9 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
             cfatal << startl << "Input file out of order!  Attempted to read rule details without knowledge of configurations - aborting!!!" << endl;
           consistencyok = false;
         }
-        else
+        else {
           consistencyok = processRuleTable(input);
+	}
         break;
       case FREQ:
         consistencyok = processFreqTable(input);
@@ -274,10 +276,12 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
       {
 	if(configs[i].pulsarbin)
 	  {
-	    if (consistencyok)
+	    if (consistencyok) {
 	      consistencyok = processPulsarConfig(configs[i].pulsarconfigfilename, i);
-	    if (consistencyok)
+	    }
+	    if (consistencyok) {
 	      consistencyok = setPolycoFreqInfo(i);
+	    }
 	  }
 	
 	if(configs[i].phasedarray)
@@ -289,6 +293,9 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
     if(consistencyok) {
       model = new Model(this, calcfilename);
       consistencyok = model->openSuccess();
+      if (!consistencyok) {
+	cerror << startl << "Failed to open calc file " << calcfilename << endl;
+      }
     }
     for(int i=0;i<telescopetablelength;i++) {
       if(consistencyok)
@@ -486,7 +493,6 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
         sprintf(formatname, "CODIFC_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, framesperperiod, alignmentseconds, nchan, nbits);
       }
       else {
-        //sprintf(formatname, "CODIF_%d-%d-%d/%d-%d", framebytes-CODIF_HEADER_BYTES, nchan, nbits, 1, 1); //need to change 1,1 to num/denom of period
         sprintf(formatname, "CODIF_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, framesperperiod, alignmentseconds, nchan, nbits);
       }
       break;
