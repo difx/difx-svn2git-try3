@@ -880,16 +880,23 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
         fraclooffset = -fraclooffset;
     }
 
-    //get ready to apply fringe rotation, if it is pre-F
+    //get ready to apply fringe rotation, if it is pre-F.  
+    //By default, the local oscillator frequency (which is used for fringe rotation) is the band edge, as specified inthe input file
     lofreq = config->getDRecordedFreq(configindex, datastreamindex, i);
-    if (usecomplex && usedouble) // need to adjust the LO frequency relative to the band edge
+
+    // For double-sideband data, the LO frequency is at the centre of the band, not the band edge
+    if (usecomplex && usedouble)
     {
       if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
 	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
-        lofreq = -lofreq; // I'm still a little confused by this, but 'double sideband' lower sideband is confusing...
       } else {
 	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       }
+    }
+
+    // For lower sideband complex data, the effective LO is at negative frequency, not positieve
+    if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+      lofreq = -lofreq;
     }
 
     switch(fringerotationorder) {
@@ -1189,25 +1196,32 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
               if(status != vecNoErr)
                 csevere << startl << "Error doing the FFT!!!" << endl;
             }
-            else{
+            else {
               status = vectorDFT_CtoC_cf32(complexunpacked, fftd, pDFTSpecC, fftbuffer);
               if(status != vecNoErr)
                 csevere << startl << "Error doing the DFT!!!" << endl;
             }
 
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+              // All lower sideband bands need to be conjugated (achieved by taking the second half of the band for real-valued inputs)
+              // Additionally for the complex-valued inputs, the order of the frequency channels is reversed so they need to be flipped
+              // (for the double sideband case, in two halves, for the regular case, the whole thing)
 	      if (usecomplex) {
 		if (usedouble) {
-		  status = vectorFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
-		  status = vectorFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
-		} else {
-              status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
-              }
-	      } else {
+		  status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
+		  status = vectorConjFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
+		} 
+                else {
+                  status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
+                }
+	      } 
+              else {
 		status = vectorCopy_cf32(&(fftd[recordedbandchannels]), fftoutputs[j][subloopindex], recordedbandchannels);
 	      }
             }
             else {
+              // For upper sideband bands, normally just need to copy the fftd channels.
+              // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
 	      if (usecomplex && usedouble) {
 		status = vectorCopy_cf32(fftd, &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels/2);
 		status = vectorCopy_cf32(&fftd[recordedbandchannels/2], fftoutputs[j][subloopindex], recordedbandchannels/2);
@@ -1224,6 +1238,8 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
 	// 1. The zero element corresponds to the lowest sky frequency.  That is:
 	//    fftoutputs[j][0] = Local Oscillator Frequency              (for Upper Sideband)
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Lower Sideband)
+	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Upper Sideband)
+	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Lower Sideband)
 	// 
 	// 2. The frequency increases monotonically with index
 	// 
