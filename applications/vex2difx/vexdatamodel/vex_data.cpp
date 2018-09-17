@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2017 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,6 +32,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <list>
 #include <regex.h>
 #include "vex_data.h"
 #include "vex_utility.h"
@@ -715,7 +716,7 @@ void VexData::swapPolarization(const std::string &antName)
 	}
 }
 
-void VexData::setPhaseCalInterval(const std::string &antName, int phaseCalIntervalMHz)
+void VexData::setPhaseCalInterval(const std::string &antName, float phaseCalIntervalMHz)
 {
 	for(std::vector<VexMode>::iterator it = modes.begin(); it != modes.end(); ++it)
 	{
@@ -777,6 +778,17 @@ void VexData::setAntennaAxisOffset(const std::string &antName, double axisOffset
 		if(it->name == antName)
 		{
 			it->axisOffset = axisOffset;
+		}
+	}
+}
+
+void VexData::setAntennaPolConvert(const std::string &antName, bool doConvert)
+{
+	for(std::vector<VexAntenna>::iterator it = antennas.begin(); it != antennas.end(); ++it)
+	{
+		if(it->name == antName)
+		{
+			it->polConvert = doConvert;
 		}
 	}
 }
@@ -855,6 +867,36 @@ void VexData::generateEvents(std::list<Event> &events) const
 	addLeapSecondEvents(events);
 
 	events.sort();
+}
+
+void VexData::setDifxTsys(unsigned int antId, unsigned int streamId, double tSys)
+{
+	std::vector<VexMode>::iterator mit;
+
+	if(antId >= antennas.size())
+	{
+		std::cerr << "Developer error: VexData::setDifxTsys: antId = " << antId << " where size of antennas[] is " << antennas.size() << std::endl;
+		
+		exit(EXIT_FAILURE);
+	}
+
+	for(mit = modes.begin(); mit != modes.end(); ++mit)
+	{
+		std::map<std::string,VexSetup>::iterator it = mit->setups.find(antennas[antId].name);
+
+		if(it == mit->setups.end())
+		{
+			continue;
+		}
+		if(streamId >= it->second.streams.size())
+		{
+			std::cerr << "Developer error: VexData::setDifxTsys: antId = " << antId << " streamId = " << streamId << " where number of streams is " << it->second.streams.size() << std::endl;
+
+			exit(EXIT_FAILURE);
+		}
+
+		it->second.streams[streamId].difxTsys = tSys;
+	}
 }
 
 void VexData::setNoDatastream(unsigned int antId, unsigned int streamId)
@@ -1321,6 +1363,39 @@ bool VexData::hasData(const std::string &antName, const VexScan &scan) const
 	}
 
 	return hd;
+}
+
+int VexData::getPolarizations() const
+{
+	int rv = 0;
+
+	for(std::vector<VexMode>::const_iterator it = modes.begin(); it != modes.end(); ++it)
+	{
+		rv |= it->getPolarizations();
+	}
+
+	return rv;
+}
+
+int VexData::getConvertedPolarizations() const
+{
+	int rv = 0;
+	std::list<std::string> antsToConvert;
+
+	for(std::vector<VexAntenna>::const_iterator it = antennas.begin(); it != antennas.end(); ++it)
+	{
+		if(it->polConvert)
+		{
+			antsToConvert.push_back(it->name);
+		}
+	}
+
+	for(std::vector<VexMode>::const_iterator it = modes.begin(); it != modes.end(); ++it)
+	{
+		rv |= it->getConvertedPolarizations(antsToConvert);
+	}
+
+	return rv;
 }
 
 std::ostream& operator << (std::ostream &os, const VexData &x)

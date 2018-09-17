@@ -789,6 +789,7 @@ DatastreamSetup::DatastreamSetup(const std::string &name) : difxName(name)
 	dataSampling = NumSamplingTypes;	// flag that no sampling is is identified here
 	startBand = -1;
 	nBand = 0;				// Zero implies all.
+	tSys = 0.0;
 }
 
 
@@ -950,6 +951,10 @@ int DatastreamSetup::setkv(const std::string &key, const std::string &value)
 		basebandFiles.clear();
 		basebandFiles.push_back(VexBasebandData(value, 0, -1));
 	}
+	else if(key == "tSys")
+	{
+		ss >> tSys;
+	}
 	else
 	{
 		std::cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << std::endl; 
@@ -985,6 +990,7 @@ bool DatastreamSetup::hasBasebandData(const Interval &interval) const
 int DatastreamSetup::merge(const DatastreamSetup *dss)
 {
 	nBand = dss->nBand;	// there is no way for the defaultDatastreamSetup to have this set
+	tSys = dss->tSys;
 
 	if(dataSource == DataSourceUnspecified || dss->dataSource == DataSourceNone)
 	{
@@ -1094,6 +1100,7 @@ int DatastreamSetup::merge(const DatastreamSetup *dss)
 AntennaSetup::AntennaSetup(const std::string &name) : vexName(name), defaultDatastreamSetup(name)
 {
 	polSwap = false;
+	polConvert = false;
 	X = ANTENNA_COORD_NOT_SET;
 	Y = ANTENNA_COORD_NOT_SET;
 	Z = ANTENNA_COORD_NOT_SET;
@@ -1138,6 +1145,10 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	else if(key == "polSwap")
 	{
 		polSwap = parseBoolean(value);
+	}
+	else if(key == "polConvert")
+	{
+		polConvert = parseBoolean(value);
 	}
 	else if(key == "clockOffset" || key == "clock0")
 	{
@@ -1767,6 +1778,7 @@ void CorrParams::defaults()
 	nThread = 0;
 	tweakIntTime = false;
 	sortAntennas = true;
+	exhaustiveAutocorrs = false;
 }
 
 void pathify(std::string &filename)
@@ -1865,6 +1877,10 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	else if(key == "mediaSplit")
 	{
 		mediaSplit = parseBoolean(value);
+	}
+	else if(key == "exhaustiveAutocorrs")
+	{
+		exhaustiveAutocorrs = parseBoolean(value);
 	}
 	else if(key == "maxLength")
 	{
@@ -2776,6 +2792,21 @@ bool CorrParams::swapPol(const std::string &antName) const
 		if(a->vexName == antName)
 		{
 			return a->polSwap;
+		}
+	}
+
+	return false;
+}
+
+bool CorrParams::convertPol(const std::string &antName) const
+{
+	std::vector<AntennaSetup>::const_iterator a;
+
+	for(a = antennaSetups.begin(); a != antennaSetups.end(); ++a)
+	{
+		if(a->vexName == antName)
+		{
+			return a->polConvert;
 		}
 	}
 

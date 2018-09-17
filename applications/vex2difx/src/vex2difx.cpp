@@ -63,13 +63,13 @@ const int defaultMaxNSBetweenACAvg = 2000000;	// 2ms, good default for use with 
 
 static int calculateWorstcaseGuardNS(double sampleRate, int subintNS, int nBit, int nSubband)
 {
-	double sampleTimeNS = 1.0e9/sampleRate;
+        double sampleTimeNS = 1.0e9/sampleRate;
 	double nsAccumulate = sampleTimeNS;
 	const double MaxEarthGeomSlipRate = 1600.0;	// ns/sec
-	
-	while(fabs(nsAccumulate - static_cast<int>(nsAccumulate)) > 1.0e-12)
+
+	while(fabs(nsAccumulate - round(nsAccumulate)) > 2.0e-11)
 	{
-		nsAccumulate += sampleTimeNS;
+	  nsAccumulate += sampleTimeNS;
 	}
 
 	if(nBit*nSubband < 8)
@@ -77,7 +77,7 @@ static int calculateWorstcaseGuardNS(double sampleRate, int subintNS, int nBit, 
 		nsAccumulate = nsAccumulate*8.0/(nBit*nSubband);
 	}
 
-	return static_cast<int>(nsAccumulate + MaxEarthGeomSlipRate*subintNS*1.0e-9 + 1.0);
+	return static_cast<int>(round(nsAccumulate + MaxEarthGeomSlipRate*subintNS*1.0e-9 + 1.0));
 }
 
 static DifxJob *makeDifxJob(string directory, const Job& J, int nAntenna, const string& obsCode, int *n, int nDigit, char ext, const CorrParams *P)
@@ -315,7 +315,7 @@ static DifxDatastream *makeDifxDatastreams(const Job& J, const VexData *V, const
 
 				dd->antennaId = antennaId;
 				dd->dataSource = stream.dataSource;
-				dd->tSys = 0.0;
+				dd->tSys = stream.difxTsys;
 				dd->dataSampling = stream.dataSampling;
 				switch(dd->dataSource)
 				{
@@ -808,10 +808,25 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 			// 8. a zoom band with opposite sideband
 
 			// Needless to say, this logic can probably be simplified some, but it seems to work!
+			//
+			// Finally, we have the case of exhaustiveAutocorrs
+			// Here we disable "normal" autocorrelations and instead construct autocorrs as baselines
+			// This allows us to grab cross-hand autocorrs when the polarisations are in different baselines
 
-			for(int a1 = 0; a1 < D->nAntenna-1; ++a1)
+			int enda1 = D->nAntenna-1;
+			if(P->exhaustiveAutocorrs)
 			{
-				for(int a2 = a1 + 1; a2 < D->nAntenna; ++a2)
+				enda1 = D->nAntenna;
+				config->doAutoCorr = 0;
+			}
+			for(int a1 = 0; a1 < enda1; ++a1)
+			{
+				int starta2 = a1 + 1;
+				if(P->exhaustiveAutocorrs)
+				{
+					starta2 = a1;
+				}
+				for(int a2 = starta2; a2 < D->nAntenna; ++a2)
 				{
 					for(int configds1 = 0; configds1 < config->nDatastream; ++configds1)
 					{
@@ -989,7 +1004,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								++nFreq;
 							}
 
-							for(int f = 0; f < D->datastream[a1].nZoomFreq; ++f)
+							for(int f = 0; f < D->datastream[ds1].nZoomFreq; ++f)
 							{
 								bool zoom2 = false;	// did antenna 2 zoom band make match? 
 
@@ -1433,6 +1448,10 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	{
 		config->nBaseline = nDatastream*(nDatastream-1)/2;	// this is a worst case (but typical) scenario; may shrink later.
 									// FIXME: it seems the shrinking causes seg faults.  
+		if(P->exhaustiveAutocorrs)
+		{
+			config->nBaseline += 2*nDatastream; // worst case if every datastream has a corresponding partner
+		}
 	}
 
 	//if guardNS was set to negative value, change it to the right amount to allow for
@@ -2090,9 +2109,11 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				
 			exit(EXIT_FAILURE);
 		}
-		worstcaseguardns = calculateWorstcaseGuardNS(mode->getLowestSampleRate(), config->subintNS, mode->getMinBits(), mode->getMinSubbands());
-		if(config->guardNS < worstcaseguardns && config->guardNS > 0)
+		if (config->guardNS > 0)
 		{
+		    worstcaseguardns = calculateWorstcaseGuardNS(mode->getLowestSampleRate(), config->subintNS, mode->getMinBits(), mode->getMinSubbands());
+		    if(config->guardNS < worstcaseguardns)
+		    {
 			cerr << "vex2difx calculates the worst-case guardNS as " << worstcaseguardns << ", but you have explicitly set " << config->guardNS << ". It is possible that mpifxcorr will refuse to run! Unless you know what you are doing, you should probably set guardNS to " << worstcaseguardns << " or above, or just leave it unset!" << endl;
 			if(strict)
 			{
@@ -2104,6 +2125,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			{
 				cerr << "\nContinuing since --force was specified" << endl;
 			}
+		    }
 		}
 		config->nDatastream = nConfigDatastream;
 	} // configId loop
@@ -2447,6 +2469,9 @@ static void usage(int argc, char **argv)
 	cout << "     -s" << endl;
 	cout << "     --strict      treat some warnings as errors and quit [default]." << endl;
 	cout << endl;
+	cout << "     -6" << endl;
+	cout << "     --mk6         call mk62v2d utility to generate mark6 related files" << endl;
+	cout << endl;
 	cout << "  <v2d file> is the vex2difx configuration file to process." << endl;
 	cout << endl;
 	cout << "When running " << program << " you will likely see some output to the screen." << endl;
@@ -2493,7 +2518,19 @@ static void calculateScanSizes(VexData *V, const CorrParams &P)
 		int nSubband, nBaseline;
 		
 		scan = V->getScan(s);
+		if (!scan)
+		{
+			cerr << "Warning: scan " << s << " could not be looked up!" << endl;
+			continue;
+		}
+
 		mode = V->getModeByDefName(scan->modeDefName);
+		if (!mode)
+		{
+			cerr << "Warning: scan " << scan->defName << " has undefined VEX mode " << scan->modeDefName << "!" << endl;
+			continue;
+		}
+
 		const std::string &corrSetupName = P.findSetup(scan->defName, scan->sourceDefName, scan->modeDefName);
 		setup = P.getCorrSetup(corrSetupName);
 		if(!setup)
@@ -2561,6 +2598,7 @@ int main(int argc, char **argv)
 	bool writeParams = false;
 	bool deleteOld = false;
 	bool strict = true;
+	bool mk6 = false;
 	int nWarn = 0;
 	int nError = 0;
 	int nSkip = 0;
@@ -2615,6 +2653,11 @@ int main(int argc, char **argv)
 				strcmp(argv[a], "--strict") == 0)
 			{
 				strict = 1;
+			}
+			else if(strcmp(argv[a], "-6") == 0 ||
+				strcmp(argv[a], "--mk6") == 0)
+			{
+				mk6 = 1;
 			}
 			else
 			{
@@ -2674,6 +2717,14 @@ int main(int argc, char **argv)
 		cerr << "The .v2d file has problems.  Exiting." << endl;
 
 		exit(EXIT_FAILURE);
+	}
+
+        // call mk62v2d script for mark6 related v2d prework
+	// mk62v2d exits without altering v2d if no mark6 modules are present in .vex.obs
+	if(mk6)
+	{
+		command = "mk62v2d " + v2dFile;
+	      	system(command.c_str());
 	}
 
 	P = new CorrParams(v2dFile);
@@ -2764,6 +2815,10 @@ int main(int argc, char **argv)
 		const std::string &corrSetupName = P->findSetup(scan->defName, scan->sourceDefName, scan->modeDefName);
 		CorrSetup *corrSetup = P->getNonConstCorrSetup(corrSetupName);
 		const VexMode *mode = V->getModeByDefName(scan->modeDefName);
+		if (!mode)
+		{
+			continue;
+		}
 		for(map<string,VexSetup>::const_iterator sp = mode->setups.begin(); sp != mode->setups.end(); ++sp)
 		{
 			for(vector<VexChannel>::const_iterator cp = sp->second.channels.begin(); cp != sp->second.channels.end(); ++cp)

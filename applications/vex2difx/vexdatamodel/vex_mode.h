@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -34,6 +34,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <list>
 #include <difxio.h>
 #include "vex_subband.h"
 #include "vex_setup.h"
@@ -60,6 +61,9 @@ public:
 	void setPhaseCalInterval(const std::string &antName, int phaseCalIntervalMHz);
 	void selectTones(const std::string &antName, enum ToneSelection selection, double guardBandMHz);
 	void generateRecordChans();
+	bool hasDuplicateBands() const;
+	int getPolarizations() const;
+	int getConvertedPolarizations(const std::list<std::string> &antsToConvert) const;
 
 	std::string defName;
 

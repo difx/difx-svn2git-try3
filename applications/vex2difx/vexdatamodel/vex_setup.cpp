@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -31,10 +31,10 @@
 #include <set>
 #include "vex_setup.h"
 
-int VexSetup::phaseCalIntervalMHz() const
+float VexSetup::phaseCalIntervalMHz() const
 {
-	int p;
-	int pc = 0;
+	float p;
+	float pc = 0;
 
 	for(std::map<std::string,VexIF>::const_iterator it = ifs.begin(); it != ifs.end(); ++it)
 	{
@@ -46,6 +46,23 @@ int VexSetup::phaseCalIntervalMHz() const
 	}
 
 	return pc;
+}
+
+float VexSetup::phaseCalBaseMHz() const
+{
+	float pb;
+	float pcb = 0;
+
+	for(std::map<std::string,VexIF>::const_iterator it = ifs.begin(); it != ifs.end(); ++it)
+	{
+		pb = it->second.phaseCalBaseMHz;
+		if(pb > 0 && (pb < pcb || pcb == 0))
+		{
+			pcb = pb;
+		}
+	}
+
+	return pcb;
 }
 
 const VexIF *VexSetup::getIF(const std::string &ifName) const
@@ -118,7 +135,7 @@ void VexSetup::assignRecordChans()
 	}
 }
 
-void VexSetup::setPhaseCalInterval(int phaseCalIntervalMHz)
+void VexSetup::setPhaseCalInterval(float phaseCalIntervalMHz)
 {
 	// change IF phase cal values
 	for(std::map<std::string,VexIF>::iterator it = ifs.begin(); it != ifs.end(); ++it)
@@ -137,7 +154,41 @@ void VexSetup::setPhaseCalInterval(int phaseCalIntervalMHz)
 		{
 			for(std::vector<unsigned int>::iterator tit = it->tones.begin(); tit != it->tones.end(); )
 			{
-				if(*tit % phaseCalIntervalMHz != 0)
+				float toneFreq = (*tit) * phaseCalIntervalMHz + phaseCalBaseMHz();
+				if (toneFreq > it->bbcBandwidth)
+				{
+					tit = it->tones.erase(tit);
+				}
+				else
+				{
+					++tit;
+				}
+			}
+		}
+	}
+}
+
+void VexSetup::setPhaseCalBase(float phaseCalBaseMHz)
+{
+	// change IF phase cal values
+	for(std::map<std::string,VexIF>::iterator it = ifs.begin(); it != ifs.end(); ++it)
+	{
+		it->second.phaseCalBaseMHz = phaseCalBaseMHz;
+	}
+
+	// weed out unwanted tones
+	for(std::vector<VexChannel>::iterator it = channels.begin(); it != channels.end(); ++it)
+	{
+		if(phaseCalBaseMHz < 0)
+		{
+			it->tones.clear();
+		}
+		else
+		{
+			for(std::vector<unsigned int>::iterator tit = it->tones.begin(); tit != it->tones.end(); )
+			{
+				float toneFreq = (*tit) * phaseCalIntervalMHz() + phaseCalBaseMHz;
+				if (toneFreq > it->bbcBandwidth)
 				{
 					tit = it->tones.erase(tit);
 				}
@@ -155,7 +206,7 @@ void VexSetup::selectTones(enum ToneSelection selection, double guardBandMHz)
 	for(std::vector<VexChannel>::iterator it = channels.begin(); it != channels.end(); ++it)
 	{
 		const VexIF *vif = getIF(it->ifName);
-		it->selectTones(vif->phaseCalIntervalMHz, selection, guardBandMHz);
+		it->selectTones(vif->phaseCalIntervalMHz, vif->phaseCalBaseMHz, selection, guardBandMHz);
 	}
 }
 
@@ -295,6 +346,62 @@ double VexSetup::getAverageSampleRate() const
 	}
 
 	return sr;
+}
+
+bool VexSetup::hasDuplicateSubbands() const
+{
+	unsigned int n;
+
+	n = channels.size();
+
+	if(n > 1)
+	{
+		for(unsigned int i = 1; i < n; ++i)
+		{
+			if(channels[i].subbandId < 0)
+			{
+				continue;
+			}
+			for(unsigned int j = 0; j < i; ++j)
+			{
+				if(channels[i].subbandId == channels[j].subbandId)
+				{
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+/* returns bit map using same values as difxio does */
+int VexSetup::getPolarizations() const
+{
+	int rv = 0;
+
+	for(std::map<std::string,VexIF>::const_iterator it = ifs.begin(); it != ifs.end(); ++it)
+	{
+		switch(it->second.pol)
+		{
+		case 'R':
+			rv |= 0x01;
+			break;
+		case 'L':
+			rv |= 0x02;
+			break;
+		case 'X':
+			rv |= 0x10;
+			break;
+		case 'Y':
+			rv |= 0x20;
+			break;
+		default:
+			rv |= 0x100;	// Error/Unknown bit
+		}
+	}
+
+	return rv;
 }
 
 std::ostream& operator << (std::ostream &os, const VexSetup &x)

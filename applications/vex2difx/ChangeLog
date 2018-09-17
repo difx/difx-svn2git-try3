@@ -1,3 +1,24 @@
+Version 2.6.0
+~~~~~~~~~~~~~
+* New DATASTREAM parameter tSys that passes through into .input files
+* vexpeek:
+  - new --scans option produces a listing of scans in the VEX file,
+      useful to help select suitable scans for clock searches in early correlation
+  - new --modules option produces listing of media in the TAPELOG_OBS section
+* Improved parsing of P-cal $IF if_def entries (vex1.5)
+  - parse P-cal base frequency; allows a shifted P-cal
+  - finer P-cal spacing; 'float' replaces 'int' in vex2difx and .input
+  - Note: P-cal base frequency is not yet supported in .input file
+* ANTENNA parameter polConvert can be set to true to indicate desire to perform polarization basis conversion on this antenna.  This will eliminate a warning that is not needed in this case.
+* Added parameter exahustiveAutocorrs to allow correlation of cross-hand autocorrelations when polarisations are in different datastreams
+* Support units in the clock rate (e.g., usec/sec).  This change generalizes unit support to allow time in numerators.
+* Increase maximum number of allowed IFs from 4 to 32, and catch cases where this gets exceeded.
+* Add mk62v2d script and call from vex2script to support mark6 prework to .v2d
+* Fix indexing bug in baseline table preparation. Affected zoom band projects where only a subset of antennas is multi-datastream.
+* Python scripts explicitly call python2
+* difxspeed: allow benchmarking on real data
+* remove calc2xyz: was on a dead-end development path
+
 Version 2.5.0
 ~~~~~~~~~~~~~
 * Users can now supply comments in one or more COMMENT { } blocks
@@ -50,6 +71,8 @@ Version 2.5.0
 * Fix long standing issue w.r.t. (Mark5) media change detection: media change would never split a job.
 * Option sortAntennas in .v2d file (default=true) now allows prevention of sorting (set sortAntennas=false).  Use of this feature requires an antenna list to be provided in the .v2d file.
 * Remove dangerous option for antenna partial matching in .v2d file
+* Check for duplicate channels and warn if found.
+* Check for unsupported polarizations
 * Version for DiFX-2.5, May 16, 2017
 
 Version 2.4.0

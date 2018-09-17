@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -389,6 +389,72 @@ int VexMode::nRecordChan(const std::string &antName) const
 	{
 		return 0;
 	}
+}
+
+bool VexMode::hasDuplicateBands() const
+{
+	if(hasDuplicates(subbands) | hasDuplicates(zoombands))
+	{
+		return true;
+	}
+
+	for(std::map<std::string,VexSetup>::const_iterator it = setups.begin(); it != setups.end(); ++it)
+	{
+		if(it->second.hasDuplicateSubbands())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+int VexMode::getPolarizations() const
+{
+	int rv = 0;
+
+	for(std::map<std::string,VexSetup>::const_iterator it = setups.begin(); it != setups.end(); ++it)
+	{
+		rv |= it->second.getPolarizations();
+	}
+
+	return rv;
+}
+
+int VexMode::getConvertedPolarizations(const std::list<std::string> &antsToConvert) const
+{
+	int rv = 0;
+
+	for(std::map<std::string,VexSetup>::const_iterator it = setups.begin(); it != setups.end(); ++it)
+	{
+		int pols;
+		
+		pols = it->second.getPolarizations();
+
+		if(find(antsToConvert.begin(), antsToConvert.end(), it->first) != antsToConvert.end())
+		{
+			int convertedPols;
+
+			convertedPols = 0;
+			if(pols & DIFXIO_POL_RL)
+			{
+				convertedPols |= DIFXIO_POL_XY;
+			}
+			if(pols & DIFXIO_POL_XY)
+			{
+				convertedPols |= DIFXIO_POL_RL;
+			}
+			if(pols & DIFXIO_POL_ERROR)
+			{
+				convertedPols |= DIFXIO_POL_ERROR;
+			}
+			pols = convertedPols;
+		}
+
+		rv |= pols;
+	}
+
+	return rv;
 }
 
 std::ostream& operator << (std::ostream &os, const VexMode &x)

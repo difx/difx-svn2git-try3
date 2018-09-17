@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken                             *
+ *   Copyright (C) 2015-2017 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -55,9 +55,29 @@ int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 	std::vector<AntennaSetup>::const_iterator a;
 	std::vector<CorrRule>::const_iterator r;
 	std::list<std::string>::const_iterator l;
+	int polarizations;
 
 	int nWarn = 0;
 	int nError = 0;
+
+	polarizations = V->getConvertedPolarizations();
+	if((polarizations & DIFXIO_POL_RL) && (polarizations & DIFXIO_POL_XY))
+	{
+		if(polarizations != V->getPolarizations())
+		{
+			std::cerr << "Warning: after performing requested polarization conversions, both linear and circular polarizations are due to be correlated.  Use at your own risk!" << std::endl;
+		}
+		else
+		{
+			std::cerr << "Warning: both linear and circular polarizations are listed in the .vex file.  Very partial support exists for such modes within DiFX.  Use at your own risk!" << std::endl;
+		}
+		++nWarn;
+	}
+	if(polarizations & DIFXIO_POL_ERROR)
+	{
+		std::cerr << "Error: the .vex file contains a polarization that is not R, L, X or Y.  Cannot proceed." << std::endl;
+		++nError;
+	}
 
 	for(s = P->sourceSetups.begin(); s != P->sourceSetups.end(); ++s)
 	{
@@ -191,6 +211,12 @@ int sanityCheckConsistency(const VexData *V, const CorrParams *P)
 	for(unsigned int m = 0; m < V->nMode(); ++m)
 	{
 		const VexMode *M = V->getMode(m);
+		if(M->hasDuplicateBands())
+		{
+			std::cerr << "Warning: mode " << M->defName << " has duplicate bands (either recorded or zoom).  Behavior of the correlator is undefined in this case.  The .vex file might need modification to proceed." << std::endl;
+
+			++nWarn;
+		}
 		for(std::map<std::string,VexSetup>::const_iterator  s = M->setups.begin(); s != M->setups.end(); ++s)
 		{
 			for(std::vector<VexStream>::const_iterator t = s->second.streams.begin(); t != s->second.streams.end(); ++t)

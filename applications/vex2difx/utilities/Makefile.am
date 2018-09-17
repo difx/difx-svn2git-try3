@@ -14,5 +14,5 @@ dist_bin_SCRIPTS = \
 	padCalcScans \
 	difxspeed \
 	oms2v2d \
-	calc2xyz \
-	vlog
+	vlog \
+	mk62v2d

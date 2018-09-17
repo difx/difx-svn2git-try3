@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2017 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -77,7 +77,8 @@ public:
 	VexAntenna *newAntenna();
 	VexEOP *newEOP();
 	void swapPolarization(const std::string &antName);
-	void setPhaseCalInterval(const std::string &antName, int phaseCalIntervalMHz);
+	void setPhaseCalInterval(const std::string &antName, float phaseCalIntervalMHz);
+	void setPhaseCalBase(const std::string &antName, float phaseCalBaseMHz);
 	void selectTones(const std::string &antName, enum ToneSelection selection, double guardBandMHz);
 	void setClock(const std::string &antName, const VexClock &clock);
 	void setTcalFrequency(const std::string &antName, int tcalFrequency);
@@ -88,6 +89,7 @@ public:
 	void addBreakEvents(std::list<Event> &events, const std::vector<double> &breaks) const;
 	void addLeapSecondEvents(std::list<Event> &events) const;
 	void generateEvents(std::list<Event> &events) const;
+	void setDifxTsys(unsigned int antId, unsigned int streamId, double tSys);
 	void setNoDatastream(unsigned int antId, unsigned int streamId);
 	void setFiles(unsigned int antId, unsigned int streamId, const std::vector<VexBasebandData> &files);
 	void setMark6Files(unsigned int antId, unsigned int streamId, const std::vector<VexBasebandData> &files);
@@ -108,6 +110,8 @@ public:
 	enum DataSource getDataSource(unsigned int antId, unsigned int streamId) const;
 	enum DataSource getDataSource(const std::string &antName, unsigned int streamId) const;
 	bool hasData(const std::string &antName, const VexScan &scan) const;
+	int getPolarizations() const;
+	int getConvertedPolarizations() const;
 
 	double obsStart() const { return exper.mjdStart; }
 	double obsStop() const { return exper.mjdStop; }
@@ -144,6 +148,7 @@ public:
 	void setAntennaAxisOffset(const std::string &antName, double axisOffset);
 	int getNumAntennaRecChans(const std::string &name) const;
 	bool removeAntenna(const std::string name);	// Note: cannot pass name as reference!
+	void setAntennaPolConvert(const std::string &name, bool doConvert);
 
 	size_t nMode() const { return modes.size(); }
 	int getModeIdByDefName(const std::string &defName) const;

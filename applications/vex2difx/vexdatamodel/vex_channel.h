@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2018 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -39,13 +39,13 @@ class VexChannel		// Antenna-specific baseband channel details
 {
 public:
 	VexChannel() : recordChan(-1), subbandId(-1), bbcFreq(0.0), bbcBandwidth(0.0), bbcSideBand(' '), threadId(0) {}
-	void selectTones(int toneIntervalMHz, enum ToneSelection selection, double guardBandMHz);
+	void selectTones(float toneIntervalMHz, float toneBaseMHz, enum ToneSelection selection, double guardBandMHz);
 	char bandCode() const;
 	friend bool operator ==(const VexChannel &c1, const VexChannel &c2);
 	friend bool operator <(const VexChannel &c1, const VexChannel &c2);
+	friend bool sameTuning(const VexChannel &c1, const VexChannel &c2);
 
 	int recordChan;				// channel number on recorded media or threadnum on stream	(< 0 indicates non-recording)
-	int streamId;				// stream number
 	int subbandId;				// 0-based index; -1 means unset
 	std::string ifName;			// name of the IF this channel came from
 	double bbcFreq;				// sky frequency tuning of the BBC (Hz)

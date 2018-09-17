@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2016 by Walter Brisken                             *
+ *   Copyright (C) 2009-2018 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -42,7 +42,7 @@
 #include "../vex/vex_parse.h"
 
 // maximum number of defined IFs
-#define MAX_IF 4
+#define MAX_IF 32
 
 using namespace std;
 
@@ -57,9 +57,15 @@ static void fixOhs(std::string &str)
 {
 	unsigned int i;
 
+	// The format of Mark5/6 disk packs is name&number where name
+    // is a four character string for mark5 and a 3 character stream for
+	// mark6.  The delimiter for mark5 is a + or a - while the mark5 uses
+    // the % sign.  This method fixes any zeroes that happen to be in the
+    // name section by turning them to capital O's.
+
 	for(i = 0; i < str.length(); ++i)
 	{
-		if(str[i] == '-' || str[i] == '+')
+		if(str[i] == '-' || str[i] == '+' || str[i] == '%')
 		{
 			break;
 		}
@@ -437,7 +443,14 @@ static int getAntennas(VexData *V, Vex *v)
 						}
 						if(C->rate && C->origin) 
 						{
-							clock.rate = atof(C->rate->value);
+							if(C->rate->units)
+							{
+								fvex_double(&(C->rate->value), &(C->rate->units), &clock.rate);
+							}
+							else
+							{
+								clock.rate = atof(C->rate->value);
+							}
 							clock.offset_epoch = vexDate(C->origin);
 						}
 						
@@ -699,6 +712,11 @@ static int getModes(VexData *V, Vex *v)
 			p2count = 0;
 			for(p = get_all_lowl(antName.c_str(), modeDefName, T_COMMENT_TRAILING, B_IF, v); p; p = get_all_lowl_next())
 			{
+				if(p2count >= MAX_IF)
+				{
+					std::cerr << "Developer error: Value of MAX_IF is too small in vexload.cpp, instance 1" << std::endl;
+					exit(0);
+				}
 				p2array[p2count++] = p;
 			}
 
@@ -708,7 +726,7 @@ static int getModes(VexData *V, Vex *v)
 			// Derive IF map
 			for(p = get_all_lowl(antName.c_str(), modeDefName, T_IF_DEF, B_IF, v); p; p = get_all_lowl_next())
 			{
-				double phaseCal;
+				double phaseCal, phaseCalBase;
 				
 				vex_field(T_IF_DEF, p, 1, &link, &name, &value, &units);
 				VexIF &vif = setup.ifs[std::string(value)];
@@ -736,27 +754,44 @@ static int getModes(VexData *V, Vex *v)
 				}
 				if(fabs(phaseCal) < 1.0)
 				{
-					vif.phaseCalIntervalMHz = 0;
+					vif.phaseCalIntervalMHz = 0.0f;
 				}
 				else if(fabs(phaseCal-1000000.0) < 1.0)
 				{
-					vif.phaseCalIntervalMHz = 1;
+					vif.phaseCalIntervalMHz = 1.0f;
 				}
 				else if(fabs(phaseCal-5000000.0) < 1.0)
 				{
-					vif.phaseCalIntervalMHz = 5;
+					vif.phaseCalIntervalMHz = 5.0f;
 				}
 				else if(fabs(phaseCal-200000000.0) < 1.0)
 				{
-					vif.phaseCalIntervalMHz = 200;
+					vif.phaseCalIntervalMHz = 200.0f;
 				}
 				else
 				{
 					std::cerr << "Warning: Unsupported pulse cal interval of " << (phaseCal/1000000.0) << " MHz requested for antenna " << antName << "." << std::endl;
 					++nWarn;
-					vif.phaseCalIntervalMHz = static_cast<int>((phaseCal + 0.5)/1000000.0);
+					vif.phaseCalIntervalMHz = static_cast<float>(phaseCal/1000000.0);
 				}
 
+				vex_field(T_IF_DEF, p, 7, &link, &name, &value, &units);
+				if(value)
+				{
+					fvex_double(&value, &units, &phaseCalBase);
+				}
+				else
+				{
+					phaseCalBase = 0.0;
+				}
+				vif.phaseCalBaseMHz = static_cast<float>(phaseCalBase/1000000.0);
+
+
+				if(p2count >= MAX_IF)
+				{
+					std::cerr << "Developer error: Value of MAX_IF is too small in vexload.cpp, instance 2" << std::endl;
+					exit(0);
+				}
 				p2 = p2array[p2count++];
 #if 0
 				if(!p2)
