@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2016 by Adam Deller                                *
+ *   Copyright (C) 2006-2018 by Adam Deller                                *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -42,6 +42,7 @@
 #include "nativemk5.h"
 #include "mark5bfile.h"
 #include "mark5bmark5.h"
+#include "mark5bmark6_datastream.h"
 #include "vdiffile.h"
 #include "vdifnetwork.h"
 #include "vdiffake.h"
@@ -63,20 +64,34 @@
 //act on an XML command message which was received
 bool actOnCommand(Configuration * config, DifxMessageGeneric * difxmessage) {
   string paramname, paramvalue;
-  bool ok;
 
   //Only act on parameter setting commands
   //cout << "received a message" << endl;
   if (difxmessage->type == DIFX_MESSAGE_PARAMETER) {
+    bool toMatches = true;
     DifxMessageParameter * pmessage = &((difxmessage->body).param);
     paramname = string(pmessage->paramName);
     paramvalue = string(pmessage->paramValue);
     cdebug << startl << "Received a parameter message for parameter " << paramname << " and value " << paramvalue << ", targetmpiid is " << pmessage->targetMpiId << endl;
+
+    if(difxmessage->nTo > 0)
+    {
+      toMatches = false;
+      for(int t = 0; t < difxmessage->nTo; ++t)
+      {
+        if(strcmp(difxmessage->to[t], getDifxMessageIdentifier()) == 0)
+        {
+          toMatches = true;
+        }
+      }
+    }
+
     //is it for me
-    if ((pmessage->targetMpiId == config->getMPIId()) || 
+    if (toMatches && (
+        (pmessage->targetMpiId == config->getMPIId()) || 
         (pmessage->targetMpiId == DIFX_MESSAGE_ALLMPIFXCORR) || 
         ((pmessage->targetMpiId == DIFX_MESSAGE_ALLCORES) && config->isCoreProcess()) ||
-        ((pmessage->targetMpiId == DIFX_MESSAGE_ALLDATASTREAMS) && config->isDatastreamProcess())) {
+        ((pmessage->targetMpiId == DIFX_MESSAGE_ALLDATASTREAMS) && config->isDatastreamProcess()))) {
       //is it a shutdown message?
       if (paramname == "keepacting" && paramvalue == "false")
         return false;
@@ -92,7 +107,12 @@ bool actOnCommand(Configuration * config, DifxMessageGeneric * difxmessage) {
       else if (paramname == "ltachannels")
         config->setLTADumpChannels(atoi(pmessage->paramValue));
       else if (paramname == "clockupdate")
-        ok = config->updateClock(paramvalue);
+        config->updateClock(paramvalue);
+      else if (paramname == "stopat")
+      {
+        config->setStopTimeUnixTime(atoll(pmessage->paramValue)); // expects unix time; datastreams result in no more data when their timestamps reach this number.
+        cinfo << startl << config->getMPIId() << ": received message requesting stop at Unix data observe time " << paramvalue << ".  executeseconds changed to " << config->getExecuteSeconds() << endl;
+      }
       else {
         cwarn << startl << config->getMPIId() << ": warning - received a parameter instruction regarding " <<  pmessage->paramName << " which cannot be honored and will be ignored!" << endl;
       }
@@ -283,6 +303,7 @@ int main(int argc, char *argv[])
   //setup difxmessage
   generateIdentifier(argv[1], difxMessageID);
   difxMessageInit(myID, difxMessageID);
+  difxMessageSetInputFilename(argv[1]);
   if(myID == 0)
   {
     if(isDifxMessageInUse())
@@ -329,7 +350,28 @@ int main(int argc, char *argv[])
 
   cverbose << startl << "About to process the input file.." << endl;
   //process the input file to get all the info we need
-  config = new Configuration(argv[1], myID, restartseconds);
+  string inputfiledata, jobname(argv[1]);
+  int inputfiledatalen = 0;
+  if(myID == fxcorr::MANAGERID)
+  {
+    // fxmanager reads content to be exchanged via MPI Broadcast
+    ifstream* inputfile = new ifstream(argv[1]);
+    if (inputfile->is_open())
+    {
+      stringstream ssinputfiledata;
+      ssinputfiledata << inputfile->rdbuf();
+      inputfiledata = ssinputfiledata.str();
+      inputfiledatalen = inputfiledata.size()+1;
+    }
+    delete inputfile;
+  }
+  MPI_Barrier(world);
+  MPI_Bcast((void*)&inputfiledatalen, 1, MPI_INT, fxcorr::MANAGERID, world);
+  if(myID != fxcorr::MANAGERID)
+    inputfiledata.resize(inputfiledatalen+16);
+  MPI_Bcast(const_cast<char*>(inputfiledata.data()), inputfiledatalen, MPI_CHAR, fxcorr::MANAGERID, world);
+  stringstream ssinputfiledata(inputfiledata);
+  config = new Configuration(&ssinputfiledata, jobname, myID, restartseconds);
   if(!config->consistencyOK())
   {
     //There was a problem with the input file, so shut down gracefully
@@ -386,9 +428,7 @@ int main(int argc, char *argv[])
 
 		     http://stackoverflow.com/questions/38680530/use-of-undeclared-identifier-mpi-when-using-c-syntax-for-openmpi-on-macos
   */
-#if !(__APPLE__)
-  try
-#endif
+  //  try
   {
     //work out what process we are and run accordingly
     if(myID == fxcorr::MANAGERID) //im the manager
@@ -410,6 +450,9 @@ int main(int argc, char *argv[])
       } else if(config->isVDIFMark6(datastreamnum)) {
         stream = new VDIFMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening VDIFMark6DataStream" << endl;
+      } else if(config->isMark5BMark6(datastreamnum)) {
+        stream = new Mark5BMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        cverbose << startl << "Opening Mark5BMark6DataStream" << endl;
       } else if(config->isVDIFMark5(datastreamnum)) {
         stream = new VDIFMark5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening VDIFMark5DataStream" << endl;
@@ -455,14 +498,12 @@ int main(int argc, char *argv[])
     MPI_Barrier(world);
   }
 
-  /* See comment about MPI bindings above */
-#if !(__APPLE__)
-  catch (MPI::Exception e)
-  {
-    cerror << startl << "Caught an exception!!! " << e.Get_error_string() << endl;
-    return EXIT_FAILURE;
-  }
-#endif
+  //  /* See comment about MPI bindings above */
+  //catch (MPI::Exception e)
+  //{
+  //  cerror << startl << "Caught an exception!!! " << e.Get_error_string() << endl;
+  //  return EXIT_FAILURE;
+  //}
 
   MPI_Finalize();
 

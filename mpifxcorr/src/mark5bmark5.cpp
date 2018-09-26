@@ -142,10 +142,10 @@ Mark5BMark5DataStream::Mark5BMark5DataStream(const Configuration * conf, int snu
 
 Mark5BMark5DataStream::~Mark5BMark5DataStream()
 {
-	mark5threadstop = true;
 
 	/* barriers come in pairs to allow the read thread to always get first lock */
 	pthread_barrier_wait(&mark5threadbarrier);
+        mark5threadstop = true; // "signal" for exit while thread guaranteed to still be alive
 	pthread_barrier_wait(&mark5threadbarrier);
 
 	pthread_join(mark5thread, 0);
@@ -810,7 +810,7 @@ int Mark5BMark5DataStream::dataRead(int buffersegment)
 
 	bytesvisible = fixend - fixindex;
 
-	// "fix" Mark5B data: remove stray packets/byts and put good frames on a uniform grid
+	// "fix" Mark5B data: remove stray packets/bytes and put good frames on a uniform grid
 	fixReturn = mark5bfix(destination, readbytes, readbuffer+fixindex, bytesvisible, framespersecond, startOutputFrameNumber, &m5bstats);
 	if(fixReturn < 0)
 	{

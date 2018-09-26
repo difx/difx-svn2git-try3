@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 #**************************************************************************
 #   Copyright (C) 2008-2016 by Walter Brisken and Helge Rottmann          *
@@ -30,8 +30,8 @@
 #============================================================================
 
 PROGRAM = 'startdifx'
-VERSION = '2.5.0'
-VERDATE = '20160727'
+VERSION = '2.5.3'
+VERDATE = '20180907'
 AUTHOR  = 'Walter Brisken and Helge Rottmann'
 
 defaultgroup = "224.2.2.1"
@@ -43,6 +43,7 @@ genmachines              = 'genmachines -v'
 defaultDelayModelProgram = 'calcif2'
 difx2fits                = 'difx2fits -v'
 mpiOptions               = '--mca mpi_yield_when_idle 1 --mca rmaps seq'
+agent                    = ''
 
 from sys import argv, exit, stdout
 from os import popen, getcwd, system, getenv, getpid, environ
@@ -59,24 +60,27 @@ import signal
 import subprocess
 
 delayModelProgram = defaultDelayModelProgram
+delayModelOptions = getenv("DIFX_CALC_OPTIONS")
 
 verbose = 0
 
 def getUsage():
 	usage = '\n%s ver. %s  %s  %s\n' % (PROGRAM, VERSION, VERDATE, AUTHOR)
-	usage +='A program to simplify the launching of mpifxcorr'
+	usage +='A program to simplify the launching of mpifxcorr.\n'
 	usage += 'It can also cause model and FITS to be made.\n\n'
 	usage += 'Usage: startdifx [options] [<start delay>] <input1> [<input2> [ ... ] ]\n'
 	usage += 'or:    startdifx [options] [<start delay>] <joblist> \n\n'
 	usage +=  '<start delay> is an optional delay (seconds) to add to the job start time\n'
 	usage +=  '<inputN> is the file prefix for a DiFX input file (possibly including .input)\n'
-	usage +=  '<joblist> is a joblist file as created by vex2difx (must have .joblist extension)\n'
+	usage +=  '<joblist> as created by vex2difx (.joblist extension required)\n'
 	usage +=  '\nThis program responds to the following environment variables:\n'
-	usage +=  'DIFX_MESSAGE_GROUP and DIFX_MESSAGE_PORT can be used to override the default group/port of %s/%d\n' % (defaultgroup, defaultport)
-	usage +=  'DIFX_HEAD_NODE must name the correlation head node (only if using the -m option).\n'
+	usage +=  'DIFX_MESSAGE_GROUP and DIFX_MESSAGE_PORT can be used to override\n'
+        usage +=  'the default group/port of %s/%d\n' % (defaultgroup, defaultport)
+	usage +=  'DIFX_HEAD_NODE must name the correlation head node (only with the -m option).\n'
 	usage +=  'DIFX_MPIRUNOPTIONS can be used to pass options to the mpirun command.\n'
-	usage +=  'DIFX_CALC_PROGRAM can be used to change the delay model program (default is %s)\n' % defaultDelayModelProgram
- 
+	usage +=  'DIFX_CALC_PROGRAM can be used to change the delay model program\n'
+        usage +=  '(the default is %s, but difxcalc can be used).\n' % defaultDelayModelProgram
+	usage +=  'DIFX_CALC_OPTIONS can be used to override options to the delay model program.\n'
 	return(usage)
 
 class Parser:
@@ -537,15 +541,15 @@ def runMessage(fileBase, machinesPolicy, deletePolicy, makeModel, override, useL
 	
 	if not isfile(fileBase+'.im'):
 		if makeModel and isfile(fileBase+'.calc'):
-			calcOptions = ""
-			if override:
-				calcOptions += "--override-version "
-
-			for i in range(verbose):
-				calcOptions += "-v "
-
+			if delayModelOptions != None and len(delayModelOptions) > 0:
+			    calcOptions = delayModelOptions
+			else:
+			    calcOptions = ""
+			    if override:
+				    calcOptions += "--override-version "
+			    for i in range(verbose):
+				    calcOptions += "-v "
 			system('%s %s %s.calc' % (delayModelProgram, calcOptions, fileBase))
-	
 		else:
 			return 'Error: model not available for %s' % fileBase
 	
@@ -587,13 +591,14 @@ def runDirect(fileBase, machinesPolicy, deletePolicy, makeModel, override, useLo
 	
 	if not isfile(fileBase+'.im'):
 		if makeModel and isfile(fileBase+'.calc'):
-			calcOptions = ""
-			if override:
-				calcOptions += "--override-version " 
-
-			for i in range(verbose):
-				calcOptions += "-v "
-
+			if delayModelOptions != None and len(delayModelOptions) > 0:
+			    calcOptions = delayModelOptions
+			else:
+			    calcOptions = ""
+			    if override:
+				    calcOptions += "--override-version "
+			    for i in range(verbose):
+				    calcOptions += "-v "
 			system('%s %s %s.calc' % (delayModelProgram, calcOptions, fileBase))
 		else:
 			return 'Error: model not available for %s' % fileBase
@@ -615,12 +620,19 @@ def runDirect(fileBase, machinesPolicy, deletePolicy, makeModel, override, useLo
 	if np <= 0:
 		return 'Error: %s.machines not found' % fileBase
 
+        # check before proceeding
+        cmd = 'checkmpifxcorr %s.input' % fileBase
+        if verbose > 1:
+            print 'Executing: %s' % cmd
+        if (system(cmd)):
+            return 'Error: checkmpifxcorr has issues with this job'
+
 	# spawn a logger process that will quit once this script ends
 	# this will quietly fail on systems without difxlog installed
-	cmd = 'difxlog %s %s.difxlog 4 %d &' % (identifier, fileBase, getpid())
+        cmd = ['difxlog', str(identifier), fileBase+".difxlog", "4", str(getpid())]
 	if verbose > 1:
-		print 'Executing: %s' % cmd
-	system(cmd);
+		print 'Executing: %s' % ' '.join(cmd)
+        logProcess = subprocess.Popen(cmd)
 
 	if difxLabel == None or difxLabel == '':
 		difxProgram = 'mpifxcorr'
@@ -632,7 +644,11 @@ def runDirect(fileBase, machinesPolicy, deletePolicy, makeModel, override, useLo
 	else:
 		restartOption = ''
 
-	cmd = 'mpirun -np %d --hostfile %s.machines %s  %s %s.input%s' % (np, fileBase, mpiOptions, difxProgram, fileBase, restartOption)
+        if len(agent) > 0:  # hand off to agent
+            cmd = '%s %s' % (agent, fileBase)
+        else:               # hand off to mpirun
+            cmd = 'mpirun -np %d --hostfile %s.machines %s  %s %s.input%s' % (
+                np, fileBase, mpiOptions, difxProgram, fileBase, restartOption)
 
 	sendMessage(fileBase, 'Spawning', 'Spawning %d processes' % np)
 	if verbose > 0:
@@ -653,6 +669,11 @@ def runDirect(fileBase, machinesPolicy, deletePolicy, makeModel, override, useLo
 			print 'Executing: %s' % cmd
 		system(cmd)
 	sendMessage(fileBase, 'MpiDone', '')
+
+	# end difxlog (necessary when running startdifx with joblist)
+	if runJobList:
+            logProcess.kill()
+			
 
 	return None
 
@@ -685,6 +706,7 @@ optParser = OptionParser(version="%prog " + VERSION , usage=usage)
 
 optParser.set_defaults(machinesPolicy=2, useStartMessage=False, deletePolicy=0, makeModel=True, difxdb=False, makeFits=False, verbose=0, quiet=0, useLocalHead=False, override=False, machinesFile="")
 
+optParser.add_option("-A", "--agent", dest="agent", action="store", type="string", help="call mpirun through this agent with filebase as only argument")
 optParser.add_option("-g", "--genmachines", dest="machinesPolicy", action="store_const", const=2, help="will run genmachines even if not needed [default]")
 optParser.add_option("-a", "--automachines", dest="machinesPolicy", action="store_const", const=1, help="will run genmachines if needed")
 optParser.add_option("-n", "--nomachines", dest="machinesPolicy", action="store_const", const=0, help="will not run genmachines, even if needed")
@@ -694,7 +716,7 @@ optParser.add_option("-f", "--force", dest="deletePolicy", action="store_const",
 optParser.add_option("-d", "--dont-calc", dest="makeModel", action="store_false", help="will not calculate delay model, even if needed")
 optParser.add_option("-D", "--difxdb", dest="difxdb", action="store_true", help="make use of difxdb to obtain module location")
 optParser.add_option("-F", "--fits", dest="makeFits", action="store_true", help="generate 1 fits file per job at end of each job")
-optParser.add_option("-v", "--verbose", dest="verbose", action="count", help="send more output to the screen  (use -v -v for extra info)")
+optParser.add_option("-v", "--verbose", dest="verbose", action="count", help="send more output to the screen and difxlog file (use -v -v for extra info)")
 optParser.add_option("-q", "--quiet", dest="quiet", action="count", help="be quieter")
 optParser.add_option("-l", "--localhead", dest="useLocalHead", action="store_true", help="use the current host as the head node. Overrides DIFX_HEAD_NODE.")
 optParser.add_option("--override-version", dest="override", action="store_true", help="ignore difx version differences")
@@ -705,7 +727,8 @@ optParser.add_option("--override-version", dest="override", action="store_true",
 verbose = options.verbose - options.quiet
 
 if len(args) < 1:
-	optParser.error("at least one .input or .joblist file must be given.")
+	optParser.print_help()
+	exit(1)
 
 # parse arguments
 try:
@@ -714,14 +737,18 @@ try:
 	start = 1
 except:
 	start = 0
+
+if options.agent: agent = options.agent
 	
 # loop over all arguments
 fb = None
+runJobList = False
 for a in args[start:]:
 	# check for extension
 	if a[-6:] == '.input':
 		fb = a[:-6]
 	elif a[-8:] == '.joblist':
+		runJobList = True
 		d = open(a).readlines()
 		for l in d:
 			parts = l.split()

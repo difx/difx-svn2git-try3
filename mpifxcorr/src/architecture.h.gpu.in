@@ -37,6 +37,7 @@
 #define INTEL   1
 #define AMD     2
 #define GENERIC 3
+#define CUDA	4
 
 //define the MPI tags
 #define CR_TERMINATE      0
@@ -64,13 +65,6 @@
 #include <ipps.h>
 #include <ippvm.h>
 #include <ippcore.h>
-#include <ippversion.h>
-
-#ifdef IPP9
-#define IPP_9_API
-#elif(IPP_VERSION_MAJOR == 2018)
-#define IPP_9_API
-#endif
 
 //start with the data types
 #define u8                       Ipp8u
@@ -205,7 +199,7 @@
 
 #define vectorSinCos_f32(src, sin, cos, length)                             ippsSinCos_32f_A11(src, sin, cos, length)
 
-#ifdef IPP_9_API
+#ifdef IPP9
 #define vectorSplitScaled_s16f32(src, dest, numchannels, chanlen)           genericSplitScaled_16s32f(src, dest, numchannels, chanlen)
 #else
 #define vectorSplitScaled_s16f32(src, dest, numchannels, chanlen)           ippsSplitScaled_16s32f_D2L(src, dest, numchannels, chanlen)
@@ -244,7 +238,7 @@
 
 // FFT Functions
 
-#ifdef IPP_9_API
+#ifdef IPP9
 inline vecStatus vectorInitFFTR_f32(vecFFTSpecR_f32 **fftspec, int order, int flag, IppHintAlgorithm hint, int *wbufsize, u8 **fftworkbuf) {
   // Alloc FFT buffers
   int sizeFFTSpec, sizeFFTInitBuf;
@@ -452,7 +446,7 @@ inline vecStatus vectorInitDFTR_f32(vecDFTSpecR_f32 **dftspec, int length, int f
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <fftw3.h>
+#include <cufftw.h>
 
 //start with the types
 typedef struct {

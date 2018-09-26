@@ -70,16 +70,28 @@ public:
   enum datasampling {REAL, COMPLEX};
   enum complextype {SINGLE, DOUBLE};
 
+  /// For certain FILE data types (e.g., VDIF), can influence peeking / seeking on open
+  enum filechecklevel {FILECHECKNONE, FILECHECKSEEK, FILECHECKUNKNOWN};
+
   /// Constant for the TCP window size for monitoring
   static int MONITOR_TCP_WINDOWBYTES;
 
  /**
-  * Constructor: Reads and stores the information in the input file
+  * Constructor: Reads information from an input file and stores it internally
   * @param configfile The filename of the input file containing configuration information to be read
   * @param id The MPI id of the process (0 = manager, then 1 - N datastreams, N+1 onwards cores
   * @param restartsec The restart time into the job in seconds (to restart a job which died halfway)
   */
   Configuration(const char * configfile, int id, double restartsec=0.0);
+
+ /**
+  * Constructor: Reads information from an input file and stores it internally
+  * @param input The input stream containing configuration information to be read
+  * @param job_name The name to give to the job
+  * @param id The MPI id of the process (0 = manager, then 1 - N datastreams, N+1 onwards cores
+  * @param restartsec The restart time into the job in seconds (to restart a job which died halfway)
+  */
+  Configuration(istream* input, const string job_name, int id, double restartsec=0.0);
 
   ~Configuration();
 
@@ -89,6 +101,8 @@ public:
 //@{
   inline int getMPIId() const { return mpiid; }
   inline string getJobName() const { return jobname; }
+  inline void setJobName(string jname) { jobname = jname; }
+  void setJobNameFromConfigfilename(string configfilename);
   inline string getObsCode() const { return obscode; }
   inline void setObsCode(string ocode) { obscode = ocode; }
   inline long long getEstimatedBytes() const { return estimatedbytes; }
@@ -152,8 +166,10 @@ public:
     { return telescopetable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex].name; }
   inline double getDTsys(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].tsys; }
-  inline int getDPhaseCalIntervalMHz(int configindex, int configdatastreamindex) const
+  inline float getDPhaseCalIntervalMHz(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].phasecalintervalmhz; }
+  inline float getDPhaseCalBaseMHz(int configindex, int configdatastreamindex) const
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].phasecalbasemhz; }
   inline int getDSwitchedPowerFrequency(int datastreamindex) const
     { return datastreamtable[datastreamindex].switchedpowerfrequency; }
   inline int getDMaxRecordedPCalTones(int configindex, int configdatastreamindex) const
@@ -213,8 +229,8 @@ public:
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].datafilenames; }
   inline int getDRecordedFreqNumPCalTones(int configindex, int configdatastreamindex, int recordedfreqindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numrecordedfreqpcaltones[recordedfreqindex]; }
-  inline int getDRecordedFreqPCalToneFreq(int configindex, int configdatastreamindex, int recordedfreqindex, int tone) const
-    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqpcaltonefreqs[recordedfreqindex][tone]; }
+  inline double getDRecordedFreqPCalToneFreqHz(int configindex, int configdatastreamindex, int recordedfreqindex, int tone) const
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqpcaltonefreqshz[recordedfreqindex][tone]; }
   inline int getDRecordedFreqPCalOffsetsHz(int configindex, int configdatastreamindex, int recordedfreqindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqpcaloffsetshz[recordedfreqindex]; }
   inline double getDRecordedFreq(int configindex, int configdatastreamindex, int datastreamrecordedfreqindex) const
@@ -275,6 +291,8 @@ public:
   inline int getMaxNumPulsarBins() const { return maxnumpulsarbins; }
   inline int getMTU() const { return mtu; }
   inline int getExecuteSeconds() const { return executeseconds; }
+  inline void setExecuteSeconds(int eseconds) { executeseconds = eseconds; }
+  inline void setStopTimeUnixTime(long long int unixTime) { executeseconds = unixTime - ((startmjd-40587LL)*86400LL + startseconds); }
   inline bool isRestart() const { return (restartseconds>0)?true:false; }
   inline int getStartMJD() const { return startmjd; }
   inline int getStartSeconds() const { return startseconds; }
@@ -387,6 +405,14 @@ public:
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
     return (f == MARK5B && s == MK5MODULE);
   }
+  inline bool isMark5BMark6(int datastreamindex) const
+  {
+    dataformat f;
+    datasource s;
+    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
+    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
+    return (f == MARK5B && s == MK6MODULE);
+  }
   inline bool isMark5BNetwork(int datastreamindex) const
   {
     dataformat f;
@@ -438,6 +464,12 @@ public:
     { return configs[configindex].papols[freqindex][polindex]; }
 
 //@}
+
+ /**
+  * Read information from an input stream and store it internally into this object
+  * @param input The input stream containing configuration information to be read
+  */
+ void parseConfiguration(istream* input);
 
  /**
   * @param configindex The index of the configuration being used (from the table in the input file)
@@ -599,7 +631,7 @@ public:
   * @param line Existing string to store value in
   * @param startofheader The start of the expected keyword, to compare to the actual keyword which will be read
   */
-  void getinputline(ifstream * input, std::string * line, std::string startofheader) const;
+  void getinputline(istream * input, std::string * line, std::string startofheader) const;
 
  /**
   * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
@@ -608,10 +640,10 @@ public:
   * @param startofheader The start of the expected keyword, to compare to the actual keyword which will be read
   * @param intval An integer value which should follow startofheader
   */
-  void getinputline(ifstream * input, std::string * line, std::string startofheader, int intval) const;
+  void getinputline(istream * input, std::string * line, std::string startofheader, int intval) const;
 
   /** Actual function **/
-  void getinputline(ifstream * input, std::string * line, std::string startofheader, bool verbose) const;
+  void getinputline(istream * input, std::string * line, std::string startofheader, bool verbose) const;
 
  /**
   * Utility method which reads a line from a file, splitting it into a key and a value and storing both
@@ -619,7 +651,42 @@ public:
   * @param key String to store key in
   * @param val String to store value in
   */
-  void getinputkeyval(ifstream * input, std::string * key, std::string * val) const;
+  void getinputkeyval(istream * input, std::string * key, std::string * val) const;
+
+ /**
+  * Utility method which reads the next line from a file, splitting it into a key and a value and storing both.
+  * If the read key and expected key do not match, the line is "unread" i.e. placed back.
+  * @param input Open input stream to read from
+  * @param expectedkey Expected value of the key to be read
+  * @param key String to store key in
+  * @param val String to store value in
+  */
+  bool peekinputkeyval(istream * input, const std::string& expectedkey, std::string * key, std::string * val) const;
+
+ /**
+  * Get an obligatory entry from a configuration input stream
+  * @param input Open input stream to read from
+  * @param key The start of the expected keyword, to compare to the actual keyword which will be read
+  */
+  template<typename T>
+  bool getInputEntry(istream * input, const std::string& key, T* dest);
+
+ /**
+  * Get an obligatory entry from a configuration input stream
+  * @param input Open input stream to read from
+  * @param key The start of the expected keyword, to compare to the actual keyword which will be read
+  * @param intval An integer value which should follow startofheader
+  */
+  template<typename T>
+  bool getInputEntry(istream * input, const std::string& key, const int intval, T* dest);
+
+ /**
+  * Get an optional entry from a configuration input stream
+  * @param input Open input stream to read from
+  * @param key The start of the expected keyword, to compare to the actual keyword which will be read
+  */
+  template<typename T>
+  bool getInputEntryOptional(istream * input, const std::string& key, T* dest, const T& defaultval);
 
  /**
   * Utility method which converts a year,month,day into mjd and hour,minute,second into seconds from start of day
@@ -650,6 +717,8 @@ public:
   * @param destination The buffer to store the Fortran-style string
   */
   void makeFortranString(string line, int length, char * destination) const;
+
+  static filechecklevel getFileCheckLevel();
 
 private:
   ///types of sections that can occur within an input file
@@ -769,7 +838,8 @@ private:
     datasampling sampling;
     complextype tcomplex;
     bool ismuxed;
-    int phasecalintervalmhz;
+    float phasecalintervalmhz;
+    float phasecalbasemhz;
     int switchedpowerfrequency; // e.g., 80 Hz for VLBA
     int numbits;
     int bytespersamplenum;
@@ -788,7 +858,7 @@ private:
     int *  recordedfreqpols;
     int *  recordedfreqtableindices;
     int *  numrecordedfreqpcaltones;
-    int ** recordedfreqpcaltonefreqs; 
+    double ** recordedfreqpcaltonefreqshz;
     int * recordedfreqpcaloffsetshz;
     double * recordedfreqclockoffsets;
     double * recordedfreqclockoffsetsdelta;
@@ -814,10 +884,10 @@ private:
 
  /**
   * Reads through the input file and locates the next section header
-  * @param input Open file stream for the input file
+  * @param input Input stream to a file or string
   * @return The kind of section encountered
   */
-  sectionheader getSectionHeader(ifstream * input);
+  sectionheader getSectionHeader(istream * input);
 
  /**
   * Looks at number of output channels for each used frequency to determine the best xmac stride
@@ -858,63 +928,63 @@ private:
   bool populateModelDatastreamMap();
 
  /**
-  * Loads the baseline table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the baseline table into memory
+  * @param input Input stream to a file or string
   * @return Whether the baseline table was successfully parsed (failure should abort)
   */
-  bool processBaselineTable(ifstream * input);
+  bool processBaselineTable(istream * input);
 
  /**
-  * Loads the common settings from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the common settings into memory
+  * @param input Input stream to a file or string
   */
-  void processCommon(ifstream * input);
+  void processCommon(istream * input);
 
  /**
-  * Loads the config table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the config table into memory
+  * @param input Input stream to a file or string
   * @return Whether the config table was successfully parsed (failure should abort)
   */
-  bool processConfig(ifstream * input);
+  bool processConfig(istream * input);
 
  /**
-  * Loads the rule table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the rule table into memory
+  * @param input Input stream to a file or string
   * @return Whether the rule table was successfully parsed (failure should abort)
   */
-  bool processRuleTable(ifstream * input);
+  bool processRuleTable(istream * input);
 
  /**
-  * Loads the datastream table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the datastream table into memory
+  * @param input Input stream to a file or string
   * @return Whether the datastream table was successfully parsed (failure should abort)
   */
-  bool processDatastreamTable(ifstream * input);
+  bool processDatastreamTable(istream * input);
 
  /**
-  * Loads the data table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the data table into memory
+  * @param input Input stream to a file or string
   */
-  void processDataTable(ifstream * input);
+  void processDataTable(istream * input);
 
  /**
-  * Loads the frequency table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the frequency table into memory
+  * @param input Input stream to a file or string
   * @return Whether the freq table was successfully parsed (failure should abort)
   */
-  bool processFreqTable(ifstream * input);
+  bool processFreqTable(istream * input);
 
  /**
-  * Loads the telescope table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the telescope table into memory
+  * @param input Input stream to a file or string
   */
-  void processTelescopeTable(ifstream * input);
+  void processTelescopeTable(istream * input);
 
  /**
-  * Loads the network table from the file into memory
-  * @param input Open file stream for the input file
+  * Loads the network table into memory
+  * @param input Input stream to a file or string
   */
-  void processNetworkTable(ifstream * input);
+  void processNetworkTable(istream * input);
 
  /**
   * Loads the pulsar setup data for the specified config and creates the Polyco objects
@@ -925,12 +995,30 @@ private:
   bool processPulsarConfig(string filename, int configindex);
 
  /**
+  * Loads the pulsar setup data for the specified config and creates the Polyco objects
+  * @param input Input stream to a file or string
+  * @param configindex The config index in the configuration table that this pulsar setup belongs to
+  * @param reffile Optional name of input file or other data origin, used for printout purposes only
+  * @return Whether the pulsar config was successfully parsed (failure should abort)
+  */
+  bool processPulsarConfig(istream * input, int configindex, string reffile = "");
+
+ /**
   * Loads the phased array setup data for the specified config
   * @param filename The file containing phased array configuration data to be loaded
   * @param configindex The config index in the configuration table that this phased array belongs to
   * @return Whether the phased array config was successfully parsed (failure should abort)
   */
   bool processPhasedArrayConfig(string filename, int configindex);
+
+ /**
+  * Loads the phased array setup data for the specified config
+  * @param filename The file containing phased array configuration data to be loaded
+  * @param configindex The config index in the configuration table that this phased array belongs to
+  * @param configindex The config index in the configuration table that this phased array belongs to
+  * @return Whether the phased array config was successfully parsed (failure should abort)
+  */
+  bool processPhasedArrayConfig(istream * input, int configindex, string reffile = "");
 
  /**
   * Sets up an array of indices useful in determining the record band for a baseline frequency
@@ -988,6 +1076,26 @@ private:
   Model * model;
   outputformat outformat;
 };
+
+template<> bool Configuration::getInputEntry<float>(istream*, const std::string&, float*);
+template<> bool Configuration::getInputEntry<double>(istream*, const std::string&, double*);
+template<> bool Configuration::getInputEntry<int>(istream*, const std::string&, int*);
+template<> bool Configuration::getInputEntry<long long>(istream*, const std::string&, long long*);
+template<> bool Configuration::getInputEntry<std::string>(istream*, const std::string&, std::string*);
+template<> bool Configuration::getInputEntry<char>(istream*, const std::string&, char*);
+template<> bool Configuration::getInputEntry<bool>(istream*, const std::string&, bool*);
+
+template<> bool Configuration::getInputEntry<float>(istream*, const std::string&, const int, float*);
+template<> bool Configuration::getInputEntry<double>(istream*, const std::string&, const int, double*);
+template<> bool Configuration::getInputEntry<int>(istream*, const std::string&, const int, int*);
+template<> bool Configuration::getInputEntry<long long>(istream*, const std::string&, const int, long long*);
+template<> bool Configuration::getInputEntry<std::string>(istream*, const std::string&, const int, std::string*);
+template<> bool Configuration::getInputEntry<char>(istream*, const std::string&, const int, char*);
+
+template<> bool Configuration::getInputEntryOptional<std::string>(istream*, const std::string&, std::string*, const std::string&);
+template<> bool Configuration::getInputEntryOptional<int>(istream*, const std::string&, int*, const int&);
+template<> bool Configuration::getInputEntryOptional<float>(istream*, const std::string&, float*, const float&);
+template<> bool Configuration::getInputEntryOptional<bool>(istream*, const std::string&, bool*, const bool&);
 
 #endif
 // vim: shiftwidth=2:softtabstop=2:expandtab

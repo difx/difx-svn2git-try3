@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2016 by Adam Deller                                *
+ *   Copyright (C) 2006-2017 by Adam Deller                                *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -37,6 +37,7 @@
 #include "vdifio.h"
 #include "codifio.h"
 #include "mathutil.h"
+#include "sysutil.h"
 
 int Configuration::MONITOR_TCP_WINDOWBYTES;
 
@@ -57,26 +58,8 @@ static unsigned int calcstridelength(unsigned int arraylength)
 }
 
 Configuration::Configuration(const char * configfile, int id, double restartsec)
-  : mpiid(id), consistencyok(true), restartseconds(restartsec)
+  : jobname("na"), mpiid(id), consistencyok(true), restartseconds(restartsec)
 {
-  string configfilestring = configfile;
-  size_t basestart = configfilestring.find_last_of('/');
-  if(basestart == string::npos)
-    basestart = 0;
-  else
-    basestart = basestart+1;
-  jobname = configfilestring.substr(basestart, string(configfile).find_last_of('.')-basestart);
-  char * difxmtu = getenv("DIFX_MTU");
-  if(difxmtu == 0)
-    mtu = 1500;
-  else
-    mtu = atoi(difxmtu);
-  if (mtu > 9000) {
-    cerror << startl << "DIFX_MTU was set to " << mtu << " - resetting to 9000 bytes (max)" << endl;
-    mtu = 9000;
-  }
-
-  sectionheader currentheader = INPUT_EOF;
   commonread = false;
   datastreamread = false;
   configread = false;
@@ -87,16 +70,80 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
   estimatedbytes = 0;
   model = NULL;
 
+  setJobNameFromConfigfilename(string(configfile));
+  char * difxmtu = getenv("DIFX_MTU");
+  if(difxmtu == 0)
+    mtu = 1500;
+  else
+    mtu = atoi(difxmtu);
+  if (mtu > 9000) {
+    cerror << startl << "DIFX_MTU was set to " << mtu << " - resetting to 9000 bytes (max)" << endl;
+    mtu = 9000;
+  }
+
   //open the file
-  ifstream * input = new ifstream(configfile);
+  ifstream * input = ifstreamOpen(configfile);
   if(input->fail() || !input->is_open())
   {
     //need to write this message from all processes - sometimes it is visible to head node but no-one else...
     cfatal << startl << "Cannot open file " << configfile << " - aborting!!!" << endl;
     consistencyok = false;
-  }
+  } else
+    parseConfiguration(input);
+  input->close();
+  delete input;
+}
+
+Configuration::Configuration(istream* input, const string job_name, int id, double restartsec)
+  : jobname("na"), mpiid(id), consistencyok(true), restartseconds(restartsec)
+{
+  commonread = false;
+  datastreamread = false;
+  configread = false;
+  freqread = false;
+  ruleread = false;
+  baselineread = false;
+  maxnumchannels = 0;
+  estimatedbytes = 0;
+  model = NULL;
+
+  setJobNameFromConfigfilename(job_name);
+  char * difxmtu = getenv("DIFX_MTU");
+  if(difxmtu == 0)
+    mtu = 1500;
   else
-    currentheader = getSectionHeader(input);
+    mtu = atoi(difxmtu);
+  if (mtu > 9000) {
+    cerror << startl << "DIFX_MTU was set to " << mtu << " - resetting to 9000 bytes (max)" << endl;
+    mtu = 9000;
+  }
+
+  if(input->fail())
+  {
+    //need to write this message from all processes - sometimes it is visible to head node but no-one else...
+    cfatal << startl << "Cannot read config for " << jobname << " - aborting!!!" << endl;
+    consistencyok = false;
+  } else
+    parseConfiguration(input);
+}
+
+void Configuration::setJobNameFromConfigfilename(string configfilename)
+{
+  size_t basestart = configfilename.find_last_of('/');
+  if(basestart == string::npos)
+    basestart = 0;
+  else
+    basestart = basestart+1;
+  size_t baseend = configfilename.find_last_of('.');
+  if (baseend == string::npos)
+    baseend = configfilename.size();
+  jobname = configfilename.substr(basestart, baseend-basestart);
+}
+
+void Configuration::parseConfiguration(istream* input)
+{
+  sectionheader currentheader = INPUT_EOF;
+  currentheader = getSectionHeader(input);
 
   //go through all the sections and tables in the input file
   while(consistencyok && currentheader != INPUT_EOF)
@@ -205,8 +252,7 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
     }
     consistencyok = false;
   }
-  input->close();
-  delete input;
+  //input->close();
 
   if (consistencyok) {
 
@@ -316,6 +362,7 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
     if(consistencyok)
       consistencyok = populateRecordBandIndicies();
     commandthreadinitialised = false;
+    commandthreadfailed = false;
     dumpsta = false;
     dumplta = false;
     dumpkurtosis = false;
@@ -368,9 +415,9 @@ Configuration::~Configuration()
       delete [] datastreamtable[i].datafilenames;
       if(datastreamtable[i].phasecalintervalmhz > 0) {
 	for (int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
-	  delete [] datastreamtable[i].recordedfreqpcaltonefreqs[j];
+	  delete [] datastreamtable[i].recordedfreqpcaltonefreqshz[j];
 	delete [] datastreamtable[i].numrecordedfreqpcaltones;
-	delete [] datastreamtable[i].recordedfreqpcaltonefreqs;
+	delete [] datastreamtable[i].recordedfreqpcaltonefreqshz;
 	delete [] datastreamtable[i].recordedfreqpcaloffsetshz;
       }
     }
@@ -906,7 +953,7 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
   }
 }
 
-Configuration::sectionheader Configuration::getSectionHeader(ifstream * input)
+Configuration::sectionheader Configuration::getSectionHeader(istream * input)
 {
   string line = "";
 
@@ -939,7 +986,7 @@ Configuration::sectionheader Configuration::getSectionHeader(ifstream * input)
   return UNKNOWN;
 }
 
-bool Configuration::processBaselineTable(ifstream * input)
+bool Configuration::processBaselineTable(istream * input)
 {
   int tempint, dsband, findex, matchfindex;
   int ** tempintptr;
@@ -1185,7 +1232,7 @@ bool Configuration::populateRecordBandIndicies()
   return true;
 }
 
-void Configuration::processCommon(ifstream * input)
+void Configuration::processCommon(istream * input)
 {
   string line;
 
@@ -1229,7 +1276,7 @@ void Configuration::processCommon(ifstream * input)
   commonread = true;
 }
 
-bool Configuration::processConfig(ifstream * input)
+bool Configuration::processConfig(istream * input)
 {
   string line;
   int arraystridelenfrominputfile;
@@ -1311,10 +1358,11 @@ bool Configuration::processConfig(ifstream * input)
   return true;
 }
 
-bool Configuration::processDatastreamTable(ifstream * input)
+bool Configuration::processDatastreamTable(istream * input)
 {
   datastreamdata * dsdata;
-  int configindex, freqindex, decimationfactor, tonefreq;
+  int configindex, freqindex, decimationfactor;
+  double tonefreq;
   double lofreq, parentlowbandedge, parenthighbandedge, lowbandedge, highbandedge, recbandwidth;
   string line = "";;
   string key = "";
@@ -1504,10 +1552,23 @@ bool Configuration::processDatastreamTable(ifstream * input)
         return false;
       }
     }
-    datastreamtable[i].phasecalintervalmhz = atoi(line.c_str());
+    datastreamtable[i].phasecalintervalmhz = atof(line.c_str());
 
-    getinputline(input, &line, "NUM RECORDED FREQS");
+    getinputkeyval(input, &key, &line);
+    if (key.find("PHASE CAL BASE(MHZ)") != string::npos) {
+      datastreamtable[i].phasecalbasemhz = atof(line.c_str());
+      getinputline(input, &line, "NUM RECORDED FREQS");
+    }
+    else {
+      datastreamtable[i].phasecalbasemhz = 0;
+      if(key.find("NUM RECORDED FREQS") == string::npos) {
+        if(mpiid == 0) //only write one copy of this error message
+          cfatal << startl << "Went looking for NUM RECORDED FREQS (or maybe PHASE CAL BASE(MHZ)), but got " << key << endl;
+        return false;
+      }
+    }
     datastreamtable[i].numrecordedfreqs = atoi(line.c_str());
+
     datastreamtable[i].recordedfreqpols = new int[datastreamtable[i].numrecordedfreqs]();
     datastreamtable[i].recordedfreqtableindices = new int[datastreamtable[i].numrecordedfreqs]();
     datastreamtable[i].recordedfreqclockoffsets = new double[datastreamtable[i].numrecordedfreqs]();
@@ -1650,7 +1711,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
     if(dsdata->phasecalintervalmhz > 0)
     {
       dsdata->numrecordedfreqpcaltones = new int[dsdata->numrecordedfreqs]();
-      dsdata->recordedfreqpcaltonefreqs = new int*[dsdata->numrecordedfreqs]();
+      dsdata->recordedfreqpcaltonefreqshz = new double*[dsdata->numrecordedfreqs]();
       dsdata->recordedfreqpcaloffsetshz = new int[dsdata->numrecordedfreqs]();
       dsdata->maxrecordedpcaltones = 0;
       estimatedbytes += sizeof(int)*(dsdata->numrecordedfreqs);
@@ -1662,7 +1723,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
 
         if(freqtable[freqindex].lowersideband)
         {     // LSB
-          tonefreq = (int(lofreq)/dsdata->phasecalintervalmhz)*dsdata->phasecalintervalmhz;
+          tonefreq = double(int(lofreq/dsdata->phasecalintervalmhz))*dsdata->phasecalintervalmhz;
           if(tonefreq == lofreq)
             tonefreq -= dsdata->phasecalintervalmhz;
           if(tonefreq >= lofreq - freqtable[freqindex].bandwidth)
@@ -1674,25 +1735,25 @@ bool Configuration::processDatastreamTable(ifstream * input)
             dsdata->maxrecordedpcaltones = dsdata->numrecordedfreqpcaltones[j];
           if(datastreamtable[i].numrecordedfreqpcaltones[j] > 0)
           {
-            datastreamtable[i].recordedfreqpcaltonefreqs[j] = new int[datastreamtable[i].numrecordedfreqpcaltones[j]]();
+            datastreamtable[i].recordedfreqpcaltonefreqshz[j] = new double[datastreamtable[i].numrecordedfreqpcaltones[j]]();
             estimatedbytes += sizeof(int)*datastreamtable[i].numrecordedfreqpcaltones[j];
             for(int k=0;k<datastreamtable[i].numrecordedfreqpcaltones[j];k++) {
-              datastreamtable[i].recordedfreqpcaltonefreqs[j][k] = tonefreq - k*dsdata->phasecalintervalmhz;
+              datastreamtable[i].recordedfreqpcaltonefreqshz[j][k] = 1e6*tonefreq - double(k)*1e6*dsdata->phasecalintervalmhz - 1e6*dsdata->phasecalbasemhz;
             }
-            dsdata->recordedfreqpcaloffsetshz[j] = long(1e6*lofreq - 1e6*datastreamtable[i].recordedfreqpcaltonefreqs[j][0] + 0.5);
+            dsdata->recordedfreqpcaloffsetshz[j] = long(1e6*lofreq - datastreamtable[i].recordedfreqpcaltonefreqshz[j][0] + 0.5);
           }
           else
           {
             datastreamtable[i].numrecordedfreqpcaltones[j] = 1;
-            datastreamtable[i].recordedfreqpcaltonefreqs[j] = new int[1]();
-            datastreamtable[i].recordedfreqpcaltonefreqs[j][0] = 0;
+            datastreamtable[i].recordedfreqpcaltonefreqshz[j] = new double[1]();
+            datastreamtable[i].recordedfreqpcaltonefreqshz[j][0] = 0;
 
             dsdata->recordedfreqpcaloffsetshz[j] = -1; /* A flag to indicate this is not real */
           }
         }
         else
         {     // USB
-          tonefreq = (int(lofreq)/dsdata->phasecalintervalmhz)*dsdata->phasecalintervalmhz;
+          tonefreq = double(int(lofreq/dsdata->phasecalintervalmhz))*dsdata->phasecalintervalmhz;
           if(tonefreq <= lofreq)
             tonefreq += dsdata->phasecalintervalmhz;
           if(tonefreq <= lofreq + freqtable[freqindex].bandwidth)
@@ -1704,22 +1765,22 @@ bool Configuration::processDatastreamTable(ifstream * input)
             dsdata->maxrecordedpcaltones = dsdata->numrecordedfreqpcaltones[j];
           if(datastreamtable[i].numrecordedfreqpcaltones[j] > 0)
           {
-            datastreamtable[i].recordedfreqpcaltonefreqs[j] = new int[datastreamtable[i].numrecordedfreqpcaltones[j]]();
+            datastreamtable[i].recordedfreqpcaltonefreqshz[j] = new double[datastreamtable[i].numrecordedfreqpcaltones[j]]();
             estimatedbytes += sizeof(int)*datastreamtable[i].numrecordedfreqpcaltones[j];
             for(int k=0;k<datastreamtable[i].numrecordedfreqpcaltones[j];k++) {
-              datastreamtable[i].recordedfreqpcaltonefreqs[j][k] = tonefreq + k*dsdata->phasecalintervalmhz;
+              datastreamtable[i].recordedfreqpcaltonefreqshz[j][k] = 1e6*tonefreq + k*1e6*dsdata->phasecalintervalmhz + 1e6*dsdata->phasecalbasemhz;
             }
-            dsdata->recordedfreqpcaloffsetshz[j] = long(1e6*datastreamtable[i].recordedfreqpcaltonefreqs[j][0] - 1e6*lofreq + 0.5);
+            dsdata->recordedfreqpcaloffsetshz[j] = long(datastreamtable[i].recordedfreqpcaltonefreqshz[j][0] - 1e6*lofreq + 0.5);
           }
           else
           {
             datastreamtable[i].numrecordedfreqpcaltones[j] = 1;
-            datastreamtable[i].recordedfreqpcaltonefreqs[j] = new int[1]();
-            datastreamtable[i].recordedfreqpcaltonefreqs[j][0] = 0;
+            datastreamtable[i].recordedfreqpcaltonefreqshz[j] = new double[1]();
+            datastreamtable[i].recordedfreqpcaltonefreqshz[j][0] = 0;
 
             dsdata->recordedfreqpcaloffsetshz[j] = -1; /* A flag to indicate this is not real */
           }
-        }  
+        }
       }
     }
     datastreamtable[i].tcpwindowsizekb = 0;
@@ -1743,7 +1804,8 @@ bool Configuration::processDatastreamTable(ifstream * input)
     return false;
 
   //read in the core numthreads info
-  ifstream coreinput(coreconffilename.c_str());
+  ifstream coreinput;
+  ifstreamOpen(coreinput, coreconffilename.c_str());
   numcoreconfs = 0;
   if(!coreinput.is_open() || coreinput.bad())
   {
@@ -1775,7 +1837,7 @@ bool Configuration::processDatastreamTable(ifstream * input)
   return true;
 }
 
-bool Configuration::processRuleTable(ifstream * input)
+bool Configuration::processRuleTable(istream * input)
 {
   int count=0;
   string key, val;
@@ -1840,7 +1902,7 @@ bool Configuration::processRuleTable(ifstream * input)
   return true;
 }
 
-void Configuration::processDataTable(ifstream * input)
+void Configuration::processDataTable(istream * input)
 {
   string line;
 
@@ -1854,7 +1916,7 @@ void Configuration::processDataTable(ifstream * input)
   }
 }
 
-bool Configuration::processFreqTable(ifstream * input)
+bool Configuration::processFreqTable(istream * input)
 {
   string line, key;
 
@@ -1931,7 +1993,7 @@ bool Configuration::processFreqTable(ifstream * input)
   return true;
 }
 
-void Configuration::processTelescopeTable(ifstream * input)
+void Configuration::processTelescopeTable(istream * input)
 {
   string line;
 
@@ -1954,7 +2016,7 @@ void Configuration::processTelescopeTable(ifstream * input)
   }
 }
 
-void Configuration::processNetworkTable(ifstream * input)
+void Configuration::processNetworkTable(istream * input)
 {
   string line;
 
@@ -2962,18 +3024,27 @@ bool Configuration::consistencyCheck()
 
 bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 {
-  string line;
-
+  bool rc;
   if(mpiid == 0) //only write one copy of this info message
     cinfo << startl << "About to process phased array file " << filename << endl;
-  ifstream phasedarrayinput(filename.c_str(), ios::in);
+  ifstream phasedarrayinput;
+  ifstreamOpen(phasedarrayinput, filename.c_str());
   if(!phasedarrayinput.is_open() || phasedarrayinput.bad())
   {
     if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Could not open phased array config file " << line << " - aborting!!!" << endl;
+      cfatal << startl << "Could not open phased array config file " << filename << " - aborting!!!" << endl;
     return false;
   }
-  getinputline(&phasedarrayinput, &line, "OUTPUT TYPE");
+  rc = processPhasedArrayConfig(&phasedarrayinput, configindex, filename);
+  phasedarrayinput.close();
+  return rc;
+}
+
+bool Configuration::processPhasedArrayConfig(istream * input, int configindex, string reffile)
+{
+  string line;
+
+  getinputline(input, &line, "OUTPUT TYPE");
   if(line == "FILTERBANK")
     configs[configindex].padomain = FREQUENCY;
   else if (line == "TIMESERIES") {
@@ -2986,7 +3057,7 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
       cerror << startl << "Unknown phased array output type " << line << " - setting to FILTERBANK" << endl;
     configs[configindex].padomain = FREQUENCY;
   }
-  getinputline(&phasedarrayinput, &line, "OUTPUT FORMAT");
+  getinputline(input, &line, "OUTPUT FORMAT");
   if(line == "DIFX") {
     if(configs[configindex].padomain == TIME) {
       if(mpiid == 0) //only write one copy of this error message
@@ -3019,21 +3090,21 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
       configs[configindex].paoutputformat = VDIFOUT;
     }
   }
-  getinputline(&phasedarrayinput, &line, "ACC TIME (NS)");
+  getinputline(input, &line, "ACC TIME (NS)");
   configs[configindex].paaccumulationns = atoi(line.c_str());
-  getinputline(&phasedarrayinput, &line, "COMPLEX OUTPUT");
+  getinputline(input, &line, "COMPLEX OUTPUT");
   if(line == "TRUE" || line == "true" || line == "True")
     configs[configindex].pacomplexoutput = true;
   else
     configs[configindex].pacomplexoutput = false;
-  getinputline(&phasedarrayinput, &line, "OUTPUT BITS");
+  getinputline(input, &line, "OUTPUT BITS");
   configs[configindex].pabits = atoi(line.c_str());
   configs[configindex].paweights = new double*[freqtablelength]();
   configs[configindex].numpafreqpols = new int[freqtablelength]();
   configs[configindex].papols = new char*[freqtablelength]();
   for(int i=0;i<freqtablelength;i++)
   {
-    getinputline(&phasedarrayinput, &line, "NUM FREQ");
+    getinputline(input, &line, "NUM FREQ");
     configs[configindex].numpafreqpols[i] = atoi(line.c_str());
     if(configs[configindex].numpafreqpols[i] > 0)
     {
@@ -3041,12 +3112,12 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
       configs[configindex].papols[i] = new char[configs[configindex].numpafreqpols[i]]();
       for(int j=0;j<configs[configindex].numpafreqpols[i];j++)
       {
-        getinputline(&phasedarrayinput, &line, "FREQ");
+        getinputline(input, &line, "FREQ");
         configs[configindex].papols[i][j] = line.c_str()[0];
       }
       for(int j=0;j<numdatastreams;j++)
       {
-        getinputline(&phasedarrayinput, &line, "FREQ");
+        getinputline(input, &line, "FREQ");
         configs[configindex].paweights[i][j] = atof(line.c_str());
         if(configs[configindex].paweights[i][j] < 0.0)
         {
@@ -3057,11 +3128,29 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
       }
     }
   }
-  phasedarrayinput.close();
   return true;
 }
 
 bool Configuration::processPulsarConfig(string filename, int configindex)
+{
+  bool rc;
+  if(mpiid == 0) //only write one copy of this info message
+    cinfo << startl << "About to process pulsar file " << filename << endl;
+
+  ifstream pulsarinput;
+  ifstreamOpen(pulsarinput, filename.c_str());
+  if(!pulsarinput.is_open() || pulsarinput.bad())
+  {
+    if(mpiid == 0) //only write one copy of this error message
+      cfatal << startl << "Could not open pulsar config file " << filename << " - aborting!!!" << endl;
+    return false;
+  }
+  rc = processPulsarConfig(&pulsarinput, configindex, filename);
+  pulsarinput.close();
+  return rc;
+}
+
+bool Configuration::processPulsarConfig(istream * input, int configindex, string reffile)
 {
   int numpolycofiles, ncoefficients, polycocount;
   string line;
@@ -3070,63 +3159,62 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
   double * binweights;
   int * numsubpolycos;
   char psrline[128];
-  ifstream temppsrinput;
+  ifstream polycoinput;
 
   if(mpiid == 0) //only write one copy of this info message
-    cinfo << startl << "About to process pulsar file " << filename << endl;
-  ifstream pulsarinput(filename.c_str(), ios::in);
-  if(!pulsarinput.is_open() || pulsarinput.bad())
+    cinfo << startl << "About to process pulsar configuration " << reffile << endl;
+  if(input->bad())
   {
     if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "Could not open pulsar config file " << filename << " - aborting!!!" << endl;
+      cfatal << startl << "Could not open pulsar config " << reffile << " - aborting!!!" << endl;
     return false;
   }
-  getinputline(&pulsarinput, &line, "NUM POLYCO FILES");
+  getinputline(input, &line, "NUM POLYCO FILES");
   numpolycofiles = atoi(line.c_str());
   polycofilenames = new string[numpolycofiles];
   numsubpolycos = new int[numpolycofiles]();
   configs[configindex].numpolycos = 0;
   for(int i=0;i<numpolycofiles;i++)
   {
-    getinputline(&pulsarinput, &(polycofilenames[i]), "POLYCO FILE");
+    getinputline(input, &(polycofilenames[i]), "POLYCO FILE");
     numsubpolycos[i] = 0;
-    temppsrinput.open(polycofilenames[i].c_str());
-    if(!temppsrinput.is_open() || temppsrinput.bad()) {
+    ifstreamOpen(polycoinput, polycofilenames[i].c_str());
+    if(!polycoinput.is_open() || polycoinput.bad()) {
       if(mpiid == 0) //only write one copy of this error message
         cerror << startl << "Could not open polyco file " << polycofilenames[i] << ", but continuing..." << endl;
       continue;
     }
-    temppsrinput.getline(psrline, 128);
-    temppsrinput.getline(psrline, 128);
-    while(!(temppsrinput.eof() || temppsrinput.fail())) {
+    polycoinput.getline(psrline, 128);
+    polycoinput.getline(psrline, 128);
+    while(!(polycoinput.eof() || polycoinput.fail())) {
       psrline[54] = '\0';
       ncoefficients = atoi(&(psrline[49]));
       for(int j=0;j<ncoefficients/3 + 2;j++)
-        temppsrinput.getline(psrline, 128);
+        polycoinput.getline(psrline, 128);
       numsubpolycos[i]++;
       configs[configindex].numpolycos++;
     }
-    temppsrinput.close();
+    polycoinput.close();
   }
   if(configs[configindex].numpolycos == 0) {
     if(mpiid == 0) //only write one copy of this error message
-      cfatal << startl << "No polycos were parsed from the binconfig file " << filename << " - aborting!!!" << endl;
+      cfatal << startl << "No polycos were parsed from the binconfig file " << reffile << " - aborting!!!" << endl;
     delete [] numsubpolycos;
     return false;
   }
-  getinputline(&pulsarinput, &line, "NUM PULSAR BINS");
+  getinputline(input, &line, "NUM PULSAR BINS");
   configs[configindex].numbins = atoi(line.c_str());
   if(configs[configindex].numbins > maxnumpulsarbins)
     maxnumpulsarbins = configs[configindex].numbins;
   binphaseends = new double[configs[configindex].numbins]();
   binweights = new double[configs[configindex].numbins]();
-  getinputline(&pulsarinput, &line, "SCRUNCH OUTPUT");
+  getinputline(input, &line, "SCRUNCH OUTPUT");
   configs[configindex].scrunchoutput = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
   for(int i=0;i<configs[configindex].numbins;i++)
   {
-    getinputline(&pulsarinput, &line, "BIN PHASE END");
+    getinputline(input, &line, "BIN PHASE END");
     binphaseends[i] = atof(line.c_str());
-    getinputline(&pulsarinput, &line, "BIN WEIGHT");
+    getinputline(input, &line, "BIN WEIGHT");
     binweights[i] = atof(line.c_str());
   }
 
@@ -3152,7 +3240,6 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
   delete [] binweights;
   delete [] polycofilenames;
   delete [] numsubpolycos;
-  pulsarinput.close();
   return true;
 }
 
@@ -3295,7 +3382,7 @@ void Configuration::makeFortranString(string line, int length, char * destinatio
   }
 }
 
-void Configuration::getinputkeyval(ifstream * input, std::string * key, std::string * val) const
+void Configuration::getinputkeyval(istream * input, std::string * key, std::string * val) const
 {
   if(input->eof())
     cerror << startl << "Trying to read past the end of file!" << endl;
@@ -3312,7 +3399,7 @@ void Configuration::getinputkeyval(ifstream * input, std::string * key, std::str
   *key = key->substr(0, key->find_first_of(':'));
 }
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, bool verbose) const
+void Configuration::getinputline(istream * input, std::string * line, std::string startofheader, bool verbose) const
 {
   if(input->eof())
     cerror << startl << "Trying to read past the end of file!" << endl;
@@ -3337,13 +3424,13 @@ void Configuration::getinputline(ifstream * input, std::string * line, std::stri
   *line = line->substr(keylength);
 }
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader) const
+void Configuration::getinputline(istream * input, std::string * line, std::string startofheader) const
 {
   getinputline(input, line, startofheader, true);
 }
 
 
-void Configuration::getinputline(ifstream * input, std::string * line, std::string startofheader, int intval) const
+void Configuration::getinputline(istream * input, std::string * line, std::string startofheader, int intval) const
 {
   char buffer[MAX_KEY_LENGTH+1];
   sprintf(buffer, "%s%i", startofheader.c_str(), intval);
@@ -3376,4 +3463,29 @@ void Configuration::mjd2ymd(int mjd, int & year, int & month, int & day) const
   month = (m + 2)%12 + 1;
   day = d + 1;
 }
+
+Configuration::filechecklevel Configuration::getFileCheckLevel()
+{
+  const char *v;
+
+  v = getenv("DIFX_FILE_CHECK_LEVEL");
+  if(v == 0)
+  {
+    return Configuration::FILECHECKSEEK;  // default
+  }
+  else if(strcmp(v, "NONE") == 0)
+  {
+    return Configuration::FILECHECKNONE;
+  }
+  else if(strcmp(v, "SEEK") == 0)
+  {
+    return Configuration::FILECHECKSEEK;
+  }
+  else
+  {
+    return Configuration::FILECHECKUNKNOWN;
+  }
+}
+
+
 // vim: shiftwidth=2:softtabstop=2:expandtab

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2016 by Adam Deller and Walter Brisken             *
+ *   Copyright (C) 2006-2018 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdiffile.cpp 6684 2015-06-02 11:40:23Z HelgeRottmann $
-// $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mk5.cpp $
-// $LastChangedRevision: 6684 $
-// $Author: HelgeRottmann $
-// $LastChangedDate: 2015-06-02 06:40:23 -0500 (Tue, 02 Jun 2015) $
+// $Id$
+// $HeadURL: $
+// $LastChangedRevision$
+// $Author$
+// $LastChangedDate$
 //
 //============================================================================
 #include <cmath>
@@ -34,12 +34,13 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <mark5access/mark5bfile.h>
+#include <mark6sg/mark6_sg_vfs.h>
+#include <mark6sg/mark6_sg_utils.h>
 #include "config.h"
 #include "alert.h"
-#include <mark6sg/mark6gather.h>
-#include <mark6gather_vdif.h>
 #include "mode.h"
-#include "vdifmark6_datastream.h"
+#include "mark5bmark6_datastream.h"
 
 
 
@@ -48,25 +49,23 @@
  */
 
 
-/// VDIFMark6DataStream -------------------------------------------------------
+/// Mark5BMark6DataStream -------------------------------------------------------
 
-VDIFMark6DataStream::VDIFMark6DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
- : VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+Mark5BMark6DataStream::Mark5BMark6DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
+ : Mark5BDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	cwarn << startl << "Starting Mark6 datastream.  This is experimental at this time!" << endl;
 	mark6gather = 0;
 	mark6eof = false;
-	nSort = 20;
-	nGap = 100;
 }
 
-VDIFMark6DataStream::~VDIFMark6DataStream()
+Mark5BMark6DataStream::~Mark5BMark6DataStream()
 {
 	cwarn << startl << "Ending Mark6 datastream.  Maybe it worked?" << endl;
 	closeMark6();
 }
 
-void VDIFMark6DataStream::closeMark6()
+void Mark5BMark6DataStream::closeMark6()
 {
 	if(mark6gather != 0)
 	{
@@ -77,7 +76,7 @@ void VDIFMark6DataStream::closeMark6()
 	mark6eof = false;
 }
 
-void VDIFMark6DataStream::openfile(int configindex, int fileindex)
+void Mark5BMark6DataStream::openfile(int configindex, int fileindex)
 {
   closeMark6();
 
@@ -123,111 +122,195 @@ void VDIFMark6DataStream::openfile(int configindex, int fileindex)
   initialiseFile(configindex, fileindex);
 }
 
-void VDIFMark6DataStream::initialiseFile(int configindex, int fileindex)
+/* This procedure may better fit in mark5access/mark5bfile.c, but it requires mark6_sg, so inconvenient... */
+int summarizemark5bmark6(struct mark5b_file_summary *sum, const char *scanName)
+{
+	int bufferSize = 200000;	/* 200 kB really should be sufficient */
+	unsigned char *buffer, *p;
+	struct stat st;
+	int rv;
+	int lastOffset;
+	int seconds0, seconds1;
+	int mk6fd;
+
+	/* Initialize things */
+
+	resetmark5bfilesummary(sum);
+	strncpy(sum->fileName, scanName, MARK5B_SUMMARY_FILE_LENGTH-1);
+	sum->startSecond = 1<<30;
+
+        mark6_sg_set_rootpattern("/mnt/disks/[1-4]/[0-7]/data");
+
+	mk6fd = mark6_sg_open(scanName, O_RDONLY);
+	if(mk6fd < 0)
+	{
+		mark6_sg_close(mk6fd);
+
+		return -2;
+	}
+
+	rv = mark6_sg_fstat(mk6fd, &st);
+	if(rv < 0)
+	{
+		mark6_sg_close(mk6fd);
+
+		return -1;
+	}
+
+	sum->fileSize = st.st_size;
+
+	cinfo << startl << scanName << " is opened with size " << sum->fileSize << endl;
+
+	if(sum->fileSize < 2*bufferSize)
+	{
+		bufferSize = sum->fileSize;
+	}
+
+	buffer = (unsigned char *)malloc(bufferSize);
+	if(!buffer)
+	{
+		mark6_sg_close(mk6fd);
+
+		return -3;
+	}
+
+	
+	/* Get initial information */
+
+	rv = mark6_sg_read(mk6fd, buffer, bufferSize);
+	if(rv < bufferSize)
+	{
+		mark6_sg_close(mk6fd);
+		free(buffer);
+
+		return -4;
+	}
+
+	sum->firstFrameOffset = determinemark5bframeoffset(buffer, bufferSize);
+	if(sum->firstFrameOffset < 0)
+	{
+		mark6_sg_close(mk6fd);
+		free(buffer);
+
+		return -6;
+	}
+
+	p = buffer + sum->firstFrameOffset;
+
+	sum->startDay = (p[11] >> 4)*100 + (p[11] & 0x0F)*10 + (p[10] >> 4);
+	sum->startSecond = (p[10] & 0x0F)*10000 + (p[9] >> 4)*1000 + (p[9] & 0x0F)*100 + (p[8] >> 4)*10 +  (p[8] & 0x0F);
+	sum->startFrame = p[4] + (p[5] * 256);
+
+	
+	/* Work on end of file */
+
+	if(sum->fileSize > bufferSize)
+	{
+		rv = mark6_sg_pread(mk6fd, buffer, bufferSize, sum->fileSize - bufferSize);
+		if(rv < bufferSize)
+		{
+			mark6_sg_close(mk6fd);
+			free(buffer);
+
+			return -8;
+		}
+	}
+
+	lastOffset = determinelastmark5bframeoffset(buffer, bufferSize);
+	if(lastOffset < 0)
+	{
+		mark6_sg_close(mk6fd);
+		free(buffer);
+
+		return -9;
+	}
+
+	p = buffer + lastOffset;
+
+	sum->endDay = (p[11] >> 4)*100 + (p[11] & 0x0F)*10 + (p[10] >> 4);
+	sum->endSecond = (p[10] & 0x0F)*10000 + (p[9] >> 4)*1000 + (p[9] & 0x0F)*100 + (p[8] >> 4)*10 +  (p[8] & 0x0F);
+	sum->endFrame = p[4] + (p[5] * 256);
+
+	seconds0 = sum->startDay*86400 + sum->startSecond;
+	seconds1 = sum->endDay*86400 + sum->endSecond;
+
+	if(seconds1 > seconds0)
+	{
+		sum->framesPerSecond = (sum->fileSize/10016 - sum->endFrame + sum->startFrame)/(seconds1 - seconds0);
+
+		sum->framesPerSecond = ((sum->framesPerSecond + 50)/100)*100;
+	}
+
+
+	/* Clean up */
+
+	free(buffer);
+	mark6_sg_close(mk6fd);
+
+	return 0;
+}
+
+void Mark5BMark6DataStream::initialiseFile(int configindex, int fileindex)
 {
 	int nrecordedbands, fanout;
 	Configuration::datasampling sampling;
 	Configuration::dataformat format;
 	double bw;
-	int muxFlags;
 	int rv;
 
 	long long dataoffset = 0;
-	struct vdif_file_summary fileSummary;
+	struct mark5b_file_summary fileSummary;
 	int jumpseconds, currentdsseconds;
 
 	format = config->getDataFormat(configindex, streamnum);
 	sampling = config->getDSampling(configindex, streamnum);
 	nbits = config->getDNumBits(configindex, streamnum);	/* Bits per sample.  If complex, bits per component. */
 	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
-	inputframebytes = config->getFrameBytes(configindex, streamnum);
-	framespersecond = config->getFramesPerSecond(configindex, streamnum)/config->getDNumMuxThreads(configindex, streamnum);
+	framebytes = config->getFrameBytes(configindex, streamnum);
+	framespersecond = config->getFramesPerSecond(configindex, streamnum);
 	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
-	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
+	framegranularity = framespersecond/12800;
+	if(framegranularity < 1)
+	{
+		framegranularity = 1;
+	}
+
 	startOutputFrameNumber = -1;
-	minleftoverdata = 4*inputframebytes;	// waste up to 4 input frames at end of read
 
-	nthreads = config->getDNumMuxThreads(configindex, streamnum);
-	threads = config->getDMuxThreadMap(configindex, streamnum);
-
-	muxFlags = VDIF_MUX_FLAG_RESPECTGRANULARITY | VDIF_MUX_FLAG_PROPAGATEVALIDITY;
-	if(sampling == Configuration::COMPLEX)
-	{
-		muxFlags |= VDIF_MUX_FLAG_COMPLEX;
-	}
-	rv = configurevdifmux(&vm, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, muxFlags);
-	if(rv < 0)
-	{
-		cfatal << startl << "configurevmux failed with return code " << rv << endl;
-		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
-
-	if(nrecordedbands > nthreads)
-	{
-		int nBandPerThread = nrecordedbands/nthreads;
-
-		cinfo << startl << "Note: " << nBandPerThread << " recoded channels (bands) reside on each thread.  Support for this is new.  Congratulations for being bold and trying this out!  Warranty void in the 193 UN recognized nations." << endl;
-		
-		if(nBandPerThread * nthreads != nrecordedbands)
-		{
-			cerror << startl << "Error: " << nrecordedbands << " recorded channels (bands) were recorded but they are divided unequally across " << nthreads << " threads.  This is not allowed.  Things will probably get very bad soon..." << endl;
-		}
-		setvdifmuxinputchannels(&vm, nBandPerThread);
-		vdiffilesummarysetsamplerate(&fileSummary, static_cast<int64_t>(bw*2000000LL*nBandPerThread));
-	}
-	else if(nrecordedbands < nthreads)
-	{
-		/* must be a fanout mode (DBBC3 probably) */
-		int nThreadPerBand = nthreads/nrecordedbands;
-
-		cinfo << startl << "Note: " << nThreadPerBand << " threads are used to store each channel (band; e.g., this is a VDIF fanout mode).  Support for this is new.  Congratulations for experimenting with plausible code.  Warranty void on weekdays and select weekends." << endl;
-
-		if(nThreadPerBand * nrecordedbands != nthreads)
-		{
-			cerror << startl << "Error: " << nthreads << " threads were recorded but they are divided unequally across " << nrecordedbands << " record channels (bands).  This is not allowed.  Things are about to go from bad to worse.  Hold onto your HAT..." << endl;
-		}
-		setvdifmuxfanoutfactor(&vm, nThreadPerBand);
-		vdiffilesummarysetsamplerate(&fileSummary, static_cast<int64_t>(bw*2000000LL/nThreadPerBand));
-	}
-
-	// If verbose...
-	//printvdifmux(&vm);
-
-	/* Note: the following fanout concept is an explicit one and is not relevant to VDIF in any way */
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, config->getDDecimationFactor(configindex, streamnum), config->getDAlignmentSeconds(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), 1, config->getDNumMuxThreads(configindex, streamnum), formatname);
 	if(fanout != 1)
 	{
 		cfatal << startl << "Classic fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	cinfo << startl << "VDIFMark6DataStream::initialiseFile format=" << formatname << endl;
+	cinfo << startl << "Mark5BMark6DataStream::initialiseFile format=" << formatname << endl;
 
 	// Here we need to open the file, read the start time, jump if necessary, and if past end of file, dataremaining = false.  Then set readseconds...
 
-	// First we get a description of the contents of the purported VDIF file and exit if it looks like not VDIF at all
-	rv = summarizevdifmark6(&fileSummary, datafilenames[configindex][fileindex].c_str(), inputframebytes);
+	// First we get a description of the contents of the purported Mark5B file and exit if it looks like not Mark5B at all
+	rv = summarizemark5bmark6(&fileSummary, datafilenames[configindex][fileindex].c_str());
 	if(rv < 0)
 	{
-		cwarn << startl << "VDIFMark6DataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid VDIF data." << endl;
+		cwarn << startl << "Mark5BMark6DataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid Mark5B data." << endl;
 		dataremaining = false;
 
 		return;
 	}
 
 	// If verbose...
-	//printvdiffilesummary(&fileSummary);
+	//printmark5bfilesummary(&fileSummary);
 
 	// Here set readseconds to time since beginning of job
-	readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
+	readseconds = 86400*(mark5bfilesummarygetstartmjd(&fileSummary)-corrstartday) + mark5bfilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
     if (fileSummary.framesPerSecond == 0)
         {
-        fileSummary.framesPerSecond = 31250;
-        cwarn << startl << "mk6 framesPerSecond is unknown, setting to 31250" << endl;
+        fileSummary.framesPerSecond = 25000;
+        cwarn << startl << "mk6 Mark5B framesPerSecond is unknown, setting to 25000" << endl;
         }
 
-	readnanoseconds = vdiffilesummarygetstartns(&fileSummary);
+	readnanoseconds = mark5bfilesummarygetstartns(&fileSummary);
 	currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
 
 	if(currentdsseconds > readseconds+1)
@@ -240,11 +323,7 @@ void VDIFMark6DataStream::initialiseFile(int configindex, int fileindex)
 
 		// set byte offset to the requested time
 
-		int n, d;	// numerator and demoninator of frame/payload size ratio
-		n = fileSummary.frameSize;
-		d = fileSummary.frameSize - 32;
-
-		dataoffset = static_cast<long long>(jumpseconds*vdiffilesummarygetbytespersecond(&fileSummary)/d*n + 0.5);
+		dataoffset = static_cast<long long>(jumpseconds*fileSummary.framesPerSecond*10016 + 0.5);
 
 		readseconds += jumpseconds;
 	}
@@ -275,35 +354,36 @@ FIXME: get seeking working
 }
 
 
-// This function does the actual file IO, readbuffer management, and VDIF multiplexing.  The result after each
+// This function does the actual file IO, readbuffer management, and Mark5B fixing.  The result after each
 // call is, hopefully, readbytes of multiplexed data being put into buffer segment with potentially some 
 // read data left over in the read buffer ready for next time
-int VDIFMark6DataStream::dataRead(int buffersegment)
+int Mark5BMark6DataStream::dataRead(int buffersegment)
 {
 	unsigned char *destination;
 	int bytes, bytestoread;
 	long long bytediff;
-	int muxReturn;
 	unsigned int bytesvisible;
 	int rbs;
+	int fixReturn;
 	time_t now;
 
-	rbs = readbuffersize - (readbuffersize % inputframebytes);
+	rbs = readbuffersize - (readbuffersize % framebytes);
 
 	destination = reinterpret_cast<unsigned char *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
 	// Bytes to read
 	bytes = rbs - readbufferleftover;
 
-	// if the file is exhausted, just multiplex any leftover data and return
+	// if the file is exhausted, just fix any leftover data and return
 	if(mark6eof)
 	{
 		// If there is some data left over, just demux that and send it out
 		if(readbufferleftover > minleftoverdata)
 		{
-			vdifmux(destination, readbytes, readbuffer, readbufferleftover, &vm, startOutputFrameNumber, &vstats);
+			fixReturn = mark5bfix(destination, readbytes, readbuffer, readbufferleftover, framespersecond, startOutputFrameNumber, &m5bstats);
+
 			readbufferleftover = 0;
-			bufferinfo[buffersegment].validbytes = vstats.destUsed;
+			bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 
 			startOutputFrameNumber = -1;
 		}
@@ -335,37 +415,38 @@ cinfo << startl << "Mark6 Gather: " << bytestoread << " requested, " << bytes <<
 
 	bytesvisible = readbufferleftover + bytes;
 
-	// multiplex and corner turn the data
-	muxReturn = vdifmux(destination, readbytes, readbuffer, bytesvisible, &vm, startOutputFrameNumber, &vstats);
+	// fix data
+	fixReturn = mark5bfix(destination, readbytes, readbuffer, bytesvisible,framespersecond, startOutputFrameNumber, &m5bstats);
 
-	if(muxReturn <= 0)
+	if(fixReturn <= 0)
 	{
 		dataremaining = false;
 		bufferinfo[buffersegment].validbytes = 0;
 		readbufferleftover = 0;
 
-		if(muxReturn < 0)
+		if(fixReturn < 0)
 		{
-			cerror << startl << "vdifmux() failed with return code " << muxReturn << ", likely input buffer is too small!" << endl;
+			cerror << startl << "mark5bfix() failed with return code " << fixReturn << ", likely input buffer is too small!" << endl;
 		}
 		else
 		{
-			cinfo << startl << "vdifmux returned no data.  Assuming end of file." << endl;
+			cinfo << startl << "mark5bfix() returned no data.  Assuming end of file." << endl;
 		}
 
 		return 0;
 	}
 
 	consumedbytes += bytes;
-	bufferinfo[buffersegment].validbytes = vstats.destUsed;
+	bufferinfo[buffersegment].validbytes = m5bstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
-		// In the case of VDIF, we can get the time from the data, so use that just in case there was a jump
-		bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
-		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
+		// In the case of Mark5B, we can get the time from the data, so use that just in case there was a jump
+		bufferinfo[buffersegment].scanns = m5bstats.startFrameNanoseconds;
+		// FIXME: warning! here we are assuming no leap seconds in the stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) % 86400) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		bufferinfo[buffersegment].scanseconds = m5bstats.startFrameSeconds + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		bufferinfo[buffersegment].scan = readscan;
 		if(bufferinfo[buffersegment].scanseconds > 86400/2)
 		{
 			bufferinfo[buffersegment].scanseconds -= 86400;
@@ -390,34 +471,22 @@ cinfo << startl << "Mark6 Gather: " << bytestoread << " requested, " << bytes <<
 			lastbytecount = bytecount;
 		}
 
-		// look at difference in data frames consumed and produced and proceed accordingly
-		int deltaDataFrames = vstats.srcUsed/(nthreads*inputframebytes) - vstats.destUsed/(nthreads*(inputframebytes-VDIF_HEADER_BYTES) + VDIF_HEADER_BYTES);
-		if(deltaDataFrames == 0)
+		if(m5bstats.destUsed == m5bstats.srcUsed)
 		{
-			// We should be able to preset startOutputFrameNumber.  Warning: early use of this was frought with peril but things seem OK now.
-			startOutputFrameNumber = vstats.startFrameNumber + vstats.nOutputFrame;
+			startOutputFrameNumber = (m5bstats.startFrameNumber + m5bstats.destUsed/10016) % framespersecond;
 		}
 		else
 		{
-			if(deltaDataFrames < -10)
+			if(m5bstats.srcUsed < m5bstats.destUsed - 10*10016)
 			{
-				static int nGapWarn = 0;
-
-				++nGapWarn;
-				if( (nGapWarn & (nGapWarn - 1)) == 0)
-				{
-					cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nGapWarn << endl;
-				}
+				// Warn if more than 10 frames of data are missing
+				cwarn << startl << "Data gap of " << (m5bstats.destUsed-m5bstats.srcUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
 			}
-			else if(deltaDataFrames > 10)
+			else if(m5bstats.srcUsed > m5bstats.destUsed + 10*10016)
 			{
-				static int nExcessWarn = 0;
-
-				++nExcessWarn;
-				if( (nExcessWarn & (nExcessWarn - 1)) == 0)
-				{
-					cwarn << startl << "Data excess of " << (vstats.srcUsed-vstats.destUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nExcessWarn << endl;
-				}
+				// Warn if more than 10 frames of unexpected data found
+				// Note that 5008 bytes of extra data at scan ends is not uncommon, so specifically don't warn for that.
+				cwarn << startl << "Data excess of " << (m5bstats.srcUsed-m5bstats.destUsed) << " bytes out of " << m5bstats.destUsed << " bytes found  startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << endl;
 			}
 			startOutputFrameNumber = -1;
 		}
@@ -427,11 +496,11 @@ cinfo << startl << "Mark6 Gather: " << bytestoread << " requested, " << bytes <<
 		startOutputFrameNumber = -1;
 	}
 
-	readbufferleftover += (bytes - vstats.srcUsed);
+	readbufferleftover += (bytes - m5bstats.srcUsed);
 
 	if(readbufferleftover > 0)
 	{
-		memmove(readbuffer, readbuffer+vstats.srcUsed, readbufferleftover);
+		memmove(readbuffer, readbuffer+m5bstats.srcUsed, readbufferleftover);
 	}
 	else if(readbufferleftover < 0)
 	{
@@ -450,7 +519,7 @@ cinfo << startl << "Mark6 Gather: " << bytestoread << " requested, " << bytes <<
 	return bytes;
 }
 
-void VDIFMark6DataStream::mark6ToMemory(int buffersegment)
+void Mark5BMark6DataStream::mark6ToMemory(int buffersegment)
 {
 	u32 *buf;
 
@@ -469,7 +538,7 @@ void VDIFMark6DataStream::mark6ToMemory(int buffersegment)
 	readseconds += readnanoseconds/1000000000;
 	readnanoseconds %= 1000000000;
 
-	if(vstats.destUsed == 0)
+	if(m5bstats.destUsed == 0)
 	{
 		++invalidtime;
 	}
@@ -535,12 +604,12 @@ void VDIFMark6DataStream::mark6ToMemory(int buffersegment)
 	}
 }
 
-void VDIFMark6DataStream::loopfileread()
+void Mark5BMark6DataStream::loopfileread()
 {
 	int perr;
 	int numread = 0;
 
-cverbose << startl << "Starting VDIFMark6DataStream::loopfileread()" << endl;
+cverbose << startl << "Starting Mark5BMark6DataStream::loopfileread()" << endl;
 
 	//lock the outstanding send lock
 	perr = pthread_mutex_lock(&outstandingsendlock);
@@ -710,7 +779,7 @@ cverbose << startl << "keepreading is true" << endl;
 	}
 }
 
-int VDIFMark6DataStream::sendMark6Activity(enum Mark6State state, long long position, double dataMJD, float rate)
+int Mark5BMark6DataStream::sendMark6Activity(enum Mark6State state, long long position, double dataMJD, float rate)
 {
 	int v = 0;
 

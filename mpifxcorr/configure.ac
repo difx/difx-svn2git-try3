@@ -1,4 +1,4 @@
-AC_INIT([mpifxcorr], [2.5], [Adam Deller <deller@astron.nl>])
+AC_INIT([mpifxcorr], [2.6], [Adam Deller <deller@astron.nl>])
 PACKAGE_VERSION=AC_PACKAGE_VERSION
 AC_SUBST([PACKAGE_VERSION])
 AC_SUBST([LIBRARY_VERSION])
@@ -61,6 +61,17 @@ PKG_CHECK_MODULES(VDIFIO, vdifio >= 1.1)
 CPPFLAGS="${CPPFLAGS} ${VDIFIO_CFLAGS}"
 
 dnl **********************************************************
+dnl **** Find mark6sg library                              ****
+dnl **********************************************************
+PKG_CHECK_MODULES([MARK6SG], [mark6sg >= 2.0.1], [hasmark6sg=true], [hasmark6sg=false])
+AM_CONDITIONAL(WITH_MARK6SG, $hasmark6sg)
+if test $hasmark6sg = true; then
+  CPPFLAGS="${CPPFLAGS} ${MARK6SG_CFLAGS}"
+  AC_DEFINE(hasmark6sg, 1, [Define if you have mark6sg library.])
+fi
+
+
+dnl **********************************************************
 dnl **** Find mark5ipc library                            ****
 dnl **********************************************************
 m5ipc_enabled=true
@@ -92,6 +103,10 @@ else
 fi
 AM_CONDITIONAL(HAS_DIRLIST, $has_dirlist)
 
+
+AC_SUBST(difxlibs, [${DIRLIST_LIBS} ${M5ACCESS_LIBS}])
+AC_SUBST(difxcflags, [${DIRLIST_CFLAGS} ${M5ACCESS_CFLAGS}])
+
 dnl **********************************************************
 dnl **** Look for StreamStor libraries                    ****
 dnl **** cause native Mark5 to be built if found.         ****
@@ -122,14 +137,14 @@ AM_CONDITIONAL(WITH_SS, $ss_enabled)
 dnl **********************************************************
 dnl **** Find mark5access library                         ****
 dnl **********************************************************
-PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.5.3)
-dnl **********************************************************
+PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.5.4)
+
 
 dnl for Mutex lock in datastream.cpp
 AC_CHECK_LIB(rt, clock_gettime)
 
-CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${VDIFIO_CFLAGS} ${MATH_CFLAGS} ${FFTW3_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${MARK5IPC_CFLAGS} ${CFLAG_QUIET} ${OPENMP_CXXFLAGS} ${DIRLIST_CFLAGS}"
-LIBS="${M5ACCESS_LIBS} ${VDIFIO_LIBS} ${SS_LIBS} ${MATH_LIBS} ${DIFXMESSAGE_LIBS} ${MARK5IPC_LIBS} ${DIRLIST_LIBS} $LIBS"
+CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${VDIFIO_CFLAGS} ${MARK6SG_CFLAGS} ${MATH_CFLAGS} ${FFTW3_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${MARK5IPC_CFLAGS} ${CFLAG_QUIET} ${OPENMP_CXXFLAGS} ${DIRLIST_CFLAGS} ${MARK6SG_CFLAGS}"
+LIBS="${M5ACCESS_LIBS} ${VDIFIO_LIBS} ${MARK6SG_LIBS} ${SS_LIBS} ${MATH_LIBS} ${DIFXMESSAGE_LIBS} ${MARK5IPC_LIBS} ${DIRLIST_LIBS} $LIBS"
 
 echo "CXXFLAGS = ${CXXFLAGS}"
 echo "LIBS = ${LIBS}"
@@ -140,5 +155,6 @@ AC_OUTPUT([
 	src/Makefile \
 	src/architecture.h \
 	scripts/Makefile \
+        test/Makefile \
 	utils/Makefile\
 ])

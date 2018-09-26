@@ -92,6 +92,12 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	invalidtime = 0;
 
 	samplingtype = Configuration::REAL;
+	filecheck = Configuration::getFileCheckLevel();
+	if(filecheck == Configuration::FILECHECKUNKNOWN)
+	{
+		cwarn << startl << "env var DIFX_FILE_CHECK_LEVEL was set to " << getenv("DIFX_FILE_CHECK_LEVEL") << " which is not a legal value.  Assuming NONE." << endl;
+		filecheck = Configuration::FILECHECKNONE;
+	}
 }
 
 VDIFDataStream::~VDIFDataStream()
@@ -307,11 +313,8 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
-	if(nGap > 1024)
-	{
-		nGap = 1024;
-	}
 	startOutputFrameNumber = -1;
+	minleftoverdata = 4*inputframebytes;	// waste up to 4 input frames at end of read 
 
 	nthreads = config->getDNumMuxThreads(configindex, streamnum);
 	threads = config->getDMuxThreadMap(configindex, streamnum);
@@ -321,6 +324,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	{
 		muxFlags |= VDIF_MUX_FLAG_COMPLEX;
 	}
+
 	rv = configurevdifmux(&vm, inputframebytes, framespersecond, nbits, nthreads, threads, nSort, nGap, muxFlags);
 	if(rv < 0)
 	{
@@ -369,63 +373,70 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 
 	// Here we need to open the file, read the start time, jump if necessary, and if past end of file, dataremaining = false.  Then set readseconds...
 
-	// First we get a description of the contents of the purported VDIF file and exit if it looks like not VDIF at all
-	rv = summarizevdiffile(&fileSummary, datafilenames[configindex][fileindex].c_str(), inputframebytes);
-	if(rv < 0)
+	if(filecheck == Configuration::FILECHECKSEEK)
 	{
-		cwarn << startl << "VDIFDataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid VDIF data." << endl;
-		dataremaining = false;
-
-		return;
-	}
-
-	// Put file information into log stream
-	vdiffilesummarysetsamplerate(&fileSummary, static_cast<int64_t>(bw*2000000LL*nrecordedbands/nthreads));
-	snprintvdiffilesummary(fileSummaryString, MaxSummaryLength, &fileSummary);
-	cinfo << startl << fileSummaryString << endl;
-
-	// If verbose...
-	printvdiffilesummary(&fileSummary);
-
-	// Here set readseconds to time since beginning of job
-	readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
-	readnanoseconds = vdiffilesummarygetstartns(&fileSummary);
-	currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
-
-	if(currentdsseconds > readseconds+1)
-	{
-		jumpseconds = currentdsseconds - readseconds;
-		if(activens < readnanoseconds)
+		// First we get a description of the contents of the purported VDIF file and exit if it looks like not VDIF at all
+		rv = summarizevdiffile(&fileSummary, datafilenames[configindex][fileindex].c_str(), inputframebytes);
+		if(rv < 0)
 		{
-			jumpseconds--;
-		}
-
-		// set byte offset to the requested time
-
-		int n, d;	// numerator and demoninator of frame/payload size ratio
-		n = fileSummary.frameSize;
-		d = fileSummary.frameSize - 32;
-
-		dataoffset = static_cast<long long>(jumpseconds*vdiffilesummarygetbytespersecond(&fileSummary)/d*n + 0.5);
-
-		readseconds += jumpseconds;
-	}
-
-	// Now set readseconds to time since beginning of scan
-	readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
-	
-	// Advance into file if requested
-	if(fileSummary.firstFrameOffset + dataoffset > 0)
-	{
-		cverbose << startl << "About to seek to byte " << fileSummary.firstFrameOffset << " plus jump " << dataoffset << " to get to the first wanted frame" << endl;
-
-		input.seekg(fileSummary.firstFrameOffset + dataoffset, ios_base::beg);
-		if(input.peek() == EOF)
-		{
-			cinfo << startl << "File " << datafilenames[configindex][fileindex] << " ended before the currently desired time" << endl;
+			cwarn << startl << "VDIFDataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid VDIF data." << endl;
 			dataremaining = false;
-			input.clear();
+
+			return;
 		}
+
+		// Put file information into log stream
+		vdiffilesummarysetsamplerate(&fileSummary, static_cast<int64_t>(bw*2000000LL*nrecordedbands/nthreads));
+		snprintvdiffilesummary(fileSummaryString, MaxSummaryLength, &fileSummary);
+		cinfo << startl << fileSummaryString << endl;
+
+		// If verbose...
+		printvdiffilesummary(&fileSummary);
+
+		// Here set readseconds to time since beginning of job
+		readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
+		readnanoseconds = vdiffilesummarygetstartns(&fileSummary);
+		currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
+
+		if(currentdsseconds > readseconds+1)
+		{
+			jumpseconds = currentdsseconds - readseconds;
+			if(activens < readnanoseconds)
+			{
+				jumpseconds--;
+			}
+
+			// set byte offset to the requested time
+
+			int n, d;	// numerator and demoninator of frame/payload size ratio
+			n = fileSummary.frameSize;
+			d = fileSummary.frameSize - 32;
+
+			dataoffset = static_cast<long long>(jumpseconds*vdiffilesummarygetbytespersecond(&fileSummary)/d*n + 0.5);
+
+			readseconds += jumpseconds;
+		}
+
+		// Now set readseconds to time since beginning of scan
+		readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		
+		// Advance into file if requested
+		if(fileSummary.firstFrameOffset + dataoffset > 0)
+		{
+			cverbose << startl << "About to seek to byte " << fileSummary.firstFrameOffset << " plus jump " << dataoffset << " to get to the first wanted frame" << endl;
+
+			input.seekg(fileSummary.firstFrameOffset + dataoffset, ios_base::beg);
+			if(input.peek() == EOF)
+			{
+				cinfo << startl << "File " << datafilenames[configindex][fileindex] << " ended before the currently desired time" << endl;
+				dataremaining = false;
+				input.clear();
+			}
+		}
+	}
+	else
+	{
+		cverbose << startl << "Not doing peek/seek on file due to setting of DIFX_FILE_CHECK_LEVEL env var." << endl;
 	}
 }
 
@@ -448,45 +459,62 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 	destination = reinterpret_cast<unsigned char *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
 
-	// Bytes to read
-	bytes = readbuffersize - readbufferleftover;
-
-	// if the file is exhausted, just multiplex any leftover data and return
 	if(input.eof())
 	{
-		// If there is some data left over, just demux that and send it out
-		if(readbufferleftover > minleftoverdata)
-		{
-			vdifmux(destination, readbytes, readbuffer, readbufferleftover, &vm, startOutputFrameNumber, &vstats);
-			readbufferleftover = 0;
-			bufferinfo[buffersegment].validbytes = vstats.destUsed;
+		bytes = 0;
+	}
+	else
+	{
+		// Bytes to read
+		bytes = readbuffersize - readbufferleftover;
+	}
 
-			startOutputFrameNumber = -1;
-		}
-		else
-		{
-			// Really, this should not happen based, but just in case...
-			bufferinfo[buffersegment].validbytes = 0;
-		}
+	// if the file is exhausted, just multiplex any leftover data and return
+	if(bytes > 0)
+	{
+		// execute the file read
+		input.clear();
+
+		input.read(reinterpret_cast<char *>(readbuffer) + readbufferleftover, bytes);
+		bytes = input.gcount();
+
+		bytesvisible = readbufferleftover + bytes;
+	}
+	else
+	{
+		bytesvisible = readbufferleftover;
+	}
+
+	if(bytesvisible <= 0)
+	{
 		dataremaining = false;
+		bufferinfo[buffersegment].validbytes = 0;
+		readbufferleftover = 0;
+
+		cinfo << startl << "bytesvisible == 0.  Assuming end of file." << endl;
 
 		return 0;
 	}
 
-	// execute the file read
-	input.clear();
-
-	input.read(reinterpret_cast<char *>(readbuffer) + readbufferleftover, bytes);
-	bytes = input.gcount();
-
-	bytesvisible = readbufferleftover + bytes;
-
 	// multiplex and corner turn the data
 	muxReturn = vdifmux(destination, readbytes, readbuffer, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 
-	if(muxReturn < 0)
+	if(muxReturn <= 0)
 	{
-		cwarn << startl << "vdifmux returned " << muxReturn << endl;
+		dataremaining = false;
+		bufferinfo[buffersegment].validbytes = 0;
+		readbufferleftover = 0;
+
+		if(muxReturn < 0)
+		{
+			cerror << startl << "vdifmux() failed with return code " << muxReturn << ", likely input buffer is too small!" << endl;
+		}
+		else
+		{
+			cinfo << startl << "vdifmux returned no data.  Assuming end of file." << endl;
+		}
+
+		return 0;
 	}
 
 	consumedbytes += bytes;
@@ -513,6 +541,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 		// look at difference in data frames consumed and produced and proceed accordingly
 		int deltaDataFrames = vstats.srcUsed/(nthreads*inputframebytes) - vstats.destUsed/(nthreads*(inputframebytes-VDIF_HEADER_BYTES) + VDIF_HEADER_BYTES);
+
 		if(deltaDataFrames == 0)
 		{
 			// We should be able to preset startOutputFrameNumber.  Warning: early use of this was frought with peril but things seem OK now.
@@ -562,6 +591,10 @@ int VDIFDataStream::dataRead(int buffersegment)
 	}
 	if(readbufferleftover <= minleftoverdata && input.eof())
 	{
+		if(readbufferleftover > 0)
+		{
+			cwarn << startl << "Stopping decoding with " << readbufferleftover << " bytes remaining to be decoded.  minleftoverdata = " << minleftoverdata << endl;
+		}
 		readbufferleftover = 0;
 
 		// here we've in one call both read all the remaining data from a file and multiplexed it all without leftovers
@@ -634,6 +667,13 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 		cinfo << startl << "diskToMemory: starting schedule scan " << readscan << endl;
 	}
 
+	if(readseconds + model->getScanStartSec(readscan, corrstartday, corrstartseconds) >= config->getExecuteSeconds())
+	{
+		keepreading = false;
+		dataremaining = false;
+		cinfo << startl << "diskToMemory: end of executeseconds reached.  stopping." << endl;
+	}
+
 	if(switchedpower && bufferinfo[buffersegment].validbytes > 0)
 	{
 		static int nt = 0;
@@ -661,8 +701,6 @@ void VDIFDataStream::loopfileread()
 	int perr;
 	int numread = 0;
 
-cverbose << startl << "Starting loopfileread()" << endl;
-
 	//lock the outstanding send lock
 	perr = pthread_mutex_lock(&outstandingsendlock);
 	if(perr != 0)
@@ -675,15 +713,12 @@ cverbose << startl << "Starting loopfileread()" << endl;
 	keepreading = true;
 	while(!dataremaining && keepreading)
 	{
-cverbose << startl << "opening file " << filesread[bufferinfo[0].configindex] << endl;
 		openfile(bufferinfo[0].configindex, filesread[bufferinfo[0].configindex]++);
 		if(!dataremaining)
 		{
 			input.close();
 		}
 	}
-
-cverbose << startl << "Opened first usable file" << endl;
 
 	if(keepreading)
 	{
@@ -710,8 +745,6 @@ cverbose << startl << "Opened first usable file" << endl;
 	{
 		diskToMemory(numread++);
 	}
-
-cverbose << startl << "Opened first usable file" << endl;
 
 	while(keepreading && (bufferinfo[lastvalidsegment].configindex < 0 || filesread[bufferinfo[lastvalidsegment].configindex] <= confignumfiles[bufferinfo[lastvalidsegment].configindex]))
 	{

@@ -1,3 +1,20 @@
+Version 2.6
+~~~~~~~~~~~
+* Some improvements to VDIF file reading for very gappy data
+* Some improvements to VDIF for frame sizes greatly differing from 5000 bytes
+* Some improvements in opening input files; reattempts on NFS-typical errors of "EAGAIN Resource temporarily unavailable"
+* Reduce NFS load: .input file is read only by FxManager node and its content is shared with other nodes via MPI Broadcast
+* Remove array that was mooted when per-band weights were introduced
+* Allow DifxParameter message to specify new stop time, then cleanly shut down at that time.
+* DifxParameters with <to></to> blocks are compared against the job name.
+* startdifx: end difxlog process after every job when running with joblist
+* genmachines: fixed support for multiple input files
+* PCAL: allow tone intervals denser than an integer MHz (Wettzell twin telescope workaround)
+* Support for IPP > 9 (specifically IPP 2018)
+* genmachines and mark6 datastream updates
+* add mark6 activity difx message to mark6 datastream
+* Implement Mark5B datastream over Mark6 (untested as of yet)
+
 Version 2.5
 ~~~~~~~~~~~
 * Another 0.5ns jitter was found in Mark5B processing for data rates >= 2 Gbps.  This is now fixed (2015 Feb 22 -- WFB)
@@ -29,6 +46,8 @@ Version 2.5
 * Peaceably ignore the new DELAY MODEL parameter of the .calc file
 * Calculate Mark5 module signature more consistently; the "NeoLegacy" formats used wrong number of bytes in the calculation
 * Change genmachines.py back to genmachines
+* Fix weights after a datastream dries up (developed after 2.5 branching)
+* Version for DiFX-2.5, May 16, 2017
 
 Version 2.4
 ~~~~~~~~~~~

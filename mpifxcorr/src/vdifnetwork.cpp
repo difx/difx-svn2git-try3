@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2016 by Walter Brisken and Adam Deller             *
+ *   Copyright (C) 2007-2017 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -322,11 +322,8 @@ void VDIFNetworkDataStream::initialiseFile(int configindex, int fileindex)
         bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
-	if(nGap > 1024)
-	{
-		nGap = 1024;
-	}
 	startOutputFrameNumber = -1;
+	minleftoverdata = 4*inputframebytes;	// waste up to 4 input frames at end of read
 
 	nthreads = config->getDNumMuxThreads(configindex, streamnum);
 	threads = config->getDMuxThreadMap(configindex, streamnum);
@@ -454,9 +451,23 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 
 	// multiplex and corner turn the data
 	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
-	if(muxReturn < 0)
+
+	if(muxReturn <= 0)
 	{
-		cwarn << startl << "vdifmux returned " << muxReturn << endl;
+		dataremaining = false;
+		bufferinfo[buffersegment].validbytes = 0;
+		readbufferleftover = 0;
+
+		if(muxReturn < 0)
+		{
+			cerror << startl << "vdifmux() failed with return code " << muxReturn << ", likely input buffer is too small!" << endl;
+		}
+		else
+		{
+			cinfo << startl << "vdifmux returned no data.  Assuming end of file." << endl;
+		}
+
+		return 0;
 	}
 
 	if(vstats.startFrameNumber % vm.frameGranularity != 0)
@@ -467,6 +478,14 @@ int VDIFNetworkDataStream::dataRead(int buffersegment)
 		muxindex += vm.frameGranularity*vm.inputFrameSize;
 		bytesvisible -= vm.frameGranularity*vm.inputFrameSize;
 		muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
+		if(muxReturn < 0)
+		{
+			dataremaining = false;
+			bufferinfo[buffersegment].validbytes = 0;
+			readbufferleftover = 0;
+			cerror << startl << "vdifmux() failed with return code " << muxReturn << ", likely input buffer is too small!" << endl;
+			return 0;
+		}
 	}
 
 	if(0)

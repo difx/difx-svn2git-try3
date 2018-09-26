@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2016 by Adam Deller and Walter Brisken             *
+ *   Copyright (C) 2006-2018 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -18,29 +18,28 @@
 // SVN properties (DO NOT CHANGE)
 //
 // $Id$
-// $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mk5.h $
+// $HeadURL: $
 // $LastChangedRevision$
 // $Author$
 // $LastChangedDate$
 //
 //============================================================================
-#ifndef __VDIFFILE_H__
-#define __VDIFFILE_H__
+#ifndef MARK5BMARK6FILE_H
+#define MARK5BMARK6FILE_H
 
-#include <vdifio.h>
-#include "datastream.h"
+#include <mark6sg/mark6gather.h>
+#include <difxmessage.h>
+#include "mark5bfile.h"
 
 /**
-@class VDIFDataStream 
-@brief Datastream which can handle Mk5 formatted data
+@class Mark5BMark6DataStream 
+@brief Datastream which can handle Mark5B formatted data coming straight off a Mark6 module
 
-This class manages a stream of data from a disk or memory, coarsely aligning it with the geocentre and sending segments of 
-data to Core nodes for processing as directed by the FxManager.  Mk5Datastream overrides the LBA-style defaults and
-implements appropriate functionality for Mk5 formatted data
+This class manages a stream of data from a Mark6 module, coarsely aligning it with the geocentre and sending segments of data to Core nodes for processing as directed by the FxManager.  
 
-@author Adam Deller
+@author Adam Deller, Walter Brisken
 */
-class VDIFDataStream : public DataStream
+class Mark5BMark6DataStream : public Mark5BDataStream
 {
 public:
  /**
@@ -53,29 +52,12 @@ public:
   * @param bufferfactor The size of the buffer, in terms of number of "max send sizes" - the biggest "blocks per send*numchannels" from the possible configurations
   * @param numsegments The number of separate segments this buffer will be divided into
   */
-  VDIFDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
-  virtual ~VDIFDataStream();
-
-  virtual void initialise();
+  Mark5BMark6DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
+  virtual ~Mark5BMark6DataStream();
+  virtual void openfile(int configindex, int fileindex);
+  int sendMark6Activity(enum Mark6State mark6state, long long position, double dataMJD, float rate);
 
 protected:
- /** 
-  * Calculates the correct offset from the start of the databuffer for a given time in the correlation, 
-  * and calculates valid bits for each FFT block as control information to pass to the Cores
-  * @param scan The scan to calculate for
-  * @param offsetsec The offset in seconds from the start of the scan
-  * @param offsetns The offset in nanoseconds from the given second
-  * @return The offset in bytes from the start of the databuffer that this block should start from - must be between 0 and bufferlength
-  */
-  virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
-
- /** 
-  * Updates all the parameters (numchannels, sendbytes etc) for the specified segment of the databuffer.  Allows for
-  * the fact that VDIF data must be sent as an integer number of frames, starting at a frame boundary
-  * @param segmentindex The index of the segment to be updated
-  */
-  virtual void updateConfig(int segmentindex);
-
  /** 
   * Reads in the header information from a Mk5 formatted file and sets the current segment time information accordingly
   * @param configindex The config index at the current time
@@ -85,31 +67,22 @@ protected:
 
   virtual int dataRead(int buffersegment);
 
-  virtual void diskToMemory(int buffersegment);
-
-  virtual int testForSync(int configindex, int buffersegment);
+  virtual void mark6ToMemory(int buffersegment);
 
   virtual void loopfileread();
 
-  int lastconfig;
+private:
+  void closeMark6();
 
-  char formatname[64];
+  DifxMessageMark6Activity mark6activity;
 
-  unsigned char *readbuffer;
-  int readbuffersize;
-  int readbufferleftover;
-  int minleftoverdata;
-  int nSort, nGap;  // muxer tuning parameters
-  struct vdif_mux vm;
-  struct vdif_mux_statistics vstats;
-  long long startOutputFrameNumber;
-  int invalidtime;
-
-  int nbits, framespersecond, nthreads, inputframebytes;
-  const int *threads;
-
-  Configuration::datasampling samplingtype;
-  Configuration::filechecklevel filecheck;
+  Mark6Gatherer *mark6gather;  /* structure for Mark6 file gathering */
+  bool mark6eof;  /* if true, current file has been exhausted */
+  long long bytecount;
+  long long lastbytecount;
+  time_t msgsenttime;
+  float mbyterate;
+  double fmjd;
 };
 
 #endif
