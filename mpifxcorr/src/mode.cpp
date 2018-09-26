@@ -851,7 +851,8 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
     currentsubchannelfreqs = subchannelfreqs;
     if(usedouble)
     {
-      if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+      currentstepchannelfreqs = dsbstepchannelfreqs;
+      /*if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
       {
         currentstepchannelfreqs = ldsbstepchannelfreqs;
         currentsubchannelfreqs = ldsbsubchannelfreqs;
@@ -859,7 +860,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
       else
       {
         currentstepchannelfreqs = dsbstepchannelfreqs;
-      }
+      }*/
     }
     else
     {
@@ -894,7 +895,7 @@ float Mode::process(int index, int subloopindex)  //frac sample error is in micr
       }
     }
 
-    // For lower sideband complex data, the effective LO is at negative frequency, not positieve
+    // For lower sideband complex data, the effective LO is at negative frequency, not positive
     if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
       lofreq = -lofreq;
     }
