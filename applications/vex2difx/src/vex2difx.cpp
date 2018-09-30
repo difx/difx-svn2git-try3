@@ -2055,7 +2055,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 
 								exit(EXIT_FAILURE);
 							}
-							if(antennaSetup->freqClockOffs.front() != 0.0)
+							if(0 && antennaSetup->freqClockOffs.front() != 0.0)
 							{
 								cerr << endl;
 								cerr << "Error: AntennaSetup for " << antName << " has a non-zero clock offset for the first" << " frequency offset. This is not allowed for model " << "accountability reasons." << endl;
