@@ -182,7 +182,6 @@ enum VexStream::DataFormat VexStream::stringToDataFormat(const std::string &str)
 	}
 	else if(strcasecmp(str.substr(0,5).c_str(), "CODIF") == 0)
 	{
-		printf("Is CODIF\n");
 		return FormatCODIF;
 	}
 	else if(strcasecmp(str.c_str(), "Mark5B") == 0 ||
