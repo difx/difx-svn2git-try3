@@ -1,0 +1,147 @@
+
+
+Custom DiFX output bands feature adds another layer of "band abstraction".
+
+Example:
+
+   REC   |-recorded freq-| |-recorded freq-| |-recorded freq-|
+
+   ZOOM  |-zoom-| |-zoom-|                   |-zoom-| |-zoom-|
+
+   OUTPUT         |--------custom output freq-------|
+                        zoom + recorded + zoom
+
+   Recorded and zoom freqs are to be processed in DiFX internally
+   in the same way as in DiFX-2.5.
+
+   Internally produced visibilities/spectral data have to be routed
+   into proper spots in a larger common spectral storage area,
+   assigned to a new invented frequency.
+
+Changes:
+
+== v2d ==
+
+   ZOOM gets renamed to CUSTOMFREQS
+
+      addZoomFreq=...     syntax as before, freq@1810.0/bw@4.0[/specAvg@4][/noparent@true]
+
+      addOutputFreq=...   new, syntax like addZoomFreq except the 'noparent' option is removed
+
+   The zoom freqs are not necessarily output to disk. If a zoom or recorded freq is located
+   within a defined output freq, that zoom/recorded freq is not independently written to disk.
+ 
+   Output freq spectral cover completeness has to be checked by vex2difx. For convenience, any not yet
+   explicitly defined zoom bands necessary to cover the output freq(s) could be auto-introduced.
+
+== .input ==
+
+   FREQ table
+
+      include frequency entry for every 'addOutputFreq'
+      
+      note: for now upper sideband only; could envision lower sideband as well 
+
+   DATASTREAM table
+
+      expand the existing abstraction level
+
+      +----------------------------------------+
+      | FQ table                               |
+      +----------------------------------------+
+
+              +----+----+----+----+
+         DS   | 30 | 31 | 32 | 33 |   recfreqindex  (refers to FQ table, as before)
+              +----+----+----+----+
+              +----+----+----+----+
+              |  1 |  2 |  2 |  1 |   recfreqpol #
+              +----+----+----+----+
+              +----+----+----+----+
+              | 65 | 66 | 67 | 68 |   dstfreqindex  NEW, refers to destination frequency in FQ table
+              +----+----+----+----+                 case 1: dstfreqindex[k] == recfreqindex[k] : behave like DiFX-2.5
+                                                    case 2: dstfreqindex[k] != recfreqindex[k] : contribute a spectral slice to dst FQ
+
+              +----+----+----+----+----+----+
+              |  0 |  1 |  1 |  2 |  2 |  3 |  recbandindex (indexes back into 'recfreqindex', 'recfreqpol')
+              +----+----+----+----+----+----+
+              +----+----+----+----+----+----+
+              |  L |  R |  L |  R |  L |  R |  recbandpol
+              +----+----+----+----+----+----+
+
+              +----+----+----+----+
+              | 40 | 41 | 42 | 43 |   zoomfreqindex  (refers to FQ table, as before)
+              +----+----+----+----+
+              +----+----+----+----+
+              |  1 |  2 |  2 |  1 |   zoomfreqpol #
+              +----+----+----+----+
+              +----+----+----+----+
+              | 65 | 66 | 67 | 68 |   dstfreqindex  NEW, refers to destination frequency in FQ table
+              +----+----+----+----+                 case 1: dstfreqindex[k] == recfreqindex[k] : behave like DiFX-2.5
+                                                    case 2: dstfreqindex[k] != recfreqindex[k] : contribute a spectral slice to dst FQ
+
+              +----+----+----+----+----+----+
+              |  0 |  1 |  1 |  2 |  2 |  3 |  zoombandindex (indexes back into 'zoomfreqindex', 'zoomfreqpol')
+              +----+----+----+----+----+----+
+              +----+----+----+----+----+----+
+              |  L |  R |  L |  R |  L |  R |  zoombandpol
+              +----+----+----+----+----+----+
+
+    BASELINE table
+
+      no changes
+
+== difxio ==
+
+      support a new keyword 'DST FREQ INDEX'
+
+        NUM RECORDED FREQS: 2
+        REC FREQ INDEX 0:   30
+      >>DST FREQ INDEX 0:   65<<
+        CLK OFFSET 0 (us):  0.000000
+        FREQ OFFSET 0 (Hz): 0.000000
+        NUM REC POLS 0:     1
+        REC FREQ INDEX 1:   31
+      >>DST FREQ INDEX 1:   66<<
+        CLK OFFSET 1 (us):  0.000000
+        FREQ OFFSET 1 (Hz): 0.000000
+        NUM REC POLS 1:     2
+
+        NUM ZOOM FREQS:     2
+        ZOOM FREQ INDEX 0:  40
+      >>DST FREQ INDEX 0:   65<<
+        NUM ZOOM POLS 0:    1
+        ZOOM FREQ INDEX 1:  41
+      >>DST FREQ INDEX 1:   65<<
+        NUM ZOOM POLS 1:    2
+
+== vex2difx ==
+
+      parse 'addOutputFreq', store in a new internal table
+
+      check for output freq cover, can it be produced from the recorded and explicit zoom bands
+
+      production of FREQ table has to use recorded, zoom, and output freq lists
+
+== mpifxcorr ==
+
+      logic to allocate the proper amount of scratch space
+
+      augment Config::isFrequencyUsed(), Config::isEquivalentFrequencyUsed() with a new function
+      that determines if visibility data of freq should land in procslots[idx].results[]
+
+      logic to map (bin indices) a narrow Frequency into the correct spectral bin range of a wider Frequency,
+      could use zoom band logic and allow it to work in the other direction
+
+      weight of band must be arithmetic or other mean of weights of (in Core -normalized amplitude) bands
+
+== difx2fits ==
+
+      FQ table construction should look at BASELINE and collect frequencies of
+      the referred DATASTREAM pairs, looked up via 'DST FREQ INDEX' rather than
+      via 'REC FREQ INDEX' / 'ZOOM FREQ INDEX'
+
+== difx2mark4 ==
+
+      freq table construction should look at BASELINE and collect frequencies of
+      the referred DATASTREAM pairs, looked up via 'DST FREQ INDEX' rather than
+      via 'REC FREQ INDEX' / 'ZOOM FREQ INDEX'
