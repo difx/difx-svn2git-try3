@@ -116,32 +116,57 @@ Changes:
 
 == vex2difx ==
 
-      parse 'addOutputFreq', store in a new internal table
+    - parse 'addOutputFreq', store in a new internal table
 
-      check for output freq cover, can it be produced from the recorded and explicit zoom bands
+    - check for output freq cover, can it be produced from the recorded and explicit zoom bands
 
-      production of FREQ table has to use recorded, zoom, and output freq lists
+    - production of FREQ table has to use recorded, zoom, and output freq lists
 
 == mpifxcorr ==
 
-      logic to allocate the proper amount of scratch space
+    - logic to allocate the proper amount of scratch space
 
-      augment Config::isFrequencyUsed(), Config::isEquivalentFrequencyUsed() with a new function
+    - augment Config::isFrequencyUsed(), Config::isEquivalentFrequencyUsed() with a new function
       that determines if visibility data of freq should land in procslots[idx].results[]
 
-      logic to map (bin indices) a narrow Frequency into the correct spectral bin range of a wider Frequency,
+    - add logic to map a narrow Frequency into the correct spectral bin range of a wider Frequency,
       could use zoom band logic and allow it to work in the other direction
 
-      weight of band must be arithmetic or other mean of weights of (in Core -normalized amplitude) bands
+    - weight of outputfreq must be arithmetic or other mean of weights of its constituent bands,
+      since some the underlying recorded bands might have had data loss (non-equal weights)
+
+    - change the site where normalization is carried out
+      Data weights are normalized in DiFX-2.5 at FxManager-level into the final spectra.
+      Since some bands contributing to an outputfreq can have data loss, the normalization
+      ought to be moved up into Core and be done early, on a per-band basis
+
+    - additional spectral averaging at Outputfreq level should take place in Core(?)
 
 == difx2fits ==
 
-      FQ table construction should look at BASELINE and collect frequencies of
+    - FQ table construction should look at BASELINE and collect frequencies of
       the referred DATASTREAM pairs, looked up via 'DST FREQ INDEX' rather than
       via 'REC FREQ INDEX' / 'ZOOM FREQ INDEX'
 
 == difx2mark4 ==
 
-      freq table construction should look at BASELINE and collect frequencies of
+    - freq table construction should look at BASELINE and collect frequencies of
       the referred DATASTREAM pairs, looked up via 'DST FREQ INDEX' rather than
       via 'REC FREQ INDEX' / 'ZOOM FREQ INDEX'
+
+Open:
+
+    - LSB outputfreqs, needed or not
+
+      1) What if output freq is formed by an LSB-recorded band plus an USB ZOOM?
+         Which one to flip?
+ 
+      2) What if output freq is formed by two LSB-recorded bands?
+         Keep it as LSB or flip it to USB?
+
+    - Will any of this inadvertently affect the pulsar processing modes?
+
+      Should there be checks in vex2difx to prohibit use of zoom & outputfreq
+      when correlation is done in pulsar binning mode?
+
+    - Are additions to wide field / multi-phasecenter code necessary?
