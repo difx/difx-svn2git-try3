@@ -19,6 +19,8 @@
 
 #endif
 
+#define USEIPP
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -32,45 +34,89 @@
 #include <getopt.h>
 #include <vdifio.h>
 
+#include "config.h"
+#if USE_CODIFIO
+#include <codifio.h>
+#endif
+
+
+#ifdef USEIPP
+#include <ippcore.h>
+#include <ipps.h>
+
+#define DEFAULTTAP 64
+
+IppsRandGaussState_32f *pRandGaussState;
+Ipp32f *scratch;
+Ipp32f phase;
+Ipp32f *dly;
+Ipp8u *buf;
+IppsFIRSpec_32f *pSpec;
+IppsFIRSpec_32fc *pcSpec;
+#else
+typedef unsigned char  Ipp8u;
+typedef unsigned short Ipp16u;
+typedef unsigned int   Ipp32u;
+typedef signed char    Ipp8s;
+typedef signed short   Ipp16s;
+typedef signed int     Ipp32s;
+typedef float          Ipp32f;
+typedef __INT64        Ipp64s;
+typedef __UINT64       Ipp64u;
+typedef double         Ipp64f;
+typedef Ipp16s         Ipp16f;
+#endif
+
+#define SEED 48573
+
+
 double currentmjd();
 void mjd2cal(double mjd, int *day, int *month, int *year, double *ut);
 float gaussrand();
 int MeanStdDev(const float *src, int length, float *mean, float *StdDev);
-int pack2bit1chan(float **in, int off, char *out, float mean, float stddev, int len);
-int pack2bitNchan(float **in, int nchan, int off, char *out, float mean, float stddev, int len);
+int pack2bit1chan(Ipp32f **in, int off, Ipp8u *out, float mean, float stddev, int len);
+int pack2bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len);
+int pack8bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len);
 void dayno2cal (int dayno, int year, int *day, int *month);
 double cal2mjd(int day, int month, int year);
 double tm2mjd(struct tm date);
-void generateData(float **data, int nframe, int sampesperframe, int nchan,
-		  int iscomplex, int bandwidth, float tone, float *mean, float *stdDev);
+void generateData(float **data, int nframe, int sampesperframe, int nchan, int iscomplex, int bandwidth,
+		   float tone, float *mean, float *stdDev);
 
 #define MAXSTR        255
-#define BUFSIZE        32  // MB
+#define BUFSIZE       256  // MB
 #define MAXPOS          3
 #define SMALLPOS        2
 #define SMALLNEG        1
 #define MAXNEG          0
 
 int main (int argc, char * const argv[]) {
-  char *filename, *framedata, msg[MAXSTR];
-  int i, n, frameperbuf, status, outfile, opt, tmp;
+  char *filename, msg[MAXSTR], *header;
+  int i, frameperbuf, status, outfile, opt, tmp, headerBytes=0;
   uint64_t nframe;
   float **data, ftmp, stdDev, mean;
   ssize_t nr;
-  vdif_header header;
+  vdif_header vheader;
+#if USE_CODIFIO
+  codif_header cheader;
+#endif
+  Ipp8u *framedata;
 
   int nbits = 2;
   int bandwidth = 64;
   int nchan = 1;
+  int ntap = DEFAULTTAP;
   int framesize = 8000;
   int iscomplex = 0;
+  int usecodif = 0;
   int year = -1;
   int month = -1;
   int day = -1;
   int dayno = -1;
   double mjd = -1;
-  float tone = 6;  // MHz
+  float tone = 10;  // MHz
   float duration = 0; // Seconds
+  char *timestr = NULL;
 
   struct option options[] = {
     {"bandwidth", 1, 0, 'b'},
@@ -81,11 +127,15 @@ int main (int argc, char * const argv[]) {
     {"year", 1, 0, 'y'},
     {"time", 1, 0, 't'},
     {"framesize", 1, 0, 'F'},
-    {"duration", 1, 0, 't'},
+    {"duration", 1, 0, 'l'},
     {"tone", 1, 0, 'T'},
     {"nchan", 1, 0, 'n'},
-    {"nthread", 1, 0, 'N'},
+    {"ntap", 1, 0, 'x'},
+    {"nbits", 1, 0, 'N'},
     {"complex", 0, 0, 'c'},
+#ifdef USEIPP
+    {"codifio", 0, 0, 'C'},
+#endif
     {"help", 0, 0, 'h'},
     {0, 0, 0, 0}
   };
@@ -94,7 +144,7 @@ int main (int argc, char * const argv[]) {
   
   /* Read command line options */
   while (1) {
-    opt = getopt_long_only(argc, argv, "b:d:m:M:y:t:n:c:T:h", options, NULL);
+    opt = getopt_long_only(argc, argv, "xb:d:m:M:y:t:n:c:T:hF:", options, NULL);
     if (opt==EOF) break;
     
 #define CASEINT(ch,var)                                     \
@@ -124,24 +174,39 @@ int main (int argc, char * const argv[]) {
       CASEINT('M', mjd);
       CASEINT('y', year);
       CASEINT('n', nchan);
+      CASEINT('N', nbits);
+      CASEINT('x', ntap);
       CASEINT('F', framesize);
-      CASEFLOAT('t', duration);
+      CASEFLOAT('l', duration);
       CASEFLOAT('T', tone);
 
-      case 'c':
+      case 't':
+	timestr = strdup(optarg);
+	break;
+
+    case 'c':
 	iscomplex = 1;
 	break;
- 
+#if USE_CODIFIO
+    case 'C':
+	usecodif = 1;
+	break;
+#endif
       case 'h':
 	printf("Usage: generateVDIF [options]\n");
-	printf("  -bandwidth <BANWIDTH> Channel bandwidth in MHz (64)\n");
-	printf("  -n/-nchan <N>         Number of  channels in stream\n");
-	printf("  -day <DAY>            Day of month of start time (now)\n");
-	printf("  -month <MONTH>        Month of start time (now)\n");
-	printf("  -dayno <DAYNO>        Day of year of start time (now)\n");
-	printf("  -year <YEAR>          Year of start time (now)\n");
-	printf("  -time <HH:MM:SS>      Year of start time (now)\n");
-	printf("  -mjd <MJD>            MJD of start time\n");
+	printf("  -bandwidth <BANWIDTH>     Channel bandwidth in MHz (64)\n");
+	printf("  -n/-nchan <N>             Number of channels in stream\n");
+	printf("  -N/-nbits <N>             Number of bits/sample (default 2)\n");
+	printf("  -F/-framesize <FRAMESIZE> VDIF framesize\n");
+	printf("  -t/-duration <DURATION>   Length of output, in seconds\n");
+	printf("  -T/-tone <TONE>           Frequency (MHz) of tone to insert\n");
+	printf("  -ntap <TAPS>              Number of taps for FIR filter to create band shape\n");
+	printf("  -day <DAY>                Day of month of start time (now)\n");
+	printf("  -month <MONTH>            Month of start time (now)\n");
+	printf("  -dayno <DAYNO>            Day of year of start time (now)\n");
+	printf("  -year <YEAR>              Year of start time (now)\n");
+	printf("  -time <HH:MM:SS>          Year of start time (now)\n");
+	printf("  -mjd <MJD>                MJD of start time\n");
 	return(1);
 	break;
       
@@ -150,13 +215,18 @@ int main (int argc, char * const argv[]) {
       break;
     }
   }
+
   
   if (argc==optind) {
-    filename = strdup("Test.vdif");
+    if (usecodif) {
+      filename = strdup("Test.cdf");
+    } else {
+      filename = strdup("Test.vdif");
+    }
   } else {
     filename = strdup(argv[optind]);
   }
-
+  
   int cfact = 1;
   if (iscomplex) cfact = 2;
 
@@ -180,47 +250,116 @@ int main (int argc, char * const argv[]) {
     }
   }
   printf("Using framesize=%d\n", framesize);
-  int samplesperframe = framesize*8/completesample;
+  int samplesperframe = framesize*8/completesample; // Treat Re/Im of complex as seperate samples
   int framespersec = bytespersec/framesize;
 
-  printf("DEBUG: %d  %d\n", samplesperframe, framespersec);
-
   // Initialize memory
-  data = malloc(nchan*sizeof(float*));
+  data = (Ipp32f**)malloc(nchan*sizeof(Ipp32f*));
   if (data==NULL) {
     perror("Memory allocation problem\n");
     exit(1);
   }
-
-  frameperbuf = BUFSIZE*1024*1024/nchan/framesize;
-  printf("DEBUG: frameperbuf=%d\n", frameperbuf);
+  frameperbuf = BUFSIZE*1024*1024/(samplesperframe*sizeof(float)*cfact*(nchan+1));
 
   if (duration==0) { // Just create BUFSIZE bytes
     nframe = frameperbuf;
   } else {
     nframe = duration*framespersec;
-    nframe = (nframe/frameperbuf)*frameperbuf;
+    nframe = ((int)floor((float)nframe/(float)frameperbuf+0.5))*frameperbuf;
+    if (nframe==0) nframe = frameperbuf;
   }
-  printf("DEBUG: Total frame = %lld\n", (long long)nframe);
+
+#ifdef USEIPP
+  int pRandGaussStateSize;
+  ippsRandGaussGetSize_32f(&pRandGaussStateSize);
+  pRandGaussState = (IppsRandGaussState_32f *)ippsMalloc_8u(pRandGaussStateSize);
+  ippsRandGaussInit_32f(pRandGaussState, 0.0, 1.0, SEED);
+  scratch = ippsMalloc_32f(frameperbuf*samplesperframe*cfact);
+  if (scratch==NULL) {
+    fprintf(stderr, "Error allocating memory\n");
+    exit(1);
+  }
+  phase = 0;
+  int specSize;
+  int bufsize, bufsize2;
+
+  Ipp64f *taps64 = ippsMalloc_64f(ntap);
+  Ipp32f *taps = ippsMalloc_32f(ntap);
+  Ipp32fc *tapsC = ippsMalloc_32fc(ntap);
+  status = ippsFIRGenGetBufferSize(ntap, &bufsize);
+  if (status != ippStsNoErr) {
+    fprintf(stderr, "Error calling ippsFIRGenGetBufferSize (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+  buf = ippsMalloc_8u(bufsize);
+  status = ippsFIRGenBandpass_64f(0.02, 0.48, taps64, ntap, ippWinHamming, ippTrue, buf);
+  if (status != ippStsNoErr) {
+    fprintf(stderr, "Error generating tap coefficients (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+  ippsConvert_64f32f(taps64, taps, ntap);
+
+  // Real FIR filter
+  status = ippsFIRSRGetSize (ntap, ipp32f, &specSize, &bufsize);
+  if (status != ippStsNoErr) {
+    fprintf(stderr, "Error Getting filter initialisation sizes (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+  pSpec = (IppsFIRSpec_32f*)ippsMalloc_8u(specSize);
+  status = ippsFIRSRInit_32f(taps, ntap, ippAlgAuto, pSpec);
+  if (status != ippStsNoErr) {
+    fprintf(stderr, "Error Initialising filter (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+
+  status = ippsFIRGenHighpass_64f(0.02, taps64, ntap, ippWinHamming, ippTrue, buf);
+  if (status != ippStsNoErr) {
+    fprintf(stderr, "Error generating tap coefficients (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+  ippsFree(buf);
+  for (i=0; i<ntap; i++) {
+    tapsC[i].re = taps64[i];
+    tapsC[i].im = 0;
+  }
+  ippsFree(taps64);
+
+
+  
+  // Complex FIR Filter
+  status = ippsFIRSRGetSize (ntap, ipp32fc, &specSize, &bufsize2);
+  if (status != ippStsNoErr) {
+    fprintf(stderr, "Error Getting filter initialisation sizes (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+  pcSpec = (IppsFIRSpec_32fc*)ippsMalloc_8u(specSize);
+  status = ippsFIRSRInit_32fc(tapsC, ntap, ippAlgAuto, pcSpec);
+  if (status != ippStsNoErr) {
+    fprintf(stderr, "Error Initialising filter (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+
+  if (bufsize2 > bufsize) bufsize = bufsize2;
+  buf = ippsMalloc_8u(bufsize);
+  dly = ippsMalloc_32f((ntap-1)*2); // *2 for complex - larger than necessary for real case
+  ippsZero_32f(dly, (ntap-1)*2);
+#endif
 
   for (i=0;i<nchan;i++) {
-    status = posix_memalign((void**)&data[i], 8, nframe*samplesperframe*sizeof(float)*cfact);
-    if (status) {
+    data[i] = ippsMalloc_32f(frameperbuf*samplesperframe*cfact);
+    if (data[i]==NULL) {
       perror("Trying to allocate memory");
       exit(EXIT_FAILURE);
     }
   }
 
-  status = posix_memalign((void**)&framedata, 8, framesize);
-  if (status) {
+  framedata = ippsMalloc_8u(framesize);
+  if (framedata==NULL) {
     perror("Trying to allocate memory");
     exit(EXIT_FAILURE);
   }
-  memset(framedata, 'Z', framesize);
+  ippsSet_8u('Z', framedata, framesize);
 
-  // THIS NEEDS TO MOVE TO MAIN LOOP
-  // END OF MOVE LOOP
-  
   double thismjd = currentmjd();
   int thisday, thismonth, thisyear;
   double ut;
@@ -230,22 +369,74 @@ int main (int argc, char * const argv[]) {
   if (day==-1) day = thisday;
   if (month==-1) month = thismonth;
   if (dayno!=-1) dayno2cal(dayno, year, &day, &month);
+
+  if (timestr!=NULL) {
+    int hour, min, sec;
+    status = sscanf(timestr, "%2d:%2d:%2d", &hour, &min, &sec);
+    if (status==0) {
+      fprintf(stderr, "Warning: Could not parse %s (%d)\n", timestr, status);
+    } else {
+      ut = ((sec/60.0+min)/60.0+hour)/24.0;
+    }
+  }
+
   mjd = cal2mjd(day, month, year)+ut;
 
-  status = createVDIFHeader(&header, framesize, 0, nbits, nchan, iscomplex, "Tt");
-  if (status!=VDIF_NOERROR) {
-    printf("Error creating VDIF header. Aborting\n");
-    exit(1);
+  if (usecodif) {
+    int sampleblock = 8*8; // bits
+    while (sampleblock % completesample) sampleblock += 64;
+    sampleblock /= 64;
+    
+#if USE_CODIFIO
+    header = (char*)&cheader;
+    headerBytes = CODIF_HEADER_BYTES;
+
+    // Need to calculate a couple of these values
+    status = createCODIFHeader(&cheader, framesize, 0, 0, nbits, nchan, sampleblock, 1, samplerate, iscomplex, "Tt");
+    if (status!=CODIF_NOERROR) {
+      printf("Error creating CODIF header. Aborting\n");
+      exit(1);
+    }
+#ifdef TEXTURE
+    // Whack some texture to the extended bytes
+    cheader.extended2 = 0xAAAAAAAA;
+    cheader.extended3 = 0xBBBBBBBB;  
+    cheader.extended4 = 0xCCCCCCCC;
+#else
+    // Whack some texture to the extended bytes
+    cheader.extended2 = 0x0;
+    cheader.extended3 = 0x0;  
+    cheader.extended4 = 0x0;
+#endif
+    setCODIFEpochMJD(&cheader, mjd);
+    setCODIFFrameMJDSec(&cheader, (uint64_t)floor(mjd*60*60*24));
+    setCODIFFrameNumber(&cheader,0);
+#endif
+  } else {
+    header = (char*)&vheader;
+    headerBytes = VDIF_HEADER_BYTES;
+    status = createVDIFHeader(&vheader, framesize, 0, nbits, nchan, iscomplex, "Tt");
+    if (status!=VDIF_NOERROR) {
+      printf("Error creating VDIF header. Aborting\n");
+      exit(1);
+    }
+#ifdef TEXTURE
+    // Whack some texture to the extended bytes
+    vheader.extended2 = 0xAAAAAAAA;
+    vheader.extended3 = 0xBBBBBBBB;  
+    vheader.extended4 = 0xCCCCCCCC;
+#else
+    // Whack some texture to the extended bytes
+    vheader.extended2 = 0x0;
+    vheader.extended3 = 0x0;  
+    vheader.extended4 = 0x0;
+#endif
+
+    setVDIFEpochMJD(&vheader, mjd);
+    setVDIFFrameMJDSec(&vheader, (uint64_t)floor(mjd*60*60*24));
+    setVDIFFrameNumber(&vheader,0);
   }
-  // Whack some texture to the extended bytes
-  header.extended2 = 0xAAAAAAAA;
-  header.extended3 = 0xBBBBBBBB;  
-  header.extended4 = 0xCCCCCCCC;
-
-  setVDIFEpochMJD(&header, mjd);
-  setVDIFFrameMJDSec(&header, (uint64_t)floor(mjd*60*60*24));
-  setVDIFFrameNumber(&header,0);
-
+  
   outfile = open(filename, OPENWRITEOPTIONS, S_IRWXU|S_IRWXG|S_IRWXO); 
   if (outfile==-1) {
     sprintf(msg, "Failed to open output (%s)", filename);
@@ -255,32 +446,32 @@ int main (int argc, char * const argv[]) {
   printf("writing %s\n", filename);
 
   while (nframe>0) {
-    printf("DEBUG: nframe=%llu\n", nframe);
+    generateData(data, frameperbuf, samplesperframe, nchan, iscomplex, bandwidth, tone, &mean, &stdDev);
     
-    generateData(data, frameperbuf, samplesperframe, nchan, iscomplex, bandwidth, tone,
-		 &mean, &stdDev);
-
     for (i=0; i<frameperbuf; i++) {
 
       if (nbits==2) {
 	if (nchan==1) {
-	  status = pack2bit1chan(data, i*samplesperframe, framedata,  mean, stdDev, samplesperframe);
+	  status = pack2bit1chan(data, i*samplesperframe*cfact, framedata,  mean, stdDev, samplesperframe*cfact);
 	  if (status) exit(1);
 	} else {
-	  status = pack2bitNchan(data, nchan, i*samplesperframe, framedata,  mean, stdDev, samplesperframe);
+	  status = pack2bitNchan(data, nchan, i*samplesperframe*cfact, framedata,  mean, stdDev, samplesperframe*cfact);
 	  if (status) exit(1);
 	}
+      } else if (nbits==8) {
+	status = pack8bitNchan(data, nchan, i*samplesperframe*cfact, framedata,  mean, stdDev, samplesperframe*cfact);
       } else {
 	printf("Unsupported number of bits\n");
 	exit(1);
       }
     
-      nr = write(outfile, &header, VDIF_HEADER_BYTES);
+      nr = write(outfile, header, headerBytes);
       if (nr == -1) {
 	sprintf(msg, "Writing to %s:", filename);
+       
 	perror(msg);
 	exit(1);
-      } else if (nr != VDIF_HEADER_BYTES) {
+      } else if (nr != headerBytes) {
 	printf("Error: Partial write to %s\n", filename);
 	exit(1);
       }
@@ -294,12 +485,21 @@ int main (int argc, char * const argv[]) {
 	printf("Error: Partial write to %s\n", filename);
 	exit(1);
       }
-      nextVDIFHeader(&header, framespersec);
+      if (usecodif) {
+#if USE_CODIFIO
+	nextCODIFHeader(&cheader, framespersec);
+#endif
+      } else {
+	nextVDIFHeader(&vheader, framespersec);
+      }
       nframe--;
     }
   }
-  
+
+  free(filename);
   close(outfile);
+  if (timestr!=NULL) free(timestr);
+  
   return(0);
 }
   
@@ -331,6 +531,8 @@ double currentmjd () {
   struct tm *tim;
   struct timeval currenttime;
 
+  setenv("TZ", "", 1); /* Force mktime to return gmt not local time */
+  tzset();
   gettimeofday(&currenttime, NULL);
 
   tim = localtime(&currenttime.tv_sec);
@@ -372,7 +574,7 @@ int MeanStdDev(const float *src, int length, float *mean, float *StdDev) {
   return 0; 
 }
 
-#define F2BIT(f,j) {					\
+#define F2BIT(f,j) {						\
   if(f >= maxposThresh)  /* large positive */		\
     ch[j] = MAXPOS;					\
   else if(f <= maxnegThresh) /* large negative */	\
@@ -384,7 +586,7 @@ int MeanStdDev(const float *src, int length, float *mean, float *StdDev) {
 }
 
 
-int pack2bit1chan(float **in, int off, char *out, float mean, float stddev, int len) {
+int pack2bit1chan(Ipp32f **in, int off, Ipp8u *out, float mean, float stddev, int len) {
   int i, j, ch[4];
   float maxposThresh, maxnegThresh, *f;
   
@@ -414,8 +616,8 @@ int pack2bit1chan(float **in, int off, char *out, float mean, float stddev, int 
   return 0;
 }
 
-int pack2bitNchan(float **in, int nchan, int off, char *out, float mean, float stddev, int len) {
-  // Should check 32bit "off" offset is enough bits
+int pack2bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len) {
+  // Should check 31bit "off" offset is enough bits
   int i, j, n, k, ch[4];
   float maxposThresh, maxnegThresh;
   
@@ -438,6 +640,34 @@ int pack2bitNchan(float **in, int nchan, int off, char *out, float mean, float s
 	j++;
 	k = 0;
       }
+    }
+  }
+  return 0;
+}
+
+Ipp8s scaleclip(Ipp32f x, Ipp32f scale) {
+  x *= scale;
+  if (x>127) // Clip
+    x = 127;
+  else if (x<-127)
+    x = -127;
+  return lrintf(x-0.5);
+}
+
+
+int pack8bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len) {
+  // Should check 31bit "off" offset is enough bits
+  int i, j, n, k;
+
+  float scale = 10/stddev;
+
+  j = 0;
+  k = 0;
+  for (i=off;i<len+off;i++) {
+    for (n=0; n<nchan; n++) {
+      out[j] = scaleclip(in[n][i], scale);
+      out[j] ^= 0x80;
+      j++;
     }
   }
   return 0;
@@ -512,18 +742,67 @@ double tm2mjd(struct tm date) {
   return(cal2mjd(date.tm_mday, date.tm_mon+1, date.tm_year+1900)+dayfrac);
 }
 
+#ifdef USEIPP
+
+void generateData(Ipp32f **data, int nframe, int samplesperframe, int nchan,
+		  int iscomplex, int bandwidth, float tone, float *mean, float *stdDev) {
+  int i, n, nsamp, cfact;
+  float s;
+  Ipp32f thismean, thisStdDev;
+  IppStatus status;
+  if (iscomplex)
+    cfact = 2;
+  else
+    cfact = 1;
+  
+  *mean = 0;
+  *stdDev = 0;
+  nsamp = nframe*samplesperframe;
+
+  if (iscomplex) {
+    status = ippsTone_32fc((Ipp32fc*)scratch, nsamp, 0.1, tone/bandwidth, &phase, ippAlgHintFast);
+  } else {
+    status = ippsTone_32f(scratch, nsamp, 0.05, tone/(bandwidth*2), &phase, ippAlgHintFast);
+  }
+  if (status!=ippStsNoErr) {
+    fprintf(stderr, "Error generating tone (%s)\n", ippGetStatusString(status));
+    exit(1);
+  }
+
+  for (n=0; n<nchan; n++) {
+    status = ippsRandGauss_32f(data[n], nsamp*cfact, pRandGaussState);
+    status = ippsAdd_32f_I(scratch, data[n], nsamp);
+
+    if (iscomplex) {
+      ippsFIRSR_32fc((Ipp32fc*)data[n], (Ipp32fc*)data[n], nsamp, pcSpec, (Ipp32fc*)dly, (Ipp32fc*)dly,  buf);
+    } else {
+      ippsFIRSR_32f(data[n], data[n], nsamp, pSpec, dly, dly, buf);
+    }
+
+    status = ippsMeanStdDev_32f(data[n], nsamp*cfact, &thismean, &thisStdDev, ippAlgHintFast);
+    *mean += thismean;
+    *stdDev += thisStdDev;
+  }
+  *mean /= nchan;
+  *stdDev /= nchan;
+}
+
+
+
+#else 
 void generateData(float **data, int nframe, int samplesperframe, int nchan,
 		  int iscomplex, int bandwidth, float tone, float *mean, float *stdDev) {
   int i, n;
   float s;
 
   for (i=0; i<nframe*samplesperframe; i++) {
-    s = sin(tone/bandwidth*i*M_PI)*0.1; // There will be a phase jump from buffer to buffer
+    s = sin(tone/bandwidth*i*M_PI)*0.05; // There may be a phase jump from buffer to buffer
     for (n=0; n<nchan; n++) {
       data[n][i] = gaussrand()+s;
     }
   }
 
+  
   // Calculate RMS to allow thresholding
   *mean = 0;
   *stdDev = 0;
@@ -536,3 +815,4 @@ void generateData(float **data, int nframe, int samplesperframe, int nchan,
   *mean /= nchan;
   *stdDev /= nchan;
 }
+#endif

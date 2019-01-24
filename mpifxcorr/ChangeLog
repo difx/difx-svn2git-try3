@@ -1,3 +1,8 @@
+2019-01-24  Jan Wagner
+	* mpifxcorr: patched with MPI-sharing of configs to fix slow start / interrupted correlation run
+	* vdifio: copied vdifio from trunk/2.6.x to fix VLBA VDIF issue
+	* new tag, svn copy master_tags/DiFX-RA-1.0.0 master_tags/DiFX-RA-1.0.1
+
 2015-06-24  James Anderson  <anderson@gfz-potsdam.de>
 
 	* src/mpifxcorr.cpp:

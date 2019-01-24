@@ -22,6 +22,7 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+#include <mpi.h>
 #include <string>
 #include <fstream>
 #include <cstdlib>
@@ -73,6 +74,15 @@ public:
 	 * Constructor: Reads and stores the information in the input file
 	 * @param configfile The filename of the input file containing configuration information to be read
 	 * @param id The MPI id of the process (0 = manager, then 1 - N datastreams, N+1 onwards cores
+	 * @param comm The MPI_Comm of the process group
+	 * @param restartsec The restart time into the job in seconds (to restart a job which died halfway)
+	 */
+	Configuration(const char * configfile, int id, MPI_Comm& comm, double restartsec=0.0);
+
+	/**
+	 * Constructor: Reads information from an input file and stores it internally
+	 * @param configfile The filename of the input file containing configuration information to be read
+	 * @param id The MPI id of the process (0 = manager, then 1 - N datastreams, N+1 onwards cores
 	 * @param restartsec The restart time into the job in seconds (to restart a job which died halfway)
 	 */
 	Configuration(const char * configfile, int id, double restartsec=0.0);
@@ -85,6 +95,8 @@ public:
 //@{
 	inline int getMPIId() const { return mpiid; }
 	inline string getJobName() const { return jobname; }
+	inline void setJobName(string jname) { jobname = jname; }
+	void setJobNameFromConfigfilename(string configfilename);
 	inline string getObsCode() const { return obscode; }
 	inline void setObsCode(string ocode) { obscode = ocode; }
 	inline long long getEstimatedBytes() const { return estimatedbytes; }
@@ -413,6 +425,21 @@ public:
 //@}
 
 	/**
+	 * Open a file and return its contents as a new std::istream.
+	 * A Configuration object with MPI ID #0 opens the file locally,
+	 * whereas other IDs wait for file content to be broadcast over MPI.
+	 * @param Name and path of file
+	 * @return Contents as a new std::istream on success, NULL on failure.
+	 */
+	istream* mpiGetFileContent(const char* filename);
+
+	/**
+	 * Read information from an input stream and store it internally into this object
+	 * @param input The input stream containing configuration information to be read
+	 */
+	void parseConfiguration(istream* input);
+
+	/**
 	 * @param configindex The index of the configuration being used (from the table in the input file)
 	 * @param configdatastreamindex The index of the datastream (from the table in the input file)
 	 * @param &sec The output value, seconds portion, returned by reference
@@ -574,7 +601,7 @@ public:
 	 * @param maxSkipLines maximum number of lines to skip if no match found
 	 * @return Whether the input line was correctly read
 	 */
-	bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
+	bool getinputline(istream * input, std::string * line, const std::string &startofheader, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
 	/**
 	 * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
@@ -586,7 +613,7 @@ public:
 	 * @param maxSkipLines maximum number of lines to skip if no match found
 	 * @return Whether the input line was correctly read
 	 */
-	bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
+	bool getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
 	/**
 	 * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
@@ -599,7 +626,7 @@ public:
 	 * @param maxSkipLines maximum number of lines to skip if no match found
 	 * @return Whether the input line was correctly read
 	 */
-	bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
+	bool getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
 
 	/**
@@ -614,7 +641,7 @@ public:
 	 * @param maxSkipLines maximum number of lines to skip if no match found
 	 * @return Whether the input line was correctly read
 	 */
-	bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
+	bool getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
 	/**
 	 * Utility method which reads a line from a file, extracts a value and checks the keyword matches that expected
@@ -629,7 +656,7 @@ public:
 	 * @param maxSkipLines maximum number of lines to skip if no match found
 	 * @return Whether the input line was correctly read
 	 */
-	bool getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, const char *headerPartThree, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
+	bool getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, const char *headerPartThree, bool warnOnFailure=true, int maxSkipLines=INT_MAX) const;
 
 	/**
 	 * Utility method which reads a line from a file, splitting it into a key and a value and storing both
@@ -637,7 +664,7 @@ public:
 	 * @param key String to store key in
 	 * @param val String to store value in
 	 */
-	void getinputkeyval(ifstream * input, std::string * key, std::string * val) const;
+	void getinputkeyval(istream * input, std::string * key, std::string * val) const;
 
 	/**
 	 * Utility method which converts a year,month,day into mjd and hour,minute,second into seconds from start of day
@@ -831,7 +858,7 @@ private:
 	 * @param input Open file stream for the input file
 	 * @return The kind of section encountered
 	 */
-	sectionheader getSectionHeader(ifstream * input);
+	sectionheader getSectionHeader(istream * input);
 
 	/**
 	 * Checks a loaded file for consistency - ensuring all frequencies for a given datastream have the same bandwidth etc
@@ -863,59 +890,59 @@ private:
 	 * @param input Open file stream for the input file
 	 * @return Whether the baseline table was successfully parsed (failure should abort)
 	 */
-	bool processBaselineTable(ifstream * input);
+	bool processBaselineTable(istream * input);
 
 	/**
 	 * Loads the common settings from the file into memory
 	 * @param input Open file stream for the input file
 	 */
-	void processCommon(ifstream * input);
+	void processCommon(istream * input);
 
 	/**
 	 * Loads the config table from the file into memory
 	 * @param input Open file stream for the input file
 	 * @return Whether the config table was successfully parsed (failure should abort)
 	 */
-	bool processConfig(ifstream * input);
+	bool processConfig(istream * input);
 
 	/**
 	 * Loads the rule table from the file into memory
 	 * @param input Open file stream for the input file
 	 * @return Whether the rule table was successfully parsed (failure should abort)
 	 */
-	bool processRuleTable(ifstream * input);
+	bool processRuleTable(istream * input);
 
 	/**
 	 * Loads the datastream table from the file into memory
 	 * @param input Open file stream for the input file
 	 * @return Whether the datastream table was successfully parsed (failure should abort)
 	 */
-	bool processDatastreamTable(ifstream * input);
+	bool processDatastreamTable(istream * input);
 
 	/**
 	 * Loads the data table from the file into memory
 	 * @param input Open file stream for the input file
 	 */
-	void processDataTable(ifstream * input);
+	void processDataTable(istream * input);
 
 	/**
 	 * Loads the frequency table from the file into memory
 	 * @param input Open file stream for the input file
 	 * @return Whether the freq table was successfully parsed (failure should abort)
 	 */
-	bool processFreqTable(ifstream * input);
+	bool processFreqTable(istream * input);
 
 	/**
 	 * Loads the telescope table from the file into memory
 	 * @param input Open file stream for the input file
 	 */
-	void processTelescopeTable(ifstream * input);
+	void processTelescopeTable(istream * input);
 
 	/**
 	 * Loads the network table from the file into memory
 	 * @param input Open file stream for the input file
 	 */
-	void processNetworkTable(ifstream * input);
+	void processNetworkTable(istream * input);
 
 	/**
 	 * Loads the pulsar setup data for the specified config and creates the Polyco objects
@@ -958,6 +985,8 @@ private:
 	static const int DEFAULT_MONITOR_NUMCHANNELS = 32;
 
 	int mpiid;
+	MPI_Comm mpicomm;
+	const bool enableMpi;
 	char header[MAX_KEY_LENGTH];
 	bool commonread, configread, datastreamread, freqread, ruleread, baselineread;
 	bool consistencyok, commandthreadinitialised, dumpsta, dumplta, dumpkurtosis;

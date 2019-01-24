@@ -1,5 +1,5 @@
 ####### DIFX VERSION ########################
-export DIFX_VERSION=DiFX-RA-1.0.0
+export DIFX_VERSION=DiFX-RA-1.0.1
 
 ####### ROOT PATHS ##########################
 export DIFXROOT=/cluster/difx/temp2

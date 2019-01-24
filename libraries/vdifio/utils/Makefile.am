@@ -1,3 +1,4 @@
+
 AM_CPPFLAGS  = \
 	-I$(top_srcdir)/src -D_FILE_OFFSET_BITS=64
 
@@ -13,6 +14,7 @@ bin_PROGRAMS = \
 	fakemultiVDIF \
 	extractSingleVDIFThread \
 	extractVDIFThreads \
+	filterVDIF \
 	countVDIFPackets \
 	printVDIF \
 	printVDIFgaps \
@@ -22,13 +24,18 @@ bin_PROGRAMS = \
 	vdif2to8 \
 	vdifChanSelect \
 	vmux \
-	vsum \
-	generateVDIF
+	vsum
+
+if USE_MARK6SG
+  bin_PROGRAMS += mk6vmux
+endif
+
+if WITH_GENERATEVDIF
+  bin_PROGRAMS += generateVDIF
+endif
 
 noinst_PROGRAMS = \
-	testcornerturners \
-	testmk6 \
-	testmk6mux
+	testcornerturners
 
 dist_bin_SCRIPTS = \
 	vdifbstate \
@@ -38,6 +45,9 @@ dist_bin_SCRIPTS = \
 
 testcornerturners_SOURCES = \
 	testcornerturners.c
+
+mk6vmux_SOURCES = \
+	mk6vmux.c
 
 stripVDIF_SOURCES = \
 	stripVDIF.c
@@ -62,6 +72,12 @@ padVDIF_SOURCES = \
 
 extractSingleVDIFThread_SOURCES = \
 	extractSingleVDIFThread.c
+
+extractVDIFThreads_SOURCES = \
+	extractVDIFThreads.c
+
+filterVDIF_SOURCES = \
+	filterVDIF.c
 
 cleanVDIF_SOURCES = \
 	cleanVDIF.c
@@ -90,14 +106,15 @@ vdifChanSelect_SOURCES = \
 generateVDIF_SOURCES = \
 	generateVDIF.c
 
+if USE_CODIFIO
+  generateVDIF_LDADD = $(IPP_LIBS) $(LDADD) $(CODIFIO_LIBS)
+else
+  generateVDIF_LDADD = $(IPP_LIBS) $(LDADD)
+endif
+
 vmux_SOURCES = \
 	vmux.c
 
 vsum_SOURCES = \
 	vsum.c
 
-testmk6_SOURCES = \
-	testmk6.c
-
-testmk6mux_SOURCES = \
-	testmk6mux.c

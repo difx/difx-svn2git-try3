@@ -1,18 +1,20 @@
-SUBDIRS = \
-	src \
-	utils
+ACLOCAL_AMFLAGS = -I m4
 
 if ENABLE_PYTHON_CTYPES
-SUBDIRS += python
+PYTHON_OPT = python
 endif
 
+SUBDIRS = \
+	src \
+	utils \
+	$(PYTHON_OPT)
+
 EXTRA_DIST = \
-	vdifio.spec.in
+	m4 \
+	vlbi-vdifio.spec.in
 
-DIST_SUBDIRS = $(SUBDIRS) python
-
-dist-hook: vdifio.spec
-	cp vdifio.spec $(distdir)
+dist-hook: vlbi-vdifio.spec
+	cp vlbi-vdifio.spec $(distdir)
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = vdifio.pc

@@ -32,59 +32,12 @@
 #include <string.h>
 #include <assert.h>
 #include <inttypes.h>
+#include "dateutils.h"
 #include "vdifio.h"
 
 
 #define VDIF_VERSION 0
 
-#define UNIXZERO_MJD 40587
-
-void mjd2ymd(int mjd, int *year, int *month, int *day)
-{
-	int jd, temp1, temp2;
-
-	jd = mjd + 2400001;
-
-	// Do some rather cryptic calculations
-
-	temp1 = 4*(jd+((6*(((4*jd-17918)/146097)))/4+1)/2-37);
-	temp2 = 10*(((temp1-237)%1461)/4)+5;
-
-	*year = temp1/1461-4712;
-	*month =((temp2/306+2)%12)+1;
-	*day = (temp2%306)/10+1;
-}
-
-int ymd2doy(int yr, int mo, int day)
-{
-        int monstart1[] = {0,31,59,90,120,151,181,212,243,273,304,334};
-        int monstart2[] = {0,31,60,91,121,152,182,213,244,274,305,335};
-        int L2;
-
-        L2 = yr/4-(yr+7)/4-yr/100+(yr+99)/100+yr/400-(yr+399)/400;
-        if(L2 == -1)
-        {
-                return day + monstart2[mo-1];
-        }
-        else
-        {
-                return day + monstart1[mo-1];
-        }
-}
-
-int ymd2mjd(int yr, int mo, int day)
-{
-        int doy;
-        int yr1 = yr - 1;
-
-        doy = ymd2doy(yr, mo, day);
-
-        return doy-678576+365*yr1+yr1/4-yr1/100+yr1/400;
-}
-
-//int epoch2mjd(int epoch) {
-//  return ymd2mjd(2000 + epoch/2, (epoch%2)*6+1, 1); // Year and Jan/July
-//}
 
 int createVDIFHeader(vdif_header *header, int dataarraylength, int threadid, int bits, int nchan,
 		      int iscomplex, char stationid[3]) {
@@ -317,9 +270,9 @@ static void fprintVDIFHeaderLong(FILE *out, const vdif_header *header)
 	fprintf(out, "  legacymode = %d\n", header->legacymode);
 	fprintf(out, "  invalid = %d\n", header->invalid);
 	fprintf(out, "  version = %d\n", header->version);
-	if(stnCode[0] >= ' ' && stnCode[0] <= 127 && (stnCode[1] >= ' ' || stnCode[1] == 0) && stnCode[1] <= 127)
+	if(isprint(stnCode[0]) && isprint(stnCode[1]))
 	{
-		fprintf(out, "  stationid = 0x%X = %d = '%c%c'\n", header->stationid, header->stationid, stnCode[0], stnCode[1]);
+		fprintf(out, "  stationid = 0x%X = %d = '%c%c'\n", header->stationid, header->stationid, stnCode[1], stnCode[0]);
 	}
 	else
 	{
@@ -332,26 +285,44 @@ static void fprintVDIFHeaderLong(FILE *out, const vdif_header *header)
 		if(header->eversion == 1)
 		{
 			const vdif_edv1_header *edv1 = (const vdif_edv1_header *)header;
-			
+
 			fprintf(out, "  samprate = 0x%06X = %d %s\n", edv1->samprate, edv1->samprate, edv1->samprateunits ? "MHz" : "kHz");
 			fprintf(out, "  syncword = 0x%08X\n", edv1->syncword);
 			fprintf(out, "  name = %8s", edv1->name);
 		}
 		else if(header->eversion == 2)
 		{
-			const vdif_edv2_header *edv2 = (const vdif_edv2_header *)header;
-
-			fprintf(out, "  polblock = %d\n", edv2->polblock);
-			fprintf(out, "  quadrant-1 = %d\n", edv2->quadrantminus1);
-			fprintf(out, "  correlator = %d\n", edv2->correlator);
-			fprintf(out, "  sync/magic = %x\n", edv2->sync);
-			fprintf(out, "  PIC status = %" PRIu32, edv2->status);
-			fprintf(out, "  VTP PSN = %" PRIu64, edv2->psn);
+			const vdif_edv2_header_generic *edv2 = (const vdif_edv2_header_generic *)header;
+			if (edv2->subsubversion == VDIF_EDV2_SUBVER_ALMA)
+			{
+				const vdif_edv2_header_alma *edv2a = (const vdif_edv2_header_alma *)header;
+				fprintf(out, "  polblock = %d\n", edv2a->polblock);
+				fprintf(out, "  quadrant-1 = %d\n", edv2a->quadrantminus1);
+				fprintf(out, "  correlator = %d\n", edv2a->correlator);
+				fprintf(out, "  PIC status = %" PRIu32 "\n", edv2a->picstatus);
+				fprintf(out, "  VTP PSN = %" PRIu64 "\n", edv2a->psn);
+			}
+			else if (edv2->subsubversion == VDIF_EDV2_SUBVER_R2DBE)
+			{
+				const vdif_edv2_header_r2dbe *edv2r2 = (const vdif_edv2_header_r2dbe *)header;
+				fprintf(out, "  polblock = %d\n", edv2r2->polblock);
+				fprintf(out, "  BDC sideband = %d\n", edv2r2->bdcsideband);
+				fprintf(out, "  rx sideband = %d\n", edv2r2->rxsideband);
+				fprintf(out, "  1PPS offset = %+" PRId32 " = %+.4f usec\n", edv2r2->ppsdiff, edv2r2->ppsdiff/256.0f);
+				fprintf(out, "  VTP PSN = %" PRIu64 "\n", edv2r2->psn);
+			}
+			else
+			{
+				fprintf(out, "  unknown EDV2 subversion = %" PRIu32 "\n", edv2->subsubversion);
+				fprintf(out, "  word5 = %" PRIu32 "\n", edv2->word5);
+				fprintf(out, "  word6 = %" PRIu32 "\n", edv2->word6);
+				fprintf(out, "  word7 = %" PRIu32 "\n", edv2->word7);
+			}
 		}
 		else if(header->eversion == 3)
 		{
 			const vdif_edv3_header *edv3 = (const vdif_edv3_header *)header;
-			
+
 			fprintf(out, "  samprate = 0x%06X = %d %s\n", edv3->samprate, edv3->samprate, edv3->samprateunits ? "MHz" : "kHz");
 			fprintf(out, "  syncword = 0x%08X\n", edv3->syncword);
 			fprintf(out, "  tuning = 0x%08X = %8.6f MHz\n", edv3->tuning, edv3->tuning/16777216.0);
@@ -361,6 +332,20 @@ static void fprintVDIFHeaderLong(FILE *out, const vdif_header *header)
 			fprintf(out, "  sideband = %d -> %s\n", edv3->sideband, edv3->sideband ? "U" : "L");
 			fprintf(out, "  rev = %d.%d\n", edv3->majorrev, edv3->minorrev);
 			fprintf(out, "  personalitytype = 0x%2X\n", edv3->personalitytype);
+		}
+		else if(header->eversion == 4)
+		{
+			const vdif_edv4_header *edv4 = (const vdif_edv4_header *)header;
+			int64_t i;
+
+			fprintf(out, "  masklength = %d\n", edv4->masklength);
+			fprintf(out, "  syncword = 0x%08X\n", edv4->syncword);
+			fprintf(out, "  validity mask = 0x");
+			for(i = edv4->masklength - 1; i >= 0; --i)
+			{
+				fprintf(out, "%c", ((edv4->validitymask) & (1LL << i)) ? '1' : '0');
+			}
+			fprintf(out, "\n");
 		}
 		else
 		{
@@ -387,8 +372,25 @@ static void fprintVDIFHeaderShort(FILE *out, const vdif_header *header)
 		}
 		else if(header->eversion == 2)
 		{
-			const vdif_edv2_header *edv2 = (const vdif_edv2_header *)header;
-			fprintf(out, " %8d %13d %" PRIu64, edv2->polblock, edv2->status, edv2->psn);
+			const vdif_edv2_header_generic *edv2 = (const vdif_edv2_header_generic *)header;
+			if (edv2->subsubversion == VDIF_EDV2_SUBVER_ALMA)
+			{
+				const vdif_edv2_header_alma *edv2a = (const vdif_edv2_header_alma *)header;
+				fprintf(out, " PIC-%s-Q%d%c %13" PRIu32 " %" PRIu64,  // e.g. PIC-BL-Q1Y
+					edv2a->correlator == 0 ? "2A" : "BL",
+					edv2a->quadrantminus1+1,
+					edv2a->polblock == 0 ? 'X' : 'Y',
+					edv2a->picstatus, edv2a->psn);
+			}
+			else if (edv2->subsubversion == VDIF_EDV2_SUBVER_R2DBE)
+			{
+				const vdif_edv2_header_r2dbe *edv2r2 = (const vdif_edv2_header_r2dbe *)header;
+				fprintf(out, " %3d %3d %2d %+13d %" PRIu64, edv2r2->polblock, edv2r2->bdcsideband, edv2r2->rxsideband, edv2r2->ppsdiff, edv2r2->psn);
+			}
+			else
+			{
+				fprintf(out, " %" PRIu64 " %" PRIu64 " %" PRIu64, edv2->word5, edv2->word6, edv2->word7);
+			}
 		}
 		else if(header->eversion == 3)
 		{
@@ -397,6 +399,17 @@ static void fprintVDIFHeaderShort(FILE *out, const vdif_header *header)
 
 			samprate = edv3->samprate * (edv3->samprateunits ? 1000000LL : 1000LL);
 			fprintf(out, " %10lld 0x%08X %3d %2d %2d %10.6f    %c %d.%d 0x%2X", samprate, edv3->syncword, edv3->dbeunit, edv3->ifnumber, edv3->subband, edv3->tuning/16777216.0, edv3->sideband ? 'U' : 'L', edv3->majorrev, edv3->minorrev, edv3->personalitytype);
+		}
+		else if(header->eversion == 4)
+		{
+			const vdif_edv4_header *edv4 = (const vdif_edv4_header *)header;
+			int64_t i;
+
+			fprintf(out, "  %2d   0x%08X 0x", edv4->masklength, edv4->syncword);
+			for(i = edv4->masklength - 1; i >= 0; --i)
+			{
+				fprintf(out, "%c", ((edv4->validitymask) & (1LL << i)) ? '1' : '0');
+			}
 		}
 	}
 	else
@@ -415,11 +428,27 @@ static void fprintVDIFHeaderColumns(FILE *out, const vdif_header *header)
 	}
 	else if(header->eversion == 2)
 	{
-		fprintf(out, " PolBlock FPGA_PPS_diff PSN");
+		const vdif_edv2_header_generic *edv2 = (const vdif_edv2_header_generic *)header;
+		if (edv2->subsubversion == VDIF_EDV2_SUBVER_ALMA)
+		{
+			fprintf(out, "     Origin    PIC_Status PSN");
+		}
+		else if (edv2->subsubversion == VDIF_EDV2_SUBVER_R2DBE)
+		{
+			fprintf(out, " Pol BDC RX FPGA_PPS_diff PSN");
+		}
+		else
+		{
+			fprintf(out, " PolBlock FPGA_PPS_diff PSN");
+		}
 	}
 	else if(header->eversion == 3)
 	{
 		fprintf(out, " SampleRate   SyncWord DBE IF Sub Tuning(MHz) Side Rev Pers");
+	}
+	else if(header->eversion == 4)
+	{
+		fprintf(out, " MgdThds SyncWord ValidityMask");
 	}
 	fprintf(out, "\n");
 }

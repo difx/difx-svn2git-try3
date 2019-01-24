@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2014-2015 by Walter Brisken, Adam Deller                *
+ *   Copyright (C) 2014-2018 by Walter Brisken, Adam Deller                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: stripVDIF.c 2006 2010-03-04 16:43:04Z AdamDeller $
+ * $Id: printVDIFheader.c 8498 2018-09-21 18:47:05Z WalterBrisken $
  * $HeadURL:  $
- * $LastChangedRevision: 2006 $
- * $Author: AdamDeller $
- * $LastChangedDate: 2010-03-04 09:43:04 -0700 (Thu, 04 Mar 2010) $
+ * $LastChangedRevision: 8498 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2018-09-21 20:47:05 +0200 (Fri, 21 Sep 2018) $
  *
  *==========================================================================*/
 
@@ -32,21 +32,37 @@
 #include <string.h>
 #include <stdint.h>
 #include "vdifio.h"
-#include "vdifmark6.h"
+#include "config.h"
+
+#ifdef HAVE_MARK6SG
+#include <mark6sg/mark6gather.h>
+#include "mark6gather_vdif.h"
+#endif
 
 const char program[] = "printVDIFheader";
-const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
-const char version[] = "0.3";
-const char verdate[] = "20150621";
+const char author[]  = "Walter Brisken <wbrisken@lbo.us>";
+const char version[] = "0.7";
+const char verdate[] = "20180921";
+
+static void printVersion()
+{
+	fprintf(stderr, "%s ver. %s  %s  %s\n", program, version, author, verdate);
+}
 
 static void usage()
 {
-	fprintf(stderr, "\n%s ver. %s  %s  %s\n\n", program, version, author, verdate);
+	fprintf(stderr, "\n");
+	printVersion();
+	fprintf(stderr, "\n");
 	fprintf(stderr, "A program to dump some basic info about VDIF packets to the screen\n");
-	fprintf(stderr, "\nUsage: %s <VDIF input file> [<framesize> [<prtlev>] ]\n", program);
-	fprintf(stderr, "\n<VDIF input file> is the name of the VDIF file to read\n");
+	fprintf(stderr, "\nUsage: %s [options] <VDIF input file> [<framesize> [<prtlev> [<offset>] ] ]\n", program);
+	fprintf(stderr, "\n[options] can include:\n");
+	fprintf(stderr, "  -h or --help    print help information\n");
+	fprintf(stderr, "  --version       print version information\n");
+	fprintf(stderr, "\n<VDIF input file> is the name of the VDIF file to read (- for stdin)\n");
 	fprintf(stderr, "\n<framesize> VDIF frame size, including header (5032 for VLBA, 8224 for R2DBE)\n");
-	fprintf(stderr, "\n<prtlev> is output type: hex short long\n\n");
+	fprintf(stderr, "\n<prtlev> is output type: none hex short long\n");
+	fprintf(stderr, "\n<offset> is a number of bytes to skip at start of file\n\n");
 	fprintf(stderr, "In normal operation this program searches for valid VDIF frames.\n");
 	fprintf(stderr, "The heuristics used to identify valid frames are somewhat weak as\n");
 	fprintf(stderr, "VDIF has no formal sync word.  Some data can fool this program.\n\n");
@@ -56,6 +72,9 @@ static void usage()
 	fprintf(stderr, "these is used, the frame finding heuristics are bypassed.\n");
 	fprintf(stderr, "If <framesize> is not provided, or if it is set to 0, the frame size\n");
 	fprintf(stderr, "will be determined by the first frame, _even if it is invalid_!\n\n");
+#ifdef HAVE_MARK6SG
+	fprintf(stderr, "This can be run on Mark6 data directly.\n\n");
+#endif
 }
 
 int main(int argc, char **argv)
@@ -71,15 +90,37 @@ int main(int argc, char **argv)
 	int nSkip = 0;
 	int force = 0;
 	int n;	/* count read loops */
+#ifdef HAVE_MARK6SG
 	int isMark6 = 0;
+	int mk6Version = 0;
+	int mk6PacketSize = 0;
+#endif
 	int mk6BlockHeaderSize = 0;
 	int framesPerMark6Block = 0;
+	int printHeader = 1;		/* if 1, print normal output, otherwise just errors */
+	int lastSecond = -1;
+	int nFrame = 0;
 
-	if(argc < 2 || argc > 4)
+
+	if(argc < 2 || argc > 5)
+	{
+		fprintf(stderr, "\nPlease run with --help to get help information\n\n");
+
+		return EXIT_FAILURE;
+	}
+
+	if(strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)
 	{
 		usage();
 
-		return EXIT_FAILURE;
+		return EXIT_SUCCESS;
+	}
+	
+	if(strcmp(argv[1], "--version") == 0)
+	{
+		printVersion();
+
+		return EXIT_SUCCESS;
 	}
 
 	if(strcmp(argv[1], "-") == 0)
@@ -149,12 +190,24 @@ int main(int argc, char **argv)
 			lev = VDIFHeaderPrintLevelLong;
 			force = 1;
 		}
+		else if(strcmp(argv[3], "none") == 0)
+		{
+			printHeader = 0;	// just print errors
+		}
 		else
 		{
 			fprintf(stderr, "Print level must be one of hex, short or long.\n");
 			
 			exit(EXIT_FAILURE);
 		}
+	}
+	if(argc > 4)
+	{
+		long int jumpBytes;
+
+		jumpBytes = atol(argv[4]);
+		fprintf(stderr, "Jumping %ld bytes into file\n", jumpBytes);
+		fseek(input, jumpBytes, SEEK_SET);
 	}
 
 	if(framesize <= 0)
@@ -182,14 +235,17 @@ int main(int argc, char **argv)
 	for(n = 0;; ++n)
 	{
 		int index, fill, readbytes;
+		int fr;
 
 		index = 0;
+		fr = 0;
 
   		readbytes = fread(buffer+leftover, 1, MaxFrameSize-leftover, input);
 		if(readbytes <= 0)
 		{
 			break;
 		}
+#ifdef HAVE_MARK6SG
 		if(n == 0)
 		{
 			const Mark6Header *m6h;
@@ -204,14 +260,17 @@ int main(int argc, char **argv)
 
 				if(mk6BlockHeaderSize > 0)
 				{
-					printf("This looks like a Mark6 data file.  I'll skip the first %d bytes.\n", headerSize);
+					printf("This looks like a Mark6 data file (version=%d).  I'll skip the first %d bytes.\n", m6h->version, headerSize);
 					printMark6Header(m6h);
 					index += headerSize;	// the first header is larger than the inter-chunk headers
 					isMark6 = 1;
 					framesPerMark6Block = (m6h->block_size - mk6BlockHeaderSize)/m6h->packet_size;
+					mk6Version = m6h->version;
+					mk6PacketSize = m6h->packet_size;
 				}
 			}
 		}
+#endif
 		fill = readbytes + leftover;
 		for(;;)
 		{
@@ -223,14 +282,22 @@ int main(int argc, char **argv)
 				break;
 			}
 
+#ifdef HAVE_MARK6SG
 			if(isMark6)
 			{
-				if(framesread % framesPerMark6Block == 0)
+				if(fr == framesPerMark6Block)
 				{
+					fr = 0;
+					if(mk6Version > 1)
+					{
+						int32_t *blockSize = (int32_t *)(buffer+index+4);
+						framesPerMark6Block = (*blockSize - mk6BlockHeaderSize)/mk6PacketSize;
+					}
 					/* skip over the block headers to prevent warnings */
 					index += mk6BlockHeaderSize;
 				}
 			}
+#endif
 
 			header = (const vdif_header *)(buffer + index);
 
@@ -251,9 +318,6 @@ int main(int argc, char **argv)
 						first = 0;
 						fprintf(stderr, "Error: non-compliant VDIF data: this data has EDV set to 0 but the extended header is not identically 0\n");
 					}
-					++index;
-					++nSkip;
-					continue;
 				}
 				if(header->eversion == 1 || header->eversion == 3)
 				{
@@ -262,6 +326,8 @@ int main(int argc, char **argv)
 					ui = (const uint32_t *)(buffer + index);
 					if(ui[5] != 0xACABFEED)
 					{
+						++index;
+						++nSkip;
 						continue;
 					}
 				}
@@ -273,23 +339,42 @@ int main(int argc, char **argv)
 				}
 			}
 
-			if(lev == VDIFHeaderPrintLevelShort && framesread % 24 == 0)
+			if(lastSecond != header->seconds)
 			{
-				printf("FrameNum ");
-				printVDIFHeader(header, VDIFHeaderPrintLevelColumns);
+				if(lastSecond >= 0)
+				{
+					printf("Second %d had %d frames\n", lastSecond, nFrame);
+				}
+				else
+				{
+					printf("First second = %d\n", header->seconds);
+				}
+				nFrame = 0;
+				lastSecond = header->seconds;
 			}
-			if(lev == VDIFHeaderPrintLevelLong)
+			++nFrame;
+
+			if(printHeader)
 			{
-				printf("Frame %lld ", framesread);
+				if(lev == VDIFHeaderPrintLevelShort && framesread % 24 == 0)
+				{
+					printf("FrameNum ");
+					printVDIFHeader(header, VDIFHeaderPrintLevelColumns);
+				}
+				if(lev == VDIFHeaderPrintLevelLong)
+				{
+					printf("Frame %lld ", framesread);
+				}
+				else
+				{
+					printf("%8lld ", framesread);
+				}
+				printVDIFHeader(header, lev);
 			}
-			else
-			{
-				printf("%8lld ", framesread);
-			}
-			printVDIFHeader(header, lev);
 			
 			index += framesize;
 			++framesread;
+			++fr;
 		}
 	}
 

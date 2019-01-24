@@ -33,27 +33,9 @@
 
 int Configuration::MONITOR_TCP_WINDOWBYTES;
 
-Configuration::Configuration(const char * configfile, int id, double restartsec)
-		: mpiid(id), consistencyok(true), restartseconds(restartsec)
+Configuration::Configuration(const char * configfile, int id, MPI_Comm& comm, double restartsec)
+		: mpiid(id), consistencyok(true), restartseconds(restartsec), enableMpi(true)
 {
-	string configfilestring = configfile;
-	size_t basestart = configfilestring.find_last_of('/');
-	if(basestart == string::npos)
-		basestart = 0;
-	else
-		basestart = basestart+1;
-	jobname = configfilestring.substr(basestart, string(configfile).find_last_of('.')-basestart);
-	char * difxmtu = getenv("DIFX_MTU");
-	if(difxmtu == 0)
-		mtu = 1500;
-	else
-		mtu = (unsigned int)(strtoul(difxmtu, 0, 0));
-	if (mtu > 9000) {
-		cerror << startl << "DIFX_MTU was set to " << mtu << " - resetting to 9000 bytes (max)" << endl;
-		mtu = 9000;
-	}
-
-	sectionheader currentheader = INPUT_EOF;
 	commonread = false;
 	datastreamread = false;
 	configread = false;
@@ -64,16 +46,138 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
 	estimatedbytes = 0;
 	model = NULL;
 
+	setJobNameFromConfigfilename(string(configfile));
+	char * difxmtu = getenv("DIFX_MTU");
+	if(difxmtu == 0)
+		mtu = 1500;
+	else
+		mtu = (unsigned int)(strtoul(difxmtu, 0, 0));
+	if (mtu > 9000) {
+		cerror << startl << "DIFX_MTU was set to " << mtu << " - resetting to 9000 bytes (max)" << endl;
+		mtu = 9000;
+	}
+
+	if (MPI_Comm_dup(comm, &mpicomm) != MPI_SUCCESS)
+		cfatal << "Failed MPI setup on MPI_Comm_dup() duplication! Correlation may produce strange results!" << endl;
+
 	//open the file
-	ifstream * input = new ifstream(configfile);
-	if(input->fail() || !input->is_open())
+	istream * input = mpiGetFileContent(configfile);
+	if (input == NULL)
 	{
 		//need to write this message from all processes - sometimes it is visible to head node but no-one else...
 		cfatal << startl << "Cannot open file " << configfile << " - aborting!!!" << endl;
 		consistencyok = false;
 	}
 	else
-		currentheader = getSectionHeader(input);
+	{
+		parseConfiguration(input);
+		cinfo << startl << "Finished loading configuration" << endl;
+		delete input;
+	}
+}
+
+Configuration::Configuration(const char * configfile, int id, double restartsec)
+		: mpiid(id), consistencyok(true), restartseconds(restartsec), enableMpi(false)
+{
+	commonread = false;
+	datastreamread = false;
+	configread = false;
+	freqread = false;
+	ruleread = false;
+	baselineread = false;
+	maxnumchannels = 0;
+	estimatedbytes = 0;
+	model = NULL;
+
+	setJobNameFromConfigfilename(string(configfile));
+	char * difxmtu = getenv("DIFX_MTU");
+	if(difxmtu == 0)
+		mtu = 1500;
+	else
+		mtu = (unsigned int)(strtoul(difxmtu, 0, 0));
+	if (mtu > 9000) {
+		cerror << startl << "DIFX_MTU was set to " << mtu << " - resetting to 9000 bytes (max)" << endl;
+		mtu = 9000;
+	}
+
+	//open the file
+	istream * input = mpiGetFileContent(configfile);
+	if (input == NULL)
+	{
+		//need to write this message from all processes - sometimes it is visible to head node but no-one else...
+		cfatal << startl << "Cannot open file " << configfile << " - aborting!!!" << endl;
+		consistencyok = false;
+	}
+	else
+	{
+		parseConfiguration(input);
+		cinfo << startl << "Finished loading configuration" << endl;
+		delete input;
+	}
+}
+
+void Configuration::setJobNameFromConfigfilename(string configfilename)
+{
+	size_t basestart = configfilename.find_last_of('/');
+	if(basestart == string::npos)
+		basestart = 0;
+	else
+		basestart = basestart+1;
+	size_t baseend = configfilename.find_last_of('.');
+	if (baseend == string::npos)
+		baseend = configfilename.size();
+	jobname = configfilename.substr(basestart, baseend-basestart);
+}
+
+istream* Configuration::mpiGetFileContent(const char* filename)
+{
+	string filecontent;
+	int filelen = -1;
+	int mpierr;
+	if (mpiid == fxcorr::MANAGERID || !enableMpi)
+	{
+		ifstream in(filename); // could also use ifstreamOpen() here for a persisting/reattempting open()
+		if (in.is_open() && !in.fail())
+		{
+			filecontent = string((std::istreambuf_iterator<char>(in)), (std::istreambuf_iterator<char>()));
+			filelen = filecontent.size() + 1;
+		}
+		else
+		{
+			return NULL;
+		}
+	}
+
+	if (!enableMpi)
+		return new stringstream(filecontent);
+
+	MPI_Barrier(mpicomm);
+	mpierr = MPI_Bcast((void*)&filelen, 1, MPI_INT, fxcorr::MANAGERID, mpicomm);
+	if (mpierr != MPI_SUCCESS)
+		cwarn << startl << "MPI_Bcast of file length " << filelen << " for " << filename << " returned MPI error #" << mpierr << endl;
+	if (filelen < 0)
+		cwarn << startl << "File length of " << filename << " is " << filelen << endl;
+	if (filelen < 0 || mpierr != MPI_SUCCESS)
+		return NULL;
+
+	if(mpiid != fxcorr::MANAGERID)
+		filecontent.resize(filelen);
+	mpierr = MPI_Bcast(const_cast<char*>(filecontent.data()), filelen, MPI_CHAR, fxcorr::MANAGERID, mpicomm);
+	if (mpierr != MPI_SUCCESS)
+		cwarn << startl << "MPI_Bcast of file content of " << filename << " returned MPI error #" << mpierr << endl;
+
+	//if(mpiid == fxcorr::MANAGERID)
+	//  cverbose << startl << "Shared content of " << filename << " of " << filelen << " byte over MPI" << endl;
+	//else
+	//  cverbose << startl << "Received content of " << filename << " of " << filelen << " byte over MPI" << endl;
+
+	return new stringstream(filecontent);
+}
+
+void Configuration::parseConfiguration(istream* input)
+{
+	sectionheader currentheader = INPUT_EOF;
+	currentheader = getSectionHeader(input);
 
 	//go through all the sections and tables in the input file
 	while(consistencyok && currentheader != INPUT_EOF)
@@ -158,8 +262,7 @@ Configuration::Configuration(const char * configfile, int id, double restartsec)
 			cfatal << startl << "One or more sections missing from input file - aborting!!!" << endl;
 		consistencyok = false;
 	}
-	input->close();
-	delete input;
+	//input->close();
 
 	if (consistencyok) {
 
@@ -830,7 +933,7 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
 	}
 }
 
-Configuration::sectionheader Configuration::getSectionHeader(ifstream * input)
+Configuration::sectionheader Configuration::getSectionHeader(istream * input)
 {
 	string line = "";
 
@@ -863,7 +966,7 @@ Configuration::sectionheader Configuration::getSectionHeader(ifstream * input)
 	return UNKNOWN;
 }
 
-bool Configuration::processBaselineTable(ifstream * input)
+bool Configuration::processBaselineTable(istream * input)
 {
 	int tempint, dsband, findex, matchfindex;
 	int ** tempintptr;
@@ -1015,7 +1118,7 @@ bool Configuration::processBaselineTable(ifstream * input)
 	return true;
 }
 
-void Configuration::processCommon(ifstream * input)
+void Configuration::processCommon(istream * input)
 {
 	string line;
 
@@ -1059,7 +1162,7 @@ void Configuration::processCommon(ifstream * input)
 	commonread = true;
 }
 
-bool Configuration::processConfig(ifstream * input)
+bool Configuration::processConfig(istream * input)
 {
 	string line;
 
@@ -1137,7 +1240,7 @@ bool Configuration::processConfig(ifstream * input)
 	return true;
 }
 
-bool Configuration::processDatastreamTable(ifstream * input)
+bool Configuration::processDatastreamTable(istream * input)
 {
 	datastreamdata * dsdata;
 	int configindex, freqindex, decimationfactor, tonefreq;
@@ -1551,21 +1654,21 @@ bool Configuration::processDatastreamTable(ifstream * input)
 		return false;
 
 	//read in the core numthreads info
-	ifstream coreinput(coreconffilename.c_str());
+	istream * coreinput = mpiGetFileContent(coreconffilename.c_str());
 	numcoreconfs = 0;
-	if(!coreinput.is_open() || coreinput.bad())
+	if(coreinput == NULL)
 	{
 		cerror << startl << "Could not open " << coreconffilename << " - will set all numthreads to 1!" << endl;
 	}
 	else
 	{
-		getinputline(&coreinput, &line, "NUMBER OF CORES");
+		getinputline(coreinput, &line, "NUMBER OF CORES");
 		int maxlines = atoi(line.c_str());
 		numprocessthreads = new int[maxlines];
-		getline(coreinput, line);
+		getline(*coreinput, line);
 		for(int i=0;i<maxlines;i++)
 		{
-			if(coreinput.eof())
+			if(coreinput->eof())
 			{
 				cerror << startl << "Hit the end of the file! Setting the numthread for Core " << i << " to 1" << endl;
 				numprocessthreads[numcoreconfs++] = 1;
@@ -1573,17 +1676,17 @@ bool Configuration::processDatastreamTable(ifstream * input)
 			else
 			{
 				numprocessthreads[numcoreconfs++] = atoi(line.c_str());
-				getline(coreinput, line);
+				getline(*coreinput, line);
 			}
 		}
+		delete coreinput;
 	}
-	coreinput.close();
 
 	datastreamread = true;
 	return true;
 }
 
-bool Configuration::processRuleTable(ifstream * input)
+bool Configuration::processRuleTable(istream * input)
 {
 	int count=0;
 	string key, val;
@@ -1648,7 +1751,7 @@ bool Configuration::processRuleTable(ifstream * input)
 	return true;
 }
 
-void Configuration::processDataTable(ifstream * input)
+void Configuration::processDataTable(istream * input)
 {
 	string line;
 
@@ -1662,7 +1765,7 @@ void Configuration::processDataTable(ifstream * input)
 	}
 }
 
-bool Configuration::processFreqTable(ifstream * input)
+bool Configuration::processFreqTable(istream * input)
 {
 	string line, key;
 
@@ -1739,7 +1842,7 @@ bool Configuration::processFreqTable(ifstream * input)
 	return true;
 }
 
-void Configuration::processTelescopeTable(ifstream * input)
+void Configuration::processTelescopeTable(istream * input)
 {
 	string line;
 
@@ -1762,7 +1865,7 @@ void Configuration::processTelescopeTable(ifstream * input)
 	}
 }
 
-void Configuration::processNetworkTable(ifstream * input)
+void Configuration::processNetworkTable(istream * input)
 {
 	string line;
 
@@ -2676,14 +2779,14 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 
 	if(mpiid == 0) //only write one copy of this info message
 		cinfo << startl << "About to process phased array file " << filename << endl;
-	ifstream phasedarrayinput(filename.c_str(), ios::in);
-	if(!phasedarrayinput.is_open() || phasedarrayinput.bad())
+	istream* phasedarrayinput = mpiGetFileContent(filename.c_str());
+	if(phasedarrayinput == NULL)
 	{
 		if(mpiid == 0) //only write one copy of this error message
 			cfatal << startl << "Could not open phased array config file " << line << " - aborting!!!" << endl;
 		return false;
 	}
-	getinputline(&phasedarrayinput, &line, "OUTPUT TYPE");
+	getinputline(phasedarrayinput, &line, "OUTPUT TYPE");
 	if(line == "FILTERBANK")
 		configs[configindex].padomain = FREQUENCY;
 	else if (line == "TIMESERIES") {
@@ -2696,7 +2799,7 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 			cerror << startl << "Unknown phased array output type " << line << " - setting to FILTERBANK" << endl;
 		configs[configindex].padomain = FREQUENCY;
 	}
-	getinputline(&phasedarrayinput, &line, "OUTPUT FORMAT");
+	getinputline(phasedarrayinput, &line, "OUTPUT FORMAT");
 	if(line == "DIFX") {
 		if(configs[configindex].padomain == TIME) {
 			if(mpiid == 0) //only write one copy of this error message
@@ -2729,21 +2832,21 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 			configs[configindex].paoutputformat = VDIFOUT;
 		}
 	}
-	getinputline(&phasedarrayinput, &line, "ACC TIME (NS)");
+	getinputline(phasedarrayinput, &line, "ACC TIME (NS)");
 	configs[configindex].paaccumulationns = atoi(line.c_str());
-	getinputline(&phasedarrayinput, &line, "COMPLEX OUTPUT");
+	getinputline(phasedarrayinput, &line, "COMPLEX OUTPUT");
 	if(line == "TRUE" || line == "true" || line == "True")
 		configs[configindex].pacomplexoutput = true;
 	else
 		configs[configindex].pacomplexoutput = false;
-	getinputline(&phasedarrayinput, &line, "OUTPUT BITS");
+	getinputline(phasedarrayinput, &line, "OUTPUT BITS");
 	configs[configindex].pabits = atoi(line.c_str());
 	configs[configindex].paweights = new double*[freqtablelength];
 	configs[configindex].numpafreqpols = new int[freqtablelength];
 	configs[configindex].papols = new char*[freqtablelength];
 	for(int i=0;i<freqtablelength;i++)
 	{
-		getinputline(&phasedarrayinput, &line, "NUM FREQ");
+		getinputline(phasedarrayinput, &line, "NUM FREQ");
 		configs[configindex].numpafreqpols[i] = atoi(line.c_str());
 		if(configs[configindex].numpafreqpols[i] > 0)
 		{
@@ -2751,12 +2854,12 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 			configs[configindex].papols[i] = new char[configs[configindex].numpafreqpols[i]];
 			for(int j=0;j<configs[configindex].numpafreqpols[i];j++)
 			{
-				getinputline(&phasedarrayinput, &line, "FREQ");
+				getinputline(phasedarrayinput, &line, "FREQ");
 				configs[configindex].papols[i][j] = line.c_str()[0];
 			}
 			for(int j=0;j<numdatastreams;j++)
 			{
-				getinputline(&phasedarrayinput, &line, "FREQ");
+				getinputline(phasedarrayinput, &line, "FREQ");
 				configs[configindex].paweights[i][j] = atof(line.c_str());
 				if(configs[configindex].paweights[i][j] < 0.0)
 				{
@@ -2767,7 +2870,7 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 			}
 		}
 	}
-	phasedarrayinput.close();
+	delete phasedarrayinput;
 	return true;
 }
 
@@ -2784,39 +2887,46 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 
 	if(mpiid == 0) //only write one copy of this info message
 		cinfo << startl << "About to process pulsar file " << filename << endl;
-	ifstream pulsarinput(filename.c_str(), ios::in);
-	if(!pulsarinput.is_open() || pulsarinput.bad())
+	istream * pulsarinput = mpiGetFileContent(filename.c_str());
+	if(pulsarinput == NULL)
 	{
 		if(mpiid == 0) //only write one copy of this error message
 			cfatal << startl << "Could not open pulsar config file " << filename << " - aborting!!!" << endl;
 		return false;
 	}
-	getinputline(&pulsarinput, &line, "NUM POLYCO FILES");
+	getinputline(pulsarinput, &line, "NUM POLYCO FILES");
 	numpolycofiles = atoi(line.c_str());
 	polycofilenames = new string[numpolycofiles];
 	numsubpolycos = new int[numpolycofiles];
 	configs[configindex].numpolycos = 0;
 	for(int i=0;i<numpolycofiles;i++)
 	{
-		getinputline(&pulsarinput, &(polycofilenames[i]), "POLYCO FILE");
+		getinputline(pulsarinput, &(polycofilenames[i]), "POLYCO FILE");
 		numsubpolycos[i] = 0;
-		temppsrinput.open(polycofilenames[i].c_str());
-		if(!temppsrinput.is_open() || temppsrinput.bad()) {
+		istream * polycoinput = mpiGetFileContent(polycofilenames[i].c_str());
+		if(polycoinput == NULL)
+		{
 			if(mpiid == 0) //only write one copy of this error message
 				cerror << startl << "Could not open polyco file " << polycofilenames[i] << ", but continuing..." << endl;
 			continue;
 		}
-		temppsrinput.getline(psrline, 128);
-		temppsrinput.getline(psrline, 128);
-		while(!(temppsrinput.eof() || temppsrinput.fail())) {
+		getline(*polycoinput, line);
+		getline(*polycoinput, line);
+		line.resize(sizeof(psrline));
+		strncpy(psrline, line.c_str(), sizeof(psrline));
+		while(!(polycoinput->eof() || polycoinput->fail())) {
 			psrline[54] = '\0';
 			ncoefficients = atoi(&(psrline[49]));
 			for(int j=0;j<ncoefficients/3 + 2;j++)
-				temppsrinput.getline(psrline, 128);
+			{
+				getline(*polycoinput, line);
+				line.resize(sizeof(psrline));
+				strncpy(psrline, line.c_str(), sizeof(psrline));
+			}
 			numsubpolycos[i]++;
 			configs[configindex].numpolycos++;
 		}
-		temppsrinput.close();
+		delete polycoinput;
 	}
 	if(configs[configindex].numpolycos == 0) {
 		if(mpiid == 0) //only write one copy of this error message
@@ -2824,19 +2934,19 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 		delete [] numsubpolycos;
 		return false;
 	}
-	getinputline(&pulsarinput, &line, "NUM PULSAR BINS");
+	getinputline(pulsarinput, &line, "NUM PULSAR BINS");
 	configs[configindex].numbins = atoi(line.c_str());
 	if(configs[configindex].numbins > maxnumpulsarbins)
 		maxnumpulsarbins = configs[configindex].numbins;
 	binphaseends = new double[configs[configindex].numbins];
 	binweights = new double[configs[configindex].numbins];
-	getinputline(&pulsarinput, &line, "SCRUNCH OUTPUT");
+	getinputline(pulsarinput, &line, "SCRUNCH OUTPUT");
 	configs[configindex].scrunchoutput = ((line == "TRUE") || (line == "T") || (line == "true") || (line == "t"))?true:false;
 	for(int i=0;i<configs[configindex].numbins;i++)
 	{
-		getinputline(&pulsarinput, &line, "BIN PHASE END");
+		getinputline(pulsarinput, &line, "BIN PHASE END");
 		binphaseends[i] = atof(line.c_str());
-		getinputline(&pulsarinput, &line, "BIN WEIGHT");
+		getinputline(pulsarinput, &line, "BIN WEIGHT");
 		binweights[i] = atof(line.c_str());
 	}
 
@@ -2848,7 +2958,9 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 		for(int j=0;j<numsubpolycos[i];j++)
 		{
 			//cinfo << startl << "About to create polyco file " << polycocount << " from filename " << polycofilenames[i] << ", subcount " << j << endl;
-			configs[configindex].polycos[polycocount] = new Polyco(polycofilenames[i], j, configindex, configs[configindex].numbins, getMaxNumChannels(), binphaseends, binweights, double(configs[configindex].subintns)/60000000000.0);
+			istream * polycofile = mpiGetFileContent(polycofilenames[i].c_str());
+			configs[configindex].polycos[polycocount] = new Polyco(polycofilenames[i], polycofile, j, configindex, configs[configindex].numbins, getMaxNumChannels(), binphaseends, binweights, double(configs[configindex].subintns)/60000000000.0);
+			delete polycofile;
 			if (!configs[configindex].polycos[polycocount]->initialisedOK()) {
 				delete [] numsubpolycos;
 				return false;
@@ -2862,7 +2974,7 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 	delete [] binweights;
 	delete [] polycofilenames;
 	delete [] numsubpolycos;
-	pulsarinput.close();
+	delete pulsarinput;
 	return true;
 }
 
@@ -3005,7 +3117,7 @@ void Configuration::makeFortranString(string line, int length, char * destinatio
 	}
 }
 
-void Configuration::getinputkeyval(ifstream * input, std::string * key, std::string * val) const
+void Configuration::getinputkeyval(istream * input, std::string * key, std::string * val) const
 {
 	if(input->eof())
 		cerror << startl << "Trying to read past the end of file!" << endl;
@@ -3022,7 +3134,7 @@ void Configuration::getinputkeyval(ifstream * input, std::string * key, std::str
 	*key = key->substr(0, key->find_first_of(':'));
 }
 
-bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, bool warnOnFailure, int maxSkipLines) const
+bool Configuration::getinputline(istream * input, std::string * line, const std::string &startofheader, bool warnOnFailure, int maxSkipLines) const
 {
 	static const char ERROR_MSG[] = "Error reading in getinputline";
 	if(input->eof())
@@ -3079,7 +3191,7 @@ getinputline_error:
 	}		
 }
 
-bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, bool warnOnFailure, int maxSkipLines) const
+bool Configuration::getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, bool warnOnFailure, int maxSkipLines) const
 {
 	char buffer[MAX_KEY_LENGTH+1];
 	snprintf(buffer, MAX_KEY_LENGTH, "%s%i", startofheader.c_str(), intval);
@@ -3087,7 +3199,7 @@ bool Configuration::getinputline(ifstream * input, std::string * line, const std
 	return getinputline(input, line, string(buffer), warnOnFailure, maxSkipLines);
 }
 
-bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure, int maxSkipLines) const
+bool Configuration::getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, bool warnOnFailure, int maxSkipLines) const
 {
 	char buffer[MAX_KEY_LENGTH+1];
 	snprintf(buffer, MAX_KEY_LENGTH, "%s%i%s", startofheader.c_str(), intval, headerPartTwo);
@@ -3095,7 +3207,7 @@ bool Configuration::getinputline(ifstream * input, std::string * line, const std
 	return getinputline(input, line, string(buffer), warnOnFailure, maxSkipLines);
 }
 
-bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, bool warnOnFailure, int maxSkipLines) const
+bool Configuration::getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, bool warnOnFailure, int maxSkipLines) const
 {
 	char buffer[MAX_KEY_LENGTH+1];
 	snprintf(buffer, MAX_KEY_LENGTH, "%s%i%s%i", startofheader.c_str(), intval, headerPartTwo, intvalTwo);
@@ -3104,7 +3216,7 @@ bool Configuration::getinputline(ifstream * input, std::string * line, const std
 }
 
 
-bool Configuration::getinputline(ifstream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, const char *headerPartThree, bool warnOnFailure, int maxSkipLines) const
+bool Configuration::getinputline(istream * input, std::string * line, const std::string &startofheader, int intval, const char *headerPartTwo, int intvalTwo, const char *headerPartThree, bool warnOnFailure, int maxSkipLines) const
 {
 	char buffer[MAX_KEY_LENGTH+1];
 	snprintf(buffer, MAX_KEY_LENGTH, "%s%i%s%i%s", startofheader.c_str(), intval, headerPartTwo, intvalTwo, headerPartThree);

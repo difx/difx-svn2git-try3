@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013 Walter Brisken                                     *
+ *   Copyright (C) 2013-2017 Walter Brisken                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,9 +32,9 @@
 #include <stdlib.h>
 #include <vdifio.h>
 #include <sys/stat.h>
+#include "dateutils.h"
 #include "config.h"
 
-int ymd2mjd(int yr, int mo, int day);
 
 void resetvdiffilesummary(struct vdif_file_summary *sum)
 {
@@ -80,6 +80,33 @@ void printvdiffilesummary(const struct vdif_file_summary *sum)
 	printf("  first frame offset = %d bytes\n", sum->firstFrameOffset);
 }
 
+void snprintvdiffilesummary(char *str, int maxLength, const struct vdif_file_summary *sum)
+{
+	int i, v;
+
+	if(sum->nThread < 1)
+	{
+		v = snprintf(str, maxLength, "VDIF file=%s size=%lld No Threads Found!", sum->fileName, sum->fileSize);
+	}
+	else
+	{
+		v = snprintf(str, maxLength, "VDIF file=%s size=%lld frameSize=%d frameRate=%d bits=%d startMJD=%d startSecond=%d startFrame=%d endSecond=%d endFrame=%d, offset=%d threads", sum->fileName, sum->fileSize, sum->frameSize, sum->framesPerSecond, sum->nBit, vdiffilesummarygetstartmjd(sum), sum->startSecond % 86400, sum->startFrame, sum->endSecond % 86400, sum->endFrame, sum->firstFrameOffset);
+
+		for(i = 0; i < sum->nThread; ++i)
+		{
+			maxLength -= v;
+
+			if(maxLength < 2)
+			{
+				break;
+			}
+			str += v;
+
+			v = snprintf(str, maxLength, "%c%d", (i == 0 ? '=' : ','), sum->threadIds[i]);
+		}
+	}
+}
+
 int vdiffilesummarygetstartmjd(const struct vdif_file_summary *sum)
 {
 	return ymd2mjd(2000 + sum->epoch/2, (sum->epoch%2)*6+1, 1) + sum->startSecond/86400;
@@ -87,13 +114,14 @@ int vdiffilesummarygetstartmjd(const struct vdif_file_summary *sum)
 
 int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int frameSize)
 {
-	int bufferSize = 2000000;	/* 2 MB should encounter all threads of a usual VDIF file */
+	int bufferSize = 1215*8224*8;	/* 2 MB should've encountered all threads of a usual VDIF file; however VGOS DBBC3 uses single-thread 8224-byte x 1215-frame sequences before switching to another thread */
 	unsigned char *buffer;
 	struct stat st;
 	int rv, i, N;
 	FILE *in;
 	char hasThread[VDIF_MAX_THREAD_ID + 1];
 	struct vdif_header *vh0;	/* pointer to the prototype header */
+	int hasEDV3 = 0;		/* no VLBA headers found yet */
 
 	/* Initialize things */
 
@@ -102,6 +130,13 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 	memset(hasThread, 0, sizeof(hasThread));
 	sum->startSecond = 1<<30;
 
+	in = fopen(fileName, "r");
+	if(!in)
+	{
+		return -2;
+	}
+
+	// note: do stat() after open() (not before) as filesize may be updated during open()
 	rv = stat(fileName, &st);
 	if(rv < 0)
 	{
@@ -110,11 +145,6 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 
 	sum->fileSize = st.st_size;
 
-	in = fopen(fileName, "r");
-	if(!in)
-	{
-		return -2;
-	}
 
 	if(sum->fileSize < 2*bufferSize)
 	{
@@ -206,6 +236,23 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 			else if(s == sum->endSecond && f > sum->endFrame)
 			{
 				sum->endFrame = f;
+			}
+
+			if(vh->eversion == 3 && hasEDV3 == 0)
+			{
+				const vdif_edv3_header *edv3 = (const vdif_edv3_header *)vh0;
+				long long int sampRate;
+				int dataSize = frameSize - (vh->legacymode ? 16 : 32);
+
+				hasEDV3 = 1;
+
+				sampRate = edv3->samprate * 1000 * 2;	/* factor of 2 because header sample rate is complex */
+				if(edv3->samprateunits == 1)
+				{
+					sampRate *= 1000;
+				}
+
+				sum->framesPerSecond = sampRate*sum->nBit/(8LL*dataSize);
 			}
 
 			i += frameSize;

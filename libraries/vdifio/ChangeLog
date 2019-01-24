@@ -1,7 +1,35 @@
+Version 1.3
+~~~~~~~~~~~
+* Move all pure Mark6 functionality to mark6sg
+* Python utils: explicitly call python2
+* More conformant help and version information: printVDIFheader
+* vdifmux(): change logic to determine first frame number if not explicitly provided -> simplified and probably faster and possibly more correct code.
+* vdifmux(): make more robust in some parameter corner cases
+* vdifmux(): nSort is now entirely referring to input frames; previously there was some use regarding output frames
+* printVDIFheader: minor update for discerning two EDV Version 2 sub(sub)versions (EHT R2DBE, ALMA)
+
+Version 1.2
+~~~~~~~~~~~
+* Post DiFX-2.5
+* Some improvements in multiplexing very sparse data
+* Options in vmux to change gap/sort tuning parameters
+* Added ability to summarize a mark6 module in a specific slot
+* new corner turners:
+  - 1-bit with 32, 64 threads
+  - 2-bit with 32, 64 threads
+  - 4-bit with 32, 64 threads
+  - 8-bit with 32, 64 threads
+  - 16-bit with 32, 64 threads
+  - 32-bit with 32, 64 threads
+  - 64-bit with 32, 64 threads
+  - 128-bit with 32, 64 threads
+* Mark6Gatherer gets module serial number for mark6 activity message
+
 Version 1.1
 ~~~~~~~~~~~
 * Post DiFX-2.4
 * Added incrementVDIFHeader
+* Added ctypes-based Python bindings and one example (vdifio_1.py)
 * vsum: error message -> stderr, not stdout
 * Support new EDV2 that is produced by ALMA and R2DBE.  Work here is based on spec with TBDs: http://vlbi.org/vdif/docs/alma-vdif-edv.pdf
 * New functionality in printVDIFheader:
@@ -20,15 +48,31 @@ Version 1.1
   - 16-bit with 2, 4, 8, 16 threads
   - 32-bit with 2, 4, 8, 16 threads
   - 64-bit with 2, 4, 8, 16 threads
+  - 128-bit with 2, 4, 8, 16 threads
   - Why need for large words?  It turns out that multiplexing multiple channels per thread is mathematically identical to multiplexing one channel per thread but with a total bit width of nBit*nChan
 * VDIF multiplexer now supports multiplexing threads with more than one channel.
   - a change in the API for configurevdifmux() is likely coming that will simplify use of this.  For now, use setvdifmuxinputchannels() after configurevdifmux()
+* New utility: filterVDIF.  It extracts certain threads and summarized what it found.  Similar to extractVDIFThreads.
+* New utility: mk6gather: reads a VDIF stream from a Mark6 unit and writes it to a file.  Time reordering is done at the packet level.
+* New utility: mk6ls: lists Mark6 "files" on system.  Respects ENV VAR MARK6_ROOT
+* New utility: mk6vmux: directly multiplexes VDIF data from a Mark6 module
+* vmux and mk6vmux (and in general any multiplexing) can be done on complex data
+* Support for partial frame validity in multiplexed VDIF data (pending VDIF committee approval of EDV version 4 requested by WFB on 2015/10/09)
+* Support for fanout in multiplexing (needed by some DBBC3 modes), both in library in vmux (very lightly tested)
+* Some minor improvements to some utilities (improved help info, some parameter checking, ...)
+* New function: void snprintvdiffilesummary(char *str, int maxLength, const struct vdif_file_summary *sum)
+* Update help info for some utilties : fix "Usage" lines.
+* vmux: all printf(...) -> fprintf(stderr, ...) so as to not interfere with stdout usage 
+* vmux: stop on SIGPIPE: useful for piped operations
+* vmux: don't segfault on incomplete command line
+* Change name of .rpm file that is made to vlbi-vdifio.*.rpm
+* vmux: some better default tuning parameters and move from signal() to sigaction()
+* Version for DiFX-2.5, May 16, 2017
 
 Version 1.0
 ~~~~~~~~~~~
 * ******* NOTE CHANGES TO THE API *********
-* Changed parameter in createVDIFHeader (pass size of dataarray not full
-	VDIF frame).
+* Changed parameter in createVDIFHeader (pass size of dataarray not full VDIF frame).
 * Changed function of getVDIFEpoch and setVDIFFrameSecond
 * Renamed:
 	getVDIFMJD

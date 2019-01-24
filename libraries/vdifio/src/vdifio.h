@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2015 by Adam Deller / Walter Brisken               *
+ *   Copyright (C) 2009-2018 by Adam Deller / Walter Brisken               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -49,7 +49,8 @@ extern "C" {
 #define VDIF_NOERROR			0
 #define VDIF_ERROR			1
 
-#define VDIF_ALMA_SYNC			0xA5AE5
+#define VDIF_EDV2_SUBVER_ALMA		0x0A5AE5
+#define VDIF_EDV2_SUBVER_R2DBE		0x000000
 
 /* *** implemented in vdifio.c *** */
 
@@ -90,7 +91,7 @@ typedef struct vdif_edv1_header {	/* NICT extensions: see http://www.vlbi.org/vd
    
    uint32_t framelength8 : 24;	// Frame length (including header) divided by 8 
    uint32_t nchan : 5;
-   uint32_t version : 3;
+   uint32_t version : 3;	// Set to 1
    
    uint32_t stationid : 16;
    uint32_t threadid : 10;
@@ -106,6 +107,92 @@ typedef struct vdif_edv1_header {	/* NICT extensions: see http://www.vlbi.org/vd
    char name[8];		// DAS/Station Name
  } vdif_edv1_header;
 
+typedef struct vdif_edv2_header_generic { /* Nominally for ALMA: https://vlbi.org/vdif/docs/alma-vdif-edv.pdf. Has sub-subversion field, defines upto 2^24 sub-versions for EDV2. */
+   uint32_t seconds : 30;
+   uint32_t legacymode : 1;
+   uint32_t invalid : 1;
+   
+   uint32_t frame : 24;
+   uint32_t epoch : 6;
+   uint32_t unassigned : 2;
+   
+   uint32_t framelength8 : 24;	// Frame length (including header) divided by 8
+   uint32_t nchan : 5;
+   uint32_t version : 3;	// Set to 0 according to alma-vdif-edv.pdf; VDIF Version 0
+   
+   uint32_t stationid : 16;
+   uint32_t threadid : 10;
+   uint32_t nbits : 5;		// Set to 1 according to alma-vdif-edv.pdf
+   uint32_t iscomplex : 1;	// Set to 0 according to alma-vdif-edv.pdf
+
+   uint32_t notrelevant : 4;	// Low 4 bit of Sub(sub)-version of EDV, meaning seems to vary by particular subsubversion
+   uint32_t subsubversion : 20;	// Sub(sub)-version of EDV;  ALMA = 0x0A5AE, R2DBE = 0x00000, others...?
+   uint32_t eversion : 8;	// EDV 0x02
+
+   uint32_t word5 : 32;		// use may vary
+   uint32_t word6 : 32;		// use may vary
+   uint32_t word7 : 32;		// use may vary
+} vdif_edv2_header_generic;
+
+typedef struct vdif_edv2_header_alma {	/* For ALMA, ratified very poorly documented on vlbi.org, incomplete document describing this from Chet to Walter via email: 20150615 */
+   uint32_t seconds : 30;
+   uint32_t legacymode : 1;
+   uint32_t invalid : 1;
+   
+   uint32_t frame : 24;
+   uint32_t epoch : 6;
+   uint32_t unassigned : 2;
+   
+   uint32_t framelength8 : 24;	// Frame length (including header) divided by 8 
+   uint32_t nchan : 5;
+   uint32_t version : 3;	// Set to 2 (really?); VDIF Version 2
+   
+   uint32_t stationid : 16;
+   uint32_t threadid : 10;
+   uint32_t nbits : 5;
+   uint32_t iscomplex : 1;
+
+   uint32_t polblock : 1;	// 0 = X-pol PIC, 1 = Y-pol PIC
+   uint32_t quadrantminus1 : 2;	// 0 = quadrant 1, 1 = quadrant 2, ..., 3 = quadrant 4
+   uint32_t correlator : 1;	// 0 = 2-ant correlator, 1 = BL correlator
+   uint32_t subsubversion : 20;	// Sub(sub)-version of EDV;  ALMA = 0x0A5AE
+   uint32_t eversion : 8;	// EDV 0x02
+
+   uint32_t picstatus;		// essentially undefined; "ALMA: A PIC status word (details TBD)"
+
+   uint64_t psn;		// packet serial number
+} vdif_edv2_header_alma;
+
+typedef struct vdif_edv2_header_r2dbe { /* Not documented on vlbi.org, not ratified, just emails, and sao-eht git repo roach2.py */
+   uint32_t seconds : 30;
+   uint32_t legacymode : 1;
+   uint32_t invalid : 1;
+   
+   uint32_t frame : 24;
+   uint32_t epoch : 6;
+   uint32_t unassigned : 2;
+   
+   uint32_t framelength8 : 24;	// Frame length (including header) divided by 8
+   uint32_t nchan : 5;
+   uint32_t version : 3;	// Set to 0 according to alma-vdif-edv.pdf; VDIF Version 0
+   
+   uint32_t stationid : 16;
+   uint32_t threadid : 10;
+   uint32_t nbits : 5;		// Set to 1 according to alma-vdif-edv.pdf
+   uint32_t iscomplex : 1;	// Set to 0 according to alma-vdif-edv.pdf
+
+   uint32_t polblock : 1;	// polarization label
+   uint32_t bdcsideband : 1;	// BDC sideband (U, L)
+   uint32_t rxsideband  : 1;	// Receiver sideband (U, L)
+   uint32_t undefined : 1;
+   uint32_t subsubversion : 20;	// Sub(sub)-version of EDV;  R2DBE = 0x00000 (apparently)
+   uint32_t eversion : 8;	// EDV 0x02
+
+   int32_t ppsdiff : 32;	// apparently, count of 1PPS int/ext diff in 256 MHz clock ticks
+
+   uint64_t psn;		// apparently, packet serial number
+} vdif_edv2_header_r2dbe;
+
 typedef struct vdif_edv2_header {	/* For ALMA & R2DBE, incomplete document describing this from Chet to Walter via email: 20150615 */
    uint32_t seconds : 30;
    uint32_t legacymode : 1;
@@ -117,7 +204,7 @@ typedef struct vdif_edv2_header {	/* For ALMA & R2DBE, incomplete document descr
    
    uint32_t framelength8 : 24;	// Frame length (including header) divided by 8 
    uint32_t nchan : 5;
-   uint32_t version : 3;
+   uint32_t version : 3;	// Set to 2
    
    uint32_t stationid : 16;
    uint32_t threadid : 10;
@@ -153,9 +240,9 @@ typedef struct vdif_edv3_header {	/* VLBA extensions: see http://www.vlbi.org/vd
    uint32_t nbits : 5;
    uint32_t iscomplex : 1;
 
-   uint32_t samprate : 23;	// in samprateunits
+   uint32_t samprate : 23;	// in samprateunits; note this is internal complex sample rate; double for real value output
    uint32_t samprateunits : 1;	// 0 = kHz, 1 = MHz
-   uint32_t eversion : 8;
+   uint32_t eversion : 8;	// set to 3
    
    uint32_t syncword;		// 0xACABFEED
    
@@ -170,6 +257,33 @@ typedef struct vdif_edv3_header {	/* VLBA extensions: see http://www.vlbi.org/vd
    uint32_t dbeunit : 4;	// which unit produced this data
    uint32_t unassigned2 : 4;
  } vdif_edv3_header;
+
+typedef struct vdif_edv4_header {	/* proposed extension extensions: (WFB email to VDIF committee 2015/10/09) */
+   uint32_t seconds : 30;
+   uint32_t legacymode : 1;
+   uint32_t invalid : 1;
+   
+   uint32_t frame : 24;
+   uint32_t epoch : 6;
+   uint32_t unassigned : 2;
+   
+   uint32_t framelength8 : 24;	// Frame length (including header) divided by 8 
+   uint32_t nchan : 5;
+   uint32_t version : 3;
+   
+   uint32_t stationid : 16;
+   uint32_t threadid : 10;
+   uint32_t nbits : 5;
+   uint32_t iscomplex : 1;
+
+   uint32_t dummy : 16;
+   uint32_t masklength : 8;	// number of bits in the validity mask.  Should be equal to, or exact divisor of number of channels
+   uint32_t eversion : 8;	// Should be set to 4
+   
+   uint32_t syncword;		// 0xACABFEED
+   
+   uint64_t validitymask;	// bits set if data is present
+ } vdif_edv4_header;
 
 enum VDIFHeaderPrintLevel	// for printVDIFHeader function
 {
@@ -213,6 +327,7 @@ static inline void setVDIFFrameEpochSecOffset(vdif_header *header, int seconds) 
 static inline void setVDIFFrameNumber(vdif_header *header, int framenumber) { header->frame = framenumber; }
 static inline void setVDIFFrameInvalid(vdif_header *header, unsigned int invalid) { header->invalid = invalid; }
 static inline void setVDIFBitsPerSample(vdif_header *header, int nbits) { header->nbits = nbits-1; }
+static inline void setVDIFComplex(vdif_header *header, int iscomplex) { header->iscomplex = (iscomplex>0); }
 int setVDIFFrameBytes(vdif_header *header, int bytes);
 int setVDIFFrameSecond(vdif_header *header, int seconds);
 int setVDIFNumChannels(vdif_header *header, int numchannels);
@@ -247,6 +362,8 @@ void (*getCornerTurner(int nThread, int nBit))(unsigned char *, const unsigned c
 #define VDIF_MUX_FLAG_ENABLEVALIDITY		0x04		/* if set, throw away VDIF frames coming in with invalid bit set */
 #define	VDIF_MUX_FLAG_INPUTLEGACY		0x08		/* if set, accept LEGACY frames; NOT YET IMPLEMENTED */
 #define	VDIF_MUX_FLAG_OUTPUTLEGACY		0x10		/* if set, produce LEGACY frames; NOT YET IMPLEMENTED */
+#define VDIF_MUX_FLAG_COMPLEX			0x20		/* if set, data is complex (so 2x as many bits per logical sample) */
+#define VDIF_MUX_FLAG_PROPAGATEVALIDITY		0x40		/* if set, change output VDIF to EDV 4 with per-input-thread validity */
 
 
 struct vdif_mux {
@@ -256,12 +373,14 @@ struct vdif_mux {
   int outputDataSize;					/* size of one output data frame, without header */
   int inputFramesPerSecond;				/* per thread */
   int inputChannelsPerThread;				/* default is 1, unless this is changed with setvdifmuxinputchannels() */
-  int nBit;						/* per sample */
+  int bitsPerSample;					/* per sample (a complex number is considered 2 samples here) */
   int nThread;
-  int nSort;
-  int nGap;
+  int nSort;						/* number of input frames over which out-of-order is to be tolerated */
+  int nGap;						/* frame number jump to tolerate before returning with incomplete muxing */
   int frameGranularity;
   int nOutputChan;					/* nThread rounded up to nearest power of 2, then multiplied by input chans per thread */
+  int complexFactor;					/* should be 1 (real) or 2 (complex).  Used in selecting cornerturner */
+  int fanoutFactor;					/* if > 1 _and_ if input frames have a single channel, will combine multiple threads into a single output channel; this is for DBBC3 */
   unsigned int flags;
   uint16_t chanIndex[VDIF_MAX_THREAD_ID+1];		/* map from threadId to channel number (0 to nThread-1) */
   uint64_t goodMask;
@@ -279,7 +398,10 @@ struct vdif_mux_statistics {
   long long nDuplicateFrame;		/* number of frames found with the same time & thread */
   long long bytesProcessed;		/* total bytes consumed from */
   long long nGoodFrame;			/* number of fully usable output frames */
+  long long nPartialFrame;		/* number of partial frames produced (EDV4 only) */
+  long long nFillerFrame;		/* number of filler frames produced */
   int nCall;				/* how many calls to vdifmux since last reset */
+  int nOutOfDataConditions;             /* how many calls did not have enough source data to produce any output */
 
   /* These remaining fields are set each time */
   int srcSize;			/* length of input array (bytes) */
@@ -299,9 +421,10 @@ struct vdif_mux_statistics {
 };
 
 /* return 0 on success, or code on error */
-int configurevdifmux(struct vdif_mux *vm, int inputFrameSize, int inputFramesPerSecond, int nBit, int nThread, const int *threadIds, int nSort, int nGap, int flags);
+int configurevdifmux(struct vdif_mux *vm, int inputFrameSize, int inputFramesPerSecond, int bitsPerSample, int nThread, const int *threadIds, int nSort, int nGap, int flags);
 
 int setvdifmuxinputchannels(struct vdif_mux *vm, int inputChannelsPerThread);
+int setvdifmuxfanoutfactor(struct vdif_mux *vm, int fanoutFactor);
 
 void printvdifmux(const struct vdif_mux *vm);
 
@@ -336,6 +459,8 @@ void resetvdiffilesummary(struct vdif_file_summary *sum);
 
 void printvdiffilesummary(const struct vdif_file_summary *sum);
 
+void snprintvdiffilesummary(char *str, int maxLength, const struct vdif_file_summary *sum);
+
 static inline void vdiffilesummarysetsamplerate(struct vdif_file_summary *sum, int64_t sampRateHz) { sum->framesPerSecond = sampRateHz*sum->nBit/(8*(sum->frameSize-VDIF_HEADER_BYTES)); }
 
 /* does same as above, but with different input */
@@ -356,11 +481,6 @@ int vdiffilesummarygetstartmjd(const struct vdif_file_summary *sum);
 static inline int vdiffilesummarygetbytespersecond(const struct vdif_file_summary *sum) { return sum->frameSize*sum->framesPerSecond; }
 
 int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int frameSize);
-
-
-/* implemented in decode.c */
-
-int decodeSingleChannelVDIF(const unsigned char *vdifFrame, float *samples, int maxSamples);
 
 
 #ifdef __cplusplus

@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: stripVDIF.c 2006 2010-03-04 16:43:04Z AdamDeller $
+ * $Id: searchVDIF.c 7329 2016-06-09 16:07:09Z WalterBrisken $
  * $HeadURL:  $
- * $LastChangedRevision: 2006 $
- * $Author: AdamDeller $
- * $LastChangedDate: 2010-03-04 09:43:04 -0700 (Thu, 04 Mar 2010) $
+ * $LastChangedRevision: 7329 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2016-06-09 18:07:09 +0200 (Thu, 09 Jun 2016) $
  *
  *==========================================================================*/
 
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
     exit(EXIT_FAILURE);
   }
 
-  byteshift = atoi(argv[2]);
+  byteshift = atol(argv[2]);
   if(byteshift < 32)
   {
     fprintf(stderr, "Error: byteshift must be larger than 32\n");
@@ -83,6 +83,7 @@ int main(int argc, char **argv)
   }
   bytecount = 0;
   lastbytecount = 0;
+  printf("%12ld bytes since last good frame ", 0L);
   while(!feof(input)) {
     readbytes = fread(buffer, 1, VDIF_HEADER_BYTES, input); //read the VDIF header
     if(readbytes <= 0)
@@ -100,13 +101,13 @@ int main(int argc, char **argv)
     }
     if(framebytes == expectedframebytes)
     {
-      printf("%d bytes since last good frame", (int)(bytecount-lastbytecount));
+      printf("%12d bytes since last good frame ", (int)(bytecount-lastbytecount));
       lastbytecount = bytecount;
     }
     bytecount += byteshift;
     fseeko(input, byteshift-32, SEEK_CUR); //go back to the start
   }
-  printf("Read %lld bytes\n", bytecount);
+  printf("\nRead %lld bytes\n", bytecount);
   fclose(input);
 
   return EXIT_SUCCESS;

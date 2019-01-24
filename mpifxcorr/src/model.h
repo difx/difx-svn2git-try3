@@ -242,17 +242,17 @@ private:
 		f64 *** clock;
 	} scan;
 
-	bool readInfoData(ifstream * input);
-	bool readCommonData(ifstream * input);
-	bool readStationData(ifstream * input);
-	bool readSourceData(ifstream * input);
-	bool readEOPData(ifstream * input);
+	bool readInfoData(istream * input);
+	bool readCommonData(istream * input);
+	bool readStationData(istream * input);
+	bool readSourceData(istream * input);
+	bool readEOPData(istream * input);
 	// 2015 Apr 20  James M Anderson  --- mpifxcorr does not need to
 	// know about spacecraft.  Comment this out for now
 	// FIXME: In future, remove this from the code entirely?
-	// bool readSpacecraftData(ifstream * input);
-	bool readScanData(ifstream * input);
-	bool readPolynomialSamples(ifstream * input);
+	// bool readSpacecraftData(istream * input);
+	bool readScanData(istream * input);
+	bool readPolynomialSamples(istream * input);
 	bool fillPolyRow(f64* vals, string line, int npoly);
 	bool fillPolyRow(f64* vals, double fill, int npoly);
 	axistype getMount(string mount);
