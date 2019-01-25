@@ -71,7 +71,9 @@ public:
 	static int MONITOR_TCP_WINDOWBYTES;
 
 	/**
-	 * Constructor: Reads and stores the information in the input file
+	 * Constructor: Reads information from an input file and stores it internally
+	 * Content of the input file and ancillary referenced files are read locally on the fx manager node,
+	 * and on all other nodes are received over MPI broadcast.
 	 * @param configfile The filename of the input file containing configuration information to be read
 	 * @param id The MPI id of the process (0 = manager, then 1 - N datastreams, N+1 onwards cores
 	 * @param comm The MPI_Comm of the process group
@@ -886,61 +888,61 @@ private:
 	bool populateModelDatastreamMap();
 
 	/**
-	 * Loads the baseline table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the baseline table into memory
+	 * @param input Input stream to a file or string
 	 * @return Whether the baseline table was successfully parsed (failure should abort)
 	 */
 	bool processBaselineTable(istream * input);
 
 	/**
-	 * Loads the common settings from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the common settings into memory
+	 * @param input Input stream to a file or string
 	 */
 	void processCommon(istream * input);
 
 	/**
-	 * Loads the config table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the config table into memory
+	 * @param input Input stream to a file or string
 	 * @return Whether the config table was successfully parsed (failure should abort)
 	 */
 	bool processConfig(istream * input);
 
 	/**
-	 * Loads the rule table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the rule table into memory
+	 * @param input Input stream to a file or string
 	 * @return Whether the rule table was successfully parsed (failure should abort)
 	 */
 	bool processRuleTable(istream * input);
 
 	/**
-	 * Loads the datastream table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the datastream table into memory
+	 * @param input Input stream to a file or string
 	 * @return Whether the datastream table was successfully parsed (failure should abort)
 	 */
 	bool processDatastreamTable(istream * input);
 
 	/**
-	 * Loads the data table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the data table into memory
+	 * @param input Input stream to a file or string
 	 */
 	void processDataTable(istream * input);
 
 	/**
-	 * Loads the frequency table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the frequency table into memory
+	 * @param input Input stream to a file or string
 	 * @return Whether the freq table was successfully parsed (failure should abort)
 	 */
 	bool processFreqTable(istream * input);
 
 	/**
-	 * Loads the telescope table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the telescope table into memory
+	 * @param input Input stream to a file or string
 	 */
 	void processTelescopeTable(istream * input);
 
 	/**
-	 * Loads the network table from the file into memory
-	 * @param input Open file stream for the input file
+	 * Loads the network table into memory
+	 * @param input Input stream to a file or string
 	 */
 	void processNetworkTable(istream * input);
 
@@ -953,12 +955,36 @@ private:
 	bool processPulsarConfig(string filename, int configindex);
 
 	/**
+	 * Loads the pulsar setup data for the specified config and creates the Polyco objects
+	 * @param input Input stream to a file or string
+	 * @param configindex The config index in the configuration table that this pulsar setup belongs to
+	 * @param reffile Optional name of input file or other data origin, used for printout purposes only
+	 * @return Whether the pulsar config was successfully parsed (failure should abort)
+	 */
+	bool processPulsarConfig(istream * input, int configindex, string reffile = "");
+
+	/**
 	 * Loads the phased array setup data for the specified config
 	 * @param filename The file containing phased array configuration data to be loaded
 	 * @param configindex The config index in the configuration table that this phased array belongs to
 	 * @return Whether the phased array config was successfully parsed (failure should abort)
 	 */
 	bool processPhasedArrayConfig(string filename, int configindex);
+
+	/**
+	 * Loads the phased array setup data for the specified config
+	 * @param filename The file containing phased array configuration data to be loaded
+	 * @param configindex The config index in the configuration table that this phased array belongs to
+	 * @param configindex The config index in the configuration table that this phased array belongs to
+	 * @return Whether the phased array config was successfully parsed (failure should abort)
+	 */
+	bool processPhasedArrayConfig(istream * input, int configindex, string reffile = "");
+
+	/**
+	 * Sets up an array of indices useful in determining the record band for a baseline frequency
+	 * @return Whether the setting was successful
+	 */
+	bool populateRecordBandIndicies();
 
 	/**
 	 * Once the input file has been completely processed, provide all frequency info to the generated Polyco files
@@ -984,7 +1010,7 @@ private:
 	/// Constant for the default number of channels for visibilities sent to monitor (STA or LTA)
 	static const int DEFAULT_MONITOR_NUMCHANNELS = 32;
 
-	int mpiid;
+	const int mpiid;
 	MPI_Comm mpicomm;
 	const bool enableMpi;
 	char header[MAX_KEY_LENGTH];

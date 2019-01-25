@@ -2775,17 +2775,25 @@ bool Configuration::consistencyCheck()
 
 bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 {
-	string line;
-
+	bool rc;
 	if(mpiid == 0) //only write one copy of this info message
 		cinfo << startl << "About to process phased array file " << filename << endl;
 	istream* phasedarrayinput = mpiGetFileContent(filename.c_str());
 	if(phasedarrayinput == NULL)
 	{
 		if(mpiid == 0) //only write one copy of this error message
-			cfatal << startl << "Could not open phased array config file " << line << " - aborting!!!" << endl;
+			cfatal << startl << "Could not open phased array config file " << filename << " - aborting!!!" << endl;
 		return false;
 	}
+	rc = processPhasedArrayConfig(phasedarrayinput, configindex, filename);
+	delete phasedarrayinput;
+	return rc;
+}
+
+bool Configuration::processPhasedArrayConfig(istream * phasedarrayinput, int configindex, string reffile)
+{
+	string line;
+
 	getinputline(phasedarrayinput, &line, "OUTPUT TYPE");
 	if(line == "FILTERBANK")
 		configs[configindex].padomain = FREQUENCY;
@@ -2870,11 +2878,28 @@ bool Configuration::processPhasedArrayConfig(string filename, int configindex)
 			}
 		}
 	}
-	delete phasedarrayinput;
 	return true;
 }
 
 bool Configuration::processPulsarConfig(string filename, int configindex)
+{
+	bool rc;
+	if(mpiid == 0) //only write one copy of this info message
+		cinfo << startl << "About to process pulsar file " << filename << endl;
+
+	istream * pulsarinput = mpiGetFileContent(filename.c_str());
+	if(pulsarinput == NULL)
+	{
+		if(mpiid == 0) //only write one copy of this error message
+			cfatal << startl << "Could not open pulsar config file " << filename << " - aborting!!!" << endl;
+		return false;
+	}
+	rc = processPulsarConfig(pulsarinput, configindex, filename);
+	delete pulsarinput;
+	return rc;
+}
+
+bool Configuration::processPulsarConfig(istream * pulsarinput, int configindex, string reffile)
 {
 	int numpolycofiles, ncoefficients, polycocount;
 	string line;
@@ -2886,12 +2911,11 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 	ifstream temppsrinput;
 
 	if(mpiid == 0) //only write one copy of this info message
-		cinfo << startl << "About to process pulsar file " << filename << endl;
-	istream * pulsarinput = mpiGetFileContent(filename.c_str());
-	if(pulsarinput == NULL)
+		cinfo << startl << "About to process pulsar file " << reffile << endl;
+	if(pulsarinput->bad())
 	{
 		if(mpiid == 0) //only write one copy of this error message
-			cfatal << startl << "Could not open pulsar config file " << filename << " - aborting!!!" << endl;
+			cfatal << startl << "Could not open pulsar config file " << reffile << " - aborting!!!" << endl;
 		return false;
 	}
 	getinputline(pulsarinput, &line, "NUM POLYCO FILES");
@@ -2930,7 +2954,7 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 	}
 	if(configs[configindex].numpolycos == 0) {
 		if(mpiid == 0) //only write one copy of this error message
-			cfatal << startl << "No polycos were parsed from the binconfig file " << filename << " - aborting!!!" << endl;
+			cfatal << startl << "No polycos were parsed from the binconfig file " << reffile << " - aborting!!!" << endl;
 		delete [] numsubpolycos;
 		return false;
 	}
@@ -2974,7 +2998,6 @@ bool Configuration::processPulsarConfig(string filename, int configindex)
 	delete [] binweights;
 	delete [] polycofilenames;
 	delete [] numsubpolycos;
-	delete pulsarinput;
 	return true;
 }
 
