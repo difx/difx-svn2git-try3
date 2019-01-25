@@ -246,7 +246,11 @@ DelayTimestamp DelayTimestamp::TAI_UTC(enum DelayTimestampTypeEnum t) const thro
 	switch(t) {
 	case DIFX_TIME_SYSTEM_UTC:
 		{
-			if(i_>= INT64_C(4942425600))
+			if(i_>= INT64_C(4989945600))
+			{
+				i = 37;
+			}
+			else if(i_>= INT64_C(4942425600))
 			{
 				i = 36;
 			}
@@ -471,7 +475,11 @@ DelayTimestamp DelayTimestamp::TAI_UTC(enum DelayTimestampTypeEnum t) const thro
 		break;
 	case DIFX_TIME_SYSTEM_TAI:
 		{
-			if(i_>= INT64_C(4942425636))
+			if(i_>= INT64_C(4989945637))
+			{
+				i = 37;
+			}
+			else if(i_>= INT64_C(4942425636))
 			{
 				i = 36;
 			}
@@ -752,6 +760,7 @@ DelayTimestamp DelayTimestamp::TAI_UTC(enum DelayTimestampTypeEnum t) const thro
  // 2009 JAN  1 =JD 2454832.5  TAI-UTC=  34.0       S + (MJD - 41317.) X 0.0      S
  // 2012 JUL  1 =JD 2456109.5  TAI-UTC=  35.0       S + (MJD - 41317.) X 0.0      S
  // 2015 JUL  1 =JD 2457204.5  TAI-UTC=  36.0       S + (MJD - 41317.) X 0.0      S
+ // 2017 JAN  1 =JD 2457754.5  TAI-UTC=  37.0       S + (MJD - 41317.) X 0.0      S
 
 // Python code to get numbers for code above
 // import math
