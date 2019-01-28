@@ -885,6 +885,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         for(int x=0;x<xmacpasses;x++)
         {
           xmacstart = x*xmacstridelength;
+          int xmacstrideremain = std::min(freqchannels-xmacstart, xmacstridelength);
 
           //do the cross multiplication - gets messy for the pulsar binning
           for(int j=0;j<numbaselines;j++)
@@ -920,7 +921,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   if(procslots[index].pulsarbin)
                   {
                     //multiply into scratch space
-                    status = vectorMul_cf32(vis1, vis2, scratchspace->pulsarscratchspace, xmacstridelength);
+                    status = vectorMul_cf32(vis1, vis2, scratchspace->pulsarscratchspace, xmacstrideremain);
                     if(status != vecNoErr)
                       csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
 
@@ -929,7 +930,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     {
                       bweight = weight1*weight2/freqchannels;
                       destchan = xmacstart;
-                      for(int l=0;l<xmacstridelength;l++)
+                      for(int l=0;l<xmacstrideremain;l++)
                       {
                         //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
                         destbin = scratchspace->bins[fftsubloop][f][destchan];
@@ -943,7 +944,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     {
                       bweight = weight1*weight2/freqchannels;
                       destchan = xmacstart;
-                      for(int l=0;l<xmacstridelength;l++)
+                      for(int l=0;l<xmacstrideremain;l++)
                       {
                         destbin = scratchspace->bins[fftsubloop][f][destchan];
                         //cindex = resultindex + (scratchspace->bins[freqindex][destchan]*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*(freqchannels+1) + destchan;
@@ -958,7 +959,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   else
                   {
                     //not pulsar binning, so this is nice and simple - just cross multiply accumulate
-                    status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+p*xmacstridelength]), xmacstridelength);
+                    status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+p*xmacstridelength]), xmacstrideremain);
 
                     if(status != vecNoErr)
                       csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
@@ -966,9 +967,9 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                 }
               }
 	      if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*procslots[index].numpulsarbins*xmacstridelength;
+	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*procslots[index].numpulsarbins*xmacstrideremain;
               else
-	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*xmacstridelength;
+	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*xmacstrideremain;
             }
           }
         }
@@ -1426,7 +1427,8 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
 {
   int status, startbaselinefreq, atbaselinefreq, startbaseline, startfreq, endbaseline;
   int localfreqindex, baselinefreqs;
-  int numxmacstrides, xmaclen;
+  int numxmacstrides, xmaclen, xmacstrideremain;
+  int freqchannels;
 
   //first scale the pulsar data if necessary
   if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
@@ -1437,10 +1439,12 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
     {
       if(config->isFrequencyUsed(procslots[index].configindex, f))
       {
+        freqchannels = config->getFNumChannels(f);
         numxmacstrides = config->getNumXmacStrides(procslots[index].configindex, f);
         xmaclen = config->getXmacStrideLength(procslots[index].configindex);
         for(int x=0;x<numxmacstrides;x++)
         {
+          xmacstrideremain = std::min(freqchannels-x*xmaclen, xmaclen);
           for(int i=0;i<numbaselines;i++)
           {
             localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, i, f);
@@ -1452,7 +1456,7 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
                 {
                   for(int k=0;k<config->getNumPulsarBins(procslots[index].configindex);k++)
                   {
-                    status = vectorMulC_f32_I((f32)(binweights[k]), (f32*)(scratchspace->pulsaraccumspace[f][x][i][s][j][k]), 2*xmaclen);
+                    status = vectorMulC_f32_I((f32)(binweights[k]), (f32*)(scratchspace->pulsaraccumspace[f][x][i][s][j][k]), 2*xmacstrideremain);
                     if(status != vecNoErr)
                       csevere << startl << "Error trying to scale for scrunch!!!" << endl;
                   }
@@ -1554,10 +1558,13 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
     {
       if(config->isFrequencyUsed(procslots[index].configindex, f))
       {
+        freqchannels = config->getFNumChannels(f);
         numxmacstrides = config->getNumXmacStrides(procslots[index].configindex, f);
         xmaclen = config->getXmacStrideLength(procslots[index].configindex);
+
         for(int x=0;x<numxmacstrides;x++)
         {
+          xmacstrideremain = std::min(freqchannels-x*xmaclen, xmaclen);
           for(int i=0;i<numbaselines;i++)
           {
             localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, i, f);
@@ -1570,7 +1577,7 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
                   for(int k=0;k<config->getNumPulsarBins(procslots[index].configindex);k++)
                   {
                     //zero the accumulation space for next time
-                    status = vectorZero_cf32(scratchspace->pulsaraccumspace[f][x][i][s][j][k], xmaclen);
+                    status = vectorZero_cf32(scratchspace->pulsaraccumspace[f][x][i][s][j][k], xmacstrideremain);
                     if(status != vecNoErr)
                       csevere << startl << "Error trying to zero pulsaraccumspace!!!" << endl;
                   }
@@ -1589,7 +1596,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   int status, perr, threadbinloop, threadindex, threadstart, numstrides;
   int localfreqindex, freqchannels, coreindex, coreoffset, corebinloop, channelinc, rotatorlength, dest;
   int antenna1index, antenna2index;
-  int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, stridestoaverage, averagesperstride, averagelength;
+  int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, xmacstrideremain, stridestoaverage, averagesperstride, averagelength;
   double bandwidth, lofrequency, channelbandwidth, stepbandwidth;
   double applieddelay, applieddelay1, applieddelay2, turns, edgeturns;
   double delaywindow, maxphasechange, timesmeardecorr, delaydecorr;
@@ -1742,6 +1749,8 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
     for(int x=0;x<config->getNumXmacStrides(procslots[index].configindex, freqindex);x++)
     {
       threadindex = threadstart+x*config->getCompleteStrideLength(procslots[index].configindex, freqindex);
+      int xmacstart_ = x*xmacstridelen;
+      xmacstrideremain = std::min(freqchannels-x*xmacstridelen, xmacstridelen);
       for(int b=0;b<threadbinloop;b++)
       {
         for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex);k++)
@@ -1780,7 +1789,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
           //now average (or just copy) from the designated pointer to the main result buffer
           if(channelinc == 1) //this frequency is not averaged
           {
-            xmaccopylen = xmacstridelen;
+            xmaccopylen = xmacstrideremain;
             status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[coreindex+coreoffset]), xmaccopylen);
             if(status != vecNoErr)
               cerror << startl << "Error trying to copy frequency index " << freqindex << ", baseline " << baseline << " when not averaging in frequency" << endl;
@@ -1788,7 +1797,10 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
           else //this frequency *is* averaged - deal with it
           {
             dest = coreindex+coreoffset;
-            for(int l=0;l<averagesperstride;l++)
+            int averagesperstrideremain = xmacstrideremain/averagelength;
+            if(averagesperstrideremain == 0)
+              averagesperstrideremain = 1;
+            for(int l=0;l<averagesperstrideremain;l++)
             {
               //status = vectorMean_cf32(srcpointer + l*channelinc, channelinc, &(scratchspace->channelsums[l]), vecAlgHintFast);
               //cout << "about to average from " << srcpointer[l*averagelength].re << " for length " << averagelength << endl;
@@ -1800,7 +1812,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
               dest++;
             }
           }
-          threadindex += xmacstridelen;
+          threadindex += xmacstrideremain;
         }
       }
     }

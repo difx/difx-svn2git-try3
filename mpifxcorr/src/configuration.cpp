@@ -2264,7 +2264,8 @@ bool Configuration::populateResultLengths()
         {
           configs[c].threadresultfreqoffset[i] = threadfindex;
           freqchans = freqtable[i].numchannels;
-          configs[c].numxmacstrides[i] = freqtable[i].numchannels/xmacstridelen;
+          //configs[c].numxmacstrides[i] = freqtable[i].numchannels/xmacstridelen;
+          configs[c].numxmacstrides[i] = (freqtable[i].numchannels+xmacstridelen-1)/xmacstridelen; // round up
           configs[c].threadresultbaselineoffset[i] = new int[numbaselines]();
           threadbindex = 0;
           for(int j=0;j<numbaselines;j++)
@@ -2852,8 +2853,7 @@ bool Configuration::consistencyCheck()
         if(nchan%configs[i].xmacstridelen != 0)
         {
           if(mpiid == 0) //only write one copy of this error message
-            cfatal << startl << "Config[" << i << "] has an xmac stride length of " << configs[i].xmacstridelen << " which is not an integer divisor of the number of channels in frequency[" << k << "] of baseline " << j << " (which is " << nchan << ") - aborting!!!" << endl;
-          return false;
+            cwarn << startl << "Config[" << i << "] has an xmac stride length of " << configs[i].xmacstridelen << " which is not an integer divisor of the number of channels in frequency[" << k << "] of baseline " << j << " (which is " << nchan << "), experimental!" << endl;
         }
       }
     }
