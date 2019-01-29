@@ -103,6 +103,7 @@ const int64_t MJD_SEC_UNIX_0 = INT64_C(3506716800); // difference in seconds
 
 DelayTimestamp::DelayTimestamp(int64_t i, double f, enum DelayTimestampTypeEnum t) throw()
 {
+	i_=0; f_=0;
 	switch(t) {
 	case DIFX_TIME_SYSTEM_UTC:
 	case DIFX_TIME_SYSTEM_TAI:
@@ -182,6 +183,7 @@ DelayTimestamp::DelayTimestamp(struct tm* const tm, double f) throw()
 {
 	time_t ret;
 	char *tz;
+	i_=0; f_=0;
 
 	tz = getenv("TZ");
 	setenv("TZ", "", 1);
