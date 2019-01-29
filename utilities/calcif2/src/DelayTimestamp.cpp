@@ -146,6 +146,7 @@ DelayTimestamp::DelayTimestamp(int64_t i, double f, enum DelayTimestampTypeEnum 
 				}
 				else
 				{
+					i_ = mi;
 					f_ = 0.0;
 				}
 			}
