@@ -14,6 +14,9 @@ Version 2.6
 * genmachines and mark6 datastream updates
 * add mark6 activity difx message to mark6 datastream
 * Implement Mark5B datastream over Mark6 (untested as of yet)
+* Added support for CODIF format
+* Correctly set CODIF format name, bug fix int framespersecond
+* Caught case where complex data is set to use zeroth order fringe rotation (which isn't implemented)
 
 Version 2.5
 ~~~~~~~~~~~
