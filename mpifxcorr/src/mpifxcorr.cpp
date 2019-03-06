@@ -243,8 +243,7 @@ int main(int argc, char *argv[])
 	string monitoropt;
 	pthread_t commandthread;
 	pthread_attr_t attr;
-	int nameslength = 1;
-	char monhostname[nameslength];
+	char monhostname[512];
 	int port=0, monitor_skip=0, namelen;
 	double restartseconds = 0.0;
 	char processor_name[MPI_MAX_PROCESSOR_NAME];
@@ -304,7 +303,7 @@ int main(int argc, char *argv[])
 				port = atoi(monitoropt.substr(colindex1 + 1, colindex2-colindex1-1).c_str());
 				monitor_skip = atoi(monitoropt.substr(colindex2 + 1).c_str());
 			}
-			strcpy(monhostname, monitoropt.substr(2,colindex1-2).c_str());
+			strncpy(monhostname, monitoropt.substr(2,colindex1-2).c_str(), sizeof(monhostname)-1);
 		}
 		else if(argv[i][0]=='-' && argv[i][1]=='r')
 		{
