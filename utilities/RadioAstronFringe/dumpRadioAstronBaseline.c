@@ -199,11 +199,11 @@ int main(int argc, char *argv[])
                         fprintf(stderr, "Bad date order\n");
                         exit(1);
                     }
-                    date_last = date;
-                    if(iat < iat_last) {
-                        fprintf(stderr, "Bad iat order\n");
+                    if((date == date_last) && (iat < iat_last)) {
+                        fprintf(stderr, "Bad iat order (previous: %f:%f, current: %f:%f)\n", date_last, iat_last, date, iat);
                         exit(1);
                     }
+                    date_last = date;
                     iat_last = iat;
                     for(IF=0; IF < NUM_IF; IF++) {
                         for(st=0; st < NUM_STOKES; st++) {
