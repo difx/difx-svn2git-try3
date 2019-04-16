@@ -52,7 +52,7 @@
 #include "fftw3.h"
 #include "JMA_math.h"
 
-
+#define FFTW_EST_MODE FFTW_MEASURE // FFTW_ESTIMATE or FFTW_MEASURE or FFTW_EXHAUSTIVE
 
 static const char wisdom_file[] = ".fftw3f_wisdom";
 static const int_fast32_t ZERO_PAD_FACTOR = 2;
@@ -252,7 +252,7 @@ int_fast32_t fft_in_frequency(FILE* const restrict fp_in,
                                         reinterpret_cast<fftwf_complex *>(data_in),
                                         reinterpret_cast<fftwf_complex *>(data_out),
                                         FFTW_FORWARD,
-                                        FFTW_DESTROY_INPUT|FFTW_EXHAUSTIVE);
+                                        FFTW_DESTROY_INPUT|FFTW_EST_MODE);
 
 //     // seek to the correct location in the file to start
 //     rewind(fp_in);
@@ -462,7 +462,7 @@ int_fast32_t fft_in_time(const int fd_in,
                                         reinterpret_cast<fftwf_complex *>(data_in),
                                         reinterpret_cast<fftwf_complex *>(data_out),
                                         FFTW_FORWARD,
-                                        FFTW_DESTROY_INPUT|FFTW_EXHAUSTIVE);
+                                        FFTW_DESTROY_INPUT|FFTW_EST_MODE);
 
     // mmap the input file
     const size_t SLOT_OFFSET = NUM_FFT_CHANNELS *2;

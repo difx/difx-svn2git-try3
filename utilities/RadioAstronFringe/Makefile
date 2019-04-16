@@ -5,8 +5,7 @@
 
 SHELL = /bin/bash
 
-#INSTALLDIR = /usr/local
-
+INSTALLDIR = ${DIFXROOT}/
 
 
 # Version numbering for the libiri library
