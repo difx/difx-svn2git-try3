@@ -1,0 +1,68 @@
+Summary: Library and utilities to work with VDIF data
+Name: vlbi-vdifio
+Version: @version@
+Release: 1
+License: GPL3
+Group: VLBI
+BuildRoot: /var/tmp/vlbi-vdifio-@version@-buildroot
+BuildRequires: gcc >= 4.1.0
+Prefix: /usr
+Source: vdifio-@version@.tar.gz
+
+%define debug_package %{nil}
+
+%description
+DiFX library and utilities for working with VDIF data
+
+%prep
+%setup -q -n vdifio-@version@
+
+%build
+%configure
+make
+
+%install
+%makeinstall
+
+%files
+%defattr(-,root,root)
+%{_libdir}/libvdifio.a
+%{_libdir}/libvdifio.la
+%{_libdir}/libvdifio.so
+%{_libdir}/libvdifio.so.0
+%{_libdir}/libvdifio.so.0.0.0
+%{_libdir}/pkgconfig/vdifio.pc
+%{_includedir}/vdifio.h
+%{_includedir}/vdifmark6.h
+%{_bindir}/stripVDIF
+%{_bindir}/captureUDPVDIF
+%{_bindir}/multi2singlethreadVDIF
+%{_bindir}/padVDIF
+%{_bindir}/cleanVDIF
+%{_bindir}/fakemultiVDIF
+%{_bindir}/extractSingleVDIFThread
+%{_bindir}/extractVDIFThreads
+%{_bindir}/filterVDIF
+%{_bindir}/countVDIFPackets
+%{_bindir}/printVDIF
+%{_bindir}/printVDIFheader
+%{_bindir}/searchVDIF
+%{_bindir}/peekVDIF
+%{_bindir}/mk6vmux
+%{_bindir}/vdif2to8
+%{_bindir}/vmux
+%{_bindir}/vsum
+%{_bindir}/vdifd
+%{_bindir}/vdifspec
+%{_bindir}/vdiffold
+%{_bindir}/vdifbstate
+%{_bindir}/printVDIFgaps
+%{_bindir}/vdifChanSelect
+
+
+%changelog
+* Tue Aug 02 2016 Walter Brisken <wbrisken@nrao.edu>
+- Change rpm name to vlbi-vdifio.*.rpm
+
+* Sun Mar 13 2011 Walter Brisken <wbrisken@nrao.edu>
+- First rpm version
