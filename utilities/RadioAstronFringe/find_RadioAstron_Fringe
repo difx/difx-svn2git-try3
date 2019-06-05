@@ -1,0 +1,73 @@
+#!/bin/bash
+
+ANTENNA1=1
+ANTENNA2=2
+if [ "$#" -eq 2 ]
+then
+    echo "Using antennas 1 and 2"
+elif [ "$#" -eq 4 ]
+then
+    ANTENNA1=$3
+    ANTENNA2=$4
+else
+    echo "Correct usage is $0 FITS_FILE RUN_CODE"
+    exit 2
+fi
+
+# RESULT=(`/home/oper/RadioAstron/RadioAstronFringe/dumpRadioAstronBaseline $1 $ANTENNA1 $ANTENNA2 | tee dump.out | grep '^Wrote'`)
+RESULT=(`dumpRadioAstronBaseline $1 $ANTENNA1 $ANTENNA2 | tee dump.out | grep '^Wrote'`)
+
+NUM_IF=${RESULT[1]}
+NUM_TIME=${RESULT[2]}
+NUM_CHAN=${RESULT[3]}
+NUM_STOKES=${RESULT[4]}
+INT_TIME=${RESULT[5]}
+CHAN_BW=${RESULT[6]}
+
+echo RESULT is ${RESULT[*]}
+echo NUM_IF is $NUM_IF
+echo NUM_TIME is $NUM_TIME
+echo NUM_CHAN is $NUM_CHAN
+echo NUM_STOKES is $NUM_STOKES
+echo INT_TIME is $INT_TIME
+echo CHAN_BW is $CHAN_BW
+
+rem=$(( $NUM_TIME % 2 ))
+ 
+if [ $rem -eq 1 ]
+then
+    NUM_TIME=$(( $NUM_TIME -1))
+fi
+
+
+
+
+if [ $NUM_STOKES -eq 1 ]
+then
+    for ((NIF=0;NIF<$NUM_IF;NIF++))
+    do
+	echo r${NIF}0
+	fft_fringe $CHAN_BW $INT_TIME $NUM_CHAN $NUM_TIME 0 1 1 vis_if${NIF}_st0.dat temp1 r${NIF}0
+    done
+else
+    for ((NIF=0;NIF<$NUM_IF;NIF++))
+    do
+	echo r${NIF}0
+	fft_fringe $CHAN_BW $INT_TIME $NUM_CHAN $NUM_TIME 0 1 1 vis_if${NIF}_st0.dat temp1 r${NIF}0
+	echo r${NIF}1
+	fft_fringe $CHAN_BW $INT_TIME $NUM_CHAN $NUM_TIME 0 1 1 vis_if${NIF}_st1.dat temp1 r${NIF}1
+    done
+    if [ $2 -gt 0 ]
+    then
+	if [ $NUM_STOKES -eq 4 ]
+	then
+	    for ((NIF=0;NIF<$NUM_IF;NIF++))
+	    do
+		echo r${NIF}2
+		fft_fringe $CHAN_BW $INT_TIME $NUM_CHAN $NUM_TIME 0 1 1 vis_if${NIF}_st2.dat temp1 r${NIF}2
+		echo r${NIF}3
+		fft_fringe $CHAN_BW $INT_TIME $NUM_CHAN $NUM_TIME 0 1 1 vis_if${NIF}_st3.dat temp1 r${NIF}3
+	    done
+	fi
+    fi
+fi
