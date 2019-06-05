@@ -14,7 +14,8 @@ else
     exit 2
 fi
 
-RESULT=(`/home/oper/RadioAstron/RadioAstronFringe/dumpRadioAstronBaseline $1 $ANTENNA1 $ANTENNA2 | tee dump.out | grep '^Wrote'`)
+# RESULT=(`/home/oper/RadioAstron/RadioAstronFringe/dumpRadioAstronBaseline $1 $ANTENNA1 $ANTENNA2 | tee dump.out | grep '^Wrote'`)
+RESULT=(`dumpRadioAstronBaseline $1 $ANTENNA1 $ANTENNA2 | tee dump.out | grep '^Wrote'`)
 
 NUM_IF=${RESULT[1]}
 NUM_TIME=${RESULT[2]}
