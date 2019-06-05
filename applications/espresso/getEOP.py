@@ -42,8 +42,8 @@ if (targetJD < 2444055.5):
     raise Exception('Date too early. No valid EOPs before July 1979')
 
 # fetch EOP data
-eop_url = "http://gemini.gsfc.nasa.gov/solve_save/usno_finals.erp"
-leapsec_url = "http://gemini.gsfc.nasa.gov/500/oper/solve_apriori_files/ut1ls.dat"
+eop_url = "ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno_finals.erp"
+leapsec_url = "ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/ut1ls.dat"
 
 print >>sys.stderr, "Fetching EOP data..."
 eop_page = urllib.FancyURLopener().open(eop_url).readlines()

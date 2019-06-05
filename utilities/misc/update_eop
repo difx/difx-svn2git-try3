@@ -1,5 +1,23 @@
-#!/bin/csh
+#!/bin/sh
 
-wget -N ftp://hpiers.obspm.fr/iers/bul/bulc/UTC-TAI.history -O .UTC-TAI
-wget http://gemini.gsfc.nasa.gov/500/oper/solve_apriori_files/usno_finals.erp -O .eops
+URL=ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori
+EOP=usno500_finals.erp
+UT1=ut1ls.dat
+
+LOG=.update_eop.log
+\rm -f $LOG
+touch $LOG
+
+\rm -f $EOP
+wget -o $LOG $URL/$EOP && \mv -f $EOP .eops
+if [ $? -ne 0 ]; then
+    cat $LOG
+fi
+\rm -f $UT1
+wget -o $LOG $URL/$UT1 && \mv -f $UT1 .ut1ls
+if [ $? -ne 0 ]; then
+    cat $LOG
+fi
+
+
 
