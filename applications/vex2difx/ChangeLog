@@ -1,3 +1,9 @@
+Version 2.7.0
+~~~~~~~~~~~~~
+* Post DiFX-2.6
+* vexpeek: add some new options for combining kinds of output
+* more explicitly catch cases where the number of provided channels is less than the number of recorded channels for a given format.
+
 Version 2.6.0
 ~~~~~~~~~~~~~
 * New DATASTREAM parameter tSys that passes through into .input files
@@ -10,7 +16,7 @@ Version 2.6.0
   - finer P-cal spacing; 'float' replaces 'int' in vex2difx and .input
   - Note: P-cal base frequency is not yet supported in .input file
 * ANTENNA parameter polConvert can be set to true to indicate desire to perform polarization basis conversion on this antenna.  This will eliminate a warning that is not needed in this case.
-* Added parameter exahustiveAutocorrs to allow correlation of cross-hand autocorrelations when polarisations are in different datastreams
+* Added parameter exhaustiveAutocorrs to allow correlation of cross-hand autocorrelations when polarisations are in different datastreams
 * Support units in the clock rate (e.g., usec/sec).  This change generalizes unit support to allow time in numerators.
 * Increase maximum number of allowed IFs from 4 to 32, and catch cases where this gets exceeded.
 * Add mk62v2d script and call from vex2script to support mark6 prework to .v2d
@@ -18,6 +24,7 @@ Version 2.6.0
 * Python scripts explicitly call python2
 * difxspeed: allow benchmarking on real data
 * remove calc2xyz: was on a dead-end development path
+* Version for DiFX-2.6, Mar 4, 2019
 
 Version 2.5.0
 ~~~~~~~~~~~~~
