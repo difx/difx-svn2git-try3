@@ -1,3 +1,9 @@
+3.7.0
+* Post DiFX 2.6
+* Add new column to antenna database: ivsName: the name used by IVS
+* Add more antennas to antenna database
+* Use libc time routines rather than ad hoc in mjd2date()
+
 3.6.0
 * Post DiFX 2.5
 * Remove unneeded source file
@@ -7,6 +13,8 @@
 * tabulatedelays: add option to print one line at the center of each integration time
 * tabulatedelays: add option to add clock model to delay
 * tabulatedelays: add option to simply print the clock model
+* print BW and FREQ with more significant digits
+* Version for DiFX-2.6, Mar 4, 2019
 
 3.5.0
 * Post DiFX 2.4

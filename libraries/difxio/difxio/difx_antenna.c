@@ -34,6 +34,13 @@
 #include "difxio/difx_input.h"
 #include "difxio/difx_write.h"
 
+const char clockMergeModeNames[][MAX_CLOCK_MERGE_MODE_STRING_LENGTH] =
+{
+        "strict",
+        "loose",
+        "illegal"
+};
+
 /* These names must match what calcserver expects */
 const char antennaMountTypeNames[][MAX_ANTENNA_MOUNT_NAME_LENGTH] =
 {
@@ -55,6 +62,19 @@ const char antennaSiteTypeNames[][MAX_ANTENNA_SITE_NAME_LENGTH] =
 	"OTHER"
 };
 
+enum ClockMergeMode stringToClockMergeMode(const char *str)
+{
+	enum ClockMergeMode e;
+
+	for(e = 0; e < NumClockMergeModes; ++e)
+	{
+		if(strcasecmp(str, clockMergeModeNames[e]) == 0)
+		{
+        		break;
+		}
+	}
+	return e;
+}
 
 enum AntennaMountType stringToMountType(const char *str)
 {
@@ -190,7 +210,7 @@ void printDifxAntennaSummary(const DifxAntenna *da)
 
 int isSameDifxAntenna(const DifxAntenna *da1, const DifxAntenna *da2)
 {
-	if((da1->spacecraftId < 0) && (da2->spacecraftId < 0) &&
+	if((da1->spacecraftId == da2->spacecraftId) &&
 	   strcmp(da1->name, da2->name) == 0 &&
 	   fabs(da1->X - da2->X) < 1.0 &&
 	   fabs(da1->Y - da2->Y) < 1.0 &&
