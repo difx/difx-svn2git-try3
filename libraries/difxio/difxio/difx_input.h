@@ -41,6 +41,7 @@
 #define MAX_DATA_SOURCE_NAME_LENGTH		16
 #define MAX_ANTENNA_MOUNT_NAME_LENGTH		8
 #define MAX_ANTENNA_SITE_NAME_LENGTH		16
+#define MAX_OUTPUT_BANDWIDTH_MODE_NAME_LENGTH	16
 #define MAX_SAMPLING_NAME_LENGTH		16
 #define MAX_TONE_SELECTION_STRING_LENGTH	12
 #define MAX_EOP_MERGE_MODE_STRING_LENGTH	16
@@ -151,6 +152,8 @@ enum AntennaMountType
 	NumAntennaMounts		/* must remain as last entry */
 };
 
+extern const char antennaMountTypeNames[][MAX_ANTENNA_MOUNT_NAME_LENGTH];
+
 /* keep this current with antennaSiteTypeNames in difx_antenna.c */
 enum AntennaSiteType
 {
@@ -169,8 +172,16 @@ enum OutputFormatType
 	NumOutputFormat			/* must remain as last entry */
 };
 
-extern const char antennaMountTypeNames[][MAX_ANTENNA_MOUNT_NAME_LENGTH];
+/* keep this current with outputBandwidthModeNames[] in difx_outputbands.c */
+enum OutputBandwidthMode
+{
+	OutputBandwidthOff = 0,		/* follow v2d for ZOOMs if any; behave like DiFX 2.5/2.6 */
+	OutputBandwidthAuto = 1,	/* uniform bandwidth auto-determined from VEX $FREQ entries */
+	OutputBandwidthUser = 2,	/* uniform bandwidth user-specified in v2d */
+	NumOutputBandwidthModes		/* must remain as last entry */
+};
 
+extern const char outputBandwidthModeNames[][MAX_OUTPUT_BANDWIDTH_MODE_NAME_LENGTH];
 
 /* keep this current with toneSelectionNames[] in difx_input.c */
 enum ToneSelection
