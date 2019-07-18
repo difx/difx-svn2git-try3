@@ -217,10 +217,12 @@ CorrSetup::CorrSetup(const std::string &name) : corrSetupName(name)
 	suppliedSpecAvg = 0;
 	FFTSpecRes = 250000.0;		// Hz; spectral resolution at FFT stage
 	outputSpecRes = 500000.0;	// Hz; spectral resolution in Output
+	outputBandwidth = 0;		// Hz; target bw for assembly of output bands from slices depending on OutputBandwidthMode
 	nFFTChan = 0;			// If this or nOutputChan != 0, these override SpecAvg params
 	nOutputChan = 0;
 	doPolar = true;
 	doAuto = true;
+	outputBandwidthMode = OutputBandwidthOff;
 	fringeRotOrder = 1;
 	strideLength = 0;
 	xmacLength = 0;
@@ -281,6 +283,19 @@ int CorrSetup::setkv(const std::string &key, const std::string &value)
 		ss >> outputSpecRes;
 		outputSpecRes *= 1e6;	// Users use MHz, vex2difx uses Hz
 		explicitOutputSpecRes = true;
+	}
+	else if(key == "outputBandwidth")
+	{
+		if (value == "auto")
+		{
+			outputBandwidthMode = OutputBandwidthAuto;
+		}
+		else
+		{
+			outputBandwidthMode = OutputBandwidthUser;
+			ss >> outputBandwidth;
+			outputBandwidth *= 1e6;	// Users use MHz, vex2difx uses Hz
+		}
 	}
 	else if(key == "FFTSpecRes" || key == "fftSpecRes")
 	{

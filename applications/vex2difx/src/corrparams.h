@@ -199,6 +199,7 @@ public:
 	std::vector<double> freqClockOffsDelta; // Clock offsets between pols for the individual frequencies
 	std::vector<double> freqPhaseDelta;	// Phase difference between pols for each frequency
 	std::vector<double> loOffsets;		// LO offsets for each individual frequency
+	std::vector<double> freqGains;		// Gains (V/V) for each individual frequency
 	VexClock clock;
 	double deltaClock;	// [sec]
 	double deltaClockRate;	// [sec/sec]
@@ -260,6 +261,7 @@ public:
 	int guardNS;		// Number of "guard" ns tacked on to end of a send
 	double FFTSpecRes;	// Hz; resolution of initial FFTs
 	double outputSpecRes;	// Hz; resolution of averaged output FFTs
+	double outputBandwidth; // Hz; target bw for assembly of output bands from slices depending on OutputBandwidthMode
 	double suppliedSpecAvg;	// specAvg supplied by .v2d file
 	int nFFTChan;		// This and the next parameter can be used to override the above two if all channels are the same width
 	int nOutputChan;	//
@@ -270,6 +272,7 @@ public:
 				// when fringeRotOrder > 0
 	int xmacLength;		// Number of channels to do at a time when xmac'ing
 	int numBufferedFFTs;	// Number of FFTs to do in Mode before XMAC'ing
+	enum OutputBandwidthMode outputBandwidthMode;
 	std::set<int> freqIds;	// which bands to correlate
 	std::string binConfigFile;
 	std::string phasedArrayConfigFile;
