@@ -52,34 +52,11 @@ void DifxBaselineAllocFreqs(DifxBaseline *b, int nFreq)
 		fprintf(stderr, "Error: DifxBaselineAllocFreqs: b = 0\n");
 		return;
 	}
-	if(b->nPolProd)
-	{
-		free(b->nPolProd);
-	}
-	if(b->bandA)
-	{
-		for(i = 0; i < b->nFreq; i++)
-		{
-			if(b->bandA[i])
-			{
-				free(b->bandA[i]);
-			}
-		}
-		free(b->bandA);
-	}
-	if(b->bandB)
-	{
-		for(i = 0; i < b->nFreq; i++)
-		{
-			if(b->bandB[i])
-			{
-				free(b->bandB[i]);
-			}
-		}
-		free(b->bandB);
-	}
+
+	deleteDifxBaselineInternals(b);
 
 	b->nFreq = nFreq;
+	b->destFq = (int *)calloc(nFreq, sizeof(int));
 	b->nPolProd = (int *)calloc(nFreq, sizeof(int));
 	b->bandA = (int **)calloc(nFreq, sizeof(int *));
 	b->bandB = (int **)calloc(nFreq, sizeof(int *));
@@ -132,6 +109,11 @@ void deleteDifxBaselineInternals(DifxBaseline *db)
 {
 	int f;
 
+	if(db->destFq)
+	{
+		free(db->destFq);
+		db->destFq = 0;
+	}
 	if(db->nPolProd)
 	{
 		free(db->nPolProd);
@@ -184,6 +166,15 @@ void fprintDifxBaseline(FILE *fp, const DifxBaseline *db)
 	fprintf(fp, "  Difx Baseline : %p\n", db);
 	fprintf(fp, "    datastream indices = %d %d\n", db->dsA, db->dsB);
 	fprintf(fp, "    nFreq = %d\n", db->nFreq);
+	if(db->destFq)
+	{
+		fprintf(fp, "    destFq[freq] =");
+		for(f = 0; f < db->nFreq; f++)
+		{
+			fprintf(fp, " %d", db->destFq[f]);
+		}
+		fprintf(fp, "\n");
+	}
 	if(db->nPolProd)
 	{
 		fprintf(fp, "    nPolProd[freq] =");
@@ -229,6 +220,10 @@ int isSameDifxBaseline(const DifxBaseline *db1, const DifxBaseline *db2,
 		{
 			return 0;
 		}
+		if(db1->destFq[f] != db2->destFq[f]) // TODO: isSameDifxFreq() might be better
+		{
+			return 0;
+		}
 		for(p = 0; p < db1->nPolProd[f]; p++)
 		{
 			if(db1->bandA[f][p] != db2->bandA[f][p] ||
@@ -261,6 +256,7 @@ void copyDifxBaseline(DifxBaseline *dest, const DifxBaseline *src,
 	DifxBaselineAllocFreqs(dest, src->nFreq);
 	for(f = 0; f < dest->nFreq; f++)
 	{
+		dest->destFq[f] = src->destFq[f];
 		DifxBaselineAllocPolProds(dest, f, src->nPolProd[f]);
 		for(p = 0; p < dest->nPolProd[f]; p++)
 		{
@@ -274,6 +270,7 @@ void moveDifxBaseline(DifxBaseline *dest, DifxBaseline *src)
 {
 	dest->dsA = src->dsA;
 	dest->dsB = src->dsB;
+	dest->destFq = src->destFq;
 	dest->nPolProd = src->nPolProd;
 	dest->bandA = src->bandA;
 	dest->bandB = src->bandB;
@@ -418,6 +415,7 @@ int writeDifxBaselineArray(FILE *out, int nBaseline, const DifxBaseline *db)
 
 		for(f = 0; f < b->nFreq; f++)
 		{
+			writeDifxLineInt2(out, "TARGET FREQ %d/%d", i, f, b->destFq[f]);
 			writeDifxLineInt2(out, "POL PRODUCTS %d/%d", i, f,
 				b->nPolProd[f]);
 			n++;

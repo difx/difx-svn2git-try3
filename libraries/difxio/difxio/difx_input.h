@@ -467,6 +467,7 @@ typedef struct
 {
 	int dsA, dsB;		/* indices to datastream table */
 	int nFreq;
+	int *destFq;		/* [freq] indices to freq table */
 	int *nPolProd;		/* [freq] */
 
 	/* note: band in excess of nRecBand are assumed to be zoom bands */

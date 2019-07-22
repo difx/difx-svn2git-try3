@@ -1555,6 +1555,15 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 		{
 			int p;
 
+			r = DifxParametersfind2(ip, r+1, "TARGET FREQ %d/%d", b, f);
+			if(r < 0)
+			{
+				fprintf(stderr, "TARGET FREQ %d/%d not found\n", b, f);
+			
+				return 0;
+			}
+			D->baseline[b].destFq[f] = atoi(DifxParametersvalue(ip, r));
+
 			r = DifxParametersfind2(ip, r+1, "POL PRODUCTS %d/%d", b, f);
 			if(r < 0)
 			{
@@ -1563,6 +1572,7 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 				return 0;
 			}
 			DifxBaselineAllocPolProds(D->baseline + b, f, atoi(DifxParametersvalue(ip, r)));
+
 			for(p = 0; p < D->baseline[b].nPolProd[f]; ++p)
 			{
 				r = DifxParametersfind1(ip, r+1, "D/STREAM A BAND %d", p);
