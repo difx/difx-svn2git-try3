@@ -498,6 +498,7 @@ Configuration::~Configuration()
     delete [] baselinetable[i].datastream2recordbandindex;
     delete [] baselinetable[i].numpolproducts;
     delete [] baselinetable[i].freqtableindices;
+    delete [] baselinetable[i].targetfreqtableindices;
     delete [] baselinetable[i].polpairs;
   }
   delete [] baselinetable;
@@ -1061,10 +1062,13 @@ bool Configuration::processBaselineTable(istream * input)
     baselinetable[i].datastream1recordbandindex = new int*[baselinetable[i].numfreqs]();
     baselinetable[i].datastream2recordbandindex = new int*[baselinetable[i].numfreqs]();
     baselinetable[i].freqtableindices = new int[baselinetable[i].numfreqs]();
+    baselinetable[i].targetfreqtableindices = new int[baselinetable[i].numfreqs]();
     baselinetable[i].polpairs = new char**[baselinetable[i].numfreqs]();
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
       baselinetable[i].oddlsbfreqs[j] = 0;
+      getinputline(input, &line, "TARGET FREQ ", i);
+      baselinetable[i].targetfreqtableindices[j] = atoi(line.c_str());
       getinputline(input, &line, "POL PRODUCTS ", i);
       baselinetable[i].numpolproducts[j] = atoi(line.c_str());
       baselinetable[i].datastream1bandindex[j] = new int[baselinetable[i].numpolproducts[j]]();

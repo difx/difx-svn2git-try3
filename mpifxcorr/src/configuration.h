@@ -262,6 +262,8 @@ public:
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].numfreqs; }
   inline int getBFreqIndex(int configindex, int configbaselineindex, int baselinefreqindex) const
     { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].freqtableindices[baselinefreqindex]; }
+  inline int getBTargetFreqIndex(int configindex, int configbaselineindex, int baselinefreqindex) const
+    { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].targetfreqtableindices[baselinefreqindex]; }
   inline int getBLocalFreqIndex(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].localfreqindices[freqtableindex]; }
   inline int getBFreqOddLSB(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].oddlsbfreqs[freqtableindex]; }
   inline int getBNumPolProducts(int configindex, int configbaselineindex, int baselinefreqindex) const
@@ -730,6 +732,7 @@ private:
     int numfreqs;
     int totalbands;
     int * freqtableindices;
+    int * targetfreqtableindices;
     int * oddlsbfreqs;
     int * localfreqindices; //given a freq table index, what local freq does it correspond to (-1 = none)
     int * numpolproducts;
