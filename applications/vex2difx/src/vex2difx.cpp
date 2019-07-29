@@ -41,6 +41,7 @@
 #include <difxmessage.h>
 #include <vexdatamodel.h>
 
+#include "autobands.h"
 #include "corrparams.h"
 #include "freq.h"
 #include "job.h"
@@ -464,7 +465,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		
 		exit(EXIT_FAILURE);
 	}
-	int nRecordChan = stream.nRecordChan;
+	const int nRecordChan = stream.nRecordChan;
 
 	stream.snprintDifxFormatName(D->datastream[dsId].dataFormat, DIFXIO_FORMAT_LENGTH);
 	D->datastream[dsId].dataFrameSize = stream.dataFrameSize();
@@ -528,7 +529,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		D->datastream[dsId].nRecPol[j]   = bandMap[j].second;
 	}
 
-	return nRecordChan;
+	return 0;
 }
 
 static void populateRuleTable(DifxInput *D, const CorrParams *P)
@@ -730,6 +731,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								}
 							}
 						}
+						bl->destFq[nFreq] = freqId;
 						bl->nPolProd[nFreq] = nPol;
 
 						if(nPol == 0)
@@ -770,6 +772,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								}
 							}
 						}
+						bl->destFq[nFreq] = freqId;
 						bl->nPolProd[nFreq] = nPol;
 
 						if(nPol == 0)
@@ -985,6 +988,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 										}
 									}
 								}
+								bl->destFq[nFreq] = freqId;
 								bl->nPolProd[nFreq] = nPol;
 
 								if(nPol == 0)
@@ -1104,6 +1108,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 										}
 									}
 								}
+								bl->destFq[nFreq] = freqId;
 								bl->nPolProd[nFreq] = nPol;
 
 								if(nPol == 0)
@@ -1461,7 +1466,7 @@ static int getConfigIndex(vector<pair<string,string> >& configs, DifxInput *D, c
 	}
 
 	//if guardNS was set to negative value, change it to the right amount to allow for
-	//adjustment to get to an integer NS + geometric rate slippage (assumes Earth-based antenna)
+		//adjustment to get to an integer NS + geometric rate slippage (assumes Earth-based antenna)
 	//Note: if not set explicitly, zero will be passed to mpifxcorr where it will do the calculation
 	if(config->guardNS < 0)
 	{
@@ -1946,8 +1951,10 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			for(unsigned int ds = 0; ds < setup.nStream(); ++ds)
 			{
 				const VexStream &stream = setup.streams[ds];
-				int v = setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
-				if(v)
+
+				setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
+
+				if(stream.nRecordChan)
 				{
 					dd = D->datastream + D->nDatastream;
 					dd->phaseCalIntervalMHz = setup.phaseCalIntervalMHz();
