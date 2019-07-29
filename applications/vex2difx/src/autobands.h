@@ -42,6 +42,7 @@ class AutoBands
 public:
 	//constructors
 	AutoBands(double outputbandwidth_Hz, int verbosity=0, bool permitgaps=false);
+	AutoBands() : outputbandwidth(32e6), verbosity(0), permitgaps(false) { }
 	~AutoBands();
 
 	//types
@@ -53,6 +54,7 @@ public:
 
 		Band(double flow_, double fhigh_, int antenna_)
 			: flow(flow_),fhigh(fhigh_),antenna(antenna_) { }
+		double bandwidth() const { return fhigh-flow; }
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Band &x);
 	};
 
@@ -67,6 +69,7 @@ public:
 		Span(double flow_, double fhigh_, int antcount_, int bandcount_)
 			: flow(flow_),fhigh(fhigh_),antennacount(antcount_),bandcount(bandcount_),continued(false) { }
 		static bool compare_bandwidths(const AutoBands::Span& lhs, const AutoBands::Span& rhs);
+		double bandwidth() const { return fhigh-flow; }
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Span &x);
 	};
 
@@ -88,7 +91,7 @@ public:
 
 public:
 	//methods
-	double autoBandwidth() const;
+	double autoBandwidth();
 	void setBandwidth(double outputbandwidth_Hz);
 
 	void addRecbands(const std::vector<double>& fstart, const std::vector<double>& fstop, int antId = -1);
@@ -103,8 +106,9 @@ public:
 	std::vector<ZoomFreq> outputzooms;
 	double minrecfreq, maxrecfreq;
 	unsigned int Nant;
-	int verbosity;
 	double outputbandwidth;
+	int verbosity;
+	bool permitgaps;
 
 private:
 	//methods

@@ -47,10 +47,10 @@
 
 AutoBands::AutoBands(double outputbandwidth_Hz, int verbosity, bool permitgaps)
 {
-	bands.clear();
-	outputbandwidth = outputbandwidth_Hz;
-	verbosity = verbosity;
-	Nant = 0;
+	this->outputbandwidth = outputbandwidth_Hz;
+	this->verbosity = verbosity;
+	this->permitgaps = permitgaps;
+	this->Nant = 0;
 }
 
 AutoBands::~AutoBands()
@@ -131,24 +131,27 @@ double AutoBands::granularity(const std::vector<double>& args) const
 /**
  * Return automatically determined best-fit common bandwidth, or 0 on failure
  */
-double AutoBands::autoBandwidth() const
+double AutoBands::autoBandwidth()
 {
+	if (spans.empty())
+	{
+		this->analyze();
+	}
+
 	if (spans.empty())
 	{
 		if (verbosity > 1)
 		{
-			std::cout << "AutoBands::autoBandwidth(): Warning: The spans list is empty, make sure analyze() was invoked earlier.\n";
+			std::cout << "AutoBands::autoBandwidth(): Warning: Not enough data to determine the common bandwidth.\n";
 		}
 		return 0.0;
 	}
 
-	const AutoBands::Span* ms = &(*std::min_element(spans.begin(), spans.end(), AutoBands::Span::compare_bandwidths));
-	const AutoBands::Span* Ms = &(*std::max_element(spans.begin(), spans.end(), AutoBands::Span::compare_bandwidths));
-	double m = ms->fhigh - ms->flow;
-	double M = Ms->fhigh - Ms->flow;
-	if (m == M)
+	const AutoBands::Span& m = (*std::min_element(spans.begin(), spans.end(), AutoBands::Span::compare_bandwidths));
+	const AutoBands::Span& M = (*std::max_element(spans.begin(), spans.end(), AutoBands::Span::compare_bandwidths));
+	if (m.bandwidth() == M.bandwidth())
 	{
-		return m;
+		return m.bandwidth();
 	}
 	return 0.0;
 }
@@ -233,10 +236,12 @@ void AutoBands::simplify(Outputband& mergeable)
  */
 void AutoBands::analyze(int Nant)
 {
+	// Init
 	if (Nant <= 0)
 	{
-		Nant = Nant;
+		Nant = this->Nant;
 	}
+	spans.clear();
 
 	// Sorted set of all recorded band edges
 	std::set<double> bandedges;
@@ -251,7 +256,6 @@ void AutoBands::analyze(int Nant)
 	std::copy(bandedges.begin(), bandedges.end(), std::back_inserter(fedges));
 
 	// Split the freq axis into spans (smallest band slices between any two rec band edges)
-	spans.clear();
 	for (unsigned n = 1; n < fedges.size(); n++)
 	{
 		double span_lo = fedges[n-1], span_hi = fedges[n];
@@ -320,7 +324,7 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 	double foutstart;
 	if (Nant <= 0)
 	{
-		Nant = Nant;
+		Nant = this->Nant;
 	}
 	if (fstart_Hz > 0)
 	{
@@ -488,7 +492,7 @@ void AutoBands::barchart(
 /// Function for std::min_element and others for sorting Span's
 bool AutoBands::Span::compare_bandwidths(const AutoBands::Span& lhs, const AutoBands::Span& rhs)
 {
-	return ((lhs.fhigh - lhs.flow) < (rhs.fhigh - rhs.flow));
+	return (lhs.bandwidth() < rhs.bandwidth());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -515,7 +519,8 @@ std::ostream& operator << (std::ostream& os, const AutoBands& x)
 	for (unsigned k = 0; k < x.spans.size(); k++)
 	{
 		xmin.push_back(x.spans[k].flow);
-		xmax.push_back(x.spans[k].fhigh);		id.push_back(k);
+		xmax.push_back(x.spans[k].fhigh);
+		id.push_back(k);
 	}
 	x.barchart(os, xmin, xmax, id, 'A');
 
@@ -533,7 +538,7 @@ std::ostream& operator << (std::ostream& os, const AutoBands::Band& x)
 {
 	os << std::fixed
 		<< "start at " << std::setw(15) << std::setprecision(8) << (x.flow*1e-6) << " MHz with bw "
-		<< std::setw(11) << std::setprecision(7) << ((x.fhigh-x.flow)*1e-6) << " MHz";
+		<< std::setw(11) << std::setprecision(7) << (x.bandwidth()*1e-6) << " MHz";
 	return os;
 }
 
@@ -542,7 +547,7 @@ std::ostream& operator << (std::ostream& os, const AutoBands::Span& x)
 	os << "Span " << std::fixed
 		<< std::setw(15) << std::setprecision(8) << (x.flow*1e-6)  << " -- "
 		<< std::setw(15) << std::setprecision(8) << (x.fhigh*1e-6) << " MHz, "
-		<< std::setw(11) << std::setprecision(7) << ((x.fhigh-x.flow)*1e-6) << " MHz bw, "
+		<< std::setw(11) << std::setprecision(7) << (x.bandwidth()*1e-6) << " MHz bw, "
 		<< x.bandcount << " rec.bands, " << (x.continued ? "contig" : "gap");
 	return os;
 }
