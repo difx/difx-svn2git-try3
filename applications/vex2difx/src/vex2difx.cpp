@@ -27,6 +27,7 @@
  *
  *==========================================================================*/
 
+#include <cassert>
 #include <vector>
 #include <set>
 #include <sstream>
@@ -446,6 +447,18 @@ static int getToneSetId(vector<vector<unsigned int> > &toneSets, const vector<un
 	return toneSets.size() - 1;
 }
 
+/**
+ * Derive multiple parameters from Datastream Format string.
+ *
+ * Allocate DS freq/band structures, convert VexStream into DS format,
+ * convert VexSetup subbands into DS rec bands&pols, update DS rec freqs.
+ *
+ * @param[in] dsId Datastream ID to update/create if positive number
+ * @param[in,out] &freqs A global list of freqs to update via getFreqId()
+ * @param[in,out] &toneSets A global vector of tone nr vectors to update via getToneSetId()
+ * @param[in] setup The VEX Setup with recorded-channel details
+ * @param[in] mode The VEX mode with subband details
+ */
 static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<unsigned int> >& toneSets, const VexMode *mode, const string &antName, int startBand, const VexSetup &setup, const VexStream &stream, const CorrSetup *corrSetup, enum V2D_Mode v2dMode)
 {
 	vector<pair<int,int> > bandMap;
@@ -458,19 +471,26 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 	}
 
 	// just check to make sure antId is legal
-	int antId = D->datastream[dsId].antennaId;
-	if(antId < 0 || antId >= D->nAntenna)
+	if(dsId >= 0)
 	{
-		cerr << "Developer error: setFormat: antId=" << antId << " while nAntenna=" << D->nAntenna << endl;
-		
-		exit(EXIT_FAILURE);
+		int antId = D->datastream[dsId].antennaId;
+		if(antId < 0 || antId >= D->nAntenna)
+		{
+			cerr << "Developer error: setFormat: antId=" << antId << " while nAntenna=" << D->nAntenna << endl;
+
+			exit(EXIT_FAILURE);
+		}
 	}
+
 	const int nRecordChan = stream.nRecordChan;
 
-	stream.snprintDifxFormatName(D->datastream[dsId].dataFormat, DIFXIO_FORMAT_LENGTH);
-	D->datastream[dsId].dataFrameSize = stream.dataFrameSize();
-	D->datastream[dsId].quantBits = stream.nBit;
-	DifxDatastreamAllocBands(D->datastream + dsId, nRecordChan);
+	if(dsId >= 0)
+	{
+		stream.snprintDifxFormatName(D->datastream[dsId].dataFormat, DIFXIO_FORMAT_LENGTH);
+		D->datastream[dsId].dataFrameSize = stream.dataFrameSize();
+		D->datastream[dsId].quantBits = stream.nBit;
+		DifxDatastreamAllocBands(D->datastream + dsId, nRecordChan);
+	}
 
 	for(int i = 0; i < nRecordChan; ++i)
 	{
@@ -495,7 +515,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 			const VexSubband& subband = mode->subbands[ch->subbandId];
 
 			r -= startBand;
-			if(r < 0 || r >= D->datastream[dsId].nRecBand)
+			if(dsId >= 0 && (r < 0 || r >= D->datastream[dsId].nRecBand))
 			{
 				cerr << "Error: setFormat: index to record channel=" << r << " is out of range.  antName=" << antName << " mode=" << mode->defName << endl;
 				cerr << "nRecBand = " << D->datastream[dsId].nRecBand << endl;
@@ -505,7 +525,7 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 
 				exit(EXIT_FAILURE);
 			}
-			
+
 			if(v2dMode == V2D_MODE_PROFILE || setup.phaseCalIntervalMHz() == 0)
 			{
 				// In profile mode don't extract any tones
@@ -515,18 +535,25 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 			{
 				toneSetId = getToneSetId(toneSets, ch->tones);
 			}
-			
+
 			fqId = getFreqId(freqs, subband.freq, subband.bandwidth, subband.sideBand, corrSetup->FFTSpecRes, corrSetup->outputSpecRes, 1, 0, toneSetId);	// 0 means not zoom band
-			
-			D->datastream[dsId].recBandFreqId[r] = getBand(bandMap, fqId);
-			D->datastream[dsId].recBandPolName[r] = subband.pol;
+
+			if(dsId >= 0)
+			{
+				D->datastream[dsId].recBandFreqId[r] = getBand(bandMap, fqId);
+				D->datastream[dsId].recBandPolName[r] = subband.pol;
+			}
 		}
 	}
-	DifxDatastreamAllocFreqs(D->datastream + dsId, bandMap.size());
-	for(size_t j = 0; j < bandMap.size(); ++j)
+
+	if(dsId >= 0)
 	{
-		D->datastream[dsId].recFreqId[j] = bandMap[j].first;
-		D->datastream[dsId].nRecPol[j]   = bandMap[j].second;
+		DifxDatastreamAllocFreqs(D->datastream + dsId, bandMap.size());
+		for(size_t j = 0; j < bandMap.size(); ++j)
+		{
+			D->datastream[dsId].recFreqId[j] = bandMap[j].first;
+			D->datastream[dsId].nRecPol[j]   = bandMap[j].second;
+		}
 	}
 
 	return 0;
@@ -1530,6 +1557,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 {
 	DifxInput *D;
 	DifxScan *scan;
+	AutoBands autobands(0.0, verbose, false);
 	const CorrSetup *corrSetup;
 	const SourceSetup *sourceSetup;
 	const PhaseCentre *phaseCentre;
@@ -1916,22 +1944,101 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			++D->nPhasedArray;
 		}
 
-		// first iterate over all antennas, making sure all recorded bands are allocated
+		// iterate over all antennas, making sure all recorded bands are allocated and all utilized datastreams populated
+		assert(D->nDatastream == 0);
 		for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
 		{
 			const std::string &antName = it->first;
 			const VexSetup &setup = it->second;
 			int startBand;
-			startBand = 0;
-			for(unsigned int ds = 0; ds < setup.nStream(); ++ds)
+
+			// do some prodding, any antenna
+			for(unsigned int ds = 0, startBand = 0; ds < setup.nStream(); ++ds)
 			{
 				const VexStream &stream = setup.streams[ds];
-				// the zero below is just to provide a legal slot to do some prodding.  the loop below will properly populate all datastreams.
-				setFormat(D, 0, freqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
+				// the -1 below is to avoid overwriting a legal slot while doing some prodding.  the loop below will properly populate all datastreams.
+				setFormat(D, -1, freqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
+				startBand += stream.nRecordChan;
+			}
+
+			// for antenna in job go ahead and populate all datastreams
+			if(find(J.jobAntennas.begin(), J.jobAntennas.end(), antName) == J.jobAntennas.end())
+			{
+				continue;
+			}
+
+			for(unsigned int ds = 0, startBand = 0; ds < setup.nStream(); ++ds)
+			{
+				const VexStream &stream = setup.streams[ds];
+				setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
+                                if(stream.nRecordChan)
+				{
+                                        config->datastreamId[nConfigDatastream] = D->nDatastream;
+                                        ++D->nDatastream;
+                                        ++nConfigDatastream;
+				}
 				startBand += stream.nRecordChan;
 			}
 		}
 
+		// collect freqs to concatenate into AutoBands logic
+		for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
+		{
+			const std::string &antName = it->first;
+			const VexSetup &setup = it->second;
+			std::vector<freq> antfreqs;
+			int startBand = 0;
+
+			if(find(J.jobAntennas.begin(), J.jobAntennas.end(), antName) == J.jobAntennas.end())
+			{
+				continue;
+			}
+
+			for(unsigned int ds = 0; ds < setup.nStream(); ++ds)
+			{
+				const VexStream &stream = setup.streams[ds];
+				setFormat(D, -1, antfreqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
+				startBand += stream.nRecordChan;
+			}
+			autobands.addRecbands(antfreqs);
+
+		}
+
+		// invoke AutoBand logic to generate additional 1:1 / N:1 / 1:N zooms that assemble into outputbands
+		if(corrSetup->outputBandwidthMode != OutputBandwidthOff)
+		{
+			double bw = 0;
+			if(corrSetup->outputBandwidthMode == OutputBandwidthAuto)
+			{
+				bw = autobands.autoBandwidth();
+				cout << "Determined outputBand 'auto' bandwidth of " << std::fixed << bw*1e-6 << "MHz\n";
+			}
+			if(bw <= 0)
+			{
+				bw = corrSetup->outputBandwidth;
+				cout << "Using user-specified outputBand bandwidth of " << std::fixed << bw*1e-6 << "MHz\n";
+			}
+			if(bw <= 0)
+			{
+				cerr << "Error: outputBand mode failed! You can try specifying 'auto' or a different bandwidth.\n";
+
+				exit(EXIT_FAILURE);
+			}
+
+			// produce the necessary bands
+			autobands.setBandwidth(bw);
+			autobands.generate();
+			if(verbose > 2)
+			{
+				std::cout << autobands;
+			}
+
+			// TODO: propagate AutoBands::outputbands into each antennaSetup via antennaSetup::copyGlobalZoom()
+
+		}
+
+		// iterate over all antennas and fill in zoom band, LO offset, clock offset details
+		int currDatastream = 0;
 		minChans = corrSetup->minInputChans();
 		for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
 		{
@@ -1951,12 +2058,9 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			for(unsigned int ds = 0; ds < setup.nStream(); ++ds)
 			{
 				const VexStream &stream = setup.streams[ds];
-
-				setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
-
 				if(stream.nRecordChan)
 				{
-					dd = D->datastream + D->nDatastream;
+					dd = D->datastream + currDatastream;
 					dd->phaseCalIntervalMHz = setup.phaseCalIntervalMHz();
 					dd->tcalFrequency = antenna->tcalFrequency;
 
@@ -1964,7 +2068,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 					if(antennaSetup)
 					{
 						nZoomBands = 0;
-						
+
 						int nZoomFreqs = antennaSetup->zoomFreqs.size();
 
 						if(nZoomFreqs > 0)
@@ -1974,7 +2078,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 							int nZoomSkip = 0;
 
 							DifxDatastreamAllocZoomFreqs(dd, nZoomFreqs);
-							
+
 							nZoom = 0;
 							for(int i = 0; i < nZoomFreqs; ++i)
 							{
@@ -2057,9 +2161,9 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 						int nFreqPhaseDelta = antennaSetup->freqPhaseDelta.size();
 						if(nFreqClockOffsets > 0)
 						{
-							if((startBand + D->datastream[D->nDatastream].nRecFreq) > nFreqClockOffsets ||
-							   (startBand + D->datastream[D->nDatastream].nRecFreq) > nFreqClockOffsetsDelta ||
-							   (startBand + D->datastream[D->nDatastream].nRecFreq) > nFreqPhaseDelta)
+							if((startBand + D->datastream[currDatastream].nRecFreq) > nFreqClockOffsets ||
+							   (startBand + D->datastream[currDatastream].nRecFreq) > nFreqClockOffsetsDelta ||
+							   (startBand + D->datastream[currDatastream].nRecFreq) > nFreqPhaseDelta)
 							{
 								cerr << endl;
 								cerr << "Error: AntennaSetup for " << antName << " has only " << nFreqClockOffsets << " freqClockOffsets specified but " << (startBand + dd->nRecFreq) << " recorded frequencies needed, or" << endl;
@@ -2075,18 +2179,18 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 
 								exit(EXIT_FAILURE);
 							}
-							for(int i = 0; i < D->datastream[D->nDatastream].nRecFreq; ++i)
+							for(int i = 0; i < D->datastream[currDatastream].nRecFreq; ++i)
 							{
 								double freqClockOffs, freqClockOffsDelta, freqPhaseDelta;
 
 								freqClockOffs = (startBand + i < nFreqClockOffsets) ? antennaSetup->freqClockOffs.at(startBand + i) : 0.0;
-								D->datastream[D->nDatastream].clockOffset[i] = freqClockOffs;
+								D->datastream[currDatastream].clockOffset[i] = freqClockOffs;
 
 								freqClockOffsDelta = (startBand + i < nFreqClockOffsetsDelta) ? antennaSetup->freqClockOffsDelta.at(startBand + i) : 0.0;
-								D->datastream[D->nDatastream].clockOffsetDelta[i] = freqClockOffsDelta;
-								
+								D->datastream[currDatastream].clockOffsetDelta[i] = freqClockOffsDelta;
+
 								freqPhaseDelta = (startBand + i < nFreqPhaseDelta) ? antennaSetup->freqPhaseDelta.at(startBand + i) : 0.0;
-								D->datastream[D->nDatastream].phaseOffset[i] = freqPhaseDelta;
+								D->datastream[currDatastream].phaseOffset[i] = freqPhaseDelta;
 							}
 						}
 
@@ -2094,24 +2198,22 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 						int nLoOffsets = antennaSetup->loOffsets.size();
 						if(nLoOffsets > 0)
 						{
-							if((startBand + D->datastream[D->nDatastream].nRecFreq) > nLoOffsets)
+							if((startBand + D->datastream[currDatastream].nRecFreq) > nLoOffsets)
 							{
 								cerr << endl;
 								cerr << "Error: AntennaSetup for " << antName << " has only " << nLoOffsets << " loOffsets specified but " << (startBand + dd->nRecFreq) << " recorded frequencies needed." << endl;
 								exit(EXIT_FAILURE);
 							}
-							for(int i = 0; i < D->datastream[D->nDatastream].nRecFreq; ++i)
+							for(int i = 0; i < D->datastream[currDatastream].nRecFreq; ++i)
 							{
 								double loOffset;
-								
+
 								loOffset = (startBand + i < nLoOffsets) ? antennaSetup->loOffsets.at(startBand + i) : 0.0;
-								D->datastream[D->nDatastream].freqOffset[i] = loOffset;
+								D->datastream[currDatastream].freqOffset[i] = loOffset;
 							}
 						}
 					} // if antennaSetup
-					config->datastreamId[nConfigDatastream] = D->nDatastream;
-					++D->nDatastream;
-					++nConfigDatastream;
+					++currDatastream;
 				} // if valid format
 				startBand += stream.nRecordChan;
 			} // datastream loop
