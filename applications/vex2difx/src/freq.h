@@ -34,13 +34,22 @@ This is a helper class used within vex2difx.cpp
 #ifndef __FREQ_H__
 #define __FREQ_H__
 
+#include <cassert>
 #include <vector>
 
 class freq
 {
 public:
 	freq(double f=0.0, double b=0.0, char s=' ', double isr=0.0, double osr=0.0, int d=0, int iz=0, unsigned int t=0) 
-		: fq(f), bw(b), inputSpecRes(isr), outputSpecRes(osr), decimation(d), isZoomFreq(iz), toneSetId(t), sideBand(s) {};
+		: fq(f), bw(b), inputSpecRes(isr), outputSpecRes(osr), decimation(d), isZoomFreq(iz), toneSetId(t), sideBand(s)
+	{
+		assert(fq >= 0);
+		assert(bw >= 0);
+		assert(sideBand == 'L' || sideBand == 'U');
+		assert(inputSpecRes > 0);
+	}
+
+	//variables
 	double fq;		// Hz
 	double bw;		// Hz
 	double inputSpecRes;	// Hz
@@ -50,9 +59,25 @@ public:
 	unsigned int toneSetId;
 	char sideBand;
 
+	//methods
 	int specAvg() const { return static_cast<int>(outputSpecRes/inputSpecRes + 0.5); }
+	friend bool operator== (const freq& lhs, const freq& rhs);
 };
 
+inline bool operator== (const freq& lhs, const freq& rhs)
+{
+	return (lhs.fq  == rhs.fq &&
+		lhs.bw  == rhs.bw &&
+		lhs.sideBand      == rhs.sideBand &&
+		lhs.inputSpecRes  == rhs.inputSpecRes &&
+		lhs.outputSpecRes == rhs.outputSpecRes &&
+		lhs.decimation    == rhs.decimation &&
+		lhs.isZoomFreq    == rhs.isZoomFreq &&
+		lhs.toneSetId     == rhs.toneSetId);
+}
+
+//freqs.cpp
+int getFreqId(std::vector<freq>& freqs, const freq& newfq);
 int getFreqId(std::vector<freq>& freqs, double fq, double bw, char sb, double isr, double osr, int d, int iz, unsigned int t);
 
 #endif

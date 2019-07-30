@@ -33,16 +33,17 @@
 // If not in freqs, it is added first
 int getFreqId(std::vector<freq>& freqs, double fq, double bw, char sb, double isr, double osr, int d, int iz, unsigned int t)
 {
+	freq newfq(fq, bw, sb, isr, osr, d, iz, t);
+	return getFreqId(freqs, newfq);
+}
+
+// Returns index of requested (fq, bw, sb, ...) from freqs.
+// If not in freqs, it is added first
+int getFreqId(std::vector<freq>& freqs, const freq& newfq)
+{
 	for(std::vector<freq>::const_iterator it = freqs.begin(); it != freqs.end(); ++it)
 	{
-		if(fq  == it->fq &&
-		   bw  == it->bw &&
-		   sb  == it->sideBand &&
-		   isr == it->inputSpecRes &&
-		   osr == it->outputSpecRes &&
-		   d   == it->decimation &&
-		   iz  == it->isZoomFreq &&
-		   t   == it->toneSetId)
+		if(newfq == *it)
 		{
 			// use iterator math to get index
 			return it - freqs.begin();
@@ -50,7 +51,7 @@ int getFreqId(std::vector<freq>& freqs, double fq, double bw, char sb, double is
 	}
 
 	// not in list yet, so add
-	freqs.push_back(freq(fq, bw, sb, isr, osr, d, iz, t));
+	freqs.push_back(newfq);
 
 	return freqs.size() - 1;
 }
