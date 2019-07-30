@@ -202,7 +202,7 @@ void AutoBands::simplify(Outputband& mergeable)
 	assert(!mergeable.constituents.empty());
 
 	// Start from blank outputband
-	Outputband merged(mergeable.fbandstart);
+	Outputband merged(mergeable.fbandstart, mergeable.bandwidth);
 	double f0 = mergeable.fbandstart;
 	double f1 = f0;
 
@@ -386,7 +386,7 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 					outputbandwidth*1e-6, span, (foutstart-f0)*1e-6, (int)outputbands.size(), foutstart*1e-6);
 			}
 
-			AutoBands::Outputband ob(foutstart);
+			AutoBands::Outputband ob(foutstart, outputbandwidth);
 			ob.extend(foutstart, outputbandwidth);
 
 			outputbands.push_back(ob);
@@ -403,7 +403,7 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 			// TODO
 
 			// Now piece together 'self.outputbw' amout of band from consecutive spans
-			AutoBands::Outputband ob(foutstart);
+			AutoBands::Outputband ob(foutstart, outputbandwidth);
 			double bw_needed = outputbandwidth;
 			double slicestartfreq = foutstart;
 			while ((span < Nspans) && (bw_needed > 0))

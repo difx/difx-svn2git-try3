@@ -77,9 +77,10 @@ public:
 	class Outputband {
 	public:
 		double fbandstart;
+		double bandwidth;
 		std::vector<Band> constituents;
 
-		Outputband(double fbandstart_) : fbandstart(fbandstart_)
+		Outputband(double fbandstart_, double bandwidth_) : fbandstart(fbandstart_),bandwidth(bandwidth_)
 		{
 			this->constituents.clear();
 		}

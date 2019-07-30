@@ -2033,7 +2033,48 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				std::cout << autobands;
 			}
 
-			// TODO: propagate AutoBands::outputbands into each antennaSetup via antennaSetup::copyGlobalZoom()
+			// register the outputbands so new freqId's are introduced where necessary,
+			// also copy out consituent zooms to add to antennas later/further below
+			GlobalZoom constituentzooms("temp");
+			for(std::vector<AutoBands::Outputband>::const_iterator itOb = autobands.outputbands.begin();
+				itOb != autobands.outputbands.end(); ++itOb)
+			{
+				// register outputband
+				int fqId = getFreqId(freqs, itOb->fbandstart, itOb->bandwidth, 'U', corrSetup->FFTSpecRes, corrSetup->outputSpecRes, decimation, 1, 0);    // final zero points to the noTone pulse cal setup.
+				if (verbose >= 0)
+				{
+					cout << "Output band at " << std::fixed << itOb->fbandstart*1e-6 << " MHz USB "
+						<< std::fixed << itOb->bandwidth*1e-6 << " MHz received fq id " << fqId << "\n";
+				}
+
+				// grow the list of all-band constituent zooms
+				for(std::vector<AutoBands::Band>::const_iterator itZm = itOb->constituents.begin();
+					itZm != itOb->constituents.end(); ++itZm)
+				{
+					ZoomFreq zoom;
+					zoom.initialise(itZm->flow, itZm->bandwidth(), false, 0); // specAvg:0 means default to parent
+					constituentzooms.zoomFreqs.push_back(zoom);
+				}
+			}
+
+			// propagate outputband constituent zooms into zooms of active antennas
+			for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
+			{
+				const std::string &antName = it->first;
+				if(find(J.jobAntennas.begin(), J.jobAntennas.end(), antName) == J.jobAntennas.end())
+				{
+					continue;
+				}
+
+				const VexAntenna *antenna = V->getAntenna(antName);
+				antennaSetup = P->getAntennaSetup(antName);
+				if(antennaSetup)
+				{
+					// antennaSetup->copyGlobalZoom((const GlobalZoom&)constituentzooms); // "copy()" but actually appends
+					// TODO: does not work here in this way, since antennaSetup is <<const>> AntennaSetup*
+				}
+			}
+
 
 		}
 
