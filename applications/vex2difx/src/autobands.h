@@ -36,6 +36,7 @@
 #include <limits>
 
 class ZoomFreq; // declared in corrparams.h
+class freq;     // declared in freq.h
 
 class AutoBands
 {
@@ -95,6 +96,7 @@ public:
 	void setBandwidth(double outputbandwidth_Hz);
 
 	void addRecbands(const std::vector<double>& fstart, const std::vector<double>& fstop, int antId = -1);
+	void addRecbands(const std::vector<freq>& freqs, int antId = -1);
 
 	int generate(int Nant=0, double fstart_Hz=0.0);
 	double granularity(const std::vector<double>& freqs) const;

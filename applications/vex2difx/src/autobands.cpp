@@ -40,7 +40,7 @@
 #include <set>
 
 #include "autobands.h"
-
+#include "freq.h"       // class freq
 #include "corrparams.h" // class ZoomFreq
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,7 @@ AutoBands::~AutoBands()
 void AutoBands::setBandwidth(double outputbandwidth_Hz)
 {
 	outputbandwidth = outputbandwidth_Hz;
-	if (outputbandwidth < 1e6)
+	if(outputbandwidth < 1e6)
 	{
 		outputbandwidth  *= 1e6;
 	}
@@ -75,14 +75,36 @@ void AutoBands::setBandwidth(double outputbandwidth_Hz)
 void AutoBands::addRecbands(const std::vector<double>& fstart, const std::vector<double>& fstop, int antId)
 {
 	assert(fstart.size() == fstop.size());
-	if (antId == -1)
+	if(antId == -1)
 	{
 		antId = Nant;
 	}
-	for (unsigned i = 0; i < fstart.size(); i++)
+	for(unsigned i = 0; i < fstart.size(); i++)
 	{
 		double lo = fstart[i], hi = fstop[i];
-		if (lo > hi)
+		if(lo > hi)
+		{
+			std::swap(lo, hi);
+		}
+		bands.push_back(AutoBands::Band(lo, hi, antId));
+	}
+	Nant++;
+}
+
+/**
+ * Add information about the recorded bands of an antenna.
+ */
+void AutoBands::addRecbands(const std::vector<freq>& freqs, int antId)
+{
+	if(antId == -1)
+	{
+		antId = Nant;
+	}
+	for(unsigned i = 0; i < freqs.size(); i++)
+	{
+		double lo = freqs[i].fq;
+		double hi = freqs[i].fq + ((freqs[i].sideBand == 'U') ? freqs[i].bw : -freqs[i].bw);
+		if(lo > hi)
 		{
 			std::swap(lo, hi);
 		}
@@ -96,22 +118,22 @@ void AutoBands::addRecbands(const std::vector<double>& fstart, const std::vector
  */
 double AutoBands::granularity(const std::vector<double>& args) const
 {
-	if (args.size() < 1)
+	if(args.size() < 1)
 	{
 		return 1.0;
 	}
 
 	double curr_gcd = args[0];
-	for (unsigned i = 1; i < args.size(); i++)
+	for(unsigned i = 1; i < args.size(); i++)
 	{
 		double arg = args[i];
-		if (arg < curr_gcd)
+		if(arg < curr_gcd)
 		{
 			std::swap(arg, curr_gcd);
 		}
 		while (1)
 		{
-			if (std::fabs(curr_gcd) < 0.001)
+			if(std::fabs(curr_gcd) < 0.001)
 			{
 				curr_gcd = arg;
 				break;
@@ -133,14 +155,14 @@ double AutoBands::granularity(const std::vector<double>& args) const
  */
 double AutoBands::autoBandwidth()
 {
-	if (spans.empty())
+	if(spans.empty())
 	{
 		this->analyze();
 	}
 
-	if (spans.empty())
+	if(spans.empty())
 	{
-		if (verbosity > 1)
+		if(verbosity > 1)
 		{
 			std::cout << "AutoBands::autoBandwidth(): Warning: Not enough data to determine the common bandwidth.\n";
 		}
@@ -149,7 +171,7 @@ double AutoBands::autoBandwidth()
 
 	const AutoBands::Span& m = (*std::min_element(spans.begin(), spans.end(), AutoBands::Span::compare_bandwidths));
 	const AutoBands::Span& M = (*std::max_element(spans.begin(), spans.end(), AutoBands::Span::compare_bandwidths));
-	if (m.bandwidth() == M.bandwidth())
+	if(m.bandwidth() == M.bandwidth())
 	{
 		return m.bandwidth();
 	}
@@ -162,9 +184,9 @@ double AutoBands::autoBandwidth()
 bool AutoBands::covered(double f0, double f1) const
 {
 	std::set<int> coverers;
-	for (std::vector<AutoBands::Band>::const_iterator b = bands.begin(); b != bands.end(); ++b)
+	for(std::vector<AutoBands::Band>::const_iterator b = bands.begin(); b != bands.end(); ++b)
 	{
-		if (((*b).flow <= f0) && (f1 <= (*b).fhigh))
+		if(((*b).flow <= f0) && (f1 <= (*b).fhigh))
 		{
 			coverers.insert((*b).antenna);
 		}
@@ -185,25 +207,25 @@ void AutoBands::simplify(Outputband& mergeable)
 	double f1 = f0;
 
 	// Simplify bands in 'mergeable' into hopefully fewer bands in 'merged'
-	for (std::vector<AutoBands::Band>::const_iterator bnext = (mergeable.constituents.begin()) + 1; bnext != mergeable.constituents.end(); ++bnext)
+	for(std::vector<AutoBands::Band>::const_iterator bnext = (mergeable.constituents.begin()) + 1; bnext != mergeable.constituents.end(); ++bnext)
 	{
 		f1 = (*bnext).fhigh;
-		if (covered(f0, f1))
+		if(covered(f0, f1))
 		{
-			if (verbosity > 4)
+			if(verbosity > 4)
 			{
 				printf("Autobands::simplify() does cover %.6f--%.6f, continue and try merge the next band constituent\n", f0*1e-6, f1*1e-6);
 			}
 		}
 		else
 		{
-			if (verbosity > 4)
+			if(verbosity > 4)
 			{
 				printf("Autobands::outputbands_merge() no   cover %.6f--%.6f\n", f0*1e-6, f1*1e-6);
 			}
 			merged.extend(f0, (*bnext).flow - f0);
 			f0 = (*bnext).flow;
-			if ((bnext + 1) != mergeable.constituents.end())
+			if((bnext + 1) != mergeable.constituents.end())
 			{
 				// set f1 ahead of exiting loop next
 				f1 = (*(bnext + 1)).fhigh;
@@ -212,13 +234,13 @@ void AutoBands::simplify(Outputband& mergeable)
 	}
 
 	// Handle leftover
-	if (f1 > f0)
+	if(f1 > f0)
 	{
 		merged.extend(f0, f1-f0);
 	}
 
 	// Print the details if something was merged
-	if ((verbosity > 1) && (merged.constituents.size() < mergeable.constituents.size()))
+	if((verbosity > 1) && (merged.constituents.size() < mergeable.constituents.size()))
 	{
 		std::cout << "Autobands::outputbands()    merged " << mergeable.constituents.size()
 			<< " sub-spans into " << merged.constituents.size() << "\n";
@@ -237,7 +259,7 @@ void AutoBands::simplify(Outputband& mergeable)
 void AutoBands::analyze(int Nant)
 {
 	// Init
-	if (Nant <= 0)
+	if(Nant <= 0)
 	{
 		Nant = this->Nant;
 	}
@@ -245,7 +267,7 @@ void AutoBands::analyze(int Nant)
 
 	// Sorted set of all recorded band edges
 	std::set<double> bandedges;
-	for (unsigned i = 0; i < bands.size(); i++)
+	for(unsigned i = 0; i < bands.size(); i++)
 	{
 		bandedges.insert(bands[i].flow);
 		bandedges.insert(bands[i].fhigh);
@@ -256,16 +278,16 @@ void AutoBands::analyze(int Nant)
 	std::copy(bandedges.begin(), bandedges.end(), std::back_inserter(fedges));
 
 	// Split the freq axis into spans (smallest band slices between any two rec band edges)
-	for (unsigned n = 1; n < fedges.size(); n++)
+	for(unsigned n = 1; n < fedges.size(); n++)
 	{
 		double span_lo = fedges[n-1], span_hi = fedges[n];
 
 		// Count how many antennas have this span
 		int antcount = 0, bandcount = 0;
 		std::set<int> antennasInSpan;
-		for (unsigned k = 0; k < bands.size(); k++)
+		for(unsigned k = 0; k < bands.size(); k++)
 		{
-			if (span_lo >= bands[k].flow && span_hi <= bands[k].fhigh)
+			if(span_lo >= bands[k].flow && span_hi <= bands[k].fhigh)
 			{
 				antennasInSpan.insert(bands[k].antenna);
 				bandcount++;
@@ -274,22 +296,22 @@ void AutoBands::analyze(int Nant)
 		antcount = antennasInSpan.size();
 
 		// Keep the span if enough antennas provide data for it
-		if (antcount >= Nant && bandcount >= Nant)
+		if(antcount >= Nant && bandcount >= Nant)
 		{
 			spans.push_back(AutoBands::Span(span_lo, span_hi, antcount, bandcount));
-			if (verbosity > 2)
+			if(verbosity > 2)
 			{
 				printf ("Autobands::analyze() retain  %.6f--%.6f MHz bw %.6f MHz with %d rec bands, %d antennas\n", span_lo*1e-6,span_hi*1e-6, (span_hi-span_lo)*1e-6, bandcount,antcount);
 			}
 		}
-		else if (verbosity > 2)
+		else if(verbosity > 2)
 		{
 			printf ("Autobands::analyze() discard %.6f--%.6f MHz bw %.6f MHz with %d rec bands, %d antennas < %d antennas\n", span_lo*1e-6,span_hi*1e-6,(span_hi-span_lo)*1e-6,bandcount,antcount,Nant);
 		}
 	}
 
 	// Mark directly adjecent spans as 'continued'; last entry defaults to .continued=False
-	for (unsigned n = 1; n < spans.size(); n++)
+	for(unsigned n = 1; n < spans.size(); n++)
 	{
 		spans[n-1].continued = (spans[n-1].fhigh == spans[n].flow);
 	}
@@ -307,11 +329,11 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 	outputbands.clear();
 
 	// Make sure that spans have been detected
-	if (spans.empty())
+	if(spans.empty())
 	{
 		analyze(Nant);
 	}
-	if (spans.empty())
+	if(spans.empty())
 	{
 		return 0;
 	}
@@ -322,11 +344,11 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 	const double minspanfreq = spans[0].flow;
 	unsigned span = 0;
 	double foutstart;
-	if (Nant <= 0)
+	if(Nant <= 0)
 	{
 		Nant = this->Nant;
 	}
-	if (fstart_Hz > 0)
+	if(fstart_Hz > 0)
 	{
 		foutstart = std::max(fstart_Hz, minspanfreq);
 	}
@@ -342,11 +364,11 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 		double f1 = spans[span].fhigh;
 
 		// Catch when large gaps between spans, e.g., geodetic/DDC mode
-		if (foutstart < f0)
+		if(foutstart < f0)
 		{
 			foutstart = f0;
 		}
-		else if (f1 < foutstart)
+		else if(f1 < foutstart)
 		{
 			span++;
 			continue;
@@ -358,7 +380,7 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 		// Generate band : insert as many bands into current span as possible
 		while ((foutstart + outputbandwidth) <= f1)
 		{
-			if (verbosity > 1)
+			if(verbosity > 1)
 			{
 				printf ("Autobands::outputbands()    case 1 adding %10.6f MHz bw from span %3d @ %10.6f MHz to out#%d %10.6f MHz\n",
 					outputbandwidth*1e-6, span, (foutstart-f0)*1e-6, (int)outputbands.size(), foutstart*1e-6);
@@ -373,7 +395,7 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 
 		// Generate band : insert one band by combining smaller pieces of spans and patch over to next span(s) if needed
 		double span_bw_remain = f1 - foutstart;
-		if ((span_bw_remain > 0) && spans[span].continued)
+		if((span_bw_remain > 0) && spans[span].continued)
 		{
 
 			// If overlap in rec bands at least at one antenna, may
@@ -387,13 +409,13 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 			while ((span < Nspans) && (bw_needed > 0))
 			{
 				double bw_utilized;
-				if ((slicestartfreq - f0) < 0)
+				if((slicestartfreq - f0) < 0)
 				{
 					break;
 				}
 				bw_utilized = std::min(bw_needed, span_bw_remain);
 				bw_needed -= bw_utilized;
-				if (verbosity > 1)
+				if(verbosity > 1)
 				{
 					printf ("Autobands::outputbands()    case 2 adding %10.6f MHz bw from span %3d @ %10.6f MHz to out#%d %10.6f MHz, remain %10.6f MHz\n",
 						bw_utilized*1e-6, span, (slicestartfreq-f0)*1e-6, (int)outputbands.size(), foutstart*1e-6, bw_needed*1e-6);
@@ -405,14 +427,14 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 				span_bw_remain = f1 - slicestartfreq;
 
 				// If out of remaining bw in this span, overflow into the next span
-				if (span_bw_remain <= 0)
+				if(span_bw_remain <= 0)
 				{
-					if (!spans[span].continued)
+					if(!spans[span].continued)
 					{
 						break;
 					}
 					span++;
-					if (span < Nspans)
+					if(span < Nspans)
 					{
 						f0 = spans[span].flow;
 						f1 = spans[span].fhigh;
@@ -424,7 +446,7 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 			}
 
 			// Store the details of the completed outputband
-			if (bw_needed <= 0)
+			if(bw_needed <= 0)
 			{
 				simplify(ob);
 				outputbands.push_back(ob);
@@ -432,7 +454,7 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 			}
 			else
 			{
-				if (verbosity > 1)
+				if(verbosity > 1)
 				{
 					printf ("Autobands::outputbands()    dropping incomplete out fq %.6f MHz\n", foutstart*1e-6);
 				}
@@ -461,23 +483,23 @@ void AutoBands::barchart(
 {
 	const int screenwidth = 110;
 
-	if (std::isnan(xmin))
+	if(std::isnan(xmin))
 	{
 		xmin = *std::min_element(start.begin(), start.end());
 	}
-	if (std::isnan(xmax))
+	if(std::isnan(xmax))
 	{
 		xmax = *std::max_element(stop.begin(), stop.end());
 	}
 
 	const double fstep = (xmax - xmin) / screenwidth;
-	for (unsigned k = 0; k < start.size(); k++)
+	for(unsigned k = 0; k < start.size(); k++)
 	{
 		double bw = stop[k] - start[k];
 		int L0 = std::ceil((start[k] - xmin)/fstep);
 		int L1 = std::ceil(bw/fstep);
 		int L2 = screenwidth - L1 - L0;
-		if (L2 < 0)
+		if(L2 < 0)
 		{
 			L1 += L2;
 			L2 = 0;
@@ -503,7 +525,7 @@ std::ostream& operator << (std::ostream& os, const AutoBands& x)
 	os << "Recorded bands:\n";
 	std::vector<double> xmin, xmax;
 	std::vector<int> id;
-	for (unsigned k = 0; k < x.bands.size(); k++)
+	for(unsigned k = 0; k < x.bands.size(); k++)
 	{
 		xmin.push_back(x.bands[k].flow);
 		xmax.push_back(x.bands[k].fhigh);
@@ -516,7 +538,7 @@ std::ostream& operator << (std::ostream& os, const AutoBands& x)
 	xmin.clear();
 	xmax.clear();
 	id.clear();
-	for (unsigned k = 0; k < x.spans.size(); k++)
+	for(unsigned k = 0; k < x.spans.size(); k++)
 	{
 		xmin.push_back(x.spans[k].flow);
 		xmax.push_back(x.spans[k].fhigh);
@@ -556,7 +578,7 @@ std::ostream& operator << (std::ostream& os, const AutoBands::Outputband& x)
 {
 	os << "Output band at " << std::fixed
 		<< std::setw(15) << std::setprecision(8) << (x.fbandstart*1e-6)  << "\n";
-	for (unsigned n = 0; n < x.constituents.size(); n++)
+	for(unsigned n = 0; n < x.constituents.size(); n++)
 	{
 		os << "   input " << std::setw(2) << n << " " << x.constituents[n] << "\n";
 	}
