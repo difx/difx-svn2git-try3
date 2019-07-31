@@ -1389,6 +1389,8 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 			free(clockOffStr);
 			r = DifxParametersfind1(ip, r+1, "FREQ OFFSET %d (Hz)", i);
 			D->datastream[e].freqOffset[i] = atof(DifxParametersvalue(ip, r));
+			r = DifxParametersfind1(ip, r+1, "GAIN OFFSET %d", i);
+			D->datastream[e].gainOffset[i] = atof(DifxParametersvalue(ip, r));
 			r = DifxParametersfind1(ip, r+1, "NUM REC POLS %d", i);
 			D->datastream[e].nRecPol[i] = atoi(DifxParametersvalue(ip, r));
 			nRecBand += D->datastream[e].nRecPol[i];

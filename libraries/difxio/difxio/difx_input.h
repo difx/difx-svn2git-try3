@@ -447,11 +447,13 @@ typedef struct
 	double *clockOffsetDelta; /* (us) [freq] */
 	double *phaseOffset;	/* (degrees) [freq] */
 	double *freqOffset;	/* Freq offsets for each frequency in Hz */
+	double *gainOffset;	/* Voltage gain offsets for each frequency in Hz */
 	
 	int nRecFreq;		/* number of freqs recorded in this datastream */
 	int nRecBand;		/* number of base band channels recorded */
 	int *nRecPol;		/* [recfreq] */
 	int *recFreqId;		/* [recfreq] index to DifxFreq table */
+	int *recFreqDestId;	/* [recfreq] index to DifxFreq table */
 	int *recBandFreqId;	/* [recband] index to recFreqId[] */
 	char *recBandPolName;	/* [recband] Polarization name (R, L, X or Y) */
 
@@ -459,6 +461,7 @@ typedef struct
 	int nZoomBand;		/* number of zoom subbands */
 	int *nZoomPol;		/* [zoomfreq] */
 	int *zoomFreqId;	/* [zoomfreq] index to DifxFreq table */
+	int *zoomFreqDestId;	/* [zoomfreq] index to DifxFreq table */
 	int *zoomBandFreqId;	/* [zoomband] index to zoomfreqId[] */
 	char *zoomBandPolName;	/* [zoomband] Polarization name (R, L, X or Y) */
 } DifxDatastream;
