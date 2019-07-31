@@ -784,14 +784,14 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 
 ZoomFreq::ZoomFreq()
 {
-	initialise(-999, -999, false, -1);
+	initialise(-999e6, -999e6, false, -1);
 }
 
-// freq and bw supplied in MHz
+// freq and bw supplied in Hz
 void ZoomFreq::initialise(double freq, double bw, bool corrparent, int specavg)
 {
-	frequency = freq*1000000; //convert to Hz
-	bandwidth = bw*1000000; //convert to Hz
+	frequency = freq;
+	bandwidth = bw;
 	correlateparent = corrparent;
 	spectralaverage = specavg;
 }

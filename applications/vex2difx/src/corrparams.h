@@ -112,10 +112,10 @@ public:
 	ZoomFreq();
 
 	//method
-	void initialise(double freq, double bw, bool corrparent, int specavg);
+	void initialise(double freq, double bw, bool corrparent, int specavg); // Hz
 
 	//variables
-	double frequency, bandwidth;
+	double frequency, bandwidth; // Hz
 	int spectralaverage;
 	bool correlateparent;
 };
