@@ -1028,11 +1028,11 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 
 								if(globalBandwidth == 0)
 								{
-									globalBandwidth = D->freq[freqId].bw;
+									globalBandwidth = D->freq[bl->destFq[nFreq]].bw;
 								}
 								else if(globalBandwidth > 0)
 								{
-									if(globalBandwidth != D->freq[freqId].bw)
+									if(globalBandwidth != D->freq[bl->destFq[nFreq]].bw)
 									{
 										globalBandwidth = -1;
 									}
@@ -1148,11 +1148,11 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 
 								if(globalBandwidth == 0)
 								{
-									globalBandwidth = D->freq[freqId].bw;
+									globalBandwidth = D->freq[bl->destFq[nFreq]].bw;
 								}
 								else if(globalBandwidth > 0)
 								{
-									if(globalBandwidth != D->freq[freqId].bw)
+									if(globalBandwidth != D->freq[bl->destFq[nFreq]].bw)
 									{
 										globalBandwidth = -1;
 									}
@@ -1551,6 +1551,12 @@ static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int
 	}
 
 	return true;
+}
+
+static int prepareJobFreqs(const Job& J, const VexData *V, CorrParams *P, int verbose)
+{
+	// TODO: placeholder for calling prior to writeJob(), relocate here the writeJob() parts regarding freq list and autobands extension of it
+	// TODO: alternatively, make writeJob(... const CorrParams *P ...) arg ptr a non-const ptr to allow updating AntennaSetup zooms
 }
 
 static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const std::list<Event> &events, const Shelves &shelves, int verbose, ofstream *of, int nDigit, char ext, int strict)
@@ -2001,7 +2007,6 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				startBand += stream.nRecordChan;
 			}
 			autobands.addRecbands(antfreqs);
-
 		}
 
 		// invoke AutoBand logic to generate additional 1:1 / N:1 / 1:N zooms that assemble into outputbands
@@ -2041,7 +2046,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			{
 				// register outputband
 				int fqId = getFreqId(freqs, itOb->fbandstart, itOb->bandwidth, 'U', corrSetup->FFTSpecRes, corrSetup->outputSpecRes, decimation, 1, 0);    // final zero points to the noTone pulse cal setup.
-				if (verbose >= 0)
+				if (verbose > 0)
 				{
 					cout << "Output band at " << std::fixed << itOb->fbandstart*1e-6 << " MHz USB "
 						<< std::fixed << itOb->bandwidth*1e-6 << " MHz received fq id " << fqId << "\n";
@@ -2067,12 +2072,13 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				}
 
 				const VexAntenna *antenna = V->getAntenna(antName);
-				antennaSetup = P->getAntennaSetup(antName);
-				if(antennaSetup)
+#warning "FIXME: get rid of the const -> nonconst cast in writeJob"
+				AntennaSetup* antSetup = ((CorrParams*)P)->getNonConstAntennaSetup(antName);
+				if(antSetup)
 				{
-					// antennaSetup->copyGlobalZoom((const GlobalZoom&)constituentzooms); // "copy()" but actually appends
-					// TODO: does not work here in this way, since antennaSetup is <<const>> AntennaSetup*
+					antSetup->copyGlobalZoom(constituentzooms); // "copy()" but actually appends
 				}
+
 			}
 
 
@@ -2148,6 +2154,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 								}
 								fqId = getFreqId(freqs, zf.frequency, zf.bandwidth, 'U', corrSetup->FFTSpecRes, corrSetup->outputSpecRes, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
 								dd->zoomFreqId[nZoom] = fqId;
+								dd->zoomFreqDestId[nZoom] = fqId; // TODO: take assigned dest freq from autobands, likewise for dd->recFreqDestId[]; probably not at this spot of code but elsewhere
 								dd->nZoomPol[nZoom] = dd->nRecPol[parentFreqIndices[nZoom]];
 								nZoomBands += dd->nRecPol[parentFreqIndices[nZoom]];
 								if(!zf.correlateparent)
@@ -3205,6 +3212,7 @@ int main(int argc, char **argv)
 		}
 		else
 		{
+			prepareJobFreqs(*j, V, P, verbose);
 			nJob += writeJob(*j, V, P, events, shelves, verbose, &of, nDigit, 0, strict);
 		}
 	}
