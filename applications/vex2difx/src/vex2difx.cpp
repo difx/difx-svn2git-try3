@@ -56,7 +56,7 @@ using namespace std;
 
 const string version(VERSION);
 const string program("vex2difx");
-const string verdate("20160226");
+const string verdate("20181015");
 const string author("Walter Brisken/Adam Deller");
 
 const int defaultMaxNSBetweenACAvg = 2000000;	// 2ms, good default for use with transient detection
@@ -324,7 +324,6 @@ static DifxDatastream *makeDifxDatastreams(const Job& J, const VexData *V, const
 					snprintf(dd->networkPort, DIFXIO_ETH_DEV_SIZE, "%s", ant->ports[d].networkPort.c_str());
 					break;
 				case DataSourceFile:
-				case DataSourceMark6:
 					{
 						int nFile = ant->files.size();
 						int count = 0;
@@ -349,6 +348,53 @@ static DifxDatastream *makeDifxDatastreams(const Job& J, const VexData *V, const
 								++count;
 							}
 						}
+					}
+					break;
+				case DataSourceMark6: 
+					{
+						// mark6 has both files and vsns
+						int nFile = ant->files.size();
+						int count = 0;
+
+						for(int j = 0; j < nFile; ++j)
+						{
+							if(ant->files[j].streamId == d && J.overlap(ant->files[j]) > 0.0)
+							{
+								++count;
+							}
+						}
+
+						DifxDatastreamAllocFiles(dd, count);
+
+						count = 0;
+
+						for(int j = 0; j < nFile; ++j)
+						{
+							if(ant->files[j].streamId == d && J.overlap(ant->files[j]) > 0.0)
+							{
+								dd->file[count] = strdup(ant->files[j].filename.c_str());
+								++count;
+							}
+						}
+						
+						string sVSN;
+						int nVSN = ant->vsns.size();
+						count = 0;
+
+						for(int j = 0; j < nVSN; ++j)
+						{
+							if(ant->vsns[j].streamId == d && J.overlap(ant->vsns[j]) > 0.0)
+							{
+								sVSN = ant->vsns[j].filename;
+								++count;
+							}
+						}
+
+						if(!shelf.empty())
+						{
+							shelf += ",";
+						}
+						shelf += shelves.getShelf(sVSN);
 					}
 					break;
 				case DataSourceModule:
@@ -473,6 +519,12 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 
 	for(int i = 0; i < nRecordChan; ++i)
 	{
+		if(i + startBand >= setup.channels.size())
+		{
+			cerr << "Error: in setting format parameters, the number of provided channels was less than that expected.  This is for antenna " << antName << ".  In this particular case, " << setup.channels.size() << " were found but " << nRecordChan << " were expected." << endl;
+			break;
+		}
+
 		const VexChannel *ch = &setup.channels[i + startBand];
 		if(ch->subbandId < 0 || ch->subbandId >= static_cast<int>(mode->subbands.size()))
 		{

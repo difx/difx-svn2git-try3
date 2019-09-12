@@ -23,13 +23,17 @@ from string import split, strip, find, lower
 from sys import exit, argv
 from os.path import isfile, isdir
 from os import umask, popen, system, getcwd, getenv
-from shutil import move
+from shutil import move, copyfile
 from datetime import *
+import re
 
 program = 'mk62v2d'
 version = '0.1'
 verdate = '20180412'
 author = 'Mark Wainright'
+
+MARK6_VSN_IDS = ['%']
+MARK5_VSN_IDS = ['+', '-']
 
 def usage(pgm):
 	print '%s ver. %s  %s  %s\n' % (program, version, author, verdate)
@@ -89,7 +93,8 @@ def convertscandata2mjd(scandata):
 	    print 'could not determine scan length:', scan[2], 'scan:', scan[0]
 	    continue
 
-def getvexscandata(station, vexfile):
+def getvexscandata(station, vexobsfile):
+    vexfile = open(vexobsfile, 'r')
     schedfound = False
     firstscanfound = False
     endscan = True
@@ -140,6 +145,239 @@ def getvexscandata(station, vexfile):
     convertscandata2mjd(scandata)
     
     return scandata       
+
+def getvexantennamodlists(vexobsfile):
+    '''
+    Returns tuple (experName,antennaModuleList,modList) for Mark6 antennas and VSNs found
+    in the given file with path vexobsfile.
+
+    On errors this function exits the script.
+    '''
+    experNameFound = False
+    tapelogObsFound = False
+    experName = ''
+    ant = ''
+    antennaModuleList = []
+    modList = []
+
+    # Regexps to flexibly detect VEX entries and fields; can test with https://regex101.com/
+    reComment = re.compile("^\s*\*")
+    reSection = re.compile("^\s*\$\s*(.*?)\s*;")
+    reDef = re.compile("^\s*def\s+(.*?)\s*;")
+    reVSN = re.compile("\W*VSN\s*=\s*(.*?)\s*:\s*(.*?)\s*:")
+    reEnddef = re.compile("\W*enddef\s*;")
+
+    # Look up expt name and module info from VEX
+    vexobs = open(vexobsfile, "r")
+    for line in vexobs:
+        if reComment.match(line):
+            continue
+        # detect EXPER info
+        i = line.find('exper_name')
+        if i != -1:
+            experNameFound = True
+	    lineend = line[i+10:len(line)-1]
+	    for i in range(len(lineend)):
+	        if lineend[i] not in [' ', '=', ';']:
+		    experName += lineend[i].upper()
+            continue
+        # detect change of VEX section
+        section = reSection.search(line)
+        if section and tapelogObsFound:
+            # encountered section after TAPELOG_OBS and if expt name also present by now, finished!
+            if experNameFound:
+               break
+        if section and not tapelogObsFound:
+            tapelogObsFound = section.group(1) == 'TAPELOG_OBS'
+        # detect entries in TAPELOG_OBS section
+        if tapelogObsFound:
+            # note the possibility of one-liners e.g. 'def Pv; VSN=0:<vsn>:<time>:<time>; enddef'
+            newdef = reDef.search(line)
+            vsn = reVSN.search(line)
+            enddef = reEnddef.search(line)
+            if newdef:
+                ant = newdef.group(1)
+	        modList = []
+		mark5Mod = False
+            if vsn:
+                vsnNr = int(vsn.group(1))
+                mod = vsn.group(2)
+                # add only Mark6 modules to modlist
+                if any([key in mod for key in MARK6_VSN_IDS]):
+	            modList.append(mod)
+                if any([key in mod for key in MARK5_VSN_IDS]):
+		    mark5Mod = True
+            if enddef and not mark5Mod:
+                antennaModuleList.append([ant,modList])
+
+    # fatal lack of info?
+    ok = experNameFound and tapelogObsFound
+    if not experNameFound:
+        print "could not find experiment name, exiting"
+    if not tapelogObsFound:
+        print "could not find TAPELOG_OBS data, exiting"
+    if not ok:
+        exit(1)
+    # harmless lack of info
+    if len(antennaModuleList) is 0:
+        print "no antennas with mark6 modules found, nothing more to do, exiting"
+        exit(0)
+    return (experName,antennaModuleList,modList)
+
+def getv2dcommentlessline(line):
+    '''
+    Remove comments from a v2d line.
+    Return new copy of str object.
+    '''
+    i = line.find('#')
+    if i < 0:
+        return line[:]
+    return line[:i][:].rstrip() + '\n'
+
+def getv2dblock(lines, blocktype, blockname=None):
+    '''
+    Search v2d for the specified section/block type.
+    The search can be restricted to one specific block
+    by specifying also a blockname.
+    Example: blocktype='ANTENNA' blockname='Aa' will
+             locate the content of 'ANTENNA Aa { ... }'.
+    Returns: (block name, starting line nr, last line nr, content[])
+    '''
+    reBlocks = re.compile("(^\s*"  + str(blocktype) + "\s*(.*?)\s*\W{([^}]+))", re.MULTILINE | re.DOTALL)
+    reNewline = re.compile(r'\n')
+    blocklist = []
+
+    # remove comments, flatten the list[] so that multiline regexp works on it
+    tidylines = [getv2dcommentlessline(l[:]) for l in lines]
+    flat = ' '.join(tidylines)
+
+    # find blocks, their content, and line numbers (by counting newlines)
+    blk = reBlocks.finditer(flat)
+    for b in blk:
+        blkName = b.group(2)
+        if blockname and (blkName.lower() != blockname.lower()):
+            continue
+        start_line = len(reNewline.findall(flat, 0, b.start(1)))
+        end_line = len(reNewline.findall(flat, 0, b.end(1)))+1
+        contents = b.group(3)
+        contents = [s.strip() + '\n' for s in contents.strip().split('\n')]
+        blocklist.append([blkName,start_line,end_line,contents])
+    return blocklist
+
+def getv2dblockkey(lines, blocktype, keyname, blockname=''):
+    '''
+    Get value(s) assigned to key in a v2d block. For example,
+    look up blocktype=ANTENNA blockname=Aa keyname=datastreams
+    will return a list of datastreams assigned to antenna Aa.
+
+    On errors this function exits the script.
+    '''
+    allrefs = []
+    blockprintname = ('%s %s' % (str(blocktype), str(blockname))).strip()
+    block = getv2dblock(lines, blocktype, blockname=blockname)
+    if not block:
+        return allrefs
+    if len(block) != 1:
+        print ('multiple %s sections found in v2d file, exiting' % (blockprintname))
+        exit(1)
+    blockcontent = block[0][-1]
+    keylines = [s for s in blockcontent if keyname in s]
+    if keylines:
+        for refline in keylines:
+            refs = refline[refline.find('=')+1:].strip()
+            refs = [ref.strip() for ref in refs.split(',')]
+            allrefs += refs
+    return allrefs
+
+def updatev2dblock(lines, insertables, commentout_keys=None, indent=2):
+    '''
+    Update a short list of v2d lines by inserting new lines at the end.
+    Optionally comments out all lines that contain specific keywords.
+    Re-indents all lines to an optionally specified indentation level.
+    '''
+    for n in range(len(lines)):
+        lines[n] = (" "*indent) + lines[n].strip() + '\n'
+        # comment out lines with keywords that aren't already commented out
+        if any([key in getv2dcommentlessline(lines[n]) for key in commentout_keys]):
+            lines[n] = '#' + lines[n]
+    lines += [(" "*indent) + ins.strip() + '\n' for ins in insertables]
+    return lines
+
+def regeneratev2d(inFile, antList):
+    '''
+    Update v2d by writing new v2d file, with Mark6 related
+    entries mark6filelist=... inserted where necessary.
+
+    On errors this function exits the script.
+    '''
+    copyfile(inFile, inFile + ".bkup")
+
+    # read entire v2d file
+    readv2d = open(inFile + ".bkup", 'r')
+    linesin = readv2d.readlines()
+    readv2d.close()
+
+    # modifications to make, stored as [ [startline,endline,replacement[]] , ... ]
+    modificationsList = []
+
+    # find all ANTENNA/DATASTREAM sections, inspect content and prepare modifications where applicable
+    antblocks = getv2dblock(linesin, 'ANTENNA')
+    for (ant,istart,istop,antcontent) in antblocks:
+        if ant not in antList:
+	    continue
+
+        # Any DATASTREAM(s) referenced by ANTENNA?
+        dsrefs = getv2dblockkey(linesin, 'ANTENNA', 'datastreams', blockname=ant)
+        if not dsrefs:
+            # ANTENNA section: insert mark6filelist=... and comment out all others
+            mark6line = 'mark6filelist = %s.filelist   # added by mk62v2d \n' % (ant.lower())
+            replacement = ['ANTENNA %s {\n' % (ant)]
+            replacement += updatev2dblock(antcontent, [mark6line], ['file','filelist'])
+            replacement.append('}\n');
+            modificationsList.append( [istart,istop,replacement] )
+        else:
+            # DATASTREAM section: revise all referenced stream(s) and keep ANTENNA as before
+            if len(dsrefs) != 1:
+                ## TODO: in the DiFX Mk6 *native* support implementation must add support for multi-VSN, >=2 module groups per Mark6
+                print ('Warning: ANTENNA %s refers to multiple datastreams (%s).' % (ant,', '.join(dsrefs)))
+                print ('DiFX Mark6 native mode does not support >=2 datastreams (module groups) in a single Mark6 unit')
+                print ('Manual editing and machine=... v2d entries necessary for %s!\n' % (ant))
+                continue
+            for dslabel in dsrefs:
+                ds = getv2dblock(linesin, 'DATASTREAM', blockname=dslabel)
+                if not ds:
+                    print ('did not find DATASTREAM %s referenced by ANTENNA %s, exiting' % (dslabel,ant))
+                    exit(1)
+                if len(ds) != 1:
+                    print ('duplicate DATASTREAM %s in v2d file, exiting' % (dslabel))
+                    exit(1)
+                # DATASTREAM section: insert mark6filelist=... and comment out all others
+                if len(dsrefs) == 1:
+                    mark6line = 'mark6filelist = %s.filelist   # added by mk62v2d\n' % (ant.lower())
+                else:
+                    mark6line += 'mark6filelist = %s.%s.filelist   # added by mk62v2d\n' % (ant.lower(),dslabel.lower())
+                (dsname,istart,istop,dscontent) = ds[0]
+                assert dsname.lower() == dslabel.lower()
+                replacement = ['DATASTREAM %s {\n' % (dsname)]
+                replacement += updatev2dblock(dscontent, [mark6line], ['file','filelist'])
+                replacement.append('}\n');
+                modificationsList.append( [istart,istop,replacement] )
+
+    # Apply all pending modifications
+    linesout = []
+    ilast = 0
+    modificationsList.sort(key=lambda takeStartIdx: takeStartIdx[0])
+    for (modstart,modstop,replacementlines) in modificationsList:
+        linesout += linesin[ilast:modstart]
+        linesout += replacementlines
+        ilast = modstop
+    linesout += linesin[ilast:]
+
+    # Store
+    writev2d = open(inFile, 'w')
+    for line in linesout:
+        writev2d.write(line)
+    writev2d.close()
 
 # main execution
 
@@ -203,108 +441,70 @@ for line in f:
 f.close()
 
 # get experiment name and TAPELOG_OBS data from .vex.obs
-experName = ''
-experNameFound = False
-tapelogObsFound = False
-ant = ''
-mod = ''
-antennaModuleList = []
-
-vexobs = open(vexObsFile, "r")
-for line in vexobs:
-
-    if experNameFound is False:
-        i = line.find('exper_name')
-	if i != -1:
-	    experNameFound = True
-	    lineend = line[i+10:len(line)-1]
-	    for i in range(len(lineend)):
-	        if lineend[i] not in [' ', '=', ';']:
-		    experName += lineend[i]
-    elif tapelogObsFound is False:
-        if '$TAPELOG_OBS;' in line:
-	    tapelogObsFound = True
-    elif tapelogObsFound is True:
-        if 'def ' in line:
-	    ant = line[4:6].upper()
-	elif '  VSN = ' in line:
-	    linesegs = line.split(':')
-	    mod = linesegs[1].strip()
-	elif 'enddef;' in line and '%' in mod:  # adds only mark6 modules to antennaModuleList
-	    antennaModuleList.append([ant,mod])
-	elif '*-----' in line:
-	    break
-
-if experNameFound is False or tapelogObsFound is False:
-    print "could not find experiment name or TAPELOG_OBS data, exiting"
-    exit(1)
-
-if len(antennaModuleList) is 0:
-    print "no antennas with mark6 modules found, nothing more to do, exiting"
-    exit(0)
+(experName,antennaModuleList,modList) = getvexantennamodlists(vexObsFile)
 
 if verbose > 1:
-    print "Experiment name:", experName, "\n"
-    print "List of modules recorded at antennas:"
+    print ("Experiment name: %s" % (experName))
+    print ("List of modules recorded at antennas:")
     for antMod in antennaModuleList:
-        print "%s recorded at %s" % (antMod[1], antMod[0])
-    print
+        print ("%s recorded on %s" % (antMod[0], antMod[1]))
+    print ("")
 
 # make an antenna.filelist for each antenna in the antenna module list
 antList = []
 antNoModuleFileList = []
-for antMod in antennaModuleList:
-    antList.append(antMod[0])
-    moduleFileName = antMod[1] + '.filelist'
-    moduleFilePath = dirPath + '/' + moduleFileName
-    antennaFileName = antMod[0].lower() + '.filelist'
-    if isfile(moduleFilePath):
+for (ant,modlist) in antennaModuleList:
+    antList.append(ant.upper())
+    antennaFileName = ant.lower() + '.filelist'
+    antFileWritten = False
+    antfile = open(antennaFileName, 'w')
+    missingAntModules = []
+    for mod in modlist:
+        moduleFileName = mod + '.filelist'
+        moduleFilePath = dirPath + '/' + moduleFileName
+        if isfile(moduleFilePath):
+            if verbose > 1:
+                print ("%s exists, using it to generate %s" % (moduleFileName,antennaFileName))
+            with open(moduleFilePath, 'r') as modfile:
+	        experPrefix = experName + '_' + ant.upper() # ToDo: is this naming really valid always?
+                for line in modfile:
+                    if experPrefix.lower() in line.lower():
+	                antfile.write(line)
+		        antFileWritten = True
+                    elif verbose > 2:
+                        print ("   skipping %s not in %s" % (line.strip(),experPrefix))
+        else:
+            missingAntModules.append(mod)
+    if missingAntModules:
+       if verbose > 1:
+           print ("Warning: antenna %s is missing these module file lists: %s" % (ant,str(missingAntModules)))
+    if not antFileWritten:
         if verbose > 1:
-            print moduleFileName, "exists, using it to generate", antennaFileName
-        modfile = open(moduleFilePath, 'r')
-        antfile = open(antennaFileName, 'w')
-        for line in modfile:
-            if experName in line:
-	        antfile.write(line)
-        modfile.close()
-        antfile.close()
+            print ("Warning: no module filelists available for antenna %s: missing %s" % (ant,str(missingAntModules)))
+        antNoModuleFileList.append(ant)
     else:
-        if verbose > 1:
-            print moduleFileName, "does not exist"
-	antNoModuleFileList.append(antMod[0])
+        print ("Wrote %s based on VSN-matching dir file lists" % (antennaFileName))
+    antfile.close()
 
 if len(antNoModuleFileList) > 0:
     for ant in antNoModuleFileList:
 	antFileName = ant.lower() + ".filelist"
         if verbose > 1:
-            print "generating", antFileName, "file from .vex.obs file:", vexObsFile
-	vexobs.seek(0)
-	scandata = getvexscandata(ant, vexobs)
+            print ("Warning: using VEX %s for antenna %s to generate tentative %s. Please verify it manually!" % (ant, vexObsFile, antFileName))
+	scandata = getvexscandata(ant, vexObsFile)
 	if len(scandata) > 0:
 	    antfile = open(antFileName, 'w')
 	    for scan in scandata:
 	        line = experName + '_' + ant.upper() + '_' + scan[0] + ' ' + scan[1] + ' ' + scan[2] + '\n'
 		antfile.write(line)
 	    antfile.close()
+            print ("Wrote %s based on VEX, please check that invented scan names match recorded names" % (antFileName))
 
 # add mark6filelist tags to .v2d file
 if verbose > 1:
     print
     print "adding mark6filelist tags to", inFile
     print
-move(inFile, inFile + ".bkup")
-readv2d = open(inFile + ".bkup", 'r')
-writev2d = open(inFile, 'w')
-for line in readv2d:
-    if 'ANTENNA' in line:
-        if line[8:10] in antList:
-	    mark6line = line[0:len(line) - 2] + 'mark6filelist=' + line[8:10].lower() + '.filelist }\n'
-	    writev2d.write(mark6line)
-	else:
-	    writev2d.write(line)
-    else:
-        writev2d.write(line)
-readv2d.close()
-writev2d.close()
-vexobs.close()
+regeneratev2d(inFile, antList)
+print("Updated %s" % inFile)
 
