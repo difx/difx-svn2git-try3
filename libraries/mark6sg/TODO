@@ -1,5 +1,0 @@
-
-- Add more thorough checks to input file quality (check magic word,
-  check that all file headers indicate the same packet size and block size,
-  etc)
-
