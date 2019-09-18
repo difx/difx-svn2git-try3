@@ -41,7 +41,34 @@
 
 #include "autobands.h"
 #include "freq.h"       // class freq
-#include "corrparams.h" // class ZoomFreq
+#include "zoomfreq.h"	// class ZoomFreq
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+double AutoBands::Band::bandwidth() const
+{
+	return fhigh - flow;
+}
+
+double AutoBands::Span::bandwidth() const
+{
+	return fhigh - flow;
+}
+
+bool AutoBands::Band::operator==(const freq& rhs) const
+{
+	return (rhs.fq == flow) && (rhs.bw == (fhigh-flow)) && (rhs.sideBand == 'U'); 
+}
+
+bool AutoBands::Outputband::operator==(const freq& rhs) const
+{
+	return (rhs.fq == fbandstart) && (rhs.bw == bandwidth) && (rhs.sideBand == 'U');
+}
+
+void AutoBands::Outputband::extend(double fstart, double bw)
+{
+	constituents.push_back(AutoBands::Band(fstart, fstart+bw, 0));
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -116,7 +143,7 @@ void AutoBands::addRecbands(const std::vector<freq>& freqs, int antId)
 /**
  * Return the greatest-common-divisor for list of frequencies
  */
-double AutoBands::granularity(const std::vector<double>& args) const
+double AutoBands::getGranularity(const std::vector<double>& args) const
 {
 	if(args.size() < 1)
 	{
@@ -323,7 +350,7 @@ void AutoBands::analyze(int Nant)
  * Output bands have the requested bandwidth. They can be direct matches to recorded bands, band slices (zoom) of recorded bands,
  * or pieces of several band slices (zoom sets) taken from neighbouring recorded bands.
  */
-int AutoBands::generate(int Nant, double fstart_Hz)
+int AutoBands::generateOutputbands(int Nant, double fstart_Hz)
 {
 	// Clear old results
 	outputbands.clear();
@@ -473,6 +500,81 @@ int AutoBands::generate(int Nant, double fstart_Hz)
 	}
 
 	return true;
+}
+
+/**
+ * Look through the internal list of output bands and search for the first
+ * output band that contains 'freq' as one of its constituents.
+ *
+ * Once the output band of 'freq' has been determined, looks through
+ * the list of frequencies 'allfreqs' and locates a match for that output
+ * band. Returns the index of that match is returned.
+ *
+ * If any of the two search stages fails to locate a frequency, the search
+ * is repeated with a sideband flipped band having the same sky coverage.
+ */
+int AutoBands::lookupDestinationFreq(const freq& inputfreq, const std::vector<freq>& allfreqs) const
+{
+	int outputband_index = -1;
+
+	// Find 'inputfreq' in constituents
+	for(unsigned n = 0; n < outputbands.size() && outputband_index < 0; n++)
+	{
+		const AutoBands::Outputband& ob = outputbands[n];
+		for(unsigned m = 0; m < ob.constituents.size(); m++)
+		{
+			if (ob.constituents[m] == inputfreq)
+			{
+				outputband_index = n;
+				break;
+			}
+		}
+	}
+
+	// Or, find band-flipped 'inputfreq' in constituents
+	if (outputband_index < 0)
+	{
+		freq flipped = inputfreq;
+		flipped.flip();
+		for(unsigned n = 0; n < outputbands.size() && outputband_index < 0; n++)
+		{
+			const AutoBands::Outputband& ob = outputbands[n];
+			for(unsigned m = 0; m < ob.constituents.size(); m++)
+			{
+				if (ob.constituents[m] == flipped)
+				{
+					outputband_index = n;
+					break;
+				}
+			}
+		}
+	}
+
+	if (outputband_index < 0)
+	{
+		return -1;
+	}
+
+	const AutoBands::Outputband& destination = outputbands[outputband_index];
+	for(unsigned n = 0; n < allfreqs.size(); n++)
+	{
+		if (destination == allfreqs[n])
+		{
+			return n;
+		}
+	}
+
+	for(unsigned n = 0; n < allfreqs.size(); n++)
+	{
+		freq flipped = allfreqs[n];
+		flipped.flip();
+		if (destination == flipped)
+		{
+			return n;
+		}
+	}
+
+	return -1;
 }
 
 void AutoBands::barchart(

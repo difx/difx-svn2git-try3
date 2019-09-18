@@ -35,8 +35,11 @@
 #include <iostream>
 #include <limits>
 
-class ZoomFreq; // declared in corrparams.h
-class freq;     // declared in freq.h
+class ZoomFreq;
+class freq;
+
+#include "zoomfreq.h"	// class ZoomFreq
+#include "freq.h"	// class freq
 
 class AutoBands
 {
@@ -55,7 +58,9 @@ public:
 
 		Band(double flow_, double fhigh_, int antenna_)
 			: flow(flow_),fhigh(fhigh_),antenna(antenna_) { }
-		double bandwidth() const { return fhigh-flow; }
+
+		double bandwidth() const;
+		bool operator==(const freq& rhs) const;
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Band &x);
 	};
 
@@ -70,7 +75,7 @@ public:
 		Span(double flow_, double fhigh_, int antcount_, int bandcount_)
 			: flow(flow_),fhigh(fhigh_),antennacount(antcount_),bandcount(bandcount_),continued(false) { }
 		static bool compare_bandwidths(const AutoBands::Span& lhs, const AutoBands::Span& rhs);
-		double bandwidth() const { return fhigh-flow; }
+		double bandwidth() const;
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Span &x);
 	};
 
@@ -84,10 +89,10 @@ public:
 		{
 			this->constituents.clear();
 		}
-		void extend(double fstart, double bw)
-		{
-			this->constituents.push_back(Band(fstart, fstart+bw, 0));
-		}
+
+		void extend(double fstart, double bw);
+		bool operator==(const freq& rhs) const;
+		Band& operator[] (int n) { return constituents[n]; }
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Outputband &x);
 	};
 
@@ -99,14 +104,16 @@ public:
 	void addRecbands(const std::vector<double>& fstart, const std::vector<double>& fstop, int antId = -1);
 	void addRecbands(const std::vector<freq>& freqs, int antId = -1);
 
-	int generate(int Nant=0, double fstart_Hz=0.0);
-	double granularity(const std::vector<double>& freqs) const;
+	double getGranularity(const std::vector<double>& freqs) const;
+
+	int generateOutputbands(int Nant=0, double fstart_Hz=0.0);
+
+	int lookupDestinationFreq(const freq& inputfreq, const std::vector<freq>& allfreqs) const;
 
 	//variables
 	std::vector<Band> bands;
 	std::vector<Span> spans;
 	std::vector<Outputband> outputbands;
-	std::vector<ZoomFreq> outputzooms;
 	double minrecfreq, maxrecfreq;
 	unsigned int Nant;
 	double outputbandwidth;
