@@ -38,8 +38,12 @@
 #include <iostream>
 #include <difxio.h>
 
+class AutoBands;
+
+#include "autobands.h"
 #include "interval.h"
 #include "freq.h"
+#include "zoomfreq.h"
 #include "vex_data.h"
 
 extern const double MJD_UNIX0;	// MJD at beginning of unix time
@@ -103,21 +107,6 @@ public:
 	std::string vexName;		// Source name as appears in vex file
 	PhaseCentre pointingCentre;	// The source which is at the pointing centre
 	std::vector<PhaseCentre> phaseCentres; // Additional phase centres to be correlated
-};
-
-class ZoomFreq
-{
-public:
-	//constructor
-	ZoomFreq();
-
-	//method
-	void initialise(double freq, double bw, bool corrparent, int specavg); // Hz
-
-	//variables
-	double frequency, bandwidth; // Hz
-	int spectralaverage;
-	bool correlateparent;
 };
 
 class GlobalZoom
@@ -272,8 +261,9 @@ public:
 				// when fringeRotOrder > 0
 	int xmacLength;		// Number of channels to do at a time when xmac'ing
 	int numBufferedFFTs;	// Number of FFTs to do in Mode before XMAC'ing
-	enum OutputBandwidthMode outputBandwidthMode;
 	std::set<int> freqIds;	// which bands to correlate
+	enum OutputBandwidthMode outputBandwidthMode;	// mode in which go choose/generate output bands
+	mutable AutoBands autobands; // generator for output bands
 	std::string binConfigFile;
 	std::string phasedArrayConfigFile;
 	char onlyPol;		// which polarization to correlate

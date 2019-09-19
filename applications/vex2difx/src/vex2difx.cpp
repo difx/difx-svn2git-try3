@@ -553,6 +553,12 @@ static int setFormat(DifxInput *D, int dsId, vector<freq>& freqs, vector<vector<
 		{
 			D->datastream[dsId].recFreqId[j] = bandMap[j].first;
 			D->datastream[dsId].nRecPol[j]   = bandMap[j].second;
+			int destFqId = corrSetup->autobands.lookupDestinationFreq(freqs[bandMap[j].first], freqs);
+			if (destFqId < 0)
+			{
+				destFqId = bandMap[j].first;
+			}
+			D->datastream[dsId].recFreqDestId[j] = destFqId;
 		}
 	}
 
@@ -654,7 +660,7 @@ static void populateFreqTable(DifxInput *D, const vector<freq>& freqs, const vec
 }
 
 static double populateBaselineTable(DifxInput *D, const CorrParams *P, const CorrSetup *corrSetup, vector<set <int> > blockedfreqids)
-{	
+{
 	int n1, n2;
 	int nPol;
 	int a1c[2], a2c[2];
@@ -662,7 +668,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 	int nFreq;
 	DifxBaseline *bl;
 	DifxConfig *config;
-	int freqId, altFreqId, blId, configId;
+	int freqId, destFreqId, altFreqId, blId, configId;
 	double lowedgefreq, altlowedgefreq;
 	double globalBandwidth = 0;
 
@@ -729,6 +735,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 					for(int f = 0; f < D->datastream[ds1].nRecFreq; ++f)
 					{
 						freqId = D->datastream[ds1].recFreqId[f];
+						destFreqId = D->datastream[ds1].recFreqDestId[f];
 
 						if(!corrSetup->correlateFreqId(freqId))
 						{
@@ -758,7 +765,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								}
 							}
 						}
-						bl->destFq[nFreq] = freqId;
+						bl->destFq[nFreq] = destFreqId;
 						bl->nPolProd[nFreq] = nPol;
 
 						if(nPol == 0)
@@ -774,6 +781,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 					for(int f = 0; f < D->datastream[ds1].nZoomFreq; ++f)
 					{
 						freqId = D->datastream[ds1].zoomFreqId[f];
+						destFreqId = D->datastream[ds1].zoomFreqDestId[f];
 
 						DifxBaselineAllocPolProds(bl, nFreq, 4);
 
@@ -799,7 +807,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								}
 							}
 						}
-						bl->destFq[nFreq] = freqId;
+						bl->destFq[nFreq] = destFreqId;
 						bl->nPolProd[nFreq] = nPol;
 
 						if(nPol == 0)
@@ -920,6 +928,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								bool zoom2 = false;	// did antenna 2 zoom band make match? 
 
 								freqId = D->datastream[ds1].recFreqId[f];
+								destFreqId = D->datastream[ds1].recFreqDestId[f];
 
 								if(!corrSetup->correlateFreqId(freqId))
 								{
@@ -1015,7 +1024,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 										}
 									}
 								}
-								bl->destFq[nFreq] = freqId;
+								bl->destFq[nFreq] = destFreqId;
 								bl->nPolProd[nFreq] = nPol;
 
 								if(nPol == 0)
@@ -1048,6 +1057,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								n2 = 0;
 
 								freqId = D->datastream[ds1].zoomFreqId[f];
+								destFreqId = D->datastream[ds1].zoomFreqDestId[f];
 
 								// Unlike for recbands, don't query corrSetup->correlateFreqId as all defined zoom bands should be correlated
 
@@ -1135,7 +1145,7 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 										}
 									}
 								}
-								bl->destFq[nFreq] = freqId;
+								bl->destFq[nFreq] = destFreqId;
 								bl->nPolProd[nFreq] = nPol;
 
 								if(nPol == 0)
@@ -1563,7 +1573,6 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 {
 	DifxInput *D;
 	DifxScan *scan;
-	AutoBands autobands(0.0, verbose, false);
 	const CorrSetup *corrSetup;
 	const SourceSetup *sourceSetup;
 	const PhaseCentre *phaseCentre;
@@ -1580,7 +1589,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 	double srcra, srcdec, radiff, decdiff;
 	const double MAX_POS_DIFF = 5e-9; //radians, approximately equal to 1 mas
 	int pointingSrcIndex, foundSrcIndex, atSource;
-	int nZoomBands, fqId, polcount, zoomChans = 0, minChans;
+	int nZoomBands, fqId, destFqId, polcount, zoomChans = 0, minChans;
 	int decimation, worstcaseguardns;
 	DifxDatastream *dd;
 	double globalBandwidth;
@@ -1987,12 +1996,13 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			}
 		}
 
-		// collect freqs to concatenate into AutoBands logic
+		// collect freqs specific to each antenna (not global), and register those into the AutoBands logic
+		corrSetup->autobands.verbosity = verbose;
 		for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
 		{
 			const std::string &antName = it->first;
 			const VexSetup &setup = it->second;
-			std::vector<freq> antfreqs;
+			std::vector<freq> antfreqs; // starts from a blank list for every antenna!
 			int startBand = 0;
 
 			if(find(J.jobAntennas.begin(), J.jobAntennas.end(), antName) == J.jobAntennas.end())
@@ -2006,7 +2016,9 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				setFormat(D, -1, antfreqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
 				startBand += stream.nRecordChan;
 			}
-			autobands.addRecbands(antfreqs);
+
+			corrSetup->autobands.addRecbands(antfreqs);
+// TODO: possibly corrSetup->autobands.addUserOutputbands(...) for all freq[] where bandwidth == output bandwidth
 		}
 
 		// invoke AutoBand logic to generate additional 1:1 / N:1 / 1:N zooms that assemble into outputbands
@@ -2015,7 +2027,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			double bw = 0;
 			if(corrSetup->outputBandwidthMode == OutputBandwidthAuto)
 			{
-				bw = autobands.autoBandwidth();
+				bw = corrSetup->autobands.autoBandwidth();
 				cout << "Determined outputBand 'auto' bandwidth of " << std::fixed << bw*1e-6 << "MHz\n";
 			}
 			if(bw <= 0)
@@ -2031,30 +2043,38 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			}
 
 			// produce the necessary bands
-			autobands.setBandwidth(bw);
-			autobands.generate();
+			corrSetup->autobands.setBandwidth(bw);
+			corrSetup->autobands.generateOutputbands();
 			if(verbose > 2)
 			{
-				std::cout << autobands;
+				std::cout << corrSetup->autobands;
 			}
 
 			// register the outputbands so new freqId's are introduced where necessary,
-			// also copy out consituent zooms to add to antennas later/further below
-			GlobalZoom constituentzooms("temp");
-			for(std::vector<AutoBands::Outputband>::const_iterator itOb = autobands.outputbands.begin();
-				itOb != autobands.outputbands.end(); ++itOb)
+			std::vector<AutoBands::Outputband>::const_iterator itOb;
+			for(itOb = corrSetup->autobands.outputbands.begin(); itOb != corrSetup->autobands.outputbands.end(); ++itOb)
 			{
 				// register outputband
-				int fqId = getFreqId(freqs, itOb->fbandstart, itOb->bandwidth, 'U', corrSetup->FFTSpecRes, corrSetup->outputSpecRes, decimation, 1, 0);    // final zero points to the noTone pulse cal setup.
+				int fqId = getFreqId(
+					freqs,
+					itOb->fbandstart, itOb->bandwidth, 'U',
+					corrSetup->FFTSpecRes, corrSetup->outputSpecRes,
+					decimation, 1, 0 // final zero points to the noTone pulse cal setup.
+				);
 				if (verbose > 0)
 				{
 					cout << "Output band at " << std::fixed << itOb->fbandstart*1e-6 << " MHz USB "
 						<< std::fixed << itOb->bandwidth*1e-6 << " MHz received fq id " << fqId << "\n";
 				}
+			}
 
+			// grab list of zoom bands needed for this antenna
+			GlobalZoom constituentzooms("temp");
+			for(itOb = corrSetup->autobands.outputbands.begin(); itOb != corrSetup->autobands.outputbands.end(); ++itOb)
+			{
 				// grow the list of all-band constituent zooms
-				for(std::vector<AutoBands::Band>::const_iterator itZm = itOb->constituents.begin();
-					itZm != itOb->constituents.end(); ++itZm)
+				std::vector<AutoBands::Band>::const_iterator itZm;
+				for(itZm = itOb->constituents.begin(); itZm != itOb->constituents.end(); ++itZm)
 				{
 					ZoomFreq zoom;
 					zoom.initialise(itZm->flow, itZm->bandwidth(), false, 0); // specAvg:0 means default to parent
@@ -2062,7 +2082,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				}
 			}
 
-			// propagate outputband constituent zooms into zooms of active antennas
+			// add those zooms into the global zooms shared by all antennas
 			for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
 			{
 				const std::string &antName = it->first;
@@ -2078,11 +2098,17 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				{
 					antSetup->copyGlobalZoom(constituentzooms); // "copy()" but actually appends
 				}
-
 			}
-
-
 		}
+
+		// register explicit v2d user-specified Zooms into the autoband logic as output bands, if not yet present
+		for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
+		{
+			const std::string &antName = it->first;
+			const AntennaSetup* antSetup = P->getAntennaSetup(antName);
+			corrSetup->autobands.addUserOutputbands(antSetup->zoomFreqs);
+		}
+
 
 		// iterate over all antennas and fill in zoom band, LO offset, clock offset details
 		int currDatastream = 0;
@@ -2111,9 +2137,18 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 					dd->phaseCalIntervalMHz = setup.phaseCalIntervalMHz();
 					dd->tcalFrequency = antenna->tcalFrequency;
 
+					for(int i = 0; i < dd->nRecFreq; ++i)
+					{
+						if (dd->recFreqDestId[i] != dd->recFreqId[i])
+						{
+							blockedfreqids[dd->antennaId].insert(dd->recFreqId[i]);
+						}
+					}
+
 					// FIXME: eventually zoom bands will migrate to the VexMode/VexSetup infrastructure.  until then, use antenanSetup directly
 					if(antennaSetup)
 					{
+
 						nZoomBands = 0;
 
 						int nZoomFreqs = antennaSetup->zoomFreqs.size();
@@ -2153,13 +2188,23 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 									minChans = zoomChans;
 								}
 								fqId = getFreqId(freqs, zf.frequency, zf.bandwidth, 'U', corrSetup->FFTSpecRes, corrSetup->outputSpecRes, decimation, 1, 0);	// final zero points to the noTone pulse cal setup.
+								destFqId = corrSetup->autobands.lookupDestinationFreq(freqs[fqId], freqs);
+								if (destFqId < 0)
+								{
+									cerr << "Error: could not look up destination frequency for zoom with freq " << fqId << endl;
+									destFqId = fqId;
+								}
 								dd->zoomFreqId[nZoom] = fqId;
-								dd->zoomFreqDestId[nZoom] = fqId; // TODO: take assigned dest freq from autobands, likewise for dd->recFreqDestId[]; probably not at this spot of code but elsewhere
+								dd->zoomFreqDestId[nZoom] = destFqId;
 								dd->nZoomPol[nZoom] = dd->nRecPol[parentFreqIndices[nZoom]];
 								nZoomBands += dd->nRecPol[parentFreqIndices[nZoom]];
 								if(!zf.correlateparent)
 								{
 									blockedfreqids[dd->antennaId].insert(dd->recFreqId[parentFreqIndices[nZoom]]);
+								}
+								if(dd->zoomFreqId[nZoom] != dd->zoomFreqDestId[nZoom])
+								{
+									blockedfreqids[dd->antennaId].insert(dd->zoomFreqId[nZoom]);
 								}
 								++nZoom;
 							}
