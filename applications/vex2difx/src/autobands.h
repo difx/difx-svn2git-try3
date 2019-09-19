@@ -61,6 +61,7 @@ public:
 
 		double bandwidth() const;
 		bool operator==(const freq& rhs) const;
+		bool operator==(const Band& rhs) const;
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Band &x);
 	};
 
@@ -92,6 +93,7 @@ public:
 
 		void extend(double fstart, double bw);
 		bool operator==(const freq& rhs) const;
+		bool operator==(const Outputband& rhs) const;
 		Band& operator[] (int n) { return constituents[n]; }
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Outputband &x);
 	};
@@ -101,13 +103,14 @@ public:
 	double autoBandwidth();
 	void setBandwidth(double outputbandwidth_Hz);
 
+	void clear();
 	void addRecbands(const std::vector<double>& fstart, const std::vector<double>& fstop, int antId = -1);
 	void addRecbands(const std::vector<freq>& freqs, int antId = -1);
 
 	double getGranularity(const std::vector<double>& freqs) const;
 
 	int generateOutputbands(int Nant=0, double fstart_Hz=0.0);
-
+	void addUserOutputbands(const std::vector<ZoomFreq>& zf);
 	int lookupDestinationFreq(const freq& inputfreq, const std::vector<freq>& allfreqs) const;
 
 	//variables
@@ -124,7 +127,7 @@ private:
 	//methods
 	bool covered(double f0, double f1) const;
 	void analyze(int Nant=0);
-	void simplify(Outputband& mergeable);
+	void simplify(AutoBands::Outputband& mergeable);
 
 	double adjustStartFreq(double f0, double f1, double finitial, double df);
 
