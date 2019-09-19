@@ -28,6 +28,7 @@
  *==========================================================================*/
 
 #include "freq.h"
+#include <iomanip>
 
 // Returns index of requested (fq, bw, sb, ...) from freqs.
 // If not in freqs, it is added first
@@ -54,4 +55,26 @@ int getFreqId(std::vector<freq>& freqs, const freq& newfq)
 	freqs.push_back(newfq);
 
 	return freqs.size() - 1;
+}
+
+void freq::flip()
+{
+	if (sideBand == 'U')
+	{
+		sideBand = 'L';
+		fq += bw;
+	}
+	else
+	{
+		sideBand = 'U';
+		fq -= bw;
+	}
+}
+
+std::ostream& operator << (std::ostream& os, const freq& f)
+{
+	os << std::setw(15) << std::setprecision(8)
+		<< f.fq*1e-6 << " MHz "<< f.bw*1e-6 << " MHz sb:" << f.sideBand
+		<< " z:" << f.isZoomFreq;
+	return os;
 }

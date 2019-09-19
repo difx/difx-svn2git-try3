@@ -36,6 +36,7 @@ This is a helper class used within vex2difx.cpp
 
 #include <cassert>
 #include <vector>
+#include <ostream>
 
 class freq
 {
@@ -57,11 +58,13 @@ public:
 	int decimation;
 	int isZoomFreq;
 	unsigned int toneSetId;
-	char sideBand;
+	char sideBand;		// 'U' or 'L'
 
 	//methods
 	int specAvg() const { return static_cast<int>(outputSpecRes/inputSpecRes + 0.5); }
+	void flip();
 	friend bool operator== (const freq& lhs, const freq& rhs);
+	friend std::ostream& operator << (std::ostream& os, const freq& f);
 };
 
 inline bool operator== (const freq& lhs, const freq& rhs)
@@ -76,8 +79,9 @@ inline bool operator== (const freq& lhs, const freq& rhs)
 		lhs.toneSetId     == rhs.toneSetId);
 }
 
-//freqs.cpp
+//freq.cpp
 int getFreqId(std::vector<freq>& freqs, const freq& newfq);
 int getFreqId(std::vector<freq>& freqs, double fq, double bw, char sb, double isr, double osr, int d, int iz, unsigned int t);
+std::ostream& operator << (std::ostream& os, const freq& f);
 
 #endif
