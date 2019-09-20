@@ -1,1 +1,0 @@
-SUBDIRS = fourfit alist aedit
