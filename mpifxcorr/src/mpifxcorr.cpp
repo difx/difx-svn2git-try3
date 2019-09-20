@@ -37,6 +37,7 @@
 #include "configuration.h"
 #include "fxmanager.h"
 #include "core.h"
+#include "idatastream.h"
 #include "datastream.h"
 #include "mk5.h"
 #include "nativemk5.h"
@@ -49,6 +50,7 @@
 #include "vdifmark5.h"
 #include "vdifmark6_datastream.h"
 #include "vdifsharedmemory.h"
+#include "vdiffilereader_istream.h"
 #include <sys/utsname.h>
 //includes for socket stuff - for monitoring
 #include "string.h"
@@ -264,7 +266,7 @@ int main(int argc, char *argv[])
   Configuration * config;
   FxManager * manager = 0;
   Core * core = 0;
-  DataStream * stream = 0;
+  IDataStream * stream = 0;
   int * coreids;
   int * datastreamids;
   bool monitor = false;
@@ -425,7 +427,12 @@ int main(int argc, char *argv[])
     {
       int datastreamnum = myID - fxcorr::FIRSTTELESCOPEID;
       if(config->isVDIFFile(datastreamnum)) {
-        stream = new VDIFDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        int nthreads = config->getDNumMuxThreads(/*configindex*/ 0, datastreamnum);
+        if (nthreads > 1) {
+            stream = new VDIFDataStream<VDIFFileReaderIStream>(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        } else {
+            stream = new VDIFDataStream<ifstream>(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        }
         cverbose << startl << "Opening VDIFDataStream" << endl;
       } else if(config->isVDIFMark6(datastreamnum)) {
         stream = new VDIFMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
@@ -447,7 +454,7 @@ int main(int argc, char *argv[])
         cverbose << startl << "Opening VDIFFakeDataStream" << endl;
       } else if(config->isMark5BFile(datastreamnum)) {
         stream = new Mark5BDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
-          cverbose << startl << "Opening Mark5BDataStream" << endl;
+        cverbose << startl << "Opening Mark5BDataStream" << endl;
       } else if(config->isMark5BMark5(datastreamnum)) {
         stream = new Mark5BMark5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening Mark5BMark5DataStream" << endl;
@@ -456,12 +463,12 @@ int main(int argc, char *argv[])
         cverbose << startl << "Opening Mk5DataStream" << endl;
       } else if(config->isNativeMkV(datastreamnum)){
         stream = new NativeMk5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
-          cverbose << startl << "Opening NativeMk5DataStream" << endl;
+        cverbose << startl << "Opening NativeMk5DataStream" << endl;
       }
       else {
-        stream = new DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
-    cverbose << startl << "Opening generic DataStream" << endl;
-    }
+        stream = new DataStream<ifstream>(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        cverbose << startl << "Opening generic DataStream" << endl;
+      }
 
       stream->initialise();
       MPI_Barrier(world);

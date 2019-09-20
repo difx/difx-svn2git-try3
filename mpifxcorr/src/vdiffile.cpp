@@ -35,6 +35,7 @@
 #include "config.h"
 #include "alert.h"
 #include "vdiffile.h"
+#include "vdiffilereader_istream.h"
 #include "mode.h"
 
 #include <unistd.h>
@@ -44,11 +45,11 @@
    - make use of activesec and activescan
  */
 
-
 /// VDIFDataStream -------------------------------------------------------
 
-VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
- : DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+template <typename istreamT>
+VDIFDataStream<istreamT>::VDIFDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
+ : DataStream<istreamT>(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	//each data buffer segment contains an integer number of frames, because thats the way config determines max bytes
 	lastconfig = -1;
@@ -57,12 +58,12 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	int spf_Hz = conf->getDSwitchedPowerFrequency(id-1);
 	if(spf_Hz > 0)
 	{
-		switchedpower = new SwitchedPower(conf, id);
-		switchedpower->frequency = spf_Hz;
+		this->switchedpower = new SwitchedPower(conf, id);
+		this->switchedpower->frequency = spf_Hz;
 	}
 	else
 	{
-		switchedpower = 0;
+		this->switchedpower = 0;
 	}
 
 	// Set some VDIF muxer parameters
@@ -76,12 +77,12 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	// But the amount of excess should be large enough to encompass all reasonable amounts of interloper data
 	// Here we give 20% overhead plus 8 MB, just to be on the safe side...
 
-	readbuffersize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*5LL/4LL+8000000LL;
+	readbuffersize = (bufferfactor/numsegments)*conf->getMaxDataBytes(this->streamnum)*5LL/4LL+8000000LL;
 	readbuffersize -= (readbuffersize % 8); // make it a multiple of 8 bytes
 	readbufferleftover = 0;
-	readbuffer = 0;	// to be allocated via initialize();
+	this->readbuffer = 0;	// to be allocated via initialize();
 
-	estimatedbytes += readbuffersize;
+	this->estimatedbytes += readbuffersize;
 
 	// Don't bother to do another read iteration just to salvage this many bytes at the end of a file/scan
 	minleftoverdata = 20000;
@@ -98,9 +99,12 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 		cwarn << startl << "env var DIFX_FILE_CHECK_LEVEL was set to " << getenv("DIFX_FILE_CHECK_LEVEL") << " which is not a legal value.  Assuming NONE." << endl;
 		filecheck = Configuration::FILECHECKNONE;
 	}
+
+	this->setHints();
 }
 
-VDIFDataStream::~VDIFDataStream()
+template <typename istreamT>
+VDIFDataStream<istreamT>::~VDIFDataStream()
 {
 	cinfo << startl << "VDIF multiplexing statistics: nValidFrame=" << vstats.nValidFrame << " nInvalidFrame=" << vstats.nInvalidFrame << " nDiscardedFrame=" << vstats.nDiscardedFrame << " nWrongThread=" << vstats.nWrongThread << " nSkippedByte=" << vstats.nSkippedByte << " nFillByte=" << vstats.nFillByte << " nDuplicateFrame=" << vstats.nDuplicateFrame << " bytesProcessed=" << vstats.bytesProcessed << " nGoodFrame=" << vstats.nGoodFrame << " nCall=" << vstats.nCall << endl;
 	if(vstats.nWrongThread > 0)
@@ -125,99 +129,113 @@ VDIFDataStream::~VDIFDataStream()
 	}
 
 	//printvdifmuxstatistics(&vstats);
-	if(switchedpower)
+	if(this->switchedpower)
 	{
-		delete switchedpower;
+		delete this->switchedpower;
 	}
-	if(readbuffer)
+	if(this->readbuffer)
 	{
-		delete [] readbuffer;
+		delete [] this->readbuffer;
 	}
 }
 
-void VDIFDataStream::initialise()
+template <typename istreamT>
+void VDIFDataStream<istreamT>::setHints()
 {
-	readbuffer = new unsigned char[readbuffersize];
-	DataStream::initialise();
 }
 
-int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
+template <>
+void VDIFDataStream<VDIFFileReaderIStream>::setHints()
+{
+	int fps = this->config->getFramesPerSecond(0, this->streamnum) / this->config->getDNumMuxThreads(0, this->streamnum);
+	this->input.setHintFramespersec(fps);
+}
+
+template <typename istreamT>
+void VDIFDataStream<istreamT>::initialise()
+{
+	this->readbuffer = new unsigned char[readbuffersize];
+	DataStream<istreamT>::initialise();
+}
+
+template <typename istreamT>
+int VDIFDataStream<istreamT>::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
 	int bufferindex, framesin, vlbaoffset, looksegment, payloadbytes, framespersecond, framebytes;
 	float datarate;
 
-	bufferindex = DataStream::calculateControlParams(scan, offsetsec, offsetns);
+	bufferindex = DataStream<istreamT>::calculateControlParams(scan, offsetsec, offsetns);
 
-	if(bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] == Mode::INVALID_SUBINT)
+	if(this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] == Mode::INVALID_SUBINT)
 	{
 		return 0;
 	}
 
-	looksegment = atsegment;
-	if(bufferinfo[atsegment].configindex < 0) //will get garbage using this to set framebytes etc
+	looksegment = this->atsegment;
+	if(this->bufferinfo[this->atsegment].configindex < 0) //will get garbage using this to set framebytes etc
 	{
 		//look at the following segment - normally has sensible info
-		looksegment = (atsegment+1)%numdatasegments;
-		if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+		looksegment = (this->atsegment+1)%this->numdatasegments;
+		if(this->bufferinfo[this->atsegment].nsinc != this->bufferinfo[looksegment].nsinc)
 		{
 			cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+			this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] = Mode::INVALID_SUBINT;
 	
 			return bufferindex;
 		}
 	}
-	if(bufferinfo[looksegment].configindex < 0)
+	if(this->bufferinfo[looksegment].configindex < 0)
 	{
 		//Sometimes the next segment is still showing invalid due to the geometric delay.
 		//try the following segment - if thats no good, get out
 		//this is not entirely safe since the read thread may not have set the configindex yet, but at worst
 		//one subint will be affected
-		looksegment = (looksegment+1)%numdatasegments;
-		if(bufferinfo[looksegment].configindex < 0)
+		looksegment = (looksegment+1)%this->numdatasegments;
+		if(this->bufferinfo[looksegment].configindex < 0)
 		{
 			cwarn << startl << "Cannot find a valid configindex to set Mk5-related info.  Flagging this subint" << endl;
-			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+			this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] = Mode::INVALID_SUBINT;
 
 			return bufferindex;
 		}
-		if(bufferinfo[atsegment].nsinc != bufferinfo[looksegment].nsinc)
+		if(this->bufferinfo[this->atsegment].nsinc != this->bufferinfo[looksegment].nsinc)
 		{
 			cwarn << startl << "Incorrectly set config index at scan boundary! Flagging this subint" << endl;
-			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+			this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] = Mode::INVALID_SUBINT;
 
 			return bufferindex;
 		}
 	}
 
 	//if we got here, we found a configindex we are happy with.  Find out the mk5 details
-	payloadbytes = config->getFramePayloadBytes(bufferinfo[looksegment].configindex, streamnum);
-	framebytes = config->getFrameBytes(bufferinfo[looksegment].configindex, streamnum);
-	framespersecond = config->getFramesPerSecond(bufferinfo[looksegment].configindex, streamnum);
-	payloadbytes *= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
-	framebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum) + VDIF_HEADER_BYTES;
-	framespersecond /= config->getDNumMuxThreads(bufferinfo[looksegment].configindex, streamnum);
+	payloadbytes = this->config->getFramePayloadBytes(this->bufferinfo[looksegment].configindex, this->streamnum);
+	framebytes = this->config->getFrameBytes(this->bufferinfo[looksegment].configindex, this->streamnum);
+	framespersecond = this->config->getFramesPerSecond(this->bufferinfo[looksegment].configindex, this->streamnum);
+	payloadbytes *= this->config->getDNumMuxThreads(this->bufferinfo[looksegment].configindex, this->streamnum);
+	framebytes = (framebytes-VDIF_HEADER_BYTES)*this->config->getDNumMuxThreads(this->bufferinfo[looksegment].configindex, this->streamnum) + VDIF_HEADER_BYTES;
+	framespersecond /= this->config->getDNumMuxThreads(this->bufferinfo[looksegment].configindex, this->streamnum);
 
-	samplingtype = config->getDSampling(bufferinfo[looksegment].configindex, streamnum);
+	samplingtype = this->config->getDSampling(this->bufferinfo[looksegment].configindex, this->streamnum);
 
 	//set the fraction of data to use to determine system temperature based on data rate
 	//the values set here work well for the today's computers and clusters...
 	datarate = static_cast<float>(framebytes)*static_cast<float>(framespersecond)*8.0/1.0e6;  // in Mbps
 	if(datarate < 512)
 	{
-		switchedpowerincrement = 1;
+		this->switchedpowerincrement = 1;
 	}
 	else
 	{
-		switchedpowerincrement = static_cast<int>(datarate/512 + 0.1);
+		this->switchedpowerincrement = static_cast<int>(datarate/512 + 0.1);
 	}
 
 	//do the necessary correction to start from a frame boundary; work out the offset from the start of this segment
-	vlbaoffset = bufferindex - atsegment*readbytes;
+	vlbaoffset = bufferindex - this->atsegment*this->readbytes;
 
 	if(vlbaoffset < 0)
 	{
-		cfatal << startl << "VDIFDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " atsegment=" << atsegment << " readbytes=" << readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
-		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+		cfatal << startl << "VDIFDataStream::calculateControlParams: vlbaoffset<0: vlbaoffset=" << vlbaoffset << " bufferindex=" << bufferindex << " this->atsegment=" << this->atsegment << " readbytes=" << this->readbytes << ", framebytes=" << framebytes << ", payloadbytes=" << payloadbytes << endl;
+		this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] = Mode::INVALID_SUBINT;
 		// WFB20120123 MPI_Abort(MPI_COMM_WORLD, 1);
 		
 		return 0;
@@ -233,21 +251,21 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 	}
 
 	// Note here a time is needed, so we only count payloadbytes
-	long long segoffns = bufferinfo[atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
-	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = bufferinfo[atsegment].scanseconds + ((int)(segoffns/1000000000));
-	bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][2] = ((int)(segoffns%1000000000));
+	long long segoffns = this->bufferinfo[this->atsegment].scanns + (long long)((1000000000.0*framesin)/framespersecond);
+	this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] = this->bufferinfo[this->atsegment].scanseconds + ((int)(segoffns/1000000000));
+	this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][2] = ((int)(segoffns%1000000000));
 
 	//go back to nearest frame -- here the total number of bytes matters
-	bufferindex = atsegment*readbytes + framesin*framebytes;
+	bufferindex = this->atsegment*this->readbytes + framesin*framebytes;
 
 	//if we are right at the end of the last segment, and there is a jump after this segment, bail out
-	if(bufferindex == bufferbytes)
+	if(bufferindex == this->bufferbytes)
 	{
-		if(bufferinfo[atsegment].scan != bufferinfo[(atsegment+1)%numdatasegments].scan ||
-		   ((bufferinfo[(atsegment+1)%numdatasegments].scanseconds - bufferinfo[atsegment].scanseconds)*1000000000 +
-		   bufferinfo[(atsegment+1)%numdatasegments].scanns - bufferinfo[atsegment].scanns - bufferinfo[atsegment].nsinc != 0))
+		if(this->bufferinfo[this->atsegment].scan != this->bufferinfo[(this->atsegment+1)%this->numdatasegments].scan ||
+		   ((this->bufferinfo[(this->atsegment+1)%this->numdatasegments].scanseconds - this->bufferinfo[this->atsegment].scanseconds)*1000000000 +
+		   this->bufferinfo[(this->atsegment+1)%this->numdatasegments].scanns - this->bufferinfo[this->atsegment].scanns - this->bufferinfo[this->atsegment].nsinc != 0))
 		{
-			bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+			this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] = Mode::INVALID_SUBINT;
 			
 			return 0; //note exit here!!
 		}
@@ -257,10 +275,10 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 		}
 	}
 
-	if(bufferindex > bufferbytes) /* WFB: this was >= */
+	if(bufferindex > this->bufferbytes) /* WFB: this was >= */
 	{
-		cfatal << startl << "VDIFDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << bufferbytes << " atsegment = " << atsegment << endl;
-		bufferinfo[atsegment].controlbuffer[bufferinfo[atsegment].numsent][1] = Mode::INVALID_SUBINT;
+		cfatal << startl << "VDIFDataStream::calculateControlParams: bufferindex>=bufferbytes: bufferindex=" << bufferindex << " >= bufferbytes=" << this->bufferbytes << " atsegment = " << this->atsegment << endl;
+		this->bufferinfo[this->atsegment].controlbuffer[this->bufferinfo[this->atsegment].numsent][1] = Mode::INVALID_SUBINT;
 		MPI_Abort(MPI_COMM_WORLD, 1);
 
 		return 0;
@@ -269,27 +287,29 @@ int VDIFDataStream::calculateControlParams(int scan, int offsetsec, int offsetns
 	return bufferindex;
 }
 
-void VDIFDataStream::updateConfig(int segmentindex)
+template <typename istreamT>
+void VDIFDataStream<istreamT>::updateConfig(int segmentindex)
 {
 	//run the default update config, then add additional information specific to Mk5
-	DataStream::updateConfig(segmentindex);
-	if(bufferinfo[segmentindex].configindex < 0) //If the config < 0 we can skip this scan
+	DataStream<istreamT>::updateConfig(segmentindex);
+	if(this->bufferinfo[segmentindex].configindex < 0) //If the config < 0 we can skip this scan
 	{
 		return;
 	}
 
-	int oframebytes = (config->getFrameBytes(bufferinfo[segmentindex].configindex, streamnum) - VDIF_HEADER_BYTES)*config->getDNumMuxThreads(bufferinfo[segmentindex].configindex, streamnum) + VDIF_HEADER_BYTES;
-	int oframespersecond = config->getFramesPerSecond(bufferinfo[segmentindex].configindex, streamnum) / config->getDNumMuxThreads(bufferinfo[segmentindex].configindex, streamnum);
+	int oframebytes = (this->config->getFrameBytes(this->bufferinfo[segmentindex].configindex, this->streamnum) - VDIF_HEADER_BYTES)*this->config->getDNumMuxThreads(this->bufferinfo[segmentindex].configindex, this->streamnum) + VDIF_HEADER_BYTES;
+	int oframespersecond = this->config->getFramesPerSecond(this->bufferinfo[segmentindex].configindex, this->streamnum) / this->config->getDNumMuxThreads(this->bufferinfo[segmentindex].configindex, this->streamnum);
 
 	//correct the nsinc - should be number of output frames*frame time
-	bufferinfo[segmentindex].nsinc = int(((bufferbytes/numdatasegments)/oframebytes)*(1000000000.0/double(oframespersecond)) + 0.5);
+	this->bufferinfo[segmentindex].nsinc = int(((this->bufferbytes/this->numdatasegments)/oframebytes)*(1000000000.0/double(oframespersecond)) + 0.5);
 
 	//take care of the case where an integral number of frames is not an integral number of blockspersend - ensure sendbytes is long enough
 	//note below, the math should produce a pure integer, but add 0.5 to make sure that the fuzziness of floats doesn't cause an off-by-one error
-	bufferinfo[segmentindex].sendbytes = int(((((double)bufferinfo[segmentindex].sendbytes)* ((double)config->getSubintNS(bufferinfo[segmentindex].configindex)))/(config->getSubintNS(bufferinfo[segmentindex].configindex) + config->getGuardNS(bufferinfo[segmentindex].configindex)) + 0.5));
+	this->bufferinfo[segmentindex].sendbytes = int(((((double)this->bufferinfo[segmentindex].sendbytes)* ((double)this->config->getSubintNS(this->bufferinfo[segmentindex].configindex)))/(this->config->getSubintNS(this->bufferinfo[segmentindex].configindex) + this->config->getGuardNS(this->bufferinfo[segmentindex].configindex)) + 0.5));
 }
 
-void VDIFDataStream::initialiseFile(int configindex, int fileindex)
+template <typename istreamT>
+void VDIFDataStream<istreamT>::initialiseFile(int configindex, int fileindex)
 {
 	const int MaxSummaryLength = 256;
 	int nrecordedbands, fanout;
@@ -300,24 +320,23 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	int rv;
 
 	long long dataoffset = 0;
-	struct vdif_file_summary fileSummary;
 	char fileSummaryString[MaxSummaryLength];
 	int jumpseconds, currentdsseconds;
 
-	format = config->getDataFormat(configindex, streamnum);
-	sampling = config->getDSampling(configindex, streamnum);
-	nbits = config->getDNumBits(configindex, streamnum);	/* Bits per sample.  If complex, bits per component. */
-	nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
-	inputframebytes = config->getFrameBytes(configindex, streamnum);
-	framespersecond = config->getFramesPerSecond(configindex, streamnum)/config->getDNumMuxThreads(configindex, streamnum);
-	bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
+	format = this->config->getDataFormat(configindex, this->streamnum);
+	sampling = this->config->getDSampling(configindex, this->streamnum);
+	nbits = this->config->getDNumBits(configindex, this->streamnum);	/* Bits per sample.  If complex, bits per component. */
+	nrecordedbands = this->config->getDNumRecordedBands(configindex, this->streamnum);
+	inputframebytes = this->config->getFrameBytes(configindex, this->streamnum);
+	framespersecond = this->config->getFramesPerSecond(configindex, this->streamnum)/this->config->getDNumMuxThreads(configindex, this->streamnum);
+	bw = this->config->getDRecordedBandwidth(configindex, this->streamnum, 0);
 
 	nGap = framespersecond/4;	// 1/4 second gap of data yields a mux break
 	startOutputFrameNumber = -1;
 	minleftoverdata = 4*inputframebytes;	// waste up to 4 input frames at end of read 
 
-	nthreads = config->getDNumMuxThreads(configindex, streamnum);
-	threads = config->getDMuxThreadMap(configindex, streamnum);
+	nthreads = this->config->getDNumMuxThreads(configindex, this->streamnum);
+	threads = this->config->getDMuxThreadMap(configindex, this->streamnum);
 
 	muxFlags = VDIF_MUX_FLAG_RESPECTGRANULARITY | VDIF_MUX_FLAG_PROPAGATEVALIDITY;
 	if(sampling == Configuration::COMPLEX)
@@ -362,7 +381,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	}
 
 	/* Note: the following fanout concept is an explicit one and is not relevant to VDIF in any way */
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, config->getDDecimationFactor(configindex, streamnum), config->getDAlignmentSeconds(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	fanout = this->config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, this->config->getDDecimationFactor(configindex, this->streamnum), this->config->getDNumMuxThreads(configindex, this->streamnum), formatname);
 	if(fanout != 1)
 	{
 		cfatal << startl << "Classic fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
@@ -376,11 +395,11 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	if(filecheck == Configuration::FILECHECKSEEK)
 	{
 		// First we get a description of the contents of the purported VDIF file and exit if it looks like not VDIF at all
-		rv = summarizevdiffile(&fileSummary, datafilenames[configindex][fileindex].c_str(), inputframebytes);
+		rv = summarizevdiffile(&fileSummary, this->datafilenames[configindex][fileindex].c_str(), inputframebytes);
 		if(rv < 0)
 		{
-			cwarn << startl << "VDIFDataStream::initialiseFile: summary of file " << datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid VDIF data." << endl;
-			dataremaining = false;
+			cwarn << startl << "VDIFDataStream::initialiseFile: summary of file " << this->datafilenames[configindex][fileindex] << " resulted in error code " << rv << ".  This does not look like valid VDIF data." << endl;
+			this->dataremaining = false;
 
 			return;
 		}
@@ -394,14 +413,14 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 		printvdiffilesummary(&fileSummary);
 
 		// Here set readseconds to time since beginning of job
-		readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
-		readnanoseconds = vdiffilesummarygetstartns(&fileSummary);
-		currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
+		this->readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-this->corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-this->corrstartseconds + this->intclockseconds;
+		this->readnanoseconds = vdiffilesummarygetstartns(&fileSummary);
+		currentdsseconds = this->activesec + this->model->getScanStartSec(this->activescan, this->config->getStartMJD(), this->config->getStartSeconds());
 
-		if(currentdsseconds > readseconds+1)
+		if(currentdsseconds > this->readseconds+1)
 		{
-			jumpseconds = currentdsseconds - readseconds;
-			if(activens < readnanoseconds)
+			jumpseconds = currentdsseconds - this->readseconds;
+			if(this->activens < this->readnanoseconds)
 			{
 				jumpseconds--;
 			}
@@ -414,23 +433,23 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 
 			dataoffset = static_cast<long long>(jumpseconds*vdiffilesummarygetbytespersecond(&fileSummary)/d*n + 0.5);
 
-			readseconds += jumpseconds;
+			this->readseconds += jumpseconds;
 		}
 
 		// Now set readseconds to time since beginning of scan
-		readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
+		this->readseconds = this->readseconds - this->model->getScanStartSec(this->readscan, this->corrstartday, this->corrstartseconds);
 		
 		// Advance into file if requested
 		if(fileSummary.firstFrameOffset + dataoffset > 0)
 		{
 			cverbose << startl << "About to seek to byte " << fileSummary.firstFrameOffset << " plus jump " << dataoffset << " to get to the first wanted frame" << endl;
 
-			input.seekg(fileSummary.firstFrameOffset + dataoffset, ios_base::beg);
-			if(input.peek() == EOF)
+			this->input.seekg(fileSummary.firstFrameOffset + dataoffset, ios_base::beg);
+			if(this->input.peek() == EOF)
 			{
-				cinfo << startl << "File " << datafilenames[configindex][fileindex] << " ended before the currently desired time" << endl;
-				dataremaining = false;
-				input.clear();
+				cinfo << startl << "File " << this->datafilenames[configindex][fileindex] << " ended before the currently desired time" << endl;
+				this->dataremaining = false;
+				this->input.clear();
 			}
 		}
 	}
@@ -440,7 +459,8 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	}
 }
 
-int VDIFDataStream::testForSync(int configindex, int buffersegment)
+template <typename istreamT>
+int VDIFDataStream<istreamT>::testForSync(int configindex, int buffersegment)
 {
 	// not needed.  vdifmux always leaves perfectly synchonized data behind
 	return 0;
@@ -450,16 +470,17 @@ int VDIFDataStream::testForSync(int configindex, int buffersegment)
 // This function does the actual file IO, readbuffer management, and VDIF multiplexing.  The result after each
 // call is, hopefully, readbytes of multiplexed data being put into buffer segment with potentially some 
 // read data left over in the read buffer ready for next time
-int VDIFDataStream::dataRead(int buffersegment)
+template <typename istreamT>
+int VDIFDataStream<istreamT>::dataRead(int buffersegment)
 {
 	unsigned char *destination;
 	int bytes;
 	int muxReturn;
 	unsigned int bytesvisible;
 
-	destination = reinterpret_cast<unsigned char *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+	destination = reinterpret_cast<unsigned char *>(&this->databuffer[buffersegment*(this->bufferbytes/this->numdatasegments)]);
 
-	if(input.eof())
+	if(this->input.eof())
 	{
 		bytes = 0;
 	}
@@ -473,10 +494,10 @@ int VDIFDataStream::dataRead(int buffersegment)
 	if(bytes > 0)
 	{
 		// execute the file read
-		input.clear();
+		this->input.clear();
 
-		input.read(reinterpret_cast<char *>(readbuffer) + readbufferleftover, bytes);
-		bytes = input.gcount();
+		this->input.read(reinterpret_cast<char *>(this->readbuffer) + readbufferleftover, bytes);
+		bytes = this->input.gcount();
 
 		bytesvisible = readbufferleftover + bytes;
 	}
@@ -487,8 +508,8 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 	if(bytesvisible <= 0)
 	{
-		dataremaining = false;
-		bufferinfo[buffersegment].validbytes = 0;
+		this->dataremaining = false;
+		this->bufferinfo[buffersegment].validbytes = 0;
 		readbufferleftover = 0;
 
 		cinfo << startl << "bytesvisible == 0.  Assuming end of file." << endl;
@@ -497,12 +518,12 @@ int VDIFDataStream::dataRead(int buffersegment)
 	}
 
 	// multiplex and corner turn the data
-	muxReturn = vdifmux(destination, readbytes, readbuffer, bytesvisible, &vm, startOutputFrameNumber, &vstats);
+	muxReturn = vdifmux(destination, this->readbytes, this->readbuffer, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 
 	if(muxReturn <= 0)
 	{
-		dataremaining = false;
-		bufferinfo[buffersegment].validbytes = 0;
+		this->dataremaining = false;
+		this->bufferinfo[buffersegment].validbytes = 0;
 		readbufferleftover = 0;
 
 		if(muxReturn < 0)
@@ -517,27 +538,27 @@ int VDIFDataStream::dataRead(int buffersegment)
 		return 0;
 	}
 
-	consumedbytes += bytes;
-	bufferinfo[buffersegment].validbytes = vstats.destUsed;
-	bufferinfo[buffersegment].readto = true;
-	if(bufferinfo[buffersegment].validbytes > 0)
+	this->consumedbytes += bytes;
+	this->bufferinfo[buffersegment].validbytes = vstats.destUsed;
+	this->bufferinfo[buffersegment].readto = true;
+	if(this->bufferinfo[buffersegment].validbytes > 0)
 	{
 		// In the case of VDIF, we can get the time from the data, so use that just in case there was a jump
-		bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
+		this->bufferinfo[buffersegment].scanns = (((vstats.startFrameNumber) % framespersecond) * 1000000000LL) / framespersecond;
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME
 		// FIXME: below assumes each scan is < 86400 seconds long
-		bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) % 86400) + intclockseconds - corrstartseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
-		if(bufferinfo[buffersegment].scanseconds > 86400/2)
+		this->bufferinfo[buffersegment].scanseconds = ((vstats.startFrameNumber / framespersecond) % 86400) + this->intclockseconds - this->corrstartseconds - this->model->getScanStartSec(this->readscan, this->corrstartday, this->corrstartseconds);
+		if(this->bufferinfo[buffersegment].scanseconds > 86400/2)
 		{
-			bufferinfo[buffersegment].scanseconds -= 86400;
+			this->bufferinfo[buffersegment].scanseconds -= 86400;
 		}
-		else if(bufferinfo[buffersegment].scanseconds < -86400/2)
+		else if(this->bufferinfo[buffersegment].scanseconds < -86400/2)
 		{
-			bufferinfo[buffersegment].scanseconds += 86400;
+			this->bufferinfo[buffersegment].scanseconds += 86400;
 		}
 
-		readnanoseconds = bufferinfo[buffersegment].scanns;
-		readseconds = bufferinfo[buffersegment].scanseconds;
+		this->readnanoseconds = this->bufferinfo[buffersegment].scanns;
+		this->readseconds = this->bufferinfo[buffersegment].scanseconds;
 
 		// look at difference in data frames consumed and produced and proceed accordingly
 		int deltaDataFrames = vstats.srcUsed/(nthreads*inputframebytes) - vstats.destUsed/(nthreads*(inputframebytes-VDIF_HEADER_BYTES) + VDIF_HEADER_BYTES);
@@ -581,7 +602,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 	if(readbufferleftover > 0)
 	{
-		memmove(readbuffer, readbuffer+vstats.srcUsed, readbufferleftover);
+		memmove(this->readbuffer, readbuffer+vstats.srcUsed, readbufferleftover);
 	}
 	else if(readbufferleftover < 0)
 	{
@@ -589,7 +610,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 		readbufferleftover = 0;
 	}
-	if(readbufferleftover <= minleftoverdata && input.eof())
+	if(readbufferleftover <= minleftoverdata && this->input.eof())
 	{
 		if(readbufferleftover > 0)
 		{
@@ -598,30 +619,31 @@ int VDIFDataStream::dataRead(int buffersegment)
 		readbufferleftover = 0;
 
 		// here we've in one call both read all the remaining data from a file and multiplexed it all without leftovers
-		dataremaining = false;
+		this->dataremaining = false;
 	}
 
 	return bytes;
 }
 
-void VDIFDataStream::diskToMemory(int buffersegment)
+template <typename istreamT>
+void VDIFDataStream<istreamT>::diskToMemory(int buffersegment)
 {
 	u32 *buf;
 
-	buf = reinterpret_cast<u32 *>(&databuffer[buffersegment*(bufferbytes/numdatasegments)]);
+	buf = reinterpret_cast<u32 *>(&this->databuffer[buffersegment*(this->bufferbytes/this->numdatasegments)]);
 
 	//do the buffer housekeeping
-	waitForBuffer(buffersegment);
+	this->waitForBuffer(buffersegment);
 
 	// This function call abstracts away all the details.  The result is multiplexed data populating the 
 	// desired buffer segment.
 	dataRead(buffersegment);
 
 	// Update estimated read timing variables
-	readnanoseconds += (bufferinfo[buffersegment].nsinc % 1000000000);
-	readseconds += (bufferinfo[buffersegment].nsinc / 1000000000);
-	readseconds += readnanoseconds/1000000000;
-	readnanoseconds %= 1000000000;
+	this->readnanoseconds += (this->bufferinfo[buffersegment].nsinc % 1000000000);
+	this->readseconds += (this->bufferinfo[buffersegment].nsinc / 1000000000);
+	this->readseconds += this->readnanoseconds/1000000000;
+	this->readnanoseconds %= 1000000000;
 
 	if(vstats.destUsed == 0)
 	{
@@ -633,32 +655,32 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 	}
 
 	// did we just come to the end of job execution time?
-	if(readseconds + model->getScanStartSec(readscan, corrstartday, corrstartseconds) >= config->getExecuteSeconds())
+	if(this->readseconds + this->model->getScanStartSec(this->readscan, this->corrstartday, this->corrstartseconds) >= this->config->getExecuteSeconds())
 	{
-		keepreading = false;
-		dataremaining = false;
+		this->keepreading = false;
+		this->dataremaining = false;
 		cinfo << startl << "diskToMemory: end of executeseconds reached.  stopping." << endl;
 	}
 
 	// did we just cross into next scan?
-	if(readseconds >= model->getScanDuration(readscan))
+	if(this->readseconds >= this->model->getScanDuration(this->readscan))
 	{
-		cinfo << startl << "diskToMemory: end of schedule scan " << readscan << " of " << model->getNumScans() << " detected" << endl;
+		cinfo << startl << "diskToMemory: end of schedule scan " << this->readscan << " of " << this->model->getNumScans() << " detected" << endl;
 
 		// find next valid schedule scan
 		do
 		{
-			++readscan;
-		} while(readscan < model->getNumScans() && config->getScanConfigIndex(readscan));
+			++this->readscan;
+		} while(this->readscan < this->model->getNumScans() && this->config->getScanConfigIndex(this->readscan));
 
-		cinfo << startl << "readscan incremented to " << readscan << endl;
+		cinfo << startl << "readscan incremented to " << this->readscan << endl;
 
-		if(readscan < model->getNumScans())
+		if(this->readscan < this->model->getNumScans())
 		{
 			//if we need to, change the config
-			if(config->getScanConfigIndex(readscan) != bufferinfo[(lastvalidsegment + 1)%numdatasegments].configindex)
+			if(this->config->getScanConfigIndex(this->readscan) != this->bufferinfo[(this->lastvalidsegment + 1)%this->numdatasegments].configindex)
 			{
-				updateConfig((lastvalidsegment + 1)%numdatasegments);
+				updateConfig((this->lastvalidsegment + 1)%this->numdatasegments);
 			}
 		}
 		else
@@ -666,67 +688,68 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 			// here we just crossed over the end of the job
 			cverbose << startl << "readscan==getNumScans -> keepreading=false" << endl;
 			
-			keepreading = false;
+			this->keepreading = false;
 
-			bufferinfo[(lastvalidsegment+1)%numdatasegments].scan = model->getNumScans()-1;
-			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
-			bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
+			this->bufferinfo[(this->lastvalidsegment+1)%this->numdatasegments].scan = this->model->getNumScans()-1;
+			this->bufferinfo[(this->lastvalidsegment+1)%this->numdatasegments].scanseconds = this->model->getScanDuration(this->model->getNumScans()-1);
+			this->bufferinfo[(this->lastvalidsegment+1)%this->numdatasegments].scanns = 0;
 		}
-		cinfo << startl << "diskToMemory: starting schedule scan " << readscan << endl;
+		cinfo << startl << "diskToMemory: starting schedule scan " << this->readscan << endl;
 	}
 
-	if(switchedpower && bufferinfo[buffersegment].validbytes > 0)
+	if(this->switchedpower && this->bufferinfo[buffersegment].validbytes > 0)
 	{
 		static int nt = 0;
 
 		++nt;
 
                 // feed switched power detector
-		if(nt % switchedpowerincrement == 0)
+		if(nt % this->switchedpowerincrement == 0)
 		{
 			struct mark5_stream *m5stream = new_mark5_stream_absorb(
-				new_mark5_stream_memory(buf, bufferinfo[buffersegment].validbytes),
+				new_mark5_stream_memory(buf, this->bufferinfo[buffersegment].validbytes),
 				new_mark5_format_generic_from_string(formatname) );
 			if(m5stream)
 			{
-				mark5_stream_fix_mjd(m5stream, config->getStartMJD());
-				switchedpower->feed(m5stream);
+				mark5_stream_fix_mjd(m5stream, this->config->getStartMJD());
+				this->switchedpower->feed(m5stream);
 				delete_mark5_stream(m5stream);
 			}
                 }
 	}
 }
 
-void VDIFDataStream::loopfileread()
+template <typename istreamT>
+void VDIFDataStream<istreamT>::loopfileread()
 {
 	int perr;
 	int numread = 0;
 
 	//lock the outstanding send lock
-	perr = pthread_mutex_lock(&outstandingsendlock);
+	perr = pthread_mutex_lock(&this->outstandingsendlock);
 	if(perr != 0)
 	{
 		csevere << startl << "Error in initial readthread lock of outstandingsendlock!" << endl;
 	}
 
 	//lock the first section to start reading
-	dataremaining = false;
-	keepreading = true;
-	while(!dataremaining && keepreading)
+	this->dataremaining = false;
+	this->keepreading = true;
+	while(!this->dataremaining && this->keepreading)
 	{
-		openfile(bufferinfo[0].configindex, filesread[bufferinfo[0].configindex]++);
-		if(!dataremaining)
+		this->openfile(this->bufferinfo[0].configindex, this->filesread[this->bufferinfo[0].configindex]++);
+		if(!this->dataremaining)
 		{
-			input.close();
+			this->input.close();
 		}
 	}
 
-	if(keepreading)
+	if(this->keepreading)
 	{
 		diskToMemory(numread++);
 		diskToMemory(numread++);
-		lastvalidsegment = numread;
-		perr = pthread_mutex_lock(&(bufferlock[numread]));
+		this->lastvalidsegment = numread;
+		perr = pthread_mutex_lock(&(this->bufferlock[numread]));
 		if(perr != 0)
 		{
 			csevere << startl << "Error in initial readthread lock of first buffer section!" << endl;
@@ -736,96 +759,96 @@ void VDIFDataStream::loopfileread()
 	{
 		csevere << startl << "Couldn't find any valid data; will be shutting down gracefully!" << endl;
 	}
-	readthreadstarted = true;
-	perr = pthread_cond_signal(&initcond);
+	this->readthreadstarted = true;
+	perr = pthread_cond_signal(&this->initcond);
 	if(perr != 0)
 	{
 		csevere << startl << "Datastream readthread error trying to signal main thread to wake up!" << endl;
 	}
-	if(keepreading)
+	if(this->keepreading)
 	{
 		diskToMemory(numread++);
 	}
 
-	while(keepreading && (bufferinfo[lastvalidsegment].configindex < 0 || filesread[bufferinfo[lastvalidsegment].configindex] <= confignumfiles[bufferinfo[lastvalidsegment].configindex]))
+	while(this->keepreading && (this->bufferinfo[this->lastvalidsegment].configindex < 0 || this->filesread[this->bufferinfo[this->lastvalidsegment].configindex] <= this->confignumfiles[this->bufferinfo[this->lastvalidsegment].configindex]))
 	{
-		while(dataremaining && keepreading)
+		while(this->dataremaining && this->keepreading)
 		{
-			lastvalidsegment = (lastvalidsegment + 1)%numdatasegments;
+			this->lastvalidsegment = (this->lastvalidsegment + 1)%this->numdatasegments;
 
 			//lock the next section
-			perr = pthread_mutex_lock(&(bufferlock[lastvalidsegment]));
+			perr = pthread_mutex_lock(&(this->bufferlock[this->lastvalidsegment]));
 			if(perr != 0)
 			{
-				csevere << startl << "Error in readthread lock of buffer section!" << lastvalidsegment << endl;
+				csevere << startl << "Error in readthread lock of buffer section!" << this->lastvalidsegment << endl;
 			}
 
-			if(!isnewfile) //can unlock previous section immediately
+			if(!this->isnewfile) //can unlock previous section immediately
 			{
 				//unlock the previous section
-				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));    
+				perr = pthread_mutex_unlock(&(this->bufferlock[(this->lastvalidsegment-1+this->numdatasegments)% this->numdatasegments]));    
 				if(perr != 0)
 				{
-					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
+					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (this->lastvalidsegment-1+this->numdatasegments)%this->numdatasegments << endl;
 				}
 			}
 
 			//do the read
-			diskToMemory(lastvalidsegment);
+			diskToMemory(this->lastvalidsegment);
 			numread++;
 
-			if(isnewfile) //had to wait before unlocking file
+			if(this->isnewfile) //had to wait before unlocking file
 			{
 				//unlock the previous section
-				perr = pthread_mutex_unlock(&(bufferlock[(lastvalidsegment-1+numdatasegments)% numdatasegments]));
+				perr = pthread_mutex_unlock(&(this->bufferlock[(this->lastvalidsegment-1+this->numdatasegments)% this->numdatasegments]));
 				if(perr != 0)
 				{
-					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (lastvalidsegment-1+numdatasegments)%numdatasegments << endl;
+					csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << (this->lastvalidsegment-1+this->numdatasegments)%this->numdatasegments << endl;
 				}
 			}
-			isnewfile = false;
+			this->isnewfile = false;
 		}
-		if(keepreading)
+		if(this->keepreading)
 		{
 cverbose << startl << "keepreading is true" << endl;
-			input.close();
+			this->input.close();
 
 			//if we need to, change the config
-			int nextconfigindex = config->getScanConfigIndex(readscan);
-			while(nextconfigindex < 0 && readscan < model->getNumScans())
+			int nextconfigindex = this->config->getScanConfigIndex(this->readscan);
+			while(nextconfigindex < 0 && this->readscan < this->model->getNumScans())
 			{
-				readseconds = 0; 
-				nextconfigindex = config->getScanConfigIndex(++readscan);
+				this->readseconds = 0; 
+				nextconfigindex = this->config->getScanConfigIndex(++this->readscan);
 			}
-			if(readscan == model->getNumScans())
+			if(this->readscan == this->model->getNumScans())
 			{
-				bufferinfo[(lastvalidsegment+1)%numdatasegments].scan = model->getNumScans()-1;
-				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanseconds = model->getScanDuration(model->getNumScans()-1);
-				bufferinfo[(lastvalidsegment+1)%numdatasegments].scanns = 0;
-				keepreading = false;
+				this->bufferinfo[(this->lastvalidsegment+1)%this->numdatasegments].scan = this->model->getNumScans()-1;
+				this->bufferinfo[(this->lastvalidsegment+1)%this->numdatasegments].scanseconds = this->model->getScanDuration(this->model->getNumScans()-1);
+				this->bufferinfo[(this->lastvalidsegment+1)%this->numdatasegments].scanns = 0;
+				this->keepreading = false;
 			}
 			else
 			{
-				if(config->getScanConfigIndex(readscan) != bufferinfo[(lastvalidsegment + 1)%numdatasegments].configindex)
+				if(this->config->getScanConfigIndex(this->readscan) != this->bufferinfo[(this->lastvalidsegment + 1)%this->numdatasegments].configindex)
 				{
-					updateConfig((lastvalidsegment + 1)%numdatasegments);
+					updateConfig((this->lastvalidsegment + 1)%this->numdatasegments);
 				}
 				//if the datastreams for two or more configs are common, they'll all have the same 
 				//files.  Therefore work with the lowest one
-				int lowestconfigindex = bufferinfo[(lastvalidsegment+1)%numdatasegments].configindex;
-				for(int i=config->getNumConfigs()-1;i>=0;i--)
+				int lowestconfigindex = this->bufferinfo[(this->lastvalidsegment+1)%this->numdatasegments].configindex;
+				for(int i=this->config->getNumConfigs()-1;i>=0;i--)
 				{
-					if(config->getDDataFileNames(i, streamnum) == config->getDDataFileNames(lowestconfigindex, streamnum))
+					if(this->config->getDDataFileNames(i, this->streamnum) == this->config->getDDataFileNames(lowestconfigindex, this->streamnum))
 					lowestconfigindex = i;
 				}
-				openfile(lowestconfigindex, filesread[lowestconfigindex]++);
-				bool skipsomefiles = (config->getScanConfigIndex(readscan) < 0)?true:false;
+				this->openfile(lowestconfigindex, this->filesread[lowestconfigindex]++);
+				bool skipsomefiles = (this->config->getScanConfigIndex(this->readscan) < 0)?true:false;
 				while(skipsomefiles)
 				{
-					int nextscan = peekfile(lowestconfigindex, filesread[lowestconfigindex]);
-					if(nextscan == readscan || (nextscan == readscan+1 && config->getScanConfigIndex(nextscan) < 0))
+					int nextscan = this->peekfile(lowestconfigindex, this->filesread[lowestconfigindex]);
+					if(nextscan == this->readscan || (nextscan == this->readscan+1 && this->config->getScanConfigIndex(nextscan) < 0))
 					{
-						openfile(lowestconfigindex, filesread[lowestconfigindex]++);
+						this->openfile(lowestconfigindex, this->filesread[lowestconfigindex]++);
 					}
 					else
 					{
@@ -835,32 +858,39 @@ cverbose << startl << "keepreading is true" << endl;
 			}
 		}
 	}
-	if(input.is_open())
+	if(this->input.is_open())
 	{
-		input.close();
+		this->input.close();
 	}
 	if(numread > 0)
 	{
-		perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
+		perr = pthread_mutex_unlock(&(this->bufferlock[this->lastvalidsegment]));
 		if(perr != 0)
 		{
-			csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << lastvalidsegment << endl;
+			csevere << startl << "Error (" << perr << ") in readthread unlock of buffer section!" << this->lastvalidsegment << endl;
 		}
 	}
 
 	//unlock the outstanding send lock
-	perr = pthread_mutex_unlock(&outstandingsendlock);
+	perr = pthread_mutex_unlock(&this->outstandingsendlock);
 	if(perr != 0)
 	{
 		csevere << startl << "Error (" << perr << ") in readthread unlock of outstandingsendlock!" << endl;
 	}
 
-	if(lastvalidsegment >= 0)
+	if(this->lastvalidsegment >= 0)
 	{
-		cverbose << startl << "Datastream readthread is exiting! Filecount was " << filesread[bufferinfo[lastvalidsegment].configindex] << ", confignumfiles was " << confignumfiles[bufferinfo[lastvalidsegment].configindex] << ", dataremaining was " << dataremaining << ", keepreading was " << keepreading << endl;
+		cverbose << startl << "Datastream readthread is exiting! Filecount was " << this->filesread[this->bufferinfo[this->lastvalidsegment].configindex] << ", confignumfiles was " << this->confignumfiles[this->bufferinfo[this->lastvalidsegment].configindex] << ", dataremaining was " << this->dataremaining << ", keepreading was " << this->keepreading << endl;
 	}
 	else
 	{
 		cverbose << startl << "Datastream readthread is exiting, after not finding any data at all!" << endl;
 	}
 }
+
+// Explicitly instantiate template, must be at *end* of this cpp file
+template class VDIFDataStream<ifstream>;
+template class VDIFDataStream<VDIFFileReaderIStream>;
+
+// vim: shiftwidth=2:softtabstop=2:expandtab
+

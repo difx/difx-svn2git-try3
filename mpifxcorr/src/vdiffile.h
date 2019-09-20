@@ -40,7 +40,8 @@ implements appropriate functionality for Mk5 formatted data
 
 @author Adam Deller
 */
-class VDIFDataStream : public DataStream
+template <typename istreamT>
+class VDIFDataStream : public DataStream<istreamT>
 {
 public:
  /**
@@ -91,6 +92,8 @@ protected:
 
   virtual void loopfileread();
 
+  virtual void setHints();
+
   int lastconfig;
 
   char formatname[64];
@@ -110,6 +113,9 @@ protected:
 
   Configuration::datasampling samplingtype;
   Configuration::filechecklevel filecheck;
+
+  struct vdif_file_summary fileSummary;
+  struct vdif_file_reader vdifReader;
 };
 
 #endif

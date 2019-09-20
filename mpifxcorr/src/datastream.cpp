@@ -27,6 +27,7 @@
 #include "datastream.h"
 #include "core.h"
 #include "fxmanager.h"
+#include "vdiffilereader_istream.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -53,8 +54,9 @@
 
 //#define DIFX_STRICTMUTEX
 
-DataStream::DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
-  : databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
+template <typename istreamType>
+DataStream<istreamType>::DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
+  : IDataStream(), databufferfactor(bufferfactor), numdatasegments(numsegments), streamnum(snum), config(conf), mpiid(id), numcores(ncores)
 {
   coreids = new int[numcores];
   for(int i=0;i<numcores;i++)
@@ -79,7 +81,8 @@ DataStream::DataStream(const Configuration * conf, int snum, int id, int ncores,
 }
 
 
-DataStream::~DataStream()
+template <typename istreamType>
+DataStream<istreamType>::~DataStream()
 {
   if(input.is_open())
     input.close();
@@ -106,7 +109,8 @@ DataStream::~DataStream()
 }
 
 
-void DataStream::initialise()
+template <typename istreamType>
+void DataStream<istreamType>::initialise()
 {
   int status, currentconfigindex, currentoverflowbytes, overflowbytes = 0;
   int maxbytes = config->getMaxDataBytes(streamnum);
@@ -222,7 +226,8 @@ void DataStream::initialise()
   keepreading = true;
 }
 
-void DataStream::execute()
+template <typename istreamType>
+void DataStream<istreamType>::execute()
 {
   cverbose << startl << "Datastream " << mpiid << " has started execution" << endl;
   datastatuses = new MPI_Status[maxsendspersegment];
@@ -344,7 +349,8 @@ void DataStream::execute()
 }
 
 //the returned value MUST be between 0 and bufferlength
-int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
+template <typename istreamType>
+int DataStream<istreamType>::calculateControlParams(int scan, int offsetsec, int offsetns)
 {
   int bufferindex, perr, blockbytes, segoffbytes, srcindex;
   long long nsdifference, validns, firstoffsetns, lastoffsetns, segoffns;
@@ -605,7 +611,8 @@ int DataStream::calculateControlParams(int scan, int offsetsec, int offsetns)
   return bufferindex;
 }
 
-void DataStream::sendDiagnostics()
+template <typename istreamType>
+void DataStream<istreamType>::sendDiagnostics()
 {
   difxMessageSendDifxDiagnosticBufferStatus(0, numdatasegments, atsegment, fullbuffersegments);
   difxMessageSendDifxDiagnosticInputDatarate(consumedbytes - lastconsumedbytes);
@@ -642,7 +649,8 @@ void set_abstime(struct timespec *abstime, double timeout) {
   }
 }
 
-void DataStream::initialiseMemoryBuffer()
+template <typename istreamType>
+void DataStream<istreamType>::initialiseMemoryBuffer()
 {
   int perr;
   struct timespec abstime;
@@ -705,7 +713,8 @@ void DataStream::initialiseMemoryBuffer()
   cverbose << startl << "Datastream " << mpiid << " finished initialising memory buffer" << endl;
 }
 
-void DataStream::updateConfig(int segmentindex)
+template <typename istreamType>
+void DataStream<istreamType>::updateConfig(int segmentindex)
 {
   //work out what the new config will be
   //cout << "Setting configindex of segment " << segmentindex << " to " << config->getScanConfigIndex(readscan) << " from scan " << readscan << endl;
@@ -749,7 +758,8 @@ void DataStream::updateConfig(int segmentindex)
   }
 }
 
-void * DataStream::launchNewFileReadThread(void * thisstream)
+template <typename istreamType>
+void * DataStream<istreamType>::launchNewFileReadThread(void * thisstream)
 {
   DataStream * me = (DataStream *)thisstream;
   me->loopfileread();
@@ -757,7 +767,8 @@ void * DataStream::launchNewFileReadThread(void * thisstream)
   return 0;
 }
 
-void * DataStream::launchNewFakeReadThread(void * thisstream)
+template <typename istreamType>
+void * DataStream<istreamType>::launchNewFakeReadThread(void * thisstream)
 {
   DataStream * me = (DataStream *)thisstream;
   me->loopfakeread();
@@ -765,7 +776,8 @@ void * DataStream::launchNewFakeReadThread(void * thisstream)
   return 0;
 }
 
-void * DataStream::launchNewNetworkReadThread(void * thisstream)
+template <typename istreamType>
+void * DataStream<istreamType>::launchNewNetworkReadThread(void * thisstream)
 {
   DataStream * me = (DataStream *)thisstream;
   me->loopnetworkread();
@@ -773,7 +785,8 @@ void * DataStream::launchNewNetworkReadThread(void * thisstream)
   return 0;
 }
 
-int DataStream::readonedemux(bool isfirst)
+template <typename istreamType>
+int DataStream<istreamType>::readonedemux(bool isfirst)
 {
   int fixbytes, rbytes;
   bool ok;
@@ -806,7 +819,8 @@ int DataStream::readonedemux(bool isfirst)
   return rbytes;
 }
 
-void DataStream::loopfileread()
+template <typename istreamType>
+void DataStream<istreamType>::loopfileread()
 {
   int perr, rbytes;
   int numread = 0;
@@ -945,14 +959,16 @@ void DataStream::loopfileread()
     cverbose << startl << "Datastream " << mpiid << "'s readthread is exiting, after not finding any data at all!" << endl;
 }
 
-void DataStream::initialiseFake(int configindex)
+template <typename istreamType>
+void DataStream<istreamType>::initialiseFake(int configindex)
 {
   readseconds = 0;
   readnanoseconds = 0;
   readscan = 0;
 }
 
-void DataStream::loopfakeread()
+template <typename istreamType>
+void DataStream<istreamType>::loopfakeread()
 {
   int perr, rbytes;
   int numread = 0;
@@ -1085,7 +1101,8 @@ void DataStream::loopfakeread()
     cverbose << startl << "Datastream " << mpiid << "'s readthread is exiting, after not finding any data at all!" << endl;
 }
 
-void DataStream::loopnetworkread()
+template <typename istreamType>
+void DataStream<istreamType>::loopnetworkread()
 {
   int perr;
   uint64_t framebytesremaining;
@@ -1177,7 +1194,8 @@ cinfo << startl << "DataStream::loopnetworkread(): running openstream" << endl;
   cinfo << startl << "Datastream " << mpiid << "'s networkreadthread is exiting!!! Keepreading was " << keepreading << ", framebytesremaining was " << framebytesremaining << endl;
 }
 
-int DataStream::openrawstream(const char *device)
+template <typename istreamType>
+int DataStream<istreamType>::openrawstream(const char *device)
 {
 #ifdef __linux__
 	int s, v;
@@ -1262,7 +1280,8 @@ int DataStream::openrawstream(const char *device)
 	return 0;
 }
 
-void DataStream::openstream(int portnumber, int tcpwindowsizebytes)
+template <typename istreamType>
+void DataStream<istreamType>::openstream(int portnumber, int tcpwindowsizebytes)
 {
   //okay - this has no counterpart in the disk case.  Just gets the socket open
   int serversock, status;
@@ -1355,7 +1374,8 @@ void DataStream::openstream(int portnumber, int tcpwindowsizebytes)
   }
 }
 
-void DataStream::closestream()
+template <typename istreamType>
+void DataStream<istreamType>::closestream()
 {
   //closes the socket
   int status;
@@ -1365,7 +1385,8 @@ void DataStream::closestream()
     cerror << startl << "Cannot close eVLBI socket" << endl;
 }
 
-uint64_t DataStream::openframe()
+template <typename istreamType>
+uint64_t DataStream<istreamType>::openframe()
 {
   char *buf;
   unsigned int ntoread, nread;
@@ -1469,7 +1490,8 @@ uint64_t DataStream::openframe()
   return framesize;
 }
 
-int DataStream::initialiseFrame(char * frameheader)
+template <typename istreamType>
+int DataStream<istreamType>::initialiseFrame(char * frameheader)
 {
   int year, month, day, hour, minute, second;
   char * at;
@@ -1519,7 +1541,8 @@ int DataStream::initialiseFrame(char * frameheader)
   return 0;
 }
 
-void DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
+template <typename istreamType>
+void DataStream<istreamType>::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
   char *ptr;
   unsigned int bytestoread, nread;
@@ -1613,7 +1636,8 @@ void DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaini
     keepreading = false;
 }
 
-int DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread)
+template <typename istreamType>
+int DataStream<istreamType>::readnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread)
 {
   int nr;
 
@@ -1639,7 +1663,8 @@ int DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned int* 
   return(1);
 }
 
-int DataStream::readrawnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread, int packetsize, int stripbytes)
+template <typename istreamType>
+int DataStream<istreamType>::readrawnetwork(int sock, char* ptr, int bytestoread, unsigned int* nread, int packetsize, int stripbytes)
 {
   const int MaxPacketSize = 20000;
   int length;
@@ -1679,7 +1704,8 @@ int DataStream::readrawnetwork(int sock, char* ptr, int bytestoread, unsigned in
   return 1;
 }
 
-int DataStream::peekfile(int configindex, int fileindex)
+template <typename istreamType>
+int DataStream<istreamType>::peekfile(int configindex, int fileindex)
 {
   if(fileindex >= confignumfiles[configindex])
     return readscan; //we're at the end - let openfile figure that out
@@ -1747,7 +1773,8 @@ int DataStream::peekfile(int configindex, int fileindex)
   return peekscan;
 }
 
-void DataStream::openfile(int configindex, int fileindex)
+template <typename istreamType>
+void DataStream<istreamType>::openfile(int configindex, int fileindex)
 {
   cverbose << startl << "Datastream " << mpiid << " is about to try and open file index " << fileindex << " of configindex " << configindex << endl;
   if(fileindex >= confignumfiles[configindex]) //run out of files - time to stop reading
@@ -1779,7 +1806,8 @@ void DataStream::openfile(int configindex, int fileindex)
   initialiseFile(configindex, fileindex);
 }
 
-void DataStream::initialiseFile(int configindex, int fileindex)
+template <typename istreamType>
+void DataStream<istreamType>::initialiseFile(int configindex, int fileindex)
 {
   string inputline;
   int year, month, day, hour, minute, second, bytes;
@@ -1834,7 +1862,8 @@ void DataStream::initialiseFile(int configindex, int fileindex)
   readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 }
 
-void DataStream::diskToMemory(int buffersegment)
+template <typename istreamType>
+void DataStream<istreamType>::diskToMemory(int buffersegment)
 {
   int synccatchbytes, previoussegment;
   long long validns, nextns;
@@ -1859,7 +1888,7 @@ void DataStream::diskToMemory(int buffersegment)
   // Copy any saved bytes from the last segment, if a jump in time was detected
   if (tempbytes>0) {
     nbytes -= tempbytes;
-    // Don't increment consumed bytes as these were already counted from the last segment
+    // Don't increment consumbed bytes as these were already counted from the last segment
     tempbytes=0;
   } 
 
@@ -1943,7 +1972,9 @@ void DataStream::diskToMemory(int buffersegment)
     dataremaining = false;
   }
 }
-void DataStream::fakeToMemory(int buffersegment)
+
+template <typename istreamType>
+void DataStream<istreamType>::fakeToMemory(int buffersegment)
 {
   int previoussegment;
   long long validns, nextns;
@@ -2012,19 +2043,22 @@ void DataStream::fakeToMemory(int buffersegment)
   }
 }
 
-int DataStream::testForSync(int configindex, int buffersegment)
+template <typename istreamType>
+int DataStream<istreamType>::testForSync(int configindex, int buffersegment)
 {
   //can't test for sync with LBA files
   return 0;
 }
 
-int DataStream::checkData(int buffersegment)
+template <typename istreamType>
+int DataStream<istreamType>::checkData(int buffersegment)
 {
   //No need to test 
   return 0;
 }
 
-void DataStream::waitForBuffer(int buffersegment)
+template <typename istreamType>
+void DataStream<istreamType>::waitForBuffer(int buffersegment)
 {
   int perr;
 //  double bufferfullfraction = double((buffersegment-1-atsegment+numdatasegments)%numdatasegments)/double(numdatasegments);
@@ -2054,7 +2088,8 @@ void DataStream::waitForBuffer(int buffersegment)
   }
 }
 
-void DataStream::waitForSendComplete()
+template <typename istreamType>
+void DataStream<istreamType>::waitForSendComplete()
 {
   int perr, dfinished, cfinished;
   bool testonly = (atsegment != (waitsegment - 3 + numdatasegments)%numdatasegments && atsegment != (waitsegment - 2 + numdatasegments)%numdatasegments);
@@ -2087,4 +2122,10 @@ void DataStream::waitForSendComplete()
   else //already done!  can advance for next time
     waitsegment = (waitsegment + 1)%numdatasegments;
 }
+
+// Explicitly instantiate template, must be at *end* of this cpp file
+template class DataStream<ifstream>;
+template class DataStream<VDIFFileReaderIStream>;
+
 // vim: shiftwidth=2:softtabstop=2:expandtab
+
