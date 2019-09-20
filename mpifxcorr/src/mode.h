@@ -213,9 +213,6 @@ Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int
 
   virtual ~Mode();
 
-  /** Constant for comparing two floats for equality (for freqs and bandwidths etc) */
-  static const float TINY;
-
   /**
    * Returns a single pcal result.
    * @param outputband The band to get
