@@ -29,6 +29,7 @@ mpifxcorr_SOURCES = \
 	mk5mode.cpp \
 	datamuxer.cpp \
 	mark5bfile.cpp \
+	vdiffilereader_istream.cpp \
 	vdiffile.cpp \
 	vdiffake.cpp \
 	vdifnetwork.cpp \
@@ -93,6 +94,7 @@ libmpifxcorr_a_SOURCES = \
 	alert.cpp \
 	switchedpower.cpp \
 	mark5bfile.cpp \
+	vdiffilereader_istream.cpp \
 	vdiffile.cpp \
 	vdiffake.cpp \
 	vdifnetwork.cpp \
@@ -126,6 +128,7 @@ neuteredmpifxcorr_SOURCES = \
 	mk5.cpp \
 	switchedpower.cpp \
 	mark5bfile.cpp \
+	vdiffilereader_istream.cpp \
 	vdiffile.cpp \
 	vdiffake.cpp \
 	vdifnetwork.cpp \
