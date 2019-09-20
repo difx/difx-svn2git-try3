@@ -34,7 +34,6 @@
 #include "pcal.h"
 
 //using namespace std;
-const float Mode::TINY = 0.000000001;
 
 #if (ARCH == GENERIC)
 pthread_mutex_t FFTinitMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -844,7 +843,7 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
     if(recordedfreqlooffsets[i] > 0.0 || recordedfreqlooffsets[i] < 0.0) {
       looff = true;
       fraclooffset = fabs(recordedfreqlooffsets[i]) - int(fabs(recordedfreqlooffsets[i]));
-      if (fraclooffset > Mode::TINY)
+      if (fraclooffset > TINY)
         isfraclooffset = true;
       if (recordedfreqlooffsets[i] < 0)
         fraclooffset = -fraclooffset;

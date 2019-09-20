@@ -1066,6 +1066,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   {
     if(config->isFrequencyUsed(procslots[index].configindex, f))
     {
+#warning "TODO: isFrequencyOutput() instead of isFrequencyUsed(), and then pull together weights of each outputband from those of its constituent freq(s)"
       for(int i=0;i<numbaselines;i++)
       {
         localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, i, f);
@@ -1274,6 +1275,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex)) {
         freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
         //put autocorrs in resultsbuffer
+#warning "TODO: resultsindex not +=freqchannels but actually look up the correct index for the used frequency-->outputband placement"
         status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[resultindex], freqchannels);
         if(status != vecNoErr)
           csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << endl;
@@ -1287,6 +1289,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex)) {
           freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+#warning "TODO: resultsindex not +=freqchannels but actually look up the correct index for the used frequency-->outputband placement"
           status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[resultindex], freqchannels);
           if(status != vecNoErr)
             csevere << startl << "Error copying cross-polar autocorrelations for datastream " << j << ", band " << k << endl;
@@ -1314,6 +1317,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
     {
       freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
       numrecordedbands = config->getDNumRecordedBands(procslots[index].configindex, j);
+#warning "TODO: isFrequencyOutput() instead of isFrequencyUsed(), and then pull together weights of each outputband from those of its constituent freq(s)"
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex))
       {
         if(k>=numrecordedbands)
@@ -1340,6 +1344,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
       {
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
         numrecordedbands = config->getDNumRecordedBands(procslots[index].configindex, j);
+#warning "TODO: isFrequencyOutput() instead of isFrequencyUsed(), and then pull together weights of each outputband from those of its constituent freq(s)"
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex)) {
           if(k>=numrecordedbands)
           {
@@ -1790,12 +1795,14 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
           if(channelinc == 1) //this frequency is not averaged
           {
             xmaccopylen = xmacstrideremain;
+#warning "TODO: instead of coreindex+coreoffset look up the correct index for the used frequency-->outputband placement"
             status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[coreindex+coreoffset]), xmaccopylen);
             if(status != vecNoErr)
               cerror << startl << "Error trying to copy frequency index " << freqindex << ", baseline " << baseline << " when not averaging in frequency" << endl;
           }
           else //this frequency *is* averaged - deal with it
           {
+#warning "TODO: instead of dest=coreindex+coreoffset look up the correct index for the used frequency-->outputband placement"
             dest = coreindex+coreoffset;
             int averagesperstrideremain = xmacstrideremain/averagelength;
             if(averagesperstrideremain == 0)

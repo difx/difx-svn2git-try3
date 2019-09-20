@@ -323,9 +323,11 @@ void Configuration::parseConfiguration(istream* input)
       configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
       configs[i].frequsedbybaseline = new bool[freqtablelength]();
       configs[i].equivfrequsedbybaseline = new bool[freqtablelength]();
+      configs[i].freqoutputbybaseline = new bool[freqtablelength]();
       for(int j=0;j<freqtablelength;j++) {
 	configs[i].frequsedbybaseline[j] = false;
 	configs[i].equivfrequsedbybaseline[j] = false;
+	configs[i].freqoutputbybaseline[j] = false;
       }
       for(int j=0;j<numbaselines;j++)
       {
@@ -334,6 +336,7 @@ void Configuration::parseConfiguration(istream* input)
 	  //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
 	  freq = freqtable[getBFreqIndex(i,j,k)];
 	  configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)] = true;
+          configs[i].freqoutputbybaseline[getBTargetFreqIndex(i,j,k)] = true;
 	  if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
 	    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
 	}
@@ -352,7 +355,8 @@ void Configuration::parseConfiguration(istream* input)
 	      freqdiff -= freqtable[j].bandwidth;
 	    if(freqtable[k].lowersideband)
 	      freqdiff += freqtable[k].bandwidth;
-	    if(bwdiff < Mode::TINY && freqdiff < Mode::TINY && freqtable[j].numchannels == freqtable[k].numchannels && 
+#warning "JanW: The next statement is suspect. Is 'diff<TINY' critical here, or was 'fabs(diff)<TINY' intended?"
+	    if(bwdiff < TINY && freqdiff < TINY && freqtable[j].numchannels == freqtable[k].numchannels && 
 	       freqtable[j].channelstoaverage == freqtable[k].channelstoaverage && 
 	       freqtable[j].oversamplefactor == freqtable[k].oversamplefactor &&
 	       freqtable[j].decimationfactor == freqtable[k].decimationfactor) {
@@ -444,6 +448,7 @@ Configuration::~Configuration()
       delete [] configs[i].ordereddatastreamindices;
       delete [] configs[i].frequsedbybaseline;
       delete [] configs[i].equivfrequsedbybaseline;
+      delete [] configs[i].freqoutputbybaseline;
     }
     delete [] configs;
   }
@@ -1063,12 +1068,14 @@ bool Configuration::processBaselineTable(istream * input)
     baselinetable[i].datastream2recordbandindex = new int*[baselinetable[i].numfreqs]();
     baselinetable[i].freqtableindices = new int[baselinetable[i].numfreqs]();
     baselinetable[i].targetfreqtableindices = new int[baselinetable[i].numfreqs]();
+    baselinetable[i].targetfreqset.clear();
     baselinetable[i].polpairs = new char**[baselinetable[i].numfreqs]();
     for(int j=0;j<baselinetable[i].numfreqs;j++)
     {
       baselinetable[i].oddlsbfreqs[j] = 0;
       getinputline(input, &line, "TARGET FREQ ", i);
       baselinetable[i].targetfreqtableindices[j] = atoi(line.c_str());
+      baselinetable[i].targetfreqset.insert(baselinetable[i].targetfreqtableindices[j]);
       getinputline(input, &line, "POL PRODUCTS ", i);
       baselinetable[i].numpolproducts[j] = atoi(line.c_str());
       baselinetable[i].datastream1bandindex[j] = new int[baselinetable[i].numpolproducts[j]]();
@@ -1151,7 +1158,7 @@ bool Configuration::processBaselineTable(istream * input)
       //first find the matching USB freq
       for(int i=0;i<freqtablelength;i++)
       {
-        if(!freqtable[i].lowersideband && fabs(freqtable[f].bandwidth - freqtable[i].bandwidth) < Mode::TINY && fabs(freqtable[f].bandedgefreq - freqtable[f].bandwidth - freqtable[i].bandedgefreq) < Mode::TINY) //match
+        if(!freqtable[i].lowersideband && fabs(freqtable[f].bandwidth - freqtable[i].bandwidth) < TINY && fabs(freqtable[f].bandedgefreq - freqtable[f].bandwidth - freqtable[i].bandedgefreq) < TINY) //match
           matchfindex = i;
       }
       for(int i=0;i<baselinetablelength;i++)
@@ -1643,6 +1650,7 @@ bool Configuration::processDatastreamTable(istream * input)
       if(j == 0 && datastreamtable[i].recordedfreqclockoffsets[j] != 0.0 && mpiid == 0)
         cwarn << startl << "Model accountability is compromised if the first band of a telescope has a non-zero clock offset! If this is the first/only datastream for " << telescopetable[datastreamtable[i].telescopeindex].name << ", you should adjust the telescope clock so that the offset for this band is ZERO!" << endl;
       getinputline(input, &line, "FREQ OFFSET ", j); //Freq offset is positive if recorded LO frequency was higher than the frequency in the frequency table
+      getinputline(input, &line, "GAIN OFFSET ", j); //Gain offset is non-zero if voltage spectra should be scaled, e.g. to amplitude-align frequency portions of outputbands
       datastreamtable[i].recordedfreqlooffsets[j] = atof(line.c_str());
       getinputline(input, &line, "NUM REC POLS ", j);
       datastreamtable[i].recordedfreqpols[j] = atoi(line.c_str());
@@ -1828,7 +1836,7 @@ bool Configuration::processDatastreamTable(istream * input)
     double ffttime = 1000.0*f.numchannels/f.bandwidth;
     double bpersenddouble = configs[i].subintns/ffttime;
     configs[i].blockspersend = int(bpersenddouble + 0.5);
-    if (fabs(bpersenddouble - configs[i].blockspersend) > Mode::TINY) {
+    if (fabs(bpersenddouble - configs[i].blockspersend) > TINY) {
       ok = false;
       if(mpiid == 0) //only write one copy of this error message
         cfatal << startl << "The supplied value of subint nanoseconds (" << configs[i].subintns << ") for config " << i << " does not yield an integer number of FFTs! (FFT time is " << ffttime << ") - aborting!!!" << endl;
@@ -1983,11 +1991,12 @@ bool Configuration::processFreqTable(istream * input)
       maxnumchannels = freqtable[i].numchannels;
     getinputline(input, &line, "CHANS TO AVG ");
     freqtable[i].channelstoaverage = atoi(line.c_str());
-    if (freqtable[i].channelstoaverage <= 0 || (freqtable[i].channelstoaverage > 1 && freqtable[i].numchannels % freqtable[i].channelstoaverage != 0)) {
-      if(mpiid == 0) //only write one copy of this error message
-        cerror << startl << "Channels to average must be positive and the number of channels must be divisible by channels to average - not the case for frequency entry " << i << "(" << freqtable[i].channelstoaverage << ","<<freqtable[i].numchannels<<") - aborting!!!" << endl;
-      return false;
-    }
+// TODO: this check must be postponed to cover only those frequencies destined for output
+//    if (freqtable[i].channelstoaverage <= 0 || (freqtable[i].channelstoaverage > 1 && freqtable[i].numchannels % freqtable[i].channelstoaverage != 0)) {
+//      if(mpiid == 0) //only write one copy of this error message
+//        cerror << startl << "Channels to average must be positive and the number of channels must be divisible by channels to average - not the case for frequency entry " << i << "(" << freqtable[i].channelstoaverage << ","<<freqtable[i].numchannels<<") - aborting!!!" << endl;
+//      return false;
+//    }
     getinputline(input, &line, "OVERSAMPLE FAC. ");
     freqtable[i].oversamplefactor = atoi(line.c_str());
     getinputline(input, &line, "DECIMATION FAC. ");
@@ -2289,6 +2298,7 @@ bool Configuration::populateResultLengths()
       configs[c].threadresultlength = threadfindex;
 
       //work out the offsets for coreresult, and the total length too
+      //note: outputband Mode data (threadresults) spectrally map injective non-surjective into Core output area
       configs[c].coreresultbaselineoffset = new int*[freqtablelength]();
       configs[c].coreresultbweightoffset  = new int*[freqtablelength]();
       configs[c].coreresultbshiftdecorroffset = new int*[freqtablelength];
@@ -2298,7 +2308,7 @@ bool Configuration::populateResultLengths()
       coreresultindex = 0;
       for(int i=0;i<freqtablelength;i++) //first the cross-correlations
       {
-        if(configs[c].frequsedbybaseline[i])
+        if(configs[c].freqoutputbybaseline[i])
         {
           freqchans = freqtable[i].numchannels;
           chanstoaverage = freqtable[i].channelstoaverage;
@@ -2316,7 +2326,7 @@ bool Configuration::populateResultLengths()
       }
       for(int i=0;i<freqtablelength;i++) //then the baseline weights
       {
-        if(configs[c].frequsedbybaseline[i])
+        if(configs[c].freqoutputbybaseline[i])
         {
           configs[c].coreresultbweightoffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
@@ -2335,7 +2345,7 @@ bool Configuration::populateResultLengths()
       }
       for(int i=0;i<freqtablelength;i++) //then the shift decorrelation factors (multi-field only)
       {
-        if(configs[c].frequsedbybaseline[i])
+        if(configs[c].freqoutputbybaseline[i])
         {
           configs[c].coreresultbshiftdecorroffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
@@ -2646,7 +2656,7 @@ bool Configuration::consistencyCheck()
       }
       double zoomfreqchannelwidth = freqtable[datastreamtable[i].zoomfreqtableindices[j]].bandwidth/freqtable[datastreamtable[i].zoomfreqtableindices[j]].numchannels;
       double parentfreqchannelwidth = freqtable[datastreamtable[i].recordedfreqtableindices[datastreamtable[i].zoomfreqparentdfreqindices[j]]].bandwidth/freqtable[datastreamtable[i].recordedfreqtableindices[datastreamtable[i].zoomfreqparentdfreqindices[j]]].numchannels;
-      if(fabs(zoomfreqchannelwidth - parentfreqchannelwidth) > Mode::TINY) {
+      if(fabs(zoomfreqchannelwidth - parentfreqchannelwidth) > TINY) {
         if(mpiid == 0) //only write one copy of this error message
           cfatal << startl << "Datastream table entry " << i << " has a zoom frequency index (freq " << j << ") whose channel width (" << zoomfreqchannelwidth << ") does not match its parents channel width (" << parentfreqchannelwidth << ") - aborting!!!" << endl;
         return false;
@@ -2735,7 +2745,7 @@ bool Configuration::consistencyCheck()
       double nsaccumulate = 0.0;
       do {
         nsaccumulate += dsdata->bytespersampledenom*samplens;
-      } while (!(fabs(nsaccumulate - int(nsaccumulate)) < Mode::TINY));
+      } while (!(fabs(nsaccumulate - int(nsaccumulate)) < TINY));
       cdebug << startl << "NS accumulate is " << nsaccumulate << " and max geom slip is " << model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001 << ", maxnsslip is " << dsdata->maxnsslip << endl;
       nsaccumulate += model->getMaxRate(dsdata->modelfileindex)*configs[i].subintns*0.000001;
       if(nsaccumulate > dsdata->maxnsslip)
@@ -2799,7 +2809,7 @@ bool Configuration::consistencyCheck()
           cfatal << startl << "FFT chunk time for config " << i << ", datastream " << j << " is not a whole number of nanoseconds (" << ffttime << ") - aborting!!!" << endl;
         return false;
       }
-      if(fabs(numffts - int(numffts+0.5)) > Mode::TINY) {
+      if(fabs(numffts - int(numffts+0.5)) > TINY) {
         if(mpiid == 0) //only write one copy of this error message
           cfatal << startl << "Send of size " << configs[i].subintns << " does not yield an integer number of FFTs for datastream " << j << " in config " << i << " - aborting!!!" << endl;
         return false;
@@ -2812,7 +2822,7 @@ bool Configuration::consistencyCheck()
       }
       for (int k=1;k<getDNumRecordedFreqs(i,j);k++) {
         freqdata f = freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[k]];
-        if (fabs((1000.0*f.numchannels)/f.bandwidth) - ffttime > Mode::TINY) {
+        if (fabs((1000.0*f.numchannels)/f.bandwidth) - ffttime > TINY) {
           if(mpiid == 0) //only write one copy of this error message
             cfatal << startl << "Frequency " << k << " of datastream " << j << " of config " << i << " has a different bandwidth or num channels to the other freqs of this datastream - aborting!!!" << endl;
           return false;

@@ -32,6 +32,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <iostream>
+#include <set>
 #include <math.h>
 #include "polyco.h"
 #include "model.h"
@@ -264,6 +265,8 @@ public:
     { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].freqtableindices[baselinefreqindex]; }
   inline int getBTargetFreqIndex(int configindex, int configbaselineindex, int baselinefreqindex) const
     { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].targetfreqtableindices[baselinefreqindex]; }
+  inline int getBNumTargetFreqs(int configindex, int configbaselineindex) const
+    { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].targetfreqset.size(); }
   inline int getBLocalFreqIndex(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].localfreqindices[freqtableindex]; }
   inline int getBFreqOddLSB(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].oddlsbfreqs[freqtableindex]; }
   inline int getBNumPolProducts(int configindex, int configbaselineindex, int baselinefreqindex) const
@@ -316,6 +319,8 @@ public:
     { return configs[configindex].frequsedbybaseline[freqindex]; }
   inline bool isEquivalentFrequencyUsed(int configindex, int freqindex) const
     { return configs[configindex].equivfrequsedbybaseline[freqindex]; }
+  inline bool isFrequencyOutput(int configindex, int freqindex) const
+    { return configs[configindex].freqoutputbybaseline[freqindex]; }
   inline bool circularPolarisations() const
     { return datastreamtable[0].recordedbandpols[0] == 'R' || datastreamtable[0].recordedbandpols[0] == 'L'; }
   inline bool isReadFromFile(int configindex, int configdatastreamindex) const
@@ -741,6 +746,7 @@ private:
     int ** datastream1recordbandindex;
     int ** datastream2recordbandindex;
     char *** polpairs;
+    set<int> targetfreqset;
   } baselinedata;
 
   ///Storage struct for data from the config table of the input file
@@ -782,6 +788,7 @@ private:
     int  * baselineindices;
     bool * frequsedbybaseline;
     bool * equivfrequsedbybaseline;
+    bool * freqoutputbybaseline;
     //bookkeeping info for thread results
     int  * numxmacstrides;              //[freq]
     int  * completestridelength;        //[freq]
