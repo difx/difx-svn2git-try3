@@ -1525,7 +1525,7 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
   //from threadresults to the slot results
   for(int f=startfreq;f<config->getFreqTableLength();f++)
   {
-    if(config->isFrequencyUsed(procslots[index].configindex, f))
+    if(config->isFrequencyUsed(procslots[index].configindex, f) && !config->isFrequencyOutput(procslots[index].configindex, f)) // TODO: what if 1-to-1 used and outputted?	
     {
       for(int i=startbaseline;i<numbaselines;i++)
       {
@@ -1538,7 +1538,7 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
   //back to the start and do the others we skipped earlier
   for(int f=0;f<startfreq;f++)
   {
-    if(config->isFrequencyUsed(procslots[index].configindex, f))
+    if(config->isFrequencyUsed(procslots[index].configindex, f) && !config->isFrequencyOutput(procslots[index].configindex, f)) // TODO: what if 1-to-1 used and outputted?
     {
       for(int i=0;i<numbaselines;i++)
       {
@@ -1548,7 +1548,10 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
   }
   for(int i=0;i<endbaseline;i++)
   {
-    uvshiftAndAverageBaselineFreq(index, threadid, nsoffset, nswidth, scratchspace, startfreq, i);
+    if (!config->isFrequencyOutput(procslots[index].configindex, startfreq)) // TODO: what if 1-to-1 used and outputted?
+    {
+      uvshiftAndAverageBaselineFreq(index, threadid, nsoffset, nswidth, scratchspace, startfreq, i);
+    }
   }
 
   //clear the thread cross-corr results

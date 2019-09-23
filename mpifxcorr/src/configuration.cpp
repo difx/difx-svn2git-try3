@@ -2192,6 +2192,48 @@ bool Configuration::populateModelDatastreamMap()
   return true;
 }
 
+bool operator>(const struct Configuration::freqdata_tt& f1, const struct Configuration::freqdata_tt& f2)
+{
+/*
+  double f1loweredge = f1.bandedgefreq;
+  if (f1.lowersideband)
+    f1loweredge -= f1.bandwidth;
+  double f2loweredge = f2.bandedgefreq;
+  if (f2.lowersideband)
+    f2loweredge -= f2.bandwidth;
+*/
+  return f1.bandlowedgefreq() > f2.bandlowedgefreq();
+}
+
+vector<int> Configuration::getOutputFrequencyInputfreqsSorted(int configindex, int freqindex) const
+{
+  set<int> inputfreqrefset;
+  vector<int> inputfreqrefs; // all contributing input freqs from all baselines (freqs can overlap!)
+  if (!isFrequencyOutput(configindex, freqindex))
+  {
+    return inputfreqrefs;
+  }
+  for(int b=0;b<getNumBaselines();++b) {
+    const baselinedata& B=baselinetable[configs[configindex].baselineindices[b]];
+    for(int f=0;f<B.numfreqs;++f) {
+      if (B.targetfreqtableindices[f] == freqindex) {
+        inputfreqrefset.insert(B.freqtableindices[f]);
+      }
+    }
+  }
+  inputfreqrefs.insert(inputfreqrefs.end(), inputfreqrefset.begin(), inputfreqrefset.end());
+  // sort frequency ids ascendingly by their low edge frequency
+  //sort(inputfreqrefs.begin(), inputfreqrefs.end(), [&](int i, int j){return i<j;} ); // C++11 but not used in difx builds; c98 needs static function not class/object
+  for(int i=0;i<inputfreqrefs.size();++i) {
+    for(int j=0;j<inputfreqrefs.size()-1;++j) {
+      if(freqtable[inputfreqrefs[j]] > freqtable[inputfreqrefs[j+1]]) {
+        swap(inputfreqrefs[j],inputfreqrefs[j+1]);
+      }
+    }
+  }
+  return inputfreqrefs;
+}
+
 bool Configuration::populateResultLengths()
 {
   datastreamdata dsdata;
@@ -2226,6 +2268,8 @@ bool Configuration::populateResultLengths()
 
     if(configs[c].phasedarray) //set up for phased array
     {
+std::cerr << "PHASED ARRAY MODE in Configuration -- not supported now" << endl;
+exit(-1);
       //the thread space is just for one round of results
       threadfindex = 0;
       if(configs[c].padomain == FREQUENCY)
@@ -2310,6 +2354,7 @@ bool Configuration::populateResultLengths()
       {
         if(configs[c].freqoutputbybaseline[i])
         {
+          // add a complete output data region
           freqchans = freqtable[i].numchannels;
           chanstoaverage = freqtable[i].channelstoaverage;
           configs[c].coreresultbaselineoffset[i] = new int[numbaselines]();
@@ -2322,12 +2367,29 @@ bool Configuration::populateResultLengths()
               coreresultindex += maxconfigphasecentres*binloop*bldata.numpolproducts[bldata.localfreqindices[i]]*freqchans/chanstoaverage;
             }
           }
+          // mark contributing band slices and their position in that region, all baselines
+          vector<int> inputfreqs=getOutputFrequencyInputfreqsSorted(c,i);
+          double fref=freqtable[i].bandlowedgefreq();
+          for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
+            double fin=freqtable[*ifi].bandlowedgefreq();
+            int choffset = ((fin-fref)/fref)*freqchans/chanstoaverage; // TODO: how are 'binloop' and 'numpolproducts' results arranged in memory?
+            if(configs[c].coreresultbaselineoffset[*ifi]==NULL) {
+              configs[c].coreresultbaselineoffset[*ifi] = new int[numbaselines]();
+            }
+            for(int j=0;j<numbaselines;j++) {
+              bldata = baselinetable[configs[c].baselineindices[j]];
+              if(bldata.localfreqindices[*ifi] >= 0) {
+                configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + choffset;
+              }
+            }
+          }
         }
       }
       for(int i=0;i<freqtablelength;i++) //then the baseline weights
       {
         if(configs[c].freqoutputbybaseline[i])
         {
+          // weight of complete output region
           configs[c].coreresultbweightoffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
@@ -2341,12 +2403,26 @@ bool Configuration::populateResultLengths()
               coreresultindex += toadd;
             }
           }
+          // weights of contributing band slices, tricky, no space, need in-place accu
+          vector<int> inputfreqs=getOutputFrequencyInputfreqsSorted(c,i);
+          for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
+            if(configs[c].coreresultbweightoffset[*ifi]==NULL) {
+              configs[c].coreresultbweightoffset[*ifi] = new int[numbaselines]();
+            }
+            for(int j=0;j<numbaselines;j++) {
+              bldata = baselinetable[configs[c].baselineindices[j]];
+              if(bldata.localfreqindices[*ifi] >= 0) {
+                configs[c].coreresultbweightoffset[*ifi][j] = configs[c].coreresultbweightoffset[i][j];
+              }
+            }
+          }
         }
       }
       for(int i=0;i<freqtablelength;i++) //then the shift decorrelation factors (multi-field only)
       {
         if(configs[c].freqoutputbybaseline[i])
         {
+          // decorrelation factor of complete output region
           configs[c].coreresultbshiftdecorroffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
@@ -2360,6 +2436,19 @@ bool Configuration::populateResultLengths()
               coreresultindex += toadd;
             }
           }
+          // decorrelation factors of contributing band slices, tricky, no space, need in-place multiplication decorr *= (1-newdecorr)?
+          vector<int> inputfreqs=getOutputFrequencyInputfreqsSorted(c,i);
+          for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
+            if(configs[c].coreresultbshiftdecorroffset[*ifi]==NULL) {
+              configs[c].coreresultbshiftdecorroffset[*ifi] = new int[numbaselines]();
+            }
+            for(int j=0;j<numbaselines;j++) {
+              bldata = baselinetable[configs[c].baselineindices[j]];
+              if(bldata.localfreqindices[*ifi] >= 0) {
+                configs[c].coreresultbweightoffset[*ifi][j] = configs[c].coreresultbweightoffset[i][j];
+              }
+            }
+          }
         }
       }
       for(int i=0;i<numdatastreams;i++) //then the autocorrelations
@@ -2367,19 +2456,21 @@ bool Configuration::populateResultLengths()
         dsdata = datastreamtable[configs[c].datastreamindices[i]];
         configs[c].coreresultautocorroffset[i] = coreresultindex;
         for(int j=0;j<getDNumRecordedBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
+          if(isFrequencyOutput(c, getDRecordedFreqIndex(c, i, j))) {
             freqindex = getDRecordedFreqIndex(c, i, j);
             freqchans = getFNumChannels(freqindex);
             chanstoaverage = getFChannelsToAverage(freqindex);
             coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
+// no pointers!? need equivalent of configs[c].coreresultbaselineoffset[]
           }
         }
         for(int j=0;j<getDNumZoomBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
+          if(isFrequencyOutput(c, getDZoomFreqIndex(c, i, j))) {
             freqindex = getDZoomFreqIndex(c, i, j);
             freqchans = getFNumChannels(freqindex);
             chanstoaverage = getFChannelsToAverage(freqindex);
             coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
+// no pointers!? need equivalent of configs[c].coreresultbaselineoffset[]
           }
         }
       }
@@ -2389,12 +2480,12 @@ bool Configuration::populateResultLengths()
         configs[c].coreresultacweightoffset[i] = coreresultindex;
         toadd = 0;
         for(int j=0;j<getDNumRecordedBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
+          if(isFrequencyOutput(c, getDRecordedFreqIndex(c, i, j))) {
             toadd += bandsperautocorr;
           }
         }
         for(int j=0;j<getDNumZoomBands(c, i);j++) {
-          if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
+          if(isFrequencyOutput(c, getDZoomFreqIndex(c, i, j))) {
             toadd += bandsperautocorr;
           }
         }

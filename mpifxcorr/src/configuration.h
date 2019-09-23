@@ -321,6 +321,7 @@ public:
     { return configs[configindex].equivfrequsedbybaseline[freqindex]; }
   inline bool isFrequencyOutput(int configindex, int freqindex) const
     { return configs[configindex].freqoutputbybaseline[freqindex]; }
+  vector<int> getOutputFrequencyInputfreqsSorted(int configindex, int freqindex) const;
   inline bool circularPolarisations() const
     { return datastreamtable[0].recordedbandpols[0] == 'R' || datastreamtable[0].recordedbandpols[0] == 'L'; }
   inline bool isReadFromFile(int configindex, int configdatastreamindex) const
@@ -716,7 +717,7 @@ private:
   enum sectionheader {COMMON, CONFIG, RULE, FREQ, TELESCOPE, DATASTREAM, BASELINE, DATA, NETWORK, INPUT_EOF, UNKNOWN};
 
   ///Storage struct for data from the frequency table of the input file
-  typedef struct {
+  typedef struct freqdata_tt {
     double bandedgefreq;
     double bandwidth;
     bool lowersideband;
@@ -728,7 +729,10 @@ private:
     int matchingwiderbandindex;
     int matchingwiderbandoffset;
     string rxName;  // an optional name for the receiver producing this channel
+    friend bool operator>(const struct freqdata_tt&, const struct freqdata_tt&);
+    double bandlowedgefreq() const { return (!lowersideband) ? bandedgefreq : bandedgefreq-bandwidth; }
   } freqdata;
+  friend bool operator>(const struct Configuration::freqdata_tt&, const struct Configuration::freqdata_tt&);
 
   ///Storage struct for data from the baseline table of the input file
   typedef struct {
