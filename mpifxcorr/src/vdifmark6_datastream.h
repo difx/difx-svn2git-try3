@@ -39,7 +39,7 @@ This class manages a stream of data from a Mark6 module, coarsely aligning it wi
 
 @author Adam Deller, Walter Brisken
 */
-class VDIFMark6DataStream : public VDIFDataStream
+class VDIFMark6DataStream : public VDIFDataStream<ifstream>
 {
 public:
  /**

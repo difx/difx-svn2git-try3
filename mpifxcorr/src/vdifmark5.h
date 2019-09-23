@@ -42,7 +42,7 @@
 #include "vdiffile.h"
 #include <difxmessage.h>
 
-class VDIFMark5DataStream : public VDIFDataStream
+class VDIFMark5DataStream : public VDIFDataStream<ifstream>
 {
 public:
 	VDIFMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);

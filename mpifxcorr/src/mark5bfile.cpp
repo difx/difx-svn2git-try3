@@ -54,7 +54,7 @@
 /// Mark5BDataStream -------------------------------------------------------
 
 Mark5BDataStream::Mark5BDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
- : DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+ : DataStream<ifstream>(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	//each data buffer segment contains an integer number of frames, because thats the way config determines max bytes
 	lastconfig = -1;

@@ -381,7 +381,7 @@ void VDIFDataStream<istreamT>::initialiseFile(int configindex, int fileindex)
 	}
 
 	/* Note: the following fanout concept is an explicit one and is not relevant to VDIF in any way */
-	fanout = this->config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, this->config->getDDecimationFactor(configindex, this->streamnum), this->config->getDNumMuxThreads(configindex, this->streamnum), formatname);
+	fanout = this->config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, this->config->getDDecimationFactor(configindex, this->streamnum), this->config->getDAlignmentSeconds(configindex, this->streamnum), this->config->getDNumMuxThreads(configindex, this->streamnum), formatname);
 	if(fanout != 1)
 	{
 		cfatal << startl << "Classic fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;

@@ -38,9 +38,8 @@
 #include "vdifnetwork.h"
 #include "alert.h"
 
-
 VDIFNetworkDataStream::VDIFNetworkDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
-	VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+	VDIFDataStream<ifstream>(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	int perr;
 
@@ -660,7 +659,7 @@ void VDIFNetworkDataStream::loopnetworkread()
 	{
 		int v;
 		
-		v = openrawstream(ethernetdevice.c_str());
+		v = this->openrawstream(ethernetdevice.c_str());
 		if(v < 0)
 		{
 			cfatal << startl << "Cannot open raw socket.  Perhaps root permission is required." << endl;
@@ -751,7 +750,7 @@ cverbose << startl << "Out of inner read loop: keepreading=" << keepreading << "
 		}
 	}
 
-	closestream();
+	this->closestream();
 
 	//unlock the outstanding send lock
 	perr = pthread_mutex_unlock(&outstandingsendlock);

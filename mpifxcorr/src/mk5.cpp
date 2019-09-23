@@ -36,6 +36,7 @@
 #include "alert.h"
 #include "mk5.h"
 #include "mode.h"
+#include "datastream.h"
 #include "vdifio.h"
 
 #define MAXPACKETSIZE 100000
@@ -50,7 +51,7 @@
 /// Mk5DataStream -------------------------------------------------------
 
 Mk5DataStream::Mk5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
- : DataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+ : DataStream<ifstream>(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
   //each data buffer segment contains an integer number of frames, because thats the way config determines max bytes
   lastconfig = -1;

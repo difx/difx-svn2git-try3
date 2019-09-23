@@ -51,7 +51,7 @@
 /// VDIFMark6DataStream -------------------------------------------------------
 
 VDIFMark6DataStream::VDIFMark6DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
- : VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+ : VDIFDataStream<ifstream>(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	cinfo << startl << "Starting VDIF Mark6 datastream." << endl;
 	mark6gather = 0;

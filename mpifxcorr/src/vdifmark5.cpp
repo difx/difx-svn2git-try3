@@ -45,7 +45,7 @@
 #endif
 
 VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments) :
-		VDIFDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
+		VDIFDataStream<ifstream>(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
 	int perr;
 

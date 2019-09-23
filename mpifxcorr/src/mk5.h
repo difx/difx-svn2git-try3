@@ -39,7 +39,7 @@ implements appropriate functionality for Mk5 formatted data
 
 @author Adam Deller
 */
-class Mk5DataStream : public DataStream
+class Mk5DataStream : public DataStream<ifstream>
 {
 public:
  /**

@@ -41,7 +41,7 @@
 #include "pthreadbarrier.h"
 #endif
 
-class VDIFNetworkDataStream : public VDIFDataStream
+class VDIFNetworkDataStream : public VDIFDataStream<ifstream>
 {
 public:
 	VDIFNetworkDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);

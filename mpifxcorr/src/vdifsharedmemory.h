@@ -42,7 +42,7 @@
 #include "pthreadbarrier.h"
 #endif
 
-class VDIFSharedMemoryDataStream : public VDIFDataStream
+class VDIFSharedMemoryDataStream : public VDIFDataStream<ifstream>
 {
 public:
 	VDIFSharedMemoryDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);

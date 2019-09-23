@@ -41,7 +41,7 @@ implements appropriate functionality for Mark5B formatted data.
 
 @author Adam Deller
 */
-class Mark5BDataStream : public DataStream
+class Mark5BDataStream : public DataStream<ifstream>
 {
 public:
  /**

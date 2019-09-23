@@ -30,7 +30,7 @@
 
 #include "vdiffile.h"
 
-class VDIFFakeDataStream : public VDIFDataStream
+class VDIFFakeDataStream : public VDIFDataStream<ifstream>
 {
 public:
 	VDIFFakeDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);

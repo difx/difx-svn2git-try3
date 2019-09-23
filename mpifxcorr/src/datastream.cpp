@@ -1888,7 +1888,7 @@ void DataStream<istreamType>::diskToMemory(int buffersegment)
   // Copy any saved bytes from the last segment, if a jump in time was detected
   if (tempbytes>0) {
     nbytes -= tempbytes;
-    // Don't increment consumbed bytes as these were already counted from the last segment
+    // Don't increment consumed bytes as these were already counted from the last segment
     tempbytes=0;
   } 
 
