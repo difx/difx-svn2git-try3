@@ -78,6 +78,13 @@ public:
   /// Constant for the TCP window size for monitoring
   static int MONITOR_TCP_WINDOWBYTES;
 
+private:
+  // Advance decl of contained private structs
+  struct freqdata_tt;
+  struct baselinedata_tt;
+
+public:
+
  /**
   * Constructor: Reads information from an input file and stores it internally
   * Content of the input file and ancillary referenced files are read locally on the fx manager node,
@@ -271,6 +278,7 @@ public:
   inline int getBFreqOddLSB(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].oddlsbfreqs[freqtableindex]; }
   inline int getBNumPolProducts(int configindex, int configbaselineindex, int baselinefreqindex) const
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].numpolproducts[baselinefreqindex]; }
+  int getBNumPolproductsOfFreqs(const vector<int>& freqs, const struct baselinedata_tt& bldata) const;
   inline int getBDataStream1BandIndex(int configindex, int configbaselineindex, int baselinefreqindex, int baselinefreqdatastream1index) const
     { return baselinetable[(configs[configindex].baselineindices[configbaselineindex])].datastream1bandindex[baselinefreqindex][baselinefreqdatastream1index]; }
   inline int getBDataStream2BandIndex(int configindex, int configbaselineindex, int baselinefreqindex, int baselinefreqdatastream2index) const
@@ -321,7 +329,7 @@ public:
     { return configs[configindex].equivfrequsedbybaseline[freqindex]; }
   inline bool isFrequencyOutput(int configindex, int freqindex) const
     { return configs[configindex].freqoutputbybaseline[freqindex]; }
-  vector<int> getOutputFrequencyInputfreqsSorted(int configindex, int freqindex) const;
+  vector<int> getSortedInputfreqsOfTargetfreq(int configindex, int freqindex) const;
   inline bool circularPolarisations() const
     { return datastreamtable[0].recordedbandpols[0] == 'R' || datastreamtable[0].recordedbandpols[0] == 'L'; }
   inline bool isReadFromFile(int configindex, int configdatastreamindex) const
@@ -735,7 +743,7 @@ private:
   friend bool operator>(const struct Configuration::freqdata_tt&, const struct Configuration::freqdata_tt&);
 
   ///Storage struct for data from the baseline table of the input file
-  typedef struct {
+  typedef struct baselinedata_tt {
     int datastream1index;
     int datastream2index;
     int numfreqs;

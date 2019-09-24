@@ -29,6 +29,7 @@
 #include <climits>
 #include <ctype.h>
 #include <cmath>
+#include <iterator>
 #include "mpifxcorr.h"
 #include "mk5mode.h"
 #include "configuration.h"
@@ -2205,7 +2206,7 @@ bool operator>(const struct Configuration::freqdata_tt& f1, const struct Configu
   return f1.bandlowedgefreq() > f2.bandlowedgefreq();
 }
 
-vector<int> Configuration::getOutputFrequencyInputfreqsSorted(int configindex, int freqindex) const
+vector<int> Configuration::getSortedInputfreqsOfTargetfreq(int configindex, int freqindex) const
 {
   set<int> inputfreqrefset;
   vector<int> inputfreqrefs; // all contributing input freqs from all baselines (freqs can overlap!)
@@ -2232,6 +2233,24 @@ vector<int> Configuration::getOutputFrequencyInputfreqsSorted(int configindex, i
     }
   }
   return inputfreqrefs;
+}
+
+int Configuration::getBNumPolproductsOfFreqs(const vector<int>& freqs, const struct Configuration::baselinedata_tt& bldata) const
+{
+  int numblpolproducts = 0;
+  for(vector<int>::const_iterator f=freqs.begin();f!=freqs.end();++f) {
+    int localfq = bldata.localfreqindices[*f];
+    if(localfq>=0) {
+      if(numblpolproducts!=0 && bldata.numpolproducts[localfq]!=numblpolproducts) {
+        stringstream str;
+        copy(freqs.begin(), freqs.end(), ostream_iterator<char>(str, " "));
+        cfatal << "Number of polarization products " << numblpolproducts << " not consistent over frequency set " << str.str() << endl;
+        return 0;
+      }
+      numblpolproducts = bldata.numpolproducts[localfq];
+    }
+  }
+  return numblpolproducts;
 }
 
 bool Configuration::populateResultLengths()
@@ -2349,30 +2368,33 @@ exit(-1);
       configs[c].coreresultautocorroffset = new int[numdatastreams]();
       configs[c].coreresultacweightoffset = new int[numdatastreams]();
       configs[c].coreresultpcaloffset     = new int[numdatastreams]();
-      coreresultindex = 0;
+      coreresultindex = 0; // current tail of coreresults array
       for(int i=0;i<freqtablelength;i++) //first the cross-correlations
       {
         if(configs[c].freqoutputbybaseline[i])
         {
+          double fref=freqtable[i].bandlowedgefreq();
+          vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
           // add a complete output data region
           freqchans = freqtable[i].numchannels;
           chanstoaverage = freqtable[i].channelstoaverage;
           configs[c].coreresultbaselineoffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
-            bldata = baselinetable[configs[c].baselineindices[j]];
-            if(bldata.localfreqindices[i] >= 0)
-            {
-              configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
-              coreresultindex += maxconfigphasecentres*binloop*bldata.numpolproducts[bldata.localfreqindices[i]]*freqchans/chanstoaverage;
+            int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
+            if(numblpolproducts<=0) {
+              stringstream str;
+              copy(inputfreqs.begin(), inputfreqs.end(), ostream_iterator<char>(str, " "));
+              cfatal << "Could not determine number of polarization products of target freq " << i << " from constituent freqs " << str.str() << " on baseline " << j << endl;
+              return false;
             }
+            configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
+            coreresultindex += maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage;
           }
           // mark contributing band slices and their position in that region, all baselines
-          vector<int> inputfreqs=getOutputFrequencyInputfreqsSorted(c,i);
-          double fref=freqtable[i].bandlowedgefreq();
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
             double fin=freqtable[*ifi].bandlowedgefreq();
-            int choffset = ((fin-fref)/fref)*freqchans/chanstoaverage; // TODO: how are 'binloop' and 'numpolproducts' results arranged in memory?
+            int choffset = 0;  // ((fin-fref)/fref)*freqchans/chanstoaverage; // TODO: how are 'binloop' and 'numpolproducts' results arranged in memory?
             if(configs[c].coreresultbaselineoffset[*ifi]==NULL) {
               configs[c].coreresultbaselineoffset[*ifi] = new int[numbaselines]();
             }
@@ -2385,26 +2407,29 @@ exit(-1);
           }
         }
       }
-      for(int i=0;i<freqtablelength;i++) //then the baseline weights
+      for(int i=0;i<freqtablelength;i++) //then append the baseline weights
       {
         if(configs[c].freqoutputbybaseline[i])
         {
+          vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
           // weight of complete output region
           configs[c].coreresultbweightoffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
-            bldata = baselinetable[configs[c].baselineindices[j]];
-            if(bldata.localfreqindices[i] >= 0)
-            {
-              configs[c].coreresultbweightoffset[i][j] = coreresultindex;
-              //baselineweights are only floats so need to divide by 2...
-              toadd  = binloop*bldata.numpolproducts[bldata.localfreqindices[i]]/2;
-              toadd += binloop*bldata.numpolproducts[bldata.localfreqindices[i]]%2;
-              coreresultindex += toadd;
+            int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
+            if(numblpolproducts<=0) {
+              stringstream str;
+              copy(inputfreqs.begin(), inputfreqs.end(), ostream_iterator<char>(str, " "));
+              cfatal << "Could not determine number of polarization products of target freq " << i << " from constituent freqs " << str.str() << " on baseline " << j << endl;
+              return false;
             }
+            configs[c].coreresultbweightoffset[i][j] = coreresultindex;
+            //baselineweights are only floats so need to divide by 2...
+            toadd  = binloop*numblpolproducts/2;
+            toadd += binloop*numblpolproducts%2;
+            coreresultindex += toadd;
           }
           // weights of contributing band slices, tricky, no space, need in-place accu
-          vector<int> inputfreqs=getOutputFrequencyInputfreqsSorted(c,i);
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
             if(configs[c].coreresultbweightoffset[*ifi]==NULL) {
               configs[c].coreresultbweightoffset[*ifi] = new int[numbaselines]();
@@ -2418,16 +2443,17 @@ exit(-1);
           }
         }
       }
-      for(int i=0;i<freqtablelength;i++) //then the shift decorrelation factors (multi-field only)
+      for(int i=0;i<freqtablelength;i++) //then append the shift decorrelation factors (multi-field only)
       {
         if(configs[c].freqoutputbybaseline[i])
         {
+          vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
           // decorrelation factor of complete output region
           configs[c].coreresultbshiftdecorroffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
-            bldata = baselinetable[configs[c].baselineindices[j]];
-            if(bldata.localfreqindices[i] >= 0 && maxconfigphasecentres > 1)
+            int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
+            if(numblpolproducts > 0 && maxconfigphasecentres > 1)
             {
               configs[c].coreresultbshiftdecorroffset[i][j] = coreresultindex;
               //shift decorrelation factors are only floats so need to divide by 2...
@@ -2437,7 +2463,6 @@ exit(-1);
             }
           }
           // decorrelation factors of contributing band slices, tricky, no space, need in-place multiplication decorr *= (1-newdecorr)?
-          vector<int> inputfreqs=getOutputFrequencyInputfreqsSorted(c,i);
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
             if(configs[c].coreresultbshiftdecorroffset[*ifi]==NULL) {
               configs[c].coreresultbshiftdecorroffset[*ifi] = new int[numbaselines]();
@@ -2456,23 +2481,22 @@ exit(-1);
         dsdata = datastreamtable[configs[c].datastreamindices[i]];
         configs[c].coreresultautocorroffset[i] = coreresultindex;
         for(int j=0;j<getDNumRecordedBands(c, i);j++) {
-          if(isFrequencyOutput(c, getDRecordedFreqIndex(c, i, j))) {
+          if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
             freqindex = getDRecordedFreqIndex(c, i, j);
             freqchans = getFNumChannels(freqindex);
             chanstoaverage = getFChannelsToAverage(freqindex);
             coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
-// no pointers!? need equivalent of configs[c].coreresultbaselineoffset[]
           }
         }
         for(int j=0;j<getDNumZoomBands(c, i);j++) {
-          if(isFrequencyOutput(c, getDZoomFreqIndex(c, i, j))) {
+          if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
             freqindex = getDZoomFreqIndex(c, i, j);
             freqchans = getFNumChannels(freqindex);
             chanstoaverage = getFChannelsToAverage(freqindex);
             coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
-// no pointers!? need equivalent of configs[c].coreresultbaselineoffset[]
           }
         }
+        // TODO: follow existing way above of outputting autos of recorded bands and their zoom bands? or switch to outputbands only?
       }
       for(int i=0;i<numdatastreams;i++) //then the autocorrelation weights
       {
