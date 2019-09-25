@@ -322,13 +322,13 @@ void Configuration::parseConfiguration(istream* input)
     {
       freq = freqtable[getBFreqIndex(i,0,0)];
       configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
-      configs[i].frequsedbybaseline = new bool[freqtablelength]();
-      configs[i].equivfrequsedbybaseline = new bool[freqtablelength]();
-      configs[i].freqoutputbybaseline = new bool[freqtablelength]();
+      configs[i].frequsedbysomebaseline = new bool[freqtablelength]();
+      configs[i].equivfrequsedbysomebaseline = new bool[freqtablelength]();
+      configs[i].freqoutputbysomebaseline = new bool[freqtablelength]();
       for(int j=0;j<freqtablelength;j++) {
-	configs[i].frequsedbybaseline[j] = false;
-	configs[i].equivfrequsedbybaseline[j] = false;
-	configs[i].freqoutputbybaseline[j] = false;
+	configs[i].frequsedbysomebaseline[j] = false;
+	configs[i].equivfrequsedbysomebaseline[j] = false;
+	configs[i].freqoutputbysomebaseline[j] = false;
       }
       for(int j=0;j<numbaselines;j++)
       {
@@ -336,8 +336,8 @@ void Configuration::parseConfiguration(istream* input)
         {
 	  //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
 	  freq = freqtable[getBFreqIndex(i,j,k)];
-	  configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)] = true;
-          configs[i].freqoutputbybaseline[getBTargetFreqIndex(i,j,k)] = true;
+	  configs[i].frequsedbysomebaseline[getBFreqIndex(i,j,k)] = true;
+          configs[i].freqoutputbysomebaseline[getBTargetFreqIndex(i,j,k)] = true;
 	  if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
 	    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
 	}
@@ -348,7 +348,7 @@ void Configuration::parseConfiguration(istream* input)
     double bwdiff, freqdiff;
     for(int i=0;i<numconfigs;i++) {
       for(int j=0;j<freqtablelength;j++) {
-	if(!configs[i].frequsedbybaseline[j]) {
+	if(!configs[i].frequsedbysomebaseline[j]) {
 	  for(int k=0;k<freqtablelength;k++) {
 	    bwdiff = freqtable[j].bandwidth - freqtable[k].bandwidth;
 	    freqdiff = freqtable[j].bandedgefreq - freqtable[k].bandedgefreq;
@@ -361,8 +361,8 @@ void Configuration::parseConfiguration(istream* input)
 	       freqtable[j].channelstoaverage == freqtable[k].channelstoaverage && 
 	       freqtable[j].oversamplefactor == freqtable[k].oversamplefactor &&
 	       freqtable[j].decimationfactor == freqtable[k].decimationfactor) {
-	      if(configs[i].frequsedbybaseline[k])
-		configs[i].equivfrequsedbybaseline[j] = true;
+	      if(configs[i].frequsedbysomebaseline[k])
+		configs[i].equivfrequsedbysomebaseline[j] = true;
 	    }
 	  }
 	}
@@ -372,10 +372,10 @@ void Configuration::parseConfiguration(istream* input)
     //set any opposite sideband freqs to be "used", to ensure their autocorrelations are not lost
     //for(int i=0;i<numconfigs;i++) {
     //  for(int j=0;j<freqtablelength;j++) {
-    //    if(configs[i].frequsedbybaseline[j]) {
+    //    if(configs[i].frequsedbysomebaseline[j]) {
     //      oppositefreqindex = getOppositeSidebandFreqIndex(j);
     //      if(oppositefreqindex >= 0)
-    //        configs[i].frequsedbybaseline[oppositefreqindex] = true;
+    //        configs[i].frequsedbysomebaseline[oppositefreqindex] = true;
     //    }
     //  }
     //}
@@ -447,9 +447,9 @@ Configuration::~Configuration()
       delete [] configs[i].datastreamindices;
       delete [] configs[i].baselineindices;
       delete [] configs[i].ordereddatastreamindices;
-      delete [] configs[i].frequsedbybaseline;
-      delete [] configs[i].equivfrequsedbybaseline;
-      delete [] configs[i].freqoutputbybaseline;
+      delete [] configs[i].frequsedbysomebaseline;
+      delete [] configs[i].equivfrequsedbysomebaseline;
+      delete [] configs[i].freqoutputbysomebaseline;
     }
     delete [] configs;
   }
@@ -2336,7 +2336,7 @@ exit(-1);
       threadfindex = 0;
       for(int i=0;i<freqtablelength;i++)
       {
-        if(configs[c].frequsedbybaseline[i])
+        if(configs[c].frequsedbysomebaseline[i])
         {
           configs[c].threadresultfreqoffset[i] = threadfindex;
           freqchans = freqtable[i].numchannels;
@@ -2371,7 +2371,7 @@ exit(-1);
       coreresultindex = 0; // current tail of coreresults array
       for(int i=0;i<freqtablelength;i++) //first the cross-correlations
       {
-        if(configs[c].freqoutputbybaseline[i])
+        if(configs[c].freqoutputbysomebaseline[i])
         {
           double fref=freqtable[i].bandlowedgefreq();
           vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
@@ -2409,7 +2409,7 @@ exit(-1);
       }
       for(int i=0;i<freqtablelength;i++) //then append the baseline weights
       {
-        if(configs[c].freqoutputbybaseline[i])
+        if(configs[c].freqoutputbysomebaseline[i])
         {
           vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
           // weight of complete output region
@@ -2445,7 +2445,7 @@ exit(-1);
       }
       for(int i=0;i<freqtablelength;i++) //then append the shift decorrelation factors (multi-field only)
       {
-        if(configs[c].freqoutputbybaseline[i])
+        if(configs[c].freqoutputbysomebaseline[i])
         {
           vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
           // decorrelation factor of complete output region
@@ -3416,7 +3416,7 @@ bool Configuration::setPolycoFreqInfo(int configindex)
       frequencies[i] -= ((double)(freqtable[i].numchannels-1))*freqtable[i].bandwidth/((double)freqtable[i].numchannels);
     bandwidths[i] = freqtable[i].bandwidth;
     numchannels[i] = freqtable[i].numchannels;
-    used[i] = configs[configindex].frequsedbybaseline[i];
+    used[i] = configs[configindex].frequsedbysomebaseline[i];
   }
   for(int i=0;i<configs[configindex].numpolycos;i++)
   {

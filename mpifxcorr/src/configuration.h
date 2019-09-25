@@ -274,6 +274,12 @@ public:
     { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].targetfreqtableindices[baselinefreqindex]; }
   inline int getBNumTargetFreqs(int configindex, int configbaselineindex) const
     { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].targetfreqset.size(); }
+  inline int getBTargetFreqsOnlyIndex(int configindex, int configbaselineindex, int targetfreqindex) const
+    {
+      set<int>::const_iterator it = baselinetable[configs[configindex].baselineindices[configbaselineindex]].targetfreqset.begin();
+      advance(it, targetfreqindex);
+      return *it;
+    }
   inline int getBLocalFreqIndex(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].localfreqindices[freqtableindex]; }
   inline int getBFreqOddLSB(int configindex, int configbaselineindex, int freqtableindex) const { return baselinetable[configs[configindex].baselineindices[configbaselineindex]].oddlsbfreqs[freqtableindex]; }
   inline int getBNumPolProducts(int configindex, int configbaselineindex, int baselinefreqindex) const
@@ -324,11 +330,11 @@ public:
   inline int getFMatchingWiderBandIndex(int index) const { return freqtable[index].matchingwiderbandindex; }
   inline int getFMatchingWiderBandOffset(int index) const { return freqtable[index].matchingwiderbandoffset; }
   inline bool isFrequencyUsed(int configindex, int freqindex) const
-    { return configs[configindex].frequsedbybaseline[freqindex]; }
+    { return configs[configindex].frequsedbysomebaseline[freqindex]; }
   inline bool isEquivalentFrequencyUsed(int configindex, int freqindex) const
-    { return configs[configindex].equivfrequsedbybaseline[freqindex]; }
+    { return configs[configindex].equivfrequsedbysomebaseline[freqindex]; }
   inline bool isFrequencyOutput(int configindex, int freqindex) const
-    { return configs[configindex].freqoutputbybaseline[freqindex]; }
+    { return configs[configindex].freqoutputbysomebaseline[freqindex]; }
   vector<int> getSortedInputfreqsOfTargetfreq(int configindex, int freqindex) const;
   inline bool circularPolarisations() const
     { return datastreamtable[0].recordedbandpols[0] == 'R' || datastreamtable[0].recordedbandpols[0] == 'L'; }
@@ -798,9 +804,9 @@ private:
     int  * datastreamindices; //[datastream]
     int  * ordereddatastreamindices;
     int  * baselineindices;
-    bool * frequsedbybaseline;
-    bool * equivfrequsedbybaseline;
-    bool * freqoutputbybaseline;
+    bool * frequsedbysomebaseline;
+    bool * equivfrequsedbysomebaseline;
+    bool * freqoutputbysomebaseline;
     //bookkeeping info for thread results
     int  * numxmacstrides;              //[freq]
     int  * completestridelength;        //[freq]
