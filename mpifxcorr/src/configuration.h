@@ -335,6 +335,16 @@ public:
     { return configs[configindex].equivfrequsedbysomebaseline[freqindex]; }
   inline bool isFrequencyOutput(int configindex, int freqindex) const
     { return configs[configindex].freqoutputbysomebaseline[freqindex]; }
+  inline bool isBFrequencyUsed(int configindex, int configbaselineindex, int freqindex) const
+    {
+      int baseline = configs[configindex].baselineindices[configbaselineindex];
+      return configs[configindex].frequsedbybaseline[freqindex][baseline];
+    }
+  inline bool isBFrequencyOutput(int configindex, int configbaselineindex, int freqindex) const
+    {
+      int baseline = configs[configindex].baselineindices[configbaselineindex];
+      return configs[configindex].freqoutputbybaseline[freqindex][baseline];
+    }
   vector<int> getSortedInputfreqsOfTargetfreq(int configindex, int freqindex) const;
   inline bool circularPolarisations() const
     { return datastreamtable[0].recordedbandpols[0] == 'R' || datastreamtable[0].recordedbandpols[0] == 'L'; }
