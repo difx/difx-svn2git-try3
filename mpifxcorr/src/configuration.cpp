@@ -30,6 +30,7 @@
 #include <ctype.h>
 #include <cmath>
 #include <iterator>
+#include <iomanip>
 #include "mpifxcorr.h"
 #include "mk5mode.h"
 #include "configuration.h"
@@ -393,6 +394,14 @@ Configuration::~Configuration()
       delete [] configs[i].frequsedbysomebaseline;
       delete [] configs[i].equivfrequsedbysomebaseline;
       delete [] configs[i].freqoutputbysomebaseline;
+      for(int j=0;j<freqtablelength;j++) {
+        delete [] configs[i].frequsedbybaseline[j];
+        delete [] configs[i].equivfrequsedbybaseline[j];
+        delete [] configs[i].freqoutputbybaseline[j];
+      }
+      delete [] configs[i].frequsedbybaseline;
+      delete [] configs[i].equivfrequsedbybaseline;
+      delete [] configs[i].freqoutputbybaseline;
     }
     delete [] configs;
   }
@@ -769,11 +778,10 @@ int Configuration::getDataBytes(int configindex, int datastreamindex) const
 
 int Configuration::getMaxProducts(int configindex) const
 {
-  baselinedata current;
   int maxproducts = 0;
   for(int i=0;i<numbaselines;i++)
   {
-    current = baselinetable[configs[configindex].baselineindices[i]];
+    const baselinedata& current = baselinetable[configs[configindex].baselineindices[i]];
     for(int j=0;j<current.numfreqs;j++)
     {
       if(current.numpolproducts[j] > maxproducts)
@@ -980,7 +988,6 @@ bool Configuration::processBaselineTable(istream * input)
   int ** tempintptr;
   string line;
   datastreamdata dsdata;
-  baselinedata bldata;
 
   getinputline(input, &line, "BASELINE ENTRIES");
   baselinetablelength = atoi(line.c_str());
@@ -1063,12 +1070,8 @@ bool Configuration::processBaselineTable(istream * input)
     {
       if(mpiid == 0) //only write one copy of this error message
         cerror << startl << "First datastream for baseline " << i << " has a higher number than second datastream - reversing!!!" << endl;
-      tempint = baselinetable[i].datastream1index;
-      baselinetable[i].datastream1index = baselinetable[i].datastream2index;
-      baselinetable[i].datastream2index = tempint;
-      tempintptr = baselinetable[i].datastream1bandindex;
-      baselinetable[i].datastream1bandindex = baselinetable[i].datastream2bandindex;
-      baselinetable[i].datastream2bandindex = tempintptr;
+      swap(baselinetable[i].datastream1index, baselinetable[i].datastream2index);
+      swap(baselinetable[i].datastream1bandindex, baselinetable[i].datastream2bandindex);
     }
   }
   for(int f=0;f<freqtablelength;f++)
@@ -1077,7 +1080,7 @@ bool Configuration::processBaselineTable(istream * input)
       continue; //only need to nadger lower sideband freqs here, and only when they are correlated against USB
     for(int i=0;i<baselinetablelength;i++)
     {
-      bldata = baselinetable[i];
+      const baselinedata& bldata = baselinetable[i];
       for(int j=0;j<baselinetable[i].numfreqs;j++)
       {
         if(bldata.freqtableindices[j] == f) //its a match - check the other datastream for USB
@@ -1107,7 +1110,7 @@ bool Configuration::processBaselineTable(istream * input)
       }
       for(int i=0;i<baselinetablelength;i++)
       {
-        bldata = baselinetable[i];
+        const baselinedata& bldata = baselinetable[i];
         for(int j=0;j<baselinetable[i].numfreqs;j++)
         {
           if(bldata.freqtableindices[j] == f) //this baseline had referred to the LSB - replace with the USB freqindex
@@ -1122,7 +1125,7 @@ bool Configuration::processBaselineTable(istream * input)
   {
     for(int i=0;i<baselinetablelength;i++)
     {
-      bldata = baselinetable[i];
+      const baselinedata& bldata = baselinetable[i];
       bldata.localfreqindices[f] = -1;
       for(int j=0;j<bldata.numfreqs;j++)
       {
@@ -2136,7 +2139,7 @@ bool Configuration::populateModelDatastreamMap()
   return true;
 }
 
-bool operator>(const struct Configuration::freqdata_tt& f1, const struct Configuration::freqdata_tt& f2)
+bool operator>(const struct Configuration::freqdata_t& f1, const struct Configuration::freqdata_t& f2)
 {
 /*
   double f1loweredge = f1.bandedgefreq;
@@ -2151,21 +2154,23 @@ bool operator>(const struct Configuration::freqdata_tt& f1, const struct Configu
 
 vector<int> Configuration::getSortedInputfreqsOfTargetfreq(int configindex, int freqindex) const
 {
-  set<int> inputfreqrefset;
   vector<int> inputfreqrefs; // all contributing input freqs from all baselines (freqs can overlap!)
   if (!isFrequencyOutput(configindex, freqindex))
   {
     return inputfreqrefs;
   }
+
+  set<int> inputfreqrefset;
   for(int b=0;b<getNumBaselines();++b) {
     const baselinedata& B=baselinetable[configs[configindex].baselineindices[b]];
-    for(int f=0;f<B.numfreqs;++f) {
-      if (B.targetfreqtableindices[f] == freqindex) {
-        inputfreqrefset.insert(B.freqtableindices[f]);
+    for(int baselinefreqindex=0;baselinefreqindex<B.numfreqs;++baselinefreqindex) {
+      if(B.targetfreqtableindices[baselinefreqindex] == freqindex) {
+        inputfreqrefset.insert(B.freqtableindices[baselinefreqindex]);
       }
     }
   }
   inputfreqrefs.insert(inputfreqrefs.end(), inputfreqrefset.begin(), inputfreqrefset.end());
+
   // sort frequency ids ascendingly by their low edge frequency
   //sort(inputfreqrefs.begin(), inputfreqrefs.end(), [&](int i, int j){return i<j;} ); // C++11 but not used in difx builds; c98 needs static function not class/object
   for(int i=0;i<inputfreqrefs.size();++i) {
@@ -2175,10 +2180,42 @@ vector<int> Configuration::getSortedInputfreqsOfTargetfreq(int configindex, int 
       }
     }
   }
+
   return inputfreqrefs;
 }
 
-int Configuration::getBNumPolproductsOfFreqs(const vector<int>& freqs, const struct Configuration::baselinedata_tt& bldata) const
+vector<int> Configuration::getSortedInputfreqsOfTargetfreq(int configindex, int configbaselineindex, int freqindex) const
+{
+  int baselineindex = configs[configindex].baselineindices[configbaselineindex];
+  vector<int> inputfreqrefs; // all contributing input freqs on given baseline
+  if (!isFrequencyOutput(configindex, freqindex))
+  {
+    return inputfreqrefs;
+  }
+
+  set<int> inputfreqrefset;
+  const baselinedata& B=baselinetable[baselineindex];
+  for(int f=0;f<B.numfreqs;++f) {
+    if (B.targetfreqtableindices[f] == freqindex) {
+      inputfreqrefset.insert(B.freqtableindices[f]);
+    }
+  }
+  inputfreqrefs.insert(inputfreqrefs.end(), inputfreqrefset.begin(), inputfreqrefset.end());
+
+  // sort frequency ids ascendingly by their low edge frequency
+  //sort(inputfreqrefs.begin(), inputfreqrefs.end(), [&](int i, int j){return i<j;} ); // C++11 but not used in difx builds; c98 needs static function not class/object
+  for(int i=0;i<inputfreqrefs.size();++i) {
+    for(int j=0;j<inputfreqrefs.size()-1;++j) {
+      if(freqtable[inputfreqrefs[j]] > freqtable[inputfreqrefs[j+1]]) {
+        swap(inputfreqrefs[j],inputfreqrefs[j+1]);
+      }
+    }
+  }
+
+  return inputfreqrefs;
+}
+
+int Configuration::getBNumPolproductsOfFreqs(const vector<int>& freqs, const struct Configuration::baselinedata_t& bldata) const
 {
   int numblpolproducts = 0;
   for(vector<int>::const_iterator f=freqs.begin();f!=freqs.end();++f) {
@@ -2213,6 +2250,9 @@ bool Configuration::populateFrequencyDetails()
       configs[i].equivfrequsedbysomebaseline[j] = false;
       configs[i].freqoutputbysomebaseline[j] = false;
     }
+    configs[i].frequsedbybaseline = new bool*[freqtablelength]();
+    configs[i].equivfrequsedbybaseline = new bool*[freqtablelength]();
+    configs[i].freqoutputbybaseline = new bool*[freqtablelength]();
     for(int j=0;j<freqtablelength;j++) {
       configs[i].frequsedbybaseline[j] = new bool[numbaselines]();
       configs[i].equivfrequsedbybaseline[j] = new bool[numbaselines]();
@@ -2223,9 +2263,9 @@ bool Configuration::populateFrequencyDetails()
       for(int k=0;k<baselinetable[configs[i].baselineindices[j]].numfreqs;k++)
       {
         //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
-        configs[i].frequsedbybaseline[j][getBFreqIndex(i,j,k)] = true;
+        configs[i].frequsedbybaseline[getBFreqIndex(i,j,k)][j] = true;
         configs[i].frequsedbysomebaseline[getBFreqIndex(i,j,k)] = true;
-        configs[i].freqoutputbybaseline[j][getBTargetFreqIndex(i,j,k)] = true;
+        configs[i].freqoutputbybaseline[getBTargetFreqIndex(i,j,k)][j] = true;
         configs[i].freqoutputbysomebaseline[getBTargetFreqIndex(i,j,k)] = true;
         int postavfreqchannels = freqtable[getBFreqIndex(i,j,k)].numchannels/freqtable[getBFreqIndex(i,j,k)].channelstoaverage;
         if(postavfreqchannels < configs[i].minpostavfreqchannels)
@@ -2278,7 +2318,6 @@ bool Configuration::populateFrequencyDetails()
 bool Configuration::populateResultLengths()
 {
   datastreamdata dsdata;
-  baselinedata bldata;
   bool found;
   int threadfindex, threadbindex, coreresultindex, toadd;
   int bandsperautocorr, freqindex, freqchans, chanstoaverage, maxconfigphasecentres, xmacstridelen, binloop;
@@ -2369,7 +2408,7 @@ exit(-1);
           for(int j=0;j<numbaselines;j++)
           {
             configs[c].threadresultbaselineoffset[i][j] = threadbindex;
-            bldata = baselinetable[configs[c].baselineindices[j]];
+            const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
             if(bldata.localfreqindices[i] >= 0)
             {
               configs[c].threadresultbaselineoffset[i][j] = threadbindex;
@@ -2415,13 +2454,19 @@ exit(-1);
           }
           // mark contributing band slices and their position in that region, all baselines
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
-            double fin=freqtable[*ifi].bandlowedgefreq();
-            int choffset = 0;  // ((fin-fref)/fref)*freqchans/chanstoaverage; // TODO: how are 'binloop' and 'numpolproducts' results arranged in memory?
+            double fcurr=freqtable[*ifi].bandlowedgefreq();
+// TODO: is it really enough to point inside the outputband? or do the '{phasecenter, pulsarbin} x polproduct x channels' sub-grouped(?) data
+// need to be reshuffled over the whole outputband in Visibility::writedata()?
+            int choffset = ((fcurr-fref)/freqtable[i].bandwidth)*freqchans;
+            if (choffset%chanstoaverage != 0) {
+              cerr << "Configuration: consituent band placement at bin " << choffset << " not divisible by freq avgeraging factor " << chanstoaverage << " -- TODO\n";
+            }
+            choffset = choffset/chanstoaverage;
             if(configs[c].coreresultbaselineoffset[*ifi]==NULL) {
               configs[c].coreresultbaselineoffset[*ifi] = new int[numbaselines]();
             }
             for(int j=0;j<numbaselines;j++) {
-              bldata = baselinetable[configs[c].baselineindices[j]];
+              const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
               if(bldata.localfreqindices[*ifi] >= 0) {
                 configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + choffset;
               }
@@ -2457,7 +2502,7 @@ exit(-1);
               configs[c].coreresultbweightoffset[*ifi] = new int[numbaselines]();
             }
             for(int j=0;j<numbaselines;j++) {
-              bldata = baselinetable[configs[c].baselineindices[j]];
+              const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
               if(bldata.localfreqindices[*ifi] >= 0) {
                 configs[c].coreresultbweightoffset[*ifi][j] = configs[c].coreresultbweightoffset[i][j];
               }
@@ -2490,7 +2535,7 @@ exit(-1);
               configs[c].coreresultbshiftdecorroffset[*ifi] = new int[numbaselines]();
             }
             for(int j=0;j<numbaselines;j++) {
-              bldata = baselinetable[configs[c].baselineindices[j]];
+              const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
               if(bldata.localfreqindices[*ifi] >= 0) {
                 configs[c].coreresultbweightoffset[*ifi][j] = configs[c].coreresultbweightoffset[i][j];
               }
@@ -2593,8 +2638,7 @@ int Configuration::calcgoodxmacstridelength(int configId) const
   // First get nchangcd : GCD of number of channels of each output frequency
   for(int j=0;j<numbaselines;j++)
   {
-    baselinedata bl;
-    bl = baselinetable[configs[configId].baselineindices[j]];
+    const baselinedata& bl = baselinetable[configs[configId].baselineindices[j]];
     for(int k=0;k<bl.numfreqs;k++)
     {
       int nchan;
@@ -2673,7 +2717,6 @@ bool Configuration::consistencyCheck()
   double bandwidth, sampletimens, ffttime, numffts, f1, f2;
   bool ismuxed;
   datastreamdata ds1, ds2;
-  baselinedata bl;
   datastreamdata * dsdata;
 
   //check length of the datastream table
@@ -2990,7 +3033,7 @@ bool Configuration::consistencyCheck()
 
     for(int j=0;j<numbaselines;j++)
     {
-      bl = baselinetable[configs[i].baselineindices[j]];
+      const baselinedata& bl = baselinetable[configs[i].baselineindices[j]];
       for(int k=0;k<bl.numfreqs;k++)
       {
         chantoav = freqtable[bl.freqtableindices[k]].channelstoaverage;

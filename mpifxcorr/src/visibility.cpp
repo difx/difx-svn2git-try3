@@ -151,7 +151,7 @@ Visibility::~Visibility()
 
   for(int i=0;i<numbaselines;i++)
   {
-    for(int j=0;j<config->getBNumFreqs(currentconfigindex, i);j++) {
+    for(int j=0;j<config->getFreqTableLength();j++) {
       for(int k=0;k<pulsarwidth;k++)
         delete [] baselineweights[i][j][k];
       delete [] baselineweights[i][j];
@@ -345,10 +345,11 @@ void Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
   *nbuf = ntowrite;
 }
 
+/// Writedata calibrates everything, then invokes writedifx() or writeascii() that actually write data
 void Visibility::writedata()
 {
   f32 scale, divisor, modifier;
-  int ds1, ds2, ds1bandindex, ds2bandindex, localfreqindex, freqindex, freqchannels;
+  int ds1, ds2, ds1bandindex, ds2bandindex, localfreqindex, freqindex, targetfreqindex, freqchannels;
   int status, resultindex, binloop;
   int dumpmjd, intsec;
   double dumpseconds, acw;
@@ -383,15 +384,17 @@ void Visibility::writedata()
     //grab the baseline weights
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) {
       freqindex = config->getBFreqIndex(currentconfigindex, i, j);
+      targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
       resultindex = config->getCoreResultBWeightOffset(currentconfigindex, freqindex, i)*2;
+// TODO: should Core combine weights for output target freqs?
       for(int b=0;b<binloop;b++) {
         for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) {
           if(binloop>1)
-            baselineweights[i][j][b][k] = floatresults[resultindex]/(fftsperintegration*polyco->getBinWidth(b));
+            baselineweights[i][freqindex][b][k] = floatresults[resultindex]/(fftsperintegration*polyco->getBinWidth(b));
           else if(config->pulsarBinOn(currentconfigindex))
-            baselineweights[i][j][b][k] = floatresults[resultindex]/(fftsperintegration*binweightdivisor[0]);
+            baselineweights[i][freqindex][b][k] = floatresults[resultindex]/(fftsperintegration*binweightdivisor[0]);
           else
-            baselineweights[i][j][b][k] = floatresults[resultindex]/fftsperintegration;
+            baselineweights[i][freqindex][b][k] = floatresults[resultindex]/fftsperintegration;
           resultindex++;
         }
       }
@@ -402,10 +405,12 @@ void Visibility::writedata()
     for(int i=0;i<numbaselines;i++) {
       for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) {
         freqindex = config->getBFreqIndex(currentconfigindex, i, j);
-        resultindex = config->getCoreResultBShiftDecorrOffset(currentconfigindex, freqindex, i)*2;
+        targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
+        resultindex = config->getCoreResultBShiftDecorrOffset(currentconfigindex, targetfreqindex, i)*2;
+// TODO: should Core combine decorrelation data for output target freqs?
         for(int s=0;s<model->getNumPhaseCentres(currentscan);s++) {
           //its in units of integration width in ns, so scale to get something which is 1.0 for no decorrelation
-          baselineshiftdecorrs[i][j][s] = floatresults[resultindex]/(1000000000.0*config->getIntTime(currentconfigindex));
+          baselineshiftdecorrs[i][freqindex][s] = floatresults[resultindex]/(1000000000.0*config->getIntTime(currentconfigindex));
           resultindex++;
         }
       }
@@ -421,7 +426,9 @@ void Visibility::writedata()
       for(int k=0;k<config->getDNumTotalBands(currentconfigindex, i); k++)
       {
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
+        targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
+// TODO: outputband weight scaling?
           autocorrweights[i][j][k] = floatresults[resultindex]/fftsperintegration;
           resultindex++;
         }
@@ -458,6 +465,7 @@ void Visibility::writedata()
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) //do each frequency
     {
       freqindex = config->getBFreqIndex(currentconfigindex, i, j);
+      targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
       resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
@@ -471,8 +479,8 @@ void Visibility::writedata()
             if(config->getDTsys(currentconfigindex, ds1) > 0.0 && config->getDTsys(currentconfigindex, ds2) > 0.0)
             {
               divisor = (Mode::getDecorrelationPercentage(config->getDNumBits(currentconfigindex, ds1)))*(Mode::getDecorrelationPercentage(config->getDNumBits(currentconfigindex, ds2)))*autocorrcalibs[ds1][ds1bandindex].re*autocorrcalibs[ds2][ds2bandindex].re/(autocorrweights[ds1][0][ds1bandindex]*autocorrweights[ds2][0][ds2bandindex]);
-              if(divisor > 0.0 && baselineweights[i][j][b][k] > 0) //only do it if there is something to calibrate with
-                scale = sqrt(config->getDTsys(currentconfigindex, ds1)*config->getDTsys(currentconfigindex, ds2)/divisor)/baselineweights[i][j][b][k];
+              if(divisor > 0.0 && baselineweights[i][freqindex][b][k] > 0) //only do it if there is something to calibrate with
+                scale = sqrt(config->getDTsys(currentconfigindex, ds1)*config->getDTsys(currentconfigindex, ds2)/divisor)/baselineweights[i][freqindex][b][k];
               else
                 scale = 0.0;
             }
@@ -480,8 +488,8 @@ void Visibility::writedata()
             {
               //We want normalised correlation coefficients, so scale by number of contributing
               //samples rather than datastream tsys and decorrelation correction
-              if(baselineweights[i][j][b][k] > 0.0) {
-                scale = 1.0/(baselineweights[i][j][b][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels*config->getFChannelsToAverage(freqindex))));
+              if(baselineweights[i][freqindex][b][k] > 0.0) {
+                scale = 1.0/(baselineweights[i][freqindex][b][k]*meansubintsperintegration*((float)(config->getBlocksPerSend(currentconfigindex)*2*freqchannels*config->getFChannelsToAverage(freqindex))));
                 //adjust for number of samples if one or both antennas used zoom bands
                 if(ds1bandindex >= config->getDNumRecordedBands(currentconfigindex, ds1))
                 {
@@ -510,7 +518,7 @@ void Visibility::writedata()
 
             //further scale by decorrelation if uv shifting was done
             if(model->getNumPhaseCentres(currentscan) > 1)
-              scale /= baselineshiftdecorrs[i][j][s];
+              scale /= baselineshiftdecorrs[i][freqindex][s];
 
             //amplitude calibrate the data
             if(scale > 0.0)
@@ -623,7 +631,7 @@ void Visibility::writedata()
 void Visibility::writeascii(int dumpmjd, double dumpseconds)
 {
   ofstream output;
-  int binloop, freqchannels, freqindex;
+  int binloop, freqchannels, freqindex, targetfreqindex;
   char datetimestring[26];
   //char sbuf[10];
 
@@ -652,6 +660,7 @@ void Visibility::writeascii(int dumpmjd, double dumpseconds)
     for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++)
     {
       freqindex = config->getBFreqIndex(currentconfigindex, i, j);
+      targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
       resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
@@ -721,7 +730,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
   char pcalfilename[256];
   char pcalstr[256];
   string pcalline;
-  int binloop, freqindex, numpolproducts, resultindex, freqchannels;
+  int binloop, freqindex, baselinefreqindex, numpolproducts, resultindex, freqchannels;
   int year, month, day;
   int ant1index, ant2index, sourceindex, baselinenumber, numfiles, filecount;
   float tonefreq;
@@ -730,7 +739,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
   bool modelok;
   bool nonzero;
   double buvw[3]; //the u,v and w for this baseline at this time
-  char polpair[3]; //the polarisation eg RR, LL
+  char polpair[3] = {'\0'}; //the polarisation eg RR, LL
   const char noToneAvailable[] = " -1 0 0 0";
 
   if(currentscan >= model->getNumScans()) {
@@ -757,12 +766,17 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
   for(int i=0;i<numbaselines;i++)
   {
     baselinenumber = config->getBNumber(currentconfigindex, i);
-    for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++)
+    for(freqindex=0;freqindex<config->getFreqTableLength();freqindex++)
     {
-      freqindex = config->getBFreqIndex(currentconfigindex, i, j);
+      if(!config->isFrequencyOutput(currentconfigindex, i, freqindex))
+        continue;
+      // freq is a target output band, look up one representative contributing baseband
+      vector<int> constituents = config->getSortedInputfreqsOfTargetfreq(currentconfigindex, i, freqindex);
+      baselinefreqindex = config->getBFreqIndexRev(currentconfigindex, i, constituents[0]);
+      // source data location and size
       resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
-      numpolproducts = config->getBNumPolProducts(currentconfigindex, i, j);
+      numpolproducts = config->getBNumPolProducts(currentconfigindex, i, baselinefreqindex);
       filecount = 0;
       for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
       {
@@ -778,16 +792,16 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
         {
           for(int k=0;k<numpolproducts;k++) 
           {
-            config->getBPolPair(currentconfigindex, i, j, k, polpair);
+            config->getBPolPair(currentconfigindex, i, baselinefreqindex, k, polpair);
 
             //open the file for appending in ascii and write the ascii header
-            if(baselineweights[i][j][b][k] > 0.0)
+            if(baselineweights[i][freqindex][b][k] > 0.0)
             {
               //cout << "About to write out baseline[" << i << "][" << s << "][" << k << "] from resultindex " << resultindex << ", whose 6th vis is " << results[resultindex+6].re << " + " << results[resultindex+6].im << " i" << endl;
               if(model->getNumPhaseCentres(currentscan) > 1)
-                currentweight = baselineweights[i][j][b][k]*baselineshiftdecorrs[i][j][s];
+                currentweight = baselineweights[i][freqindex][b][k]*baselineshiftdecorrs[i][freqindex][s];
               else
-                currentweight = baselineweights[i][j][b][k];
+                currentweight = baselineweights[i][freqindex][b][k];
               writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, currentweight, buvw, filecount);
 
               //close, reopen in binary and write the binary data, then close again
@@ -1210,9 +1224,9 @@ void Visibility::changeConfig(int configindex)
   //Set up the baseline weights array
   for(int i=0;i<numbaselines;i++)
   {
-    baselineweights[i] = new f32**[config->getBNumFreqs(configindex, i)];
-    baselineshiftdecorrs[i] = new f32*[config->getBNumFreqs(configindex, i)];
-    for(int j=0;j<config->getBNumFreqs(configindex, i);j++) {
+    baselineweights[i] = new f32**[config->getFreqTableLength()];
+    baselineshiftdecorrs[i] = new f32*[config->getFreqTableLength()];
+    for(int j=0;j<config->getFreqTableLength();j++) {
       baselineweights[i][j] = new f32*[pulsarwidth];
       baselineshiftdecorrs[i][j] = new f32[config->getMaxPhaseCentres(configindex)];
       for(int k=0;k<pulsarwidth;k++)

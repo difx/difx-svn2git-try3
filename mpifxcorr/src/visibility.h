@@ -196,7 +196,7 @@ private:
   char * hostname;
   cf32 ** autocorrcalibs;
   f32 *** autocorrweights;
-  f32 **** baselineweights;
+  f32 **** baselineweights; //[numbaselines][freqtablelength][numbins][baseline::numpolproducts<[baseline::numfreqs]>]
   f32 ***  baselineshiftdecorrs;
   std::string * telescopenames;
   cf32 * results;
