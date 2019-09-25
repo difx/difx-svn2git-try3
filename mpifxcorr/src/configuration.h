@@ -807,6 +807,10 @@ private:
     bool * frequsedbysomebaseline;
     bool * equivfrequsedbysomebaseline;
     bool * freqoutputbysomebaseline;
+    //finer bookkeeping of freqs
+    bool ** frequsedbybaseline;         //[freq][baseline]
+    bool ** equivfrequsedbybaseline;    //[freq][baseline]
+    bool ** freqoutputbybaseline;       //[freq][baseline]
     //bookkeeping info for thread results
     int  * numxmacstrides;              //[freq]
     int  * completestridelength;        //[freq]
@@ -925,6 +929,13 @@ private:
   * @return True if the rules are all consistent, else false
   */
   bool populateScanConfigList();
+
+ /**
+  * Goes through configs and baselines working out which frequencies
+  * are really present, and determines the minimum number of channels.
+  * @return True if consistent
+  */
+  bool populateFrequencyDetails();
 
  /**
   * Goes through configs working out the result length for each

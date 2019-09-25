@@ -314,72 +314,11 @@ void Configuration::parseConfiguration(istream* input)
   //input->close();
 
   if (consistencyok) {
+    consistencyok = populateFrequencyDetails();
+  }
 
-    //work out which frequencies are used in each config, and the minimum #channels
-    freqdata freq;
-    // int oppositefreqindex;
-    for(int i=0;i<numconfigs;i++)
-    {
-      freq = freqtable[getBFreqIndex(i,0,0)];
-      configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
-      configs[i].frequsedbysomebaseline = new bool[freqtablelength]();
-      configs[i].equivfrequsedbysomebaseline = new bool[freqtablelength]();
-      configs[i].freqoutputbysomebaseline = new bool[freqtablelength]();
-      for(int j=0;j<freqtablelength;j++) {
-	configs[i].frequsedbysomebaseline[j] = false;
-	configs[i].equivfrequsedbysomebaseline[j] = false;
-	configs[i].freqoutputbysomebaseline[j] = false;
-      }
-      for(int j=0;j<numbaselines;j++)
-      {
-	for(int k=0;k<baselinetable[configs[i].baselineindices[j]].numfreqs;k++)
-        {
-	  //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
-	  freq = freqtable[getBFreqIndex(i,j,k)];
-	  configs[i].frequsedbysomebaseline[getBFreqIndex(i,j,k)] = true;
-          configs[i].freqoutputbysomebaseline[getBTargetFreqIndex(i,j,k)] = true;
-	  if(freq.numchannels/freq.channelstoaverage < configs[i].minpostavfreqchannels)
-	    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
-	}
-      }
-    }
-  
-    //for each freq, check if an equivalent frequency is used, to ensure autocorrelations also get sent where required
-    double bwdiff, freqdiff;
-    for(int i=0;i<numconfigs;i++) {
-      for(int j=0;j<freqtablelength;j++) {
-	if(!configs[i].frequsedbysomebaseline[j]) {
-	  for(int k=0;k<freqtablelength;k++) {
-	    bwdiff = freqtable[j].bandwidth - freqtable[k].bandwidth;
-	    freqdiff = freqtable[j].bandedgefreq - freqtable[k].bandedgefreq;
-	    if(freqtable[j].lowersideband)
-	      freqdiff -= freqtable[j].bandwidth;
-	    if(freqtable[k].lowersideband)
-	      freqdiff += freqtable[k].bandwidth;
-#warning "JanW: The next statement is suspect. Is 'diff<TINY' critical here, or was 'fabs(diff)<TINY' intended?"
-	    if(bwdiff < TINY && freqdiff < TINY && freqtable[j].numchannels == freqtable[k].numchannels && 
-	       freqtable[j].channelstoaverage == freqtable[k].channelstoaverage && 
-	       freqtable[j].oversamplefactor == freqtable[k].oversamplefactor &&
-	       freqtable[j].decimationfactor == freqtable[k].decimationfactor) {
-	      if(configs[i].frequsedbysomebaseline[k])
-		configs[i].equivfrequsedbysomebaseline[j] = true;
-	    }
-	  }
-	}
-      }
-    }
-
-    //set any opposite sideband freqs to be "used", to ensure their autocorrelations are not lost
-    //for(int i=0;i<numconfigs;i++) {
-    //  for(int j=0;j<freqtablelength;j++) {
-    //    if(configs[i].frequsedbysomebaseline[j]) {
-    //      oppositefreqindex = getOppositeSidebandFreqIndex(j);
-    //      if(oppositefreqindex >= 0)
-    //        configs[i].frequsedbysomebaseline[oppositefreqindex] = true;
-    //    }
-    //  }
-    //}
-    
+  if (consistencyok)
+  {  
     //process the pulsar configuration files
     for(int i=0;i<numconfigs;i++)
       {
@@ -397,6 +336,10 @@ void Configuration::parseConfiguration(istream* input)
 	      consistencyok = processPhasedArrayConfig(configs[i].phasedarrayconfigfilename, i);
 	  }
       }
+  }
+
+  if (consistencyok)
+  {
     if(consistencyok) {
       model = new Model(this, calcfilename);
       consistencyok = model->openSuccess();
@@ -2252,6 +2195,85 @@ int Configuration::getBNumPolproductsOfFreqs(const vector<int>& freqs, const str
   }
   return numblpolproducts;
 }
+
+bool Configuration::populateFrequencyDetails()
+{
+  //work out which frequencies are used in each config, and the minimum #channels
+  //freqdata freq;
+  // int oppositefreqindex;
+  for(int i=0;i<numconfigs;i++)
+  {
+    const freqdata& freq = freqtable[getBFreqIndex(i,0,0)];
+    configs[i].minpostavfreqchannels = freq.numchannels/freq.channelstoaverage;
+    configs[i].frequsedbysomebaseline = new bool[freqtablelength]();
+    configs[i].equivfrequsedbysomebaseline = new bool[freqtablelength]();
+    configs[i].freqoutputbysomebaseline = new bool[freqtablelength]();
+    for(int j=0;j<freqtablelength;j++) {
+      configs[i].frequsedbysomebaseline[j] = false;
+      configs[i].equivfrequsedbysomebaseline[j] = false;
+      configs[i].freqoutputbysomebaseline[j] = false;
+    }
+    for(int j=0;j<freqtablelength;j++) {
+      configs[i].frequsedbybaseline[j] = new bool[numbaselines]();
+      configs[i].equivfrequsedbybaseline[j] = new bool[numbaselines]();
+      configs[i].freqoutputbybaseline[j] = new bool[numbaselines]();
+    }
+    for(int j=0;j<numbaselines;j++)
+    {
+      for(int k=0;k<baselinetable[configs[i].baselineindices[j]].numfreqs;k++)
+      {
+        //cout << "Setting frequency " << getBFreqIndex(i,j,k) << " used to true, from baseline " << j << ", baseline frequency " << k << endl; 
+        configs[i].frequsedbybaseline[j][getBFreqIndex(i,j,k)] = true;
+        configs[i].frequsedbysomebaseline[getBFreqIndex(i,j,k)] = true;
+        configs[i].freqoutputbybaseline[j][getBTargetFreqIndex(i,j,k)] = true;
+        configs[i].freqoutputbysomebaseline[getBTargetFreqIndex(i,j,k)] = true;
+        int postavfreqchannels = freqtable[getBFreqIndex(i,j,k)].numchannels/freqtable[getBFreqIndex(i,j,k)].channelstoaverage;
+        if(postavfreqchannels < configs[i].minpostavfreqchannels)
+          configs[i].minpostavfreqchannels = postavfreqchannels;
+      }
+    }
+  }
+
+  //for each freq, check if an equivalent frequency is used, to ensure autocorrelations also get sent where required
+  double bwdiff, freqdiff;
+  for(int i=0;i<numconfigs;i++) {
+    for(int j=0;j<freqtablelength;j++) {
+      if(!configs[i].frequsedbysomebaseline[j]) {
+        for(int k=0;k<freqtablelength;k++) {
+          bwdiff = freqtable[j].bandwidth - freqtable[k].bandwidth;
+          freqdiff = freqtable[j].bandedgefreq - freqtable[k].bandedgefreq;
+          if(freqtable[j].lowersideband)
+            freqdiff -= freqtable[j].bandwidth;
+          if(freqtable[k].lowersideband)
+            freqdiff += freqtable[k].bandwidth;
+#warning "JanW: The next statement is suspect. Is 'diff<TINY' critical here, or was 'fabs(diff)<TINY' intended?"
+          if(bwdiff < TINY && freqdiff < TINY && freqtable[j].numchannels == freqtable[k].numchannels && 
+            freqtable[j].channelstoaverage == freqtable[k].channelstoaverage && 
+            freqtable[j].oversamplefactor == freqtable[k].oversamplefactor &&
+            freqtable[j].decimationfactor == freqtable[k].decimationfactor) 
+          {
+            if(configs[i].frequsedbysomebaseline[k])
+              configs[i].equivfrequsedbysomebaseline[j] = true;
+          }
+        }
+      }
+    }
+  }
+
+  //set any opposite sideband freqs to be "used", to ensure their autocorrelations are not lost
+  //for(int i=0;i<numconfigs;i++) {
+  //  for(int j=0;j<freqtablelength;j++) {
+  //    if(configs[i].frequsedbysomebaseline[j]) {
+  //      oppositefreqindex = getOppositeSidebandFreqIndex(j);
+  //      if(oppositefreqindex >= 0)
+  //        configs[i].frequsedbysomebaseline[oppositefreqindex] = true;
+  //    }
+  //  }
+  //}
+
+  return true;
+}
+
 
 bool Configuration::populateResultLengths()
 {
