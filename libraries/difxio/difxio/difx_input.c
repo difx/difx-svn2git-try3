@@ -3129,9 +3129,10 @@ static void setGlobalValues(DifxInput *D)
 			}
 			else if(D->chanBW != bw)
 			{
-				fprintf(stderr, "Error: DifxInput setGlobalValues: detected unequal IF bandwidths (%f and %f MHz), not supported!\n", D->chanBW, bw);
-				D->chanBW = 0.0;
-				return;
+				// TODO: postpone this check to somewhere else where actual output bands can be checked; freq table does not hold this information
+				//fprintf(stderr, "Error: DifxInput setGlobalValues: detected unequal IF bandwidths (%f and %f MHz), not supported!\n", D->chanBW, bw);
+				//D->chanBW = 0.0;
+				//return;
 			}
 			if(nPol > 0)
 			{
@@ -4146,6 +4147,60 @@ int DifxInputGetFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int bas
 	}
 
 	return freqId;
+}
+
+/** Returns list of output frequencies from all baselines. The last entry is '-1'. User must free() the returned array when done. */
+int* DifxInputGetOutputFreqs(const DifxInput *D)
+{
+	int* outputfreqs = NULL;
+	int noutputfreqs = 0;
+	int configId;
+	int b, k, n, fqId;
+
+	if(!D || D->nFreq < 1)
+	{
+		return NULL;
+	}
+
+	outputfreqs = (int *)calloc(D->nFreq + 1, sizeof(int));
+	for(n = 0; n < D->nFreq + 1; ++n)
+	{
+		outputfreqs[n] = -1;
+	}
+	
+	for(configId = 0; configId < D->nConfig; ++configId)
+	{
+		const DifxConfig *dc = D->config + configId;
+		for(b = 0; b < dc->nBaseline; ++b)
+		{
+			const DifxBaseline *db = D->baseline + dc->baselineId[b];
+			if(dc->baselineId[b] < 0)
+			{
+				continue;
+			}
+
+			for(k = 0; k < db->nFreq; ++k)
+			{
+				if(db->nPolProd[k] < 0)
+				{
+					continue;
+				}
+	
+				fqId = db->destFq[k];
+				for(n = 0; n < noutputfreqs; ++n)
+				{
+					if (outputfreqs[n] == fqId) break;
+				}
+				if (n >= noutputfreqs)
+				{
+					outputfreqs[noutputfreqs] = fqId;
+					++noutputfreqs;
+				}
+			}
+		}
+	}
+
+	return outputfreqs;
 }
 
 int DifxInputGetDatastreamIdsByAntennaId(int *dsIds, const DifxInput *D, int antennaId, int maxCount)
