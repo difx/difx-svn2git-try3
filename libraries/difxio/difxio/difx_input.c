@@ -396,7 +396,8 @@ int polMaskValue(char polName)
 	}
 }
 
-/* This function populates the DifxFreqSet array
+/* This function populates the DifxFreqSet array and
+ * fills in the polarization matrix in all DifxConfig's.
  * @param D DifxInput object
  * @return -1 in case of error, 0 otherwise
  */
@@ -463,6 +464,9 @@ static int generateFreqSets(DifxInput *D)
 				{
 					continue;
 				}
+
+				++freqIsUsed[db->destFq[f]];
+
 				for(p = 0; p < db->nPolProd[f]; ++p)
 				{
 					DifxDatastream *ds;
@@ -496,7 +500,6 @@ static int generateFreqSets(DifxInput *D)
 						polName = ds->zoomBandPolName[zb];
 						fqId = ds->zoomFreqId[localFqId];
 					}
-					++freqIsUsed[fqId];
 					polValue = polMaskValue(polName);
 					if(polValue == DIFXIO_POL_ERROR)
 					{
@@ -528,7 +531,6 @@ static int generateFreqSets(DifxInput *D)
 						polName = ds->zoomBandPolName[zb];
 						fqId = ds->zoomFreqId[localFqId];
 					}
-					++freqIsUsed[fqId];
 					polValue = polMaskValue(polName);
 					if(polValue == DIFXIO_POL_ERROR)
 					{
@@ -3129,10 +3131,9 @@ static void setGlobalValues(DifxInput *D)
 			}
 			else if(D->chanBW != bw)
 			{
-				// TODO: postpone this check to somewhere else where actual output bands can be checked; freq table does not hold this information
-				//fprintf(stderr, "Error: DifxInput setGlobalValues: detected unequal IF bandwidths (%f and %f MHz), not supported!\n", D->chanBW, bw);
-				//D->chanBW = 0.0;
-				//return;
+				fprintf(stderr, "Error: DifxInput setGlobalValues: detected unequal IF bandwidths (%f and %f MHz), not supported!\n", D->chanBW, bw);
+				D->chanBW = 0.0;
+				return;
 			}
 			if(nPol > 0)
 			{
