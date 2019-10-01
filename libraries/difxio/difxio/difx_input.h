@@ -1037,6 +1037,7 @@ int DifxInputGetOriginalDatastreamIdsByAntennaIdJobId(int *dsIds, const DifxInpu
 int DifxInputGetMaxTones(const DifxInput *D);
 int DifxInputGetMaxPhaseCentres(const DifxInput *D);
 int DifxInputGetFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int baselineFreq);
+int DifxInputGetOutputFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int baselineFreq);
 int* DifxInputGetOutputFreqs(const DifxInput *D);
 int DifxInputSortAntennas(DifxInput *D, int verbose);
 int DifxInputSimFXCORR(DifxInput *D);

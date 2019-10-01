@@ -4122,6 +4122,10 @@ int DifxInputGetFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int bas
 	{
 		return -4;
 	}
+	if(D->baseline[baselineId].dsB < 0 || D->baseline[baselineId].dsB > D->nDatastream)
+	{
+		return -4;
+	}
 
 	ds = D->datastream + D->baseline[baselineId].dsA;
 
@@ -4146,6 +4150,46 @@ int DifxInputGetFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int bas
 		localFreqId = ds->zoomBandFreqId[zb];
 		freqId = ds->zoomFreqId[localFreqId];
 	}
+
+	return freqId;
+}
+
+int DifxInputGetOutputFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int baselineFreq)
+{
+	int band;
+	DifxDatastream *ds;
+	int freqId;
+
+	if(!D)
+	{
+		return -1;
+	}
+	if(baselineId > D->nBaseline || baselineId < 0)
+	{
+		return -2;
+	}
+	if(baselineFreq > D->baseline[baselineId].nFreq || baselineFreq < 0)
+	{
+		return -3;
+	}
+	if(D->baseline[baselineId].dsA < 0 || D->baseline[baselineId].dsA > D->nDatastream)
+	{
+		return -4;
+	}
+	if(D->baseline[baselineId].dsB < 0 || D->baseline[baselineId].dsB > D->nDatastream)
+	{
+		return -4;
+	}
+
+	ds = D->datastream + D->baseline[baselineId].dsA;
+
+	band = D->baseline[baselineId].bandA[baselineFreq][0];
+	if(band < 0 || band > ds->nRecBand + ds->nZoomBand)
+	{
+		return -5;
+	}
+
+	freqId = D->baseline[baselineId].destFq[baselineFreq];
 
 	return freqId;
 }
