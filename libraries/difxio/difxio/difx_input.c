@@ -583,6 +583,7 @@ static int generateFreqSets(DifxInput *D)
 			if(freqIsUsed[fqId] > 0)
 			{
 				++dfs->nIF;
+printf("IF #%d has freq id %d placement %.6f MHz bw %.6f MHz %d/%d channels\n", dfs->nIF, fqId, D->freq[fqId].freq, D->freq[fqId].bw, D->freq[fqId].nChan, D->freq[fqId].specAvg);
 			}
 		}
 
@@ -1160,8 +1161,6 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 			}
 		}
 
-		D->nInChan = D->freq[b].nChan;
-		D->nOutChan = D->freq[b].nChan/D->freq[b].specAvg;
 	}
 	
 	return D;
@@ -1557,7 +1556,7 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 		
 		for(f = 0; f < D->baseline[b].nFreq; ++f)
 		{
-			int p;
+			int p, fq;
 
 			r = DifxParametersfind2(ip, r+1, "TARGET FREQ %d/%d", b, f);
 			if(r < 0)
@@ -1566,7 +1565,11 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 			
 				return 0;
 			}
-			D->baseline[b].destFq[f] = atoi(DifxParametersvalue(ip, r));
+
+			fq = atoi(DifxParametersvalue(ip, r));
+			D->baseline[b].destFq[f] = fq;
+			D->nInChan = D->freq[fq].nChan;
+			D->nOutChan = D->freq[fq].nChan/D->freq[fq].specAvg;
 
 			r = DifxParametersfind2(ip, r+1, "POL PRODUCTS %d/%d", b, f);
 			if(r < 0)
