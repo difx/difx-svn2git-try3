@@ -2567,7 +2567,6 @@ bool Configuration::populateResultLengths()
             coreresultindex += bandsperautocorr*freqchans/chanstoaverage;
           }
         }
-        // TODO: follow existing way above of outputting autos of recorded bands and their zoom bands? or switch to outputbands only?
       }
       for(int i=0;i<numdatastreams;i++) //then the autocorrelation weights
       {
@@ -2575,12 +2574,12 @@ bool Configuration::populateResultLengths()
         configs[c].coreresultacweightoffset[i] = coreresultindex;
         toadd = 0;
         for(int j=0;j<getDNumRecordedBands(c, i);j++) {
-          if(isFrequencyOutput(c, getDRecordedFreqIndex(c, i, j))) {
+          if(isFrequencyUsed(c, getDRecordedFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDRecordedFreqIndex(c, i, j))) {
             toadd += bandsperautocorr;
           }
         }
         for(int j=0;j<getDNumZoomBands(c, i);j++) {
-          if(isFrequencyOutput(c, getDZoomFreqIndex(c, i, j))) {
+          if(isFrequencyUsed(c, getDZoomFreqIndex(c, i, j)) || isEquivalentFrequencyUsed(c, getDZoomFreqIndex(c, i, j))) {
             toadd += bandsperautocorr;
           }
         }
@@ -2610,10 +2609,6 @@ bool Configuration::populateResultLengths()
       << ", " << total_threads << " threads each threadresultlength=" << configs[c].threadresultlength << " x cf32 (" 
       << ( sizeof(cf32)*(configs[c].threadresultlength * total_threads + configs[c].coreresultlength)/1048576.0 ) << " MBbyte total)" << endl;
   }
-
-  cinfo << startl << "populateResultLengths() determined maxcoreresultlength=" << sizeof(cf32)*maxcoreresultlength/1048576.0 << "MB, "
-    << "maxthreadresultlength=" << sizeof(cf32)*maxthreadresultlength/1048576.0 << " MB (" 
-    << ( sizeof(cf32)*(maxthreadresultlength * total_threads + maxcoreresultlength)/1048576.0 ) << " MB est. total)" << endl;
 
   return true;
 }

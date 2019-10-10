@@ -405,9 +405,7 @@ void Visibility::writedata()
           if(freqindex != targetfreqindex) {
             baselineweights[i][targetfreqindex][b][k] += baselineweights[i][freqindex][b][k];
             baselineweightcounts[i][targetfreqindex][b][k]++;
-            //std::cout << "adding weight " << std::setprecision(4) << std::fixed << baselineweights[i][freqindex][b][k] << " of fq " << freqindex << " on baseline " << i << " to tgt fq " << targetfreqindex << " weight accu of " << baselineweights[i][targetfreqindex][b][k] << " count=" << baselineweightcounts[i][targetfreqindex][b][k] << " mean:" << baselineweights[i][targetfreqindex][b][k]/baselineweightcounts[i][targetfreqindex][b][k] << std::endl;
           } else {
-            //std::cout << "keeping weight " << baselineweights[i][freqindex][b][k] << " of fq " << freqindex << " on baseline " << i << " of weight accu of tgt fq " << targetfreqindex << " of " << baselineweights[i][targetfreqindex][b][k] << std::endl;
           }
           resultindex++;
         }
@@ -1064,12 +1062,10 @@ void Visibility::multicastweights()
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
           weight[i] += autocorrweights[i][0][j];
           weightcount++;
-          //std::cout << "ds " << i << " auto " << j << "/" << n-1 << " is " << std::setprecision(4) << std::fixed << autocorrweights[i][0][j] << std::endl;
         }
       }
       if(weightcount > 0) {
         weight[i] /= weightcount;
-        //std::cout << "ds " << i << " auto avg weight now " << weight[i] << std::endl;
       }
     }
   }
