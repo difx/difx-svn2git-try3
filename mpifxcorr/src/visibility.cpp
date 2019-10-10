@@ -441,7 +441,6 @@ void Visibility::writedata()
       for(int k=0;k<config->getDNumTotalBands(currentconfigindex, i); k++)
       {
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
-        targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
           autocorrweights[i][j][k] = floatresults[resultindex]/fftsperintegration;
           resultindex++;
@@ -1054,7 +1053,7 @@ void Visibility::multicastweights()
   //calculate the weights that will be multicast out.  These are averages over recorded bands
   for(int i=0;i<numdatastreams;i++)
   {
-    int n = config->getDNumTotalBands(currentconfigindex, i);
+    const int n = config->getDNumTotalBands(currentconfigindex, i);
 
     weight[i] = 0.0;
     weightcount = 0;
@@ -1065,10 +1064,13 @@ void Visibility::multicastweights()
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
           weight[i] += autocorrweights[i][0][j];
           weightcount++;
+          //std::cout << "ds " << i << " auto " << j << "/" << n-1 << " is " << std::setprecision(4) << std::fixed << autocorrweights[i][0][j] << std::endl;
         }
       }
-      if(weightcount > 0)
+      if(weightcount > 0) {
         weight[i] /= weightcount;
+        //std::cout << "ds " << i << " auto avg weight now " << weight[i] << std::endl;
+      }
     }
   }
 
@@ -1243,7 +1245,7 @@ void Visibility::changeConfig(int configindex)
   for(int i=0;i<numdatastreams;i++) {
     autocorrcalibs[i] = new cf32[config->getDNumTotalBands(configindex, i)];
     vectorZero_cf32(autocorrcalibs[i], config->getDNumTotalBands(configindex, i));
-    autocorrweights[i] = new f32*[autocorrwidth];
+    autocorrweights[i] = new f32*[autocorrwidth]();
     for(int j=0;j<autocorrwidth;j++) {
       autocorrweights[i][j] = new f32[config->getDNumTotalBands(configindex, i)];
       vectorZero_f32(autocorrweights[i][j], config->getDNumTotalBands(configindex, i));

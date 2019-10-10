@@ -1628,8 +1628,8 @@ bool Configuration::processDatastreamTable(istream * input)
       if(j == 0 && datastreamtable[i].recordedfreqclockoffsets[j] != 0.0 && mpiid == 0)
         cwarn << startl << "Model accountability is compromised if the first band of a telescope has a non-zero clock offset! If this is the first/only datastream for " << telescopetable[datastreamtable[i].telescopeindex].name << ", you should adjust the telescope clock so that the offset for this band is ZERO!" << endl;
       getinputline(input, &line, "FREQ OFFSET ", j); //Freq offset is positive if recorded LO frequency was higher than the frequency in the frequency table
-      getinputline(input, &line, "GAIN OFFSET ", j); //Gain offset is non-zero if voltage spectra should be scaled, e.g. to amplitude-align frequency portions of outputbands
       datastreamtable[i].recordedfreqlooffsets[j] = atof(line.c_str());
+      getinputline(input, &line, "GAIN OFFSET ", j); //Gain offset is non-zero if voltage spectra should be scaled, e.g. to amplitude-align frequency portions of outputbands
       getinputline(input, &line, "NUM REC POLS ", j);
       datastreamtable[i].recordedfreqpols[j] = atoi(line.c_str());
       datastreamtable[i].numrecordedbands += datastreamtable[i].recordedfreqpols[j];
@@ -2488,17 +2488,14 @@ bool Configuration::populateResultLengths()
           // mark contributing band slices and their position in that region, all baselines
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
             double fcurr=freqtable[*ifi].bandlowedgefreq();
-// TODO: is it really enough to point inside the outputband? or do the '{phasecenter, pulsarbin} x polproduct x channels' sub-grouped(?) data
-// need to be reshuffled over the whole outputband in Visibility::writedata()?
             int choffset = ((fcurr-fref)/freqtable[i].bandwidth)*freqchans;
             if (choffset%chanstoaverage != 0) {
               cerr << "Configuration: consituent band placement at bin " << choffset << " not divisible by freq avgeraging factor " << chanstoaverage << " -- TODO\n";
             }
             choffset = choffset/chanstoaverage;
-            if(configs[c].coreresultbaselineoffset[*ifi]==NULL) {
+            if(!configs[c].coreresultbaselineoffset[*ifi]) {
               configs[c].coreresultbaselineoffset[*ifi] = new int[numbaselines]();
             }
-            std::cout << "config " << c << " outfreq " << i << " member fq " << *ifi << " placed at channel " << choffset << " of " << freqchans/chanstoaverage << std::endl;
             for(int j=0;j<numbaselines;j++) {
               const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
               if(bldata.localfreqindices[*ifi] >= 0) {

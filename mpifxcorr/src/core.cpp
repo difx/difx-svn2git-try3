@@ -407,8 +407,8 @@ void Core::loopprocess(int threadid)
   threadscratchspace * scratchspace = new threadscratchspace;
   scratchspace->shifterrorcount = 0;
   scratchspace->threadcrosscorrs = vectorAlloc_cf32(maxthreadresultlength);
-  scratchspace->baselineweight = new f32***[config->getFreqTableLength()];
-  scratchspace->baselineshiftdecorr = new f32**[config->getFreqTableLength()];
+  scratchspace->baselineweight = new f32***[config->getFreqTableLength()]();
+  scratchspace->baselineshiftdecorr = new f32**[config->getFreqTableLength()]();
   if(scratchspace->threadcrosscorrs == NULL) {
     cfatal << startl << "Could not allocate thread cross corr space (tried to allocate " << maxthreadresultlength/(1024*1024) << " MB)!!! Aborting." << endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
@@ -463,7 +463,7 @@ void Core::loopprocess(int threadid)
     scratchspace->pulsarscratchspace = vectorAlloc_cf32(maxxmaclength);
     if(somescrunch) //need separate accumulation space
     {
-      scratchspace->pulsaraccumspace = new cf32******[config->getFreqTableLength()];
+      scratchspace->pulsaraccumspace = new cf32******[config->getFreqTableLength()]();
     }
     createPulsarVaryingSpace(scratchspace->pulsaraccumspace, &(scratchspace->bins), procslots[0].configindex, -1, threadid); //don't need to delete old space
   }
@@ -1600,7 +1600,7 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
 void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffset, double nswidth, threadscratchspace * scratchspace, int freqindex, int baseline)
 {
   int status, perr, threadbinloop, threadindex, threadstart, numstrides;
-  int localfreqindex, targetfreqindex, freqchannels, targetfreqchannels, coreindex, coreoffset, corebinloop, channelinc, rotatorlength, dest;
+  int localfreqindex, targetfreqindex, freqchannels, targetfreqchannels, coreindex, coreoffset, corebinloop, channelinc, targetchannelinc, rotatorlength, dest;
   int antenna1index, antenna2index;
   int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, xmacstrideremain, stridestoaverage, averagesperstride, averagelength;
   double bandwidth, bandwidthoftarget, lofrequency, channelbandwidth, stepbandwidth;
@@ -1671,6 +1671,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   bandwidth = config->getFreqTableBandwidth(freqindex);
   targetfreqindex = config->getBTargetFreqIndex(procslots[index].configindex, baseline, localfreqindex);
   targetfreqchannels = config->getFNumChannels(targetfreqindex);
+  targetchannelinc = config->getFChannelsToAverage(targetfreqindex);
   bandwidthoftarget = config->getFreqTableBandwidth(targetfreqindex);
   lofrequency = config->getFreqTableFreq(freqindex);
   stridestoaverage = channelinc/xmacstridelen;
@@ -1683,7 +1684,10 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   averagelength = xmacstridelen/averagesperstride;
   numstrides = freqchannels/xmacstridelen;
   channelbandwidth = bandwidth/double(freqchannels);
-assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
+
+  assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
+  assert(targetchannelinc == channelinc); // required for the old striding logic to work out... TODO?: allow multi-stage averaging?
+
   rotatorlength = rotatestridelen+numstrides*rotatesperstride;
   stepbandwidth = rotatestridelen*channelbandwidth;
   if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
@@ -1706,11 +1710,10 @@ assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
     }
   }
 
-  //coreindex = config->getCoreResultBaselineOffset(procslots[index].configindex, targetfreqindex, baseline);
   coreindex = config->getCoreResultBaselineOffset(procslots[index].configindex, freqindex, baseline);
 
   //lock the mutex for this segment of the copying
-  perr = pthread_mutex_lock(&(procslots[index].viscopylocks[targetfreqindex][baseline]));
+  perr = pthread_mutex_lock(&(procslots[index].viscopylocks[freqindex][baseline]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << threadid << " error trying lock copy mutex for frequency table entry " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << "!!!" << endl;
 
@@ -1760,16 +1763,15 @@ assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
     for(int x=0;x<config->getNumXmacStrides(procslots[index].configindex, freqindex);x++)
     {
       threadindex = threadstart+x*config->getCompleteStrideLength(procslots[index].configindex, freqindex);
-      int xmacstart_ = x*xmacstridelen;
       xmacstrideremain = std::min(freqchannels-x*xmacstridelen, xmacstridelen);
       for(int b=0;b<threadbinloop;b++)
       {
         for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex);k++)
         {
           if(corebinloop > 1)
-             coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*targetfreqchannels + x*xmacstridelen)/channelinc;
+             coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*targetfreqchannels + x*xmacstridelen)/targetchannelinc;
           else
-            coreoffset = (k*targetfreqchannels + x*xmacstridelen)/channelinc;
+            coreoffset = (k*targetfreqchannels + x*xmacstridelen)/targetchannelinc;
           if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1 && fabs(applieddelay) > 1.0e-20)
           {
             if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
@@ -1801,14 +1803,12 @@ assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
           if(channelinc == 1) //this frequency is not averaged
           {
             xmaccopylen = xmacstrideremain;
-#warning "TODO: instead of coreindex+coreoffset look up the correct index for the used frequency-->outputband placement"
             status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[coreindex+coreoffset]), xmaccopylen);
             if(status != vecNoErr)
               cerror << startl << "Error trying to copy frequency index " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << " when not averaging in frequency" << endl;
           }
           else //this frequency *is* averaged - deal with it
           {
-#warning "TODO: instead of dest=coreindex+coreoffset look up the correct index for the used frequency-->outputband placement"
             dest = coreindex+coreoffset;
             int averagesperstrideremain = xmacstrideremain/averagelength;
             if(averagesperstrideremain == 0)
@@ -1829,11 +1829,11 @@ assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
         }
       }
     }
-    coreindex += corebinloop*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)*targetfreqchannels/channelinc;
+    coreindex += corebinloop*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)*targetfreqchannels/targetchannelinc;
   }
 
   //unlock the mutex for this segment of the copying
-  perr = pthread_mutex_unlock(&(procslots[index].viscopylocks[targetfreqindex][baseline]));
+  perr = pthread_mutex_unlock(&(procslots[index].viscopylocks[freqindex][baseline]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << threadid << " error trying unlock copy mutex for frequency table entry " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << "!!! Perr is " << perr << endl;
 
