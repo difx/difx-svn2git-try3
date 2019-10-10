@@ -53,14 +53,14 @@
 Mark5BMark6DataStream::Mark5BMark6DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments)
  : Mark5BDataStream(conf, snum, id, ncores, cids, bufferfactor, numsegments)
 {
-	cwarn << startl << "Starting Mark5b Mark6 datastream.  This is experimental at this time!" << endl;
+	cinfo << startl << "Starting Mark5B Mark6 datastream." << endl;
 	mark6gather = 0;
 	mark6eof = false;
 }
 
 Mark5BMark6DataStream::~Mark5BMark6DataStream()
 {
-	cwarn << startl << "Ending Mark5b Mark6 datastream.  Maybe it worked?" << endl;
+	cinfo << startl << "Ending Mark5b Mark6 datastream." << endl;
 	closeMark6();
 }
 
@@ -149,7 +149,7 @@ void Mark5BMark6DataStream::initialiseFile(int configindex, int fileindex)
 
 	startOutputFrameNumber = -1;
 
-	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), 1, config->getDNumMuxThreads(configindex, streamnum), formatname);
 	if(fanout != 1)
 	{
 		cfatal << startl << "Classic fanout is " << fanout << ", which is impossible; no choice but to abort!" << endl;
@@ -479,8 +479,6 @@ void Mark5BMark6DataStream::loopfileread()
 {
 	int perr;
 	int numread = 0;
-
-cverbose << startl << "Starting Mark5BMark6DataStream::loopfileread()" << endl;
 
 	//lock the outstanding send lock
 	perr = pthread_mutex_lock(&outstandingsendlock);

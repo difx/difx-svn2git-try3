@@ -34,8 +34,9 @@ Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedb
 {
   char formatname[64];
 
-  fanout = config->genMk5FormatName(format, nrecordedbands, recordedbw, nbits, sampling, framebytes, conf->getDDecimationFactor(confindex, dsindex), conf->getDNumMuxThreads(confindex, dsindex), formatname);
+  fanout = config->genMk5FormatName(format, nrecordedbands, recordedbw, nbits, sampling, framebytes, conf->getDDecimationFactor(confindex, dsindex), config->getDAlignmentSeconds(confindex, dsindex), conf->getDNumMuxThreads(confindex, dsindex), formatname);
   invalid = 0;
+
   if(fanout < 0)
     initok = false;
   else
@@ -76,10 +77,16 @@ Mk5Mode::Mk5Mode(Configuration * conf, int confindex, int dsindex, int recordedb
       }
       if(format == Configuration::INTERLACEDVDIF)
       {
-        perbandweights = new f32[nrecordedbands];
         invalid = new int[nrecordedbands];
-        for(int b = 0; b < nrecordedbands; ++b)
-          perbandweights[b] = 0.0;
+        perbandweights = new f32*[config->getNumBufferedFFTs(configindex)];
+        for(int i=0;i<config->getNumBufferedFFTs(configindex);++i)
+        {
+          perbandweights[i] = new f32[nrecordedbands];
+          for(int b = 0; b < nrecordedbands; ++b)
+          {
+            perbandweights[i][b] = 0.0;
+          }
+        }
       }
     }
   }
@@ -94,7 +101,7 @@ Mk5Mode::~Mk5Mode()
   }
 }
 
-float Mk5Mode::unpack(int sampleoffset)
+float Mk5Mode::unpack(int sampleoffset, int subloopindex)
 {
   float goodsamples;
   int mungedoffset = 0;
@@ -151,7 +158,7 @@ float Mk5Mode::unpack(int sampleoffset)
     totalinvalid = 0;
     for(int b = 0; b < mark5stream->nchan; ++b)
     {
-      perbandweights[b] = (goodsamples - invalid[b])/(float)unpacksamples;
+      perbandweights[subloopindex][b] = (goodsamples - invalid[b])/(float)unpacksamples;
       totalinvalid += invalid[b];
     }
 

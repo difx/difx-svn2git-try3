@@ -38,6 +38,7 @@
 #include "visibility.h"
 #include "alert.h"
 #include "vdifio.h"
+#include "codifio.h"
 #include "mathutil.h"
 #include "sysutil.h"
 
@@ -222,8 +223,9 @@ void Configuration::parseConfiguration(istream* input)
             cfatal << startl << "Input file out of order!  Attempted to read configuration details without knowledge of common settings - aborting!!!" << endl;
           consistencyok = false;
         }
-        else
+        else {
           consistencyok = processConfig(input);
+	}
         break;
       case RULE:
         if(!configread) {
@@ -231,8 +233,9 @@ void Configuration::parseConfiguration(istream* input)
             cfatal << startl << "Input file out of order!  Attempted to read rule details without knowledge of configurations - aborting!!!" << endl;
           consistencyok = false;
         }
-        else
+        else {
           consistencyok = processRuleTable(input);
+	}
         break;
       case FREQ:
         consistencyok = processFreqTable(input);
@@ -325,10 +328,12 @@ void Configuration::parseConfiguration(istream* input)
       {
 	if(configs[i].pulsarbin)
 	  {
-	    if (consistencyok)
+	    if (consistencyok) {
 	      consistencyok = processPulsarConfig(configs[i].pulsarconfigfilename, i);
-	    if (consistencyok)
+	    }
+	    if (consistencyok) {
 	      consistencyok = setPolycoFreqInfo(i);
+	    }
 	  }
 	
 	if(configs[i].phasedarray)
@@ -344,6 +349,9 @@ void Configuration::parseConfiguration(istream* input)
     if(consistencyok) {
       model = new Model(this, calcfilename);
       consistencyok = model->openSuccess();
+      if (!consistencyok) {
+	cerror << startl << "Failed to open calc file " << calcfilename << endl;
+      }
     }
     for(int i=0;i<telescopetablelength;i++) {
       if(consistencyok)
@@ -463,9 +471,9 @@ Configuration::~Configuration()
   delete [] numprocessthreads;
 }
 
-int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int numthreads, char *formatname) const
+int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int alignmentseconds, int numthreads, char *formatname) const
 {
-  int fanout=1, mbps;
+  int fanout=1, mbps, framesperperiod;
 
   mbps = int(2*nchan*bw*nbits + 0.5);
 
@@ -544,6 +552,17 @@ int Configuration::genMk5FormatName(dataformat format, int nchan, double bw, int
 	else
 	  sprintf(formatname, "VDIFL_%d-%d-%d-%d", framebytes-VDIF_LEGACY_HEADER_BYTES, mbps, nchan, nbits);
       break;
+    case CODIF:
+      /* FIXME: Do the format name properly, not hardcoded! */
+      framesperperiod = (int)(1e6*bw*nchan*alignmentseconds*nbits / ((framebytes-CODIF_HEADER_BYTES) * 8) + 0.5);
+      if (sampling==COMPLEX) {
+        framesperperiod = (int)(1e6*bw*nchan*alignmentseconds*nbits*2 / ((framebytes-CODIF_HEADER_BYTES) * 8) + 0.5);
+        sprintf(formatname, "CODIFC_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, framesperperiod, alignmentseconds, nchan, nbits);
+      }
+      else {
+        sprintf(formatname, "CODIF_%d-%dm%d-%d-%d", framebytes-CODIF_HEADER_BYTES, framesperperiod, alignmentseconds, nchan, nbits);
+      }
+      break;
     default:
       cfatal << startl << "genMk5FormatName : unsupported format encountered" << endl;
       return -1;
@@ -575,6 +594,9 @@ int Configuration::getFramePayloadBytes(int configindex, int configdatastreamind
     case VDIFL:
       payloadsize = framebytes - VDIF_LEGACY_HEADER_BYTES; 
       break;
+    case CODIF:
+      payloadsize = framebytes - CODIF_HEADER_BYTES; 
+      break;
     default:
       payloadsize = framebytes;
   }
@@ -600,7 +622,7 @@ void Configuration::getFrameInc(int configindex, int configdatastreamindex, int 
   ns = int(1.0e9*(seconds - sec));
 }
 
-int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex) const
+double Configuration::getFramesPerSecond(int configindex, int configdatastreamindex) const
 {
   int nchan, qb, decimationfactor;
   int payloadsize;
@@ -612,8 +634,8 @@ int Configuration::getFramesPerSecond(int configindex, int configdatastreamindex
   decimationfactor = getDDecimationFactor(configindex, configdatastreamindex);
   payloadsize = getFramePayloadBytes(configindex, configdatastreamindex);
 
-  // This will always work out to be an integer
-  return int(samplerate*nchan*qb*decimationfactor/(8*payloadsize) + 0.5); // Works for complex data
+  // This will always work out to be an integer -  CJP 7/11/17 Not for CODIF - change to double
+  return samplerate*nchan*qb*decimationfactor/(8*payloadsize); // Works for complex data
 }
 
 int Configuration::getMaxDataBytes() const
@@ -746,7 +768,7 @@ int Configuration::getDataBytes(int configindex, int datastreamindex) const
   const datastreamdata &currentds = datastreamtable[configs[configindex].datastreamindices[datastreamindex]];
   const freqdata &arecordedfreq = freqtable[currentds.recordedfreqtableindices[0]]; 
   validlength = (arecordedfreq.decimationfactor*configs[configindex].blockspersend*currentds.numrecordedbands*2*currentds.numbits*arecordedfreq.numchannels)/8;
-  if(currentds.format == MKIV || currentds.format == VLBA || currentds.format == VLBN || currentds.format == MARK5B || currentds.format == KVN5B || currentds.format == VDIF ||currentds.format == VDIFL || currentds.format == INTERLACEDVDIF)
+  if(currentds.format == MKIV || currentds.format == VLBA || currentds.format == VLBN || currentds.format == MARK5B || currentds.format == KVN5B || currentds.format == VDIF ||currentds.format == VDIFL || currentds.format == INTERLACEDVDIF || currentds.format == CODIF)
   {
     //must be an integer number of frames, with enough margin for overlap on either side
     validlength += (arecordedfreq.decimationfactor*(int)(configs[configindex].guardns/(1000.0/(freqtable[currentds.recordedfreqtableindices[0]].bandwidth*2.0))+1.0)*currentds.numrecordedbands*currentds.numbits)/8;
@@ -930,6 +952,7 @@ Mode* Configuration::getMode(int configindex, int datastreamindex)
     case KVN5B:
     case VDIF:
     case VDIFL:
+    case CODIF:
     case K5VSSP:
     case K5VSSP32:
     case INTERLACEDVDIF:
@@ -1392,6 +1415,7 @@ bool Configuration::processDatastreamTable(istream * input)
     datastreamtable[i].numdatafiles = 0; //default in case its a network datastream
     datastreamtable[i].tcpwindowsizekb = 0; //default in case its a file datastream
     datastreamtable[i].portnumber = -1; //default in case its a file datastream
+    datastreamtable[i].alignmentseconds = 1; //default
 
     //get configuration index for this datastream
     for(int c=0; c<numconfigs; c++)
@@ -1455,11 +1479,18 @@ bool Configuration::processDatastreamTable(istream * input)
       datastreamtable[i].format = INTERLACEDVDIF;
       datastreamtable[i].ismuxed = true;
       setDatastreamMuxInfo(i, line.substr(15,string::npos));
+    } else if(line.substr(0,5)  == "CODIF") {
+      datastreamtable[i].format = CODIF;
+      if(line.length() < 6) {
+        cfatal << startl << "Data format " << line << " too short, expected alignment period info, see vex2difx documentation" << endl;
+        return false;
+      }
+      datastreamtable[i].alignmentseconds = atoi(line.substr(5,string::npos).c_str());
     }
     else
     {
       if(mpiid == 0) //only write one copy of this error message
-        cfatal << startl << "Unknown data format " << line << " (case sensitive choices are LBASTD, LBAVSOP, LBA8BIT, K5, MKIV, VLBA, VLBN, MARK5B, KVN5B, VDIF, VDIFL and INTERLACEDVDIF)" << endl;
+        cfatal << startl << "Unknown data format " << line << " (case sensitive choices are LBASTD, LBAVSOP, LBA8BIT, K5, MKIV, VLBA, VLBN, MARK5B, KVN5B, VDIF, VDIFL, INTERLACEDVDIF and CODIF)" << endl;
       return false;
     }
     getinputline(input, &line, "QUANTISATION BITS");
@@ -2323,6 +2354,10 @@ bool Configuration::populateResultLengths()
   int bandsperautocorr, freqindex, freqchans, chanstoaverage, maxconfigphasecentres, xmacstridelen, binloop;
   int numaccs;
 
+  size_t total_threads = 0;
+  for(int j=0;j<numcoreconfs;j++)
+    total_threads += getCNumProcessThreads(j);
+
   maxthreadresultlength = 0;
   maxcoreresultlength = 0;
   for(int c=0;c<numconfigs;c++)
@@ -2348,8 +2383,6 @@ bool Configuration::populateResultLengths()
 
     if(configs[c].phasedarray) //set up for phased array
     {
-std::cerr << "PHASED ARRAY MODE in Configuration -- not supported now" << endl;
-exit(-1);
       //the thread space is just for one round of results
       threadfindex = 0;
       if(configs[c].padomain == FREQUENCY)
@@ -2425,7 +2458,7 @@ exit(-1);
       //note: outputband Mode data (threadresults) spectrally map injective non-surjective into Core output area
       configs[c].coreresultbaselineoffset = new int*[freqtablelength]();
       configs[c].coreresultbweightoffset  = new int*[freqtablelength]();
-      configs[c].coreresultbshiftdecorroffset = new int*[freqtablelength];
+      configs[c].coreresultbshiftdecorroffset = new int*[freqtablelength]();
       configs[c].coreresultautocorroffset = new int[numdatastreams]();
       configs[c].coreresultacweightoffset = new int[numdatastreams]();
       configs[c].coreresultpcaloffset     = new int[numdatastreams]();
@@ -2465,6 +2498,7 @@ exit(-1);
             if(configs[c].coreresultbaselineoffset[*ifi]==NULL) {
               configs[c].coreresultbaselineoffset[*ifi] = new int[numbaselines]();
             }
+            std::cout << "config " << c << " outfreq " << i << " member fq " << *ifi << " placed at channel " << choffset << " of " << freqchans/chanstoaverage << std::endl;
             for(int j=0;j<numbaselines;j++) {
               const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
               if(bldata.localfreqindices[*ifi] >= 0) {
@@ -2476,69 +2510,42 @@ exit(-1);
       }
       for(int i=0;i<freqtablelength;i++) //then append the baseline weights
       {
-        if(configs[c].freqoutputbysomebaseline[i])
+        if(configs[c].frequsedbysomebaseline[i])
         {
-          vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
-          // weight of complete output region
           configs[c].coreresultbweightoffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
-            int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
-            if(numblpolproducts<=0) {
-              stringstream str;
-              copy(inputfreqs.begin(), inputfreqs.end(), ostream_iterator<char>(str, " "));
-              cfatal << "Could not determine number of polarization products of target freq " << i << " from constituent freqs " << str.str() << " on baseline " << j << endl;
-              return false;
-            }
-            configs[c].coreresultbweightoffset[i][j] = coreresultindex;
-            //baselineweights are only floats so need to divide by 2...
-            toadd  = binloop*numblpolproducts/2;
-            toadd += binloop*numblpolproducts%2;
-            coreresultindex += toadd;
-          }
-          // weights of contributing band slices, tricky, no space, need in-place accu
-          for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
-            if(configs[c].coreresultbweightoffset[*ifi]==NULL) {
-              configs[c].coreresultbweightoffset[*ifi] = new int[numbaselines]();
-            }
-            for(int j=0;j<numbaselines;j++) {
-              const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
-              if(bldata.localfreqindices[*ifi] >= 0) {
-                configs[c].coreresultbweightoffset[*ifi][j] = configs[c].coreresultbweightoffset[i][j];
-              }
+            const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
+            if(!configs[c].frequsedbybaseline[i][j]) // could add this one, original code does not.
+              continue;
+            if(bldata.localfreqindices[i] >= 0)
+            {
+              configs[c].coreresultbweightoffset[i][j] = coreresultindex;
+              //baselineweights are only floats so need to divide by 2...
+              toadd  = binloop*bldata.numpolproducts[bldata.localfreqindices[i]]/2;
+              toadd += binloop*bldata.numpolproducts[bldata.localfreqindices[i]]%2;
+              coreresultindex += toadd;
             }
           }
         }
       }
       for(int i=0;i<freqtablelength;i++) //then append the shift decorrelation factors (multi-field only)
       {
-        if(configs[c].freqoutputbysomebaseline[i])
+        if(configs[c].frequsedbysomebaseline[i])
         {
-          vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
-          // decorrelation factor of complete output region
           configs[c].coreresultbshiftdecorroffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
-            int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
-            if(numblpolproducts > 0 && maxconfigphasecentres > 1)
+            const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
+            if(!configs[c].frequsedbybaseline[i][j])  // could add this one, original code does not.
+              continue;
+            if(bldata.localfreqindices[i] >= 0 && maxconfigphasecentres > 1)
             {
               configs[c].coreresultbshiftdecorroffset[i][j] = coreresultindex;
               //shift decorrelation factors are only floats so need to divide by 2...
               toadd  = maxconfigphasecentres/2;
               toadd += maxconfigphasecentres%2;
               coreresultindex += toadd;
-            }
-          }
-          // decorrelation factors of contributing band slices, tricky, no space, need in-place multiplication decorr *= (1-newdecorr)?
-          for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
-            if(configs[c].coreresultbshiftdecorroffset[*ifi]==NULL) {
-              configs[c].coreresultbshiftdecorroffset[*ifi] = new int[numbaselines]();
-            }
-            for(int j=0;j<numbaselines;j++) {
-              const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
-              if(bldata.localfreqindices[*ifi] >= 0) {
-                configs[c].coreresultbweightoffset[*ifi][j] = configs[c].coreresultbweightoffset[i][j];
-              }
             }
           }
         }
@@ -2602,7 +2609,14 @@ exit(-1);
       maxthreadresultlength = configs[c].threadresultlength;
     if(configs[c].coreresultlength > maxcoreresultlength)
       maxcoreresultlength = configs[c].coreresultlength;
+    cinfo << startl << "populateResultLengths() for config " << c << " need coreresultlength=" << configs[c].coreresultlength
+      << ", " << total_threads << " threads each threadresultlength=" << configs[c].threadresultlength << " x cf32 (" 
+      << ( sizeof(cf32)*(configs[c].threadresultlength * total_threads + configs[c].coreresultlength)/1048576.0 ) << " MBbyte total)" << endl;
   }
+
+  cinfo << startl << "populateResultLengths() determined maxcoreresultlength=" << sizeof(cf32)*maxcoreresultlength/1048576.0 << "MB, "
+    << "maxthreadresultlength=" << sizeof(cf32)*maxthreadresultlength/1048576.0 << " MB (" 
+    << ( sizeof(cf32)*(maxthreadresultlength * total_threads + maxcoreresultlength)/1048576.0 ) << " MB est. total)" << endl;
 
   return true;
 }
@@ -2983,9 +2997,9 @@ bool Configuration::consistencyCheck()
       sampletimens = 1000.0/(2.0*freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].bandwidth);
       ffttime = sampletimens*freqtable[datastreamtable[configs[i].datastreamindices[j]].recordedfreqtableindices[0]].numchannels*2;
       numffts = configs[i].subintns/ffttime;
-      if(ffttime - (int)(ffttime+0.5) > 0.00000001 || ffttime - (int)(ffttime+0.5) < -0.000000001)
+      if(fabs(ffttime - (int)(ffttime+0.5)) > 0.00000001)
       {
-        if(mpiid == 0) //only write one copy of this error message
+        if(mpiid == 0)  //only write one copy of this error message
           cfatal << startl << "FFT chunk time for config " << i << ", datastream " << j << " is not a whole number of nanoseconds (" << ffttime << ") - aborting!!!" << endl;
         return false;
       }

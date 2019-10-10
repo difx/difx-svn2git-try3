@@ -152,15 +152,22 @@ Visibility::~Visibility()
   for(int i=0;i<numbaselines;i++)
   {
     for(int j=0;j<config->getFreqTableLength();j++) {
-      for(int k=0;k<pulsarwidth;k++)
-        delete [] baselineweights[i][j][k];
-      delete [] baselineweights[i][j];
-      delete [] baselineshiftdecorrs[i][j];
-    }
+      if(baselineweights[i][j]) {
+        for(int k=0;k<pulsarwidth;k++) {
+          delete [] baselineweights[i][j][k];
+          delete [] baselineweightcounts[i][j][k];
+        }
+        delete [] baselineweights[i][j];
+        delete [] baselineweightcounts[i][j];
+        delete [] baselineshiftdecorrs[i][j];
+      }
+    }    
     delete [] baselineweights[i];
+    delete [] baselineweightcounts[i];
     delete [] baselineshiftdecorrs[i];
   }
   delete [] baselineweights;
+  delete [] baselineweightcounts;
   delete [] baselineshiftdecorrs;
 
   if(pulsarbinon) {
@@ -386,7 +393,6 @@ void Visibility::writedata()
       freqindex = config->getBFreqIndex(currentconfigindex, i, j);
       targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
       resultindex = config->getCoreResultBWeightOffset(currentconfigindex, freqindex, i)*2;
-// TODO: should Core combine weights for output target freqs?
       for(int b=0;b<binloop;b++) {
         for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) {
           if(binloop>1)
@@ -395,6 +401,14 @@ void Visibility::writedata()
             baselineweights[i][freqindex][b][k] = floatresults[resultindex]/(fftsperintegration*binweightdivisor[0]);
           else
             baselineweights[i][freqindex][b][k] = floatresults[resultindex]/fftsperintegration;
+          baselineweightcounts[i][freqindex][b][k]++;
+          if(freqindex != targetfreqindex) {
+            baselineweights[i][targetfreqindex][b][k] += baselineweights[i][freqindex][b][k];
+            baselineweightcounts[i][targetfreqindex][b][k]++;
+            //std::cout << "adding weight " << std::setprecision(4) << std::fixed << baselineweights[i][freqindex][b][k] << " of fq " << freqindex << " on baseline " << i << " to tgt fq " << targetfreqindex << " weight accu of " << baselineweights[i][targetfreqindex][b][k] << " count=" << baselineweightcounts[i][targetfreqindex][b][k] << " mean:" << baselineweights[i][targetfreqindex][b][k]/baselineweightcounts[i][targetfreqindex][b][k] << std::endl;
+          } else {
+            //std::cout << "keeping weight " << baselineweights[i][freqindex][b][k] << " of fq " << freqindex << " on baseline " << i << " of weight accu of tgt fq " << targetfreqindex << " of " << baselineweights[i][targetfreqindex][b][k] << std::endl;
+          }
           resultindex++;
         }
       }
@@ -407,10 +421,11 @@ void Visibility::writedata()
         freqindex = config->getBFreqIndex(currentconfigindex, i, j);
         targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
         resultindex = config->getCoreResultBShiftDecorrOffset(currentconfigindex, targetfreqindex, i)*2;
-// TODO: should Core combine decorrelation data for output target freqs?
         for(int s=0;s<model->getNumPhaseCentres(currentscan);s++) {
           //its in units of integration width in ns, so scale to get something which is 1.0 for no decorrelation
           baselineshiftdecorrs[i][freqindex][s] = floatresults[resultindex]/(1000000000.0*config->getIntTime(currentconfigindex));
+	  //TODO: multiply-in? average? in case of multiple freqindex'es --> targetfreqindex
+          baselineshiftdecorrs[i][targetfreqindex][s] = baselineshiftdecorrs[i][freqindex][s];
           resultindex++;
         }
       }
@@ -428,7 +443,6 @@ void Visibility::writedata()
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
         targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
-// TODO: outputband weight scaling?
           autocorrweights[i][j][k] = floatresults[resultindex]/fftsperintegration;
           resultindex++;
         }
@@ -770,9 +784,14 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
     {
       if(!config->isFrequencyOutput(currentconfigindex, i, freqindex))
         continue;
-      // freq is a target output band, look up one representative contributing baseband
+      // freq is a target output band, look up one representative contributing baseband present on this baseline
       vector<int> constituents = config->getSortedInputfreqsOfTargetfreq(currentconfigindex, i, freqindex);
-      baselinefreqindex = config->getBFreqIndexRev(currentconfigindex, i, constituents[0]);
+      for(vector<int>::const_iterator localfq=constituents.begin(); localfq!=constituents.end(); localfq++) {
+        baselinefreqindex = config->getBFreqIndexRev(currentconfigindex, i, *localfq);
+        if(baselinefreqindex >= 0)
+          break;
+      }
+      assert(baselinefreqindex >= 0);
       // source data location and size
       resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
@@ -799,9 +818,9 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
             {
               //cout << "About to write out baseline[" << i << "][" << s << "][" << k << "] from resultindex " << resultindex << ", whose 6th vis is " << results[resultindex+6].re << " + " << results[resultindex+6].im << " i" << endl;
               if(model->getNumPhaseCentres(currentscan) > 1)
-                currentweight = baselineweights[i][freqindex][b][k]*baselineshiftdecorrs[i][freqindex][s];
+                currentweight = baselineweights[i][freqindex][b][k]*baselineshiftdecorrs[i][freqindex][s] / baselineweightcounts[i][freqindex][b][k];
               else
-                currentweight = baselineweights[i][freqindex][b][k];
+                currentweight = baselineweights[i][freqindex][b][k] / baselineweightcounts[i][freqindex][b][k];
               writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, currentweight, buvw, filecount);
 
               //close, reopen in binary and write the binary data, then close again
@@ -1152,13 +1171,14 @@ void Visibility::changeConfig(int configindex)
   {
     //can just allocate without freeing all the old stuff
     first = false;
-    autocorrcalibs = new cf32*[numdatastreams];
-    autocorrweights = new f32**[numdatastreams];
-    baselineweights = new f32***[numbaselines];
-    baselineshiftdecorrs = new f32**[numbaselines];
-    binweightsums = new f32**[config->getFreqTableLength()];
-    binscales = new cf32**[config->getFreqTableLength()];
-    pulsarbins = new s32*[config->getFreqTableLength()];
+    autocorrcalibs = new cf32*[numdatastreams]();
+    autocorrweights = new f32**[numdatastreams]();
+    baselineweights = new f32***[numbaselines]();
+    baselineweightcounts = new int***[numbaselines]();
+    baselineshiftdecorrs = new f32**[numbaselines]();
+    binweightsums = new f32**[config->getFreqTableLength()]();
+    binscales = new cf32**[config->getFreqTableLength()]();
+    pulsarbins = new s32*[config->getFreqTableLength()]();
   }
   else
   {
@@ -1175,13 +1195,19 @@ void Visibility::changeConfig(int configindex)
     }
     for(int i=0;i<numbaselines;i++)
     {
-      for(int j=0;j<config->getBNumFreqs(currentconfigindex, i);j++) {
-        for(int k=0;k<pulsarwidth;k++)
-          delete [] baselineweights[i][j][k];
-        delete [] baselineshiftdecorrs[i][j];
-        delete [] baselineweights[i][j];
+      for(int j=0;j<config->getFreqTableLength();j++) {
+        if(baselineweights[i][j]) {
+          for(int k=0;k<pulsarwidth;k++) {
+            delete [] baselineweights[i][j][k];
+            delete [] baselineweightcounts[i][j][k];
+          }
+          delete [] baselineshiftdecorrs[i][j];
+          delete [] baselineweights[i][j];
+          delete [] baselineweightcounts[i][j];
+        }
       }
       delete [] baselineweights[i];
+      delete [] baselineweightcounts[i];
       delete [] baselineshiftdecorrs[i];
     }
     if(pulsarbinon) {
@@ -1216,21 +1242,48 @@ void Visibility::changeConfig(int configindex)
   resultlength = config->getCoreResultLength(configindex);
   for(int i=0;i<numdatastreams;i++) {
     autocorrcalibs[i] = new cf32[config->getDNumTotalBands(configindex, i)];
+    vectorZero_cf32(autocorrcalibs[i], config->getDNumTotalBands(configindex, i));
     autocorrweights[i] = new f32*[autocorrwidth];
-    for(int j=0;j<autocorrwidth;j++)
+    for(int j=0;j<autocorrwidth;j++) {
       autocorrweights[i][j] = new f32[config->getDNumTotalBands(configindex, i)];
+      vectorZero_f32(autocorrweights[i][j], config->getDNumTotalBands(configindex, i));
+    }
   }
 
   //Set up the baseline weights array
   for(int i=0;i<numbaselines;i++)
   {
-    baselineweights[i] = new f32**[config->getFreqTableLength()];
-    baselineshiftdecorrs[i] = new f32*[config->getFreqTableLength()];
+    baselineweights[i] = new f32**[config->getFreqTableLength()]();
+    baselineweightcounts[i] = new int**[config->getFreqTableLength()]();
+    baselineshiftdecorrs[i] = new f32*[config->getFreqTableLength()]();
     for(int j=0;j<config->getFreqTableLength();j++) {
-      baselineweights[i][j] = new f32*[pulsarwidth];
-      baselineshiftdecorrs[i][j] = new f32[config->getMaxPhaseCentres(configindex)];
-      for(int k=0;k<pulsarwidth;k++)
-        baselineweights[i][j][k] = new f32[config->getBNumPolProducts(configindex, i, j)];
+      const int localfreqindex = config->getBLocalFreqIndex(configindex, i, j);
+      if(localfreqindex >= 0) {
+        const int numpolproducts = config->getBNumPolProducts(configindex, i, localfreqindex);
+        assert(numpolproducts >= 1);
+        baselineweights[i][j] = new f32*[pulsarwidth]();
+        baselineweightcounts[i][j] = new int*[pulsarwidth]();
+        for(int k=0;k<pulsarwidth;k++) {
+          baselineweights[i][j][k] = new f32[numpolproducts]();
+          baselineweightcounts[i][j][k] = new int[numpolproducts]();
+          vectorZero_f32(baselineweights[i][j][k], numpolproducts);
+        }
+        baselineshiftdecorrs[i][j] = new f32[config->getMaxPhaseCentres(configindex)]();
+        vectorZero_f32(baselineshiftdecorrs[i][j], config->getMaxPhaseCentres(configindex));
+        //Ensure target freq fields get allocated as well
+        const int tq = config->getBTargetFreqIndex(configindex, i, localfreqindex);
+        if(!baselineweights[i][tq]) {
+          baselineweights[i][tq] = new f32*[pulsarwidth]();
+          baselineweightcounts[i][tq] = new int*[pulsarwidth]();
+          for(int k=0;k<pulsarwidth;k++) {
+            baselineweights[i][tq][k] = new f32[numpolproducts]();
+            baselineweightcounts[i][tq][k] = new int[numpolproducts]();
+            vectorZero_f32(baselineweights[i][tq][k], numpolproducts);
+          }
+          baselineshiftdecorrs[i][tq] = new f32[config->getMaxPhaseCentres(configindex)]();
+          vectorZero_f32(baselineshiftdecorrs[i][tq], config->getMaxPhaseCentres(configindex));
+        }
+      }
     }
   }
 

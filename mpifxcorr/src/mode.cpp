@@ -58,7 +58,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     usedouble=0;
   }
 
-
   //Uses bitwise test to check if numchannels is power of 2
   if(!(fftchannels & (fftchannels - 1)))
   {
@@ -69,6 +68,12 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     isfft = false;
   }
 
+
+  dataweight = vectorAlloc_f32(config->getNumBufferedFFTs(confindex));
+  for(int i=0;i<config->getNumBufferedFFTs(confindex);++i)
+  {
+    dataweight[i] = 0.0;
+  }
   perbandweights = 0;
   model = config->getModel();
   initok = true;
@@ -88,8 +93,21 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
   fractionalLoFreq = false;
   for(int i=0;i<numrecordedfreqs;i++)
   {
-    if(config->getDRecordedFreq(configindex, datastreamindex, i) - int(config->getDRecordedFreq(configindex, datastreamindex, i)) > TINY)
+    double loval = config->getDRecordedFreq(configindex, datastreamindex, i);
+    if(usedouble)
+    {
+      if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) 
+      {
+        loval -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
+      } 
+      else 
+      {
+        loval += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
+      }
+    }
+    if(fabs(loval - int(loval + 0.5)) > TINY) {
       fractionalLoFreq = true;
+    }
   }
 
   //check whether LO offset correction will decorrelate too badly, if used
@@ -187,7 +205,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
         }
       }
     }
-    dataweight = 0.0;
 
     lookup = vectorAlloc_s16((MAX_U16+1)*samplesperlookup);
     linearunpacked = vectorAlloc_s16(numlookups*samplesperlookup);
@@ -286,13 +303,15 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     subfracsampsin = vectorAlloc_f32(arraystridelength);
     subfracsampcos = vectorAlloc_f32(arraystridelength);
     subchannelfreqs = vectorAlloc_f32(arraystridelength);
-    estimatedbytes += 5*4*arraystridelength;
+    ldsbsubchannelfreqs = vectorAlloc_f32(arraystridelength);
+    estimatedbytes += 6*4*arraystridelength;
     /*cout << "subfracsamparg is " << subfracsamparg << endl;
     cout << "subfracsampsin is " << subfracsampsin << endl;
     cout << "subfracsampcos is " << subfracsampcos << endl;
     cout << "subchannelfreqs is " << subchannelfreqs << endl; */
     for(int i=0;i<arraystridelength;i++) {
       subchannelfreqs[i] = (float)((TWO_PI*(i)*recordedbandwidth)/recordedbandchannels);
+      ldsbsubchannelfreqs[i] = (float)((-TWO_PI*(i)*recordedbandwidth)/recordedbandchannels);
     }
 
     stepfracsamparg = vectorAlloc_f32(numfracstrides/2);
@@ -301,11 +320,16 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     stepfracsampcplx = vectorAlloc_cf32(numfracstrides/2);
     stepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
     lsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
-    estimatedbytes += (5*2+4)*numfracstrides;
+    dsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
+    ldsbstepchannelfreqs = vectorAlloc_f32(numfracstrides/2);
+    estimatedbytes += (7*2+4)*numfracstrides;
 
     for(int i=0;i<numfracstrides/2;i++) {
-      stepchannelfreqs[i] = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels);
-      lsbstepchannelfreqs[i] = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels);
+      stepchannelfreqs[i]     = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels);
+      dsbstepchannelfreqs[i]  = (float)((TWO_PI*i*arraystridelength*recordedbandwidth)/recordedbandchannels - TWO_PI*recordedbandwidth/2.0);
+      lsbstepchannelfreqs[i]  = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels);
+      //ldsbstepchannelfreqs[i] = (float)((-TWO_PI*((numfracstrides/2-i)*arraystridelength)*recordedbandwidth)/recordedbandchannels + TWO_PI*recordedbandwidth/2.0);
+      ldsbstepchannelfreqs[i] = -dsbstepchannelfreqs[i];
     }
 
     deltapoloffsets = false;
@@ -452,8 +476,13 @@ Mode::~Mode()
 
   if(perbandweights)
   {
+    for(int i=0;i<config->getNumBufferedFFTs(configindex);++i)
+    {
+      delete [] perbandweights[i];
+    }
     delete [] perbandweights;
   }
+  vectorFree(dataweight);
   vectorFree(validflags);
   for(int j=0;j<numrecordedbands+numzoombands;j++)
   {
@@ -544,6 +573,7 @@ Mode::~Mode()
   vectorFree(subfracsampsin);
   vectorFree(subfracsampcos);
   vectorFree(subchannelfreqs);
+  vectorFree(ldsbsubchannelfreqs);
 
   vectorFree(stepfracsamparg);
   vectorFree(stepfracsampsin);
@@ -551,6 +581,8 @@ Mode::~Mode()
   vectorFree(stepfracsampcplx);
   vectorFree(stepchannelfreqs);
   vectorFree(lsbstepchannelfreqs);
+  vectorFree(dsbstepchannelfreqs);
+  vectorFree(ldsbstepchannelfreqs);
 
   vectorFree(fracsamprotatorA);
   if (deltapoloffsets) vectorFree(fracsamprotatorB);
@@ -600,7 +632,7 @@ Mode::~Mode()
   }
 }
 
-float Mode::unpack(int sampleoffset)
+float Mode::unpack(int sampleoffset, int subloopindex)
 {
   int status, leftoversamples, stepin = 0;
 
@@ -640,17 +672,18 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
   int status, count, nearestsample, integerdelay, RcpIndex, LcpIndex, intwalltime;
   cf32* fftptr;
   f32* currentstepchannelfreqs;
+  f32* currentsubchannelfreqs;
   int indices[10];
   bool looff, isfraclooffset;
   //cout << "For Mode of datastream " << datastreamindex << ", index " << index << ", validflags is " << validflags[index/FLAGS_PER_INT] << ", after shift you get " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
 
   //since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
-  dataweight = 0.0;
+  dataweight[subloopindex] = 0.0;
   if(perbandweights)
   {
     for(int b = 0; b < numrecordedbands; ++b)
     {
-      perbandweights[b] = 0.0;
+      perbandweights[subloopindex][b] = 0.0;
     }
   }
   
@@ -677,6 +710,7 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
   walltimesecs = model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds + offsetns/1.0e9 + fftstartmicrosec/1.0e6;
   intwalltime = static_cast<int>(walltimesecs);
   fracwalltime = walltimesecs - intwalltime;
+  //cinfo << startl << "ATD: fftstartmicrosec " << fftstartmicrosec << ", sampletime " << sampletime << ", fftchannels " << fftchannels << ", bytesperblocknumerator " << bytesperblocknumerator << ", nearestsample " << nearestsample << endl;
 
   //if we need to, unpack some more data - first check to make sure the pos is valid at all
   //cout << "Datalengthbytes for " << datastreamindex << " is " << datalengthbytes << endl;
@@ -687,7 +721,7 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
   //cout << "bytesperblockdenominator for " << datastreamindex << " is " << bytesperblockdenominator << endl;
   if(nearestsample < -1 || (((nearestsample + fftchannels)/samplesperblock)*bytesperblocknumerator)/bytesperblockdenominator > datalengthbytes)
   {
-    cerror << startl << "MODE error for datastream " << datastreamindex << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample << ", the max bytes should be " << datalengthbytes << ".  offsetseconds was " << offsetseconds << ", offsetns was " << offsetns << ", index was " << index << ", average delay was " << averagedelay << ", datasec was " << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
+    cerror << startl << "MODE error for datastream " << datastreamindex << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample << ", the max bytes should be " << datalengthbytes << " and hence last sample should be " << (datalengthbytes*bytesperblockdenominator)/(bytesperblocknumerator*samplesperblock)  << " (fftchannels is " << fftchannels << "), offsetseconds was " << offsetseconds << ", offsetns was " << offsetns << ", index was " << index << ", average delay was " << averagedelay << ", datasec was " << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
     for(int i=0;i<numrecordedbands;i++)
     {
       status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
@@ -702,11 +736,11 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
   if(nearestsample == -1)
   {
     nearestsample = 0;
-    dataweight = unpack(nearestsample);
+    dataweight[subloopindex] = unpack(nearestsample, subloopindex);
   }
   else if(nearestsample < unpackstartsamples || nearestsample > unpackstartsamples + unpacksamples - fftchannels)
     //need to unpack more data
-    dataweight = unpack(nearestsample);
+    dataweight[subloopindex] = unpack(nearestsample, subloopindex);
 
  /*
   * After DiFX-2.4, it is proposed to change the handling of lower sideband and dual sideband data, such
@@ -740,7 +774,7 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
   *   Would need to make a similar option for LBA data.
   */
 
-  if(!(dataweight > 0.0)) {
+  if(!(dataweight[subloopindex] > 0.0)) {
     for(int i=0;i<numrecordedbands;i++)
     {
       status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
@@ -833,9 +867,26 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
     //updated so that Nyquist channel is not accumulated for either USB or LSB data
     //and is excised entirely, so both USB and LSB data start at the same place (no sidebandoffset)
     currentstepchannelfreqs = stepchannelfreqs;
-    if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+    currentsubchannelfreqs = subchannelfreqs;
+    if(usedouble)
     {
-      currentstepchannelfreqs = lsbstepchannelfreqs;
+      currentstepchannelfreqs = dsbstepchannelfreqs;
+      /*if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+      {
+        currentstepchannelfreqs = ldsbstepchannelfreqs;
+        currentsubchannelfreqs = ldsbsubchannelfreqs;
+      }
+      else
+      {
+        currentstepchannelfreqs = dsbstepchannelfreqs;
+      }*/
+    }
+    else
+    {
+      if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
+      {
+        currentstepchannelfreqs = lsbstepchannelfreqs;
+      }
     }
 
     looff = false;
@@ -849,14 +900,23 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
         fraclooffset = -fraclooffset;
     }
 
-    //get ready to apply fringe rotation, if it is pre-F
+    //get ready to apply fringe rotation, if it is pre-F.  
+    //By default, the local oscillator frequency (which is used for fringe rotation) is the band edge, as specified inthe input file
     lofreq = config->getDRecordedFreq(configindex, datastreamindex, i);
-    if (usecomplex && usedouble) {
+
+    // For double-sideband data, the LO frequency is at the centre of the band, not the band edge
+    if (usecomplex && usedouble)
+    {
       if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i);
+	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       } else {
-	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i);
+	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       }
+    }
+
+    // For lower sideband complex data, the effective LO is at negative frequency, not positive
+    if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+      lofreq = -lofreq;
     }
 
     switch(fringerotationorder) {
@@ -1007,7 +1067,7 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
     }
 
     // Note recordedfreqclockoffsetsdata will usually be zero, but avoiding if statement
-    status = vectorMulC_f32(subchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] + recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength);
+    status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] + recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength);
     if(status != vecNoErr) {
       csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
       exit(1);
@@ -1054,7 +1114,7 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
 
     // Repeat the post F correction steps if each pol is different
     if (deltapoloffsets) {
-      status = vectorMulC_f32(subchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength); 
+      status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength); 
       if(status != vecNoErr) {
 	csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
 	exit(1);
@@ -1108,6 +1168,11 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
         indices[count++] = j;
         switch(fringerotationorder) {
           case 0: //post-F
+            if (usecomplex) {
+              cfatal << startl << "Post-F (0th order) fringe rotation not currently supported for complex sampled data!" << endl;
+              exit(1);
+            }
+              
             fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j][subloopindex]:fftoutputs[j][subloopindex];
 
             //do the fft
@@ -1134,6 +1199,8 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
           case 2: // Quadratic
             if (usecomplex) {
               status = vectorMul_cf32(complexrotator, &unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
+              // The following can be uncommented (and the above commented) if wanting to 'turn off' fringe rotation for testing in the complex case
+              //status = vectorCopy_cf32(&unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
               if (status != vecNoErr)
                 csevere << startl << "Error in complex fringe rotation" << endl;
             } else {
@@ -1149,25 +1216,32 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
               if(status != vecNoErr)
                 csevere << startl << "Error doing the FFT!!!" << endl;
             }
-            else{
+            else {
               status = vectorDFT_CtoC_cf32(complexunpacked, fftd, pDFTSpecC, fftbuffer);
               if(status != vecNoErr)
                 csevere << startl << "Error doing the DFT!!!" << endl;
             }
 
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+              // All lower sideband bands need to be conjugated (achieved by taking the second half of the band for real-valued inputs)
+              // Additionally for the complex-valued inputs, the order of the frequency channels is reversed so they need to be flipped
+              // (for the double sideband case, in two halves, for the regular case, the whole thing)
 	      if (usecomplex) {
 		if (usedouble) {
-		  status = vectorFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
-		  status = vectorFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
-		} else {
-              status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
-              }
-	      } else {
+		  status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
+		  status = vectorConjFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
+		} 
+                else {
+                  status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
+                }
+	      } 
+              else {
 		status = vectorCopy_cf32(&(fftd[recordedbandchannels]), fftoutputs[j][subloopindex], recordedbandchannels);
 	      }
             }
             else {
+              // For upper sideband bands, normally just need to copy the fftd channels.
+              // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
 	      if (usecomplex && usedouble) {
 		status = vectorCopy_cf32(fftd, &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels/2);
 		status = vectorCopy_cf32(&fftd[recordedbandchannels/2], fftoutputs[j][subloopindex], recordedbandchannels/2);
@@ -1184,6 +1258,8 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
 	// 1. The zero element corresponds to the lowest sky frequency.  That is:
 	//    fftoutputs[j][0] = Local Oscillator Frequency              (for Upper Sideband)
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Lower Sideband)
+	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Upper Sideband)
+	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Lower Sideband)
 	// 
 	// 2. The frequency increases monotonically with index
 	// 
@@ -1229,14 +1305,14 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
 	  if(status != vecNoErr)
 	    csevere << startl << "Error in autocorrelation!!!" << status << endl;
 
-	  //store the weight
+	  //store the weight for the autocorrelations
           if(perbandweights)
           {
-	    weights[0][j] += perbandweights[j];
+	    weights[0][j] += perbandweights[subloopindex][j];
           }
           else
           {
-	    weights[0][j] += dataweight;
+	    weights[0][j] += dataweight[subloopindex];
           }
 	}
       }
@@ -1297,13 +1373,13 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
 	//store the weights
         if(perbandweights)
         {
-	  weights[1][indices[0]] += perbandweights[indices[0]]*perbandweights[indices[1]];
-	  weights[1][indices[1]] += perbandweights[indices[0]]*perbandweights[indices[1]];
+	  weights[1][indices[0]] += perbandweights[subloopindex][indices[0]]*perbandweights[subloopindex][indices[1]];
+	  weights[1][indices[1]] += perbandweights[subloopindex][indices[0]]*perbandweights[subloopindex][indices[1]];
         }
         else
         {
-	  weights[1][indices[0]] += dataweight;
-	  weights[1][indices[1]] += dataweight;
+	  weights[1][indices[0]] += dataweight[subloopindex];
+	  weights[1][indices[1]] += dataweight[subloopindex];
         }
       }
     }
@@ -1318,11 +1394,11 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
 	//store the weight
         if(perbandweights)
         {
-	  weights[0][indices[k]] += perbandweights[indices[k]];
+	  weights[0][indices[k]] += perbandweights[subloopindex][indices[k]];
         }
         else
         {
-	  weights[0][indices[k]] += dataweight;
+	  weights[0][indices[k]] += dataweight[subloopindex];
         }
       }
     }

@@ -63,7 +63,7 @@ public:
 
   /// Supported types of recorded data format
 
-  enum dataformat {LBASTD, LBAVSOP, LBA8BIT, LBA16BIT, K5VSSP, K5VSSP32, MKIV, VLBA, MARK5B, VDIF, VDIFL, INTERLACEDVDIF, VLBN, KVN5B};
+  enum dataformat {LBASTD, LBAVSOP, LBA8BIT, LBA16BIT, K5VSSP, K5VSSP32, MKIV, VLBA, MARK5B, VDIF, VDIFL, INTERLACEDVDIF, VLBN, KVN5B, CODIF};
 
   /// Supported sources of data
   enum datasource {UNIXFILE, MK5MODULE, NETWORKSTREAM, FAKESTREAM, MK6MODULE, SHAREDMEMORYSTREAM};
@@ -187,6 +187,8 @@ public:
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].maxrecordedpcaltones; }
   inline int getDNumBits(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].numbits; }
+  inline int getDAlignmentSeconds(int configindex, int configdatastreamindex) const
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].alignmentseconds; }
   //inline int getDFramesPerSecond(int configindex, int configdatastreamindex) const
   //  { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].framespersecond; }
   inline int getDNumMuxThreads(int configindex, int configdatastreamindex) const
@@ -370,7 +372,7 @@ public:
     datasource s;
     f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
-    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == KVN5B || f == VDIF || f == VDIFL || f == INTERLACEDVDIF) && (s == UNIXFILE || s == NETWORKSTREAM || s == FAKESTREAM)); 
+    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == KVN5B || f == VDIF || f == VDIFL || f == INTERLACEDVDIF || f == CODIF) && (s == UNIXFILE || s == NETWORKSTREAM || s == FAKESTREAM)); 
   }
   inline bool isVDIFFile(int datastreamindex) const
   {
@@ -472,7 +474,7 @@ public:
     datasource s;
     f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
-    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == KVN5B || f == VDIF || f == VDIFL || f == INTERLACEDVDIF) && s == MK5MODULE); 
+    return ((f == MKIV || f == VLBA || f == VLBN || f == MARK5B || f == KVN5B || f == VDIF || f == VDIFL || f == INTERLACEDVDIF || f == CODIF) && s == MK5MODULE); 
   }
   inline int getFrameBytes(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].framebytes; }
@@ -538,7 +540,7 @@ public:
   * @param configindex The index of the configuration being used (from the table in the input file)
   * @param configdatastreamindex The index of the datastream (from the table in the input file)
   */
-  int getFramesPerSecond(int configindex, int configdatastreamindex) const;
+  double getFramesPerSecond(int configindex, int configdatastreamindex) const;
 
  /**
   * @return The number of payload bytes in a data frame
@@ -556,10 +558,11 @@ public:
   * @param sampling The type of data sampling (real or complex)
   * @param framebytes The number of bytes in a frame
   * @param decimationfactor The number of samples to throw away during unpacking
+  * @param alignmentseconds The number of seconds between samples landing on an integer second boundary
   * @param numthreads The number of (interlaced) threads
   * @param formatname character array representing format name (set during method)
   */
-  int genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int numthreads, char *formatname) const;
+  int genMk5FormatName(dataformat format, int nchan, double bw, int nbits, datasampling sampling, int framebytes, int decimationfactor, int alignmentseconds, int numthreads, char *formatname) const;
 
  /**
   * @return The Model object which contains geometric model information
@@ -884,7 +887,8 @@ private:
     int bytespersampledenom;
     int framesamples;
     int framebytes;
-    int framespersecond;
+    double framespersecond;
+    int alignmentseconds; // defaulted to 1, but can be >1 for CODIF.
     int nummuxthreads;
     int * muxthreadmap;
     bool filterbank;

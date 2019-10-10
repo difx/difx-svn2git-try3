@@ -57,7 +57,7 @@
 #define ARCH GENERIC
 #endif
 
-
+#define TINY 0.000000001
 
 //set up the function mapping for the intel architecture
 #if(ARCH == INTEL)

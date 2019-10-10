@@ -915,8 +915,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   vis1 = &(m1->getFreqs(config->getBDataStream1BandIndex(procslots[index].configindex, j, localfreqindex, p), fftsubloop)[xmacstart]);
                   vis2 = &(m2->getConjugatedFreqs(config->getBDataStream2BandIndex(procslots[index].configindex, j, localfreqindex, p), fftsubloop)[xmacstart]);
 
-                  weight1 = m1->getDataWeight(config->getBDataStream1RecordBandIndex(procslots[index].configindex, j, localfreqindex, p));
-                  weight2 = m2->getDataWeight(config->getBDataStream2RecordBandIndex(procslots[index].configindex, j, localfreqindex, p));
+                  weight1 = m1->getDataWeight(config->getBDataStream1RecordBandIndex(procslots[index].configindex, j, localfreqindex, p), fftsubloop);
+                  weight2 = m2->getDataWeight(config->getBDataStream2RecordBandIndex(procslots[index].configindex, j, localfreqindex, p), fftsubloop);
 
                   if(procslots[index].pulsarbin)
                   {
@@ -959,6 +959,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   else
                   {
                     //not pulsar binning, so this is nice and simple - just cross multiply accumulate
+                    //baselineweight gets updated later
                     status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+p*xmacstridelength]), xmacstrideremain);
 
                     if(status != vecNoErr)
@@ -1031,8 +1032,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   }
                   else
                   {
-                    weight1 = m1->getDataWeight(ds1recordbandindex);
-                    weight2 = m2->getDataWeight(ds2recordbandindex);
+                    weight1 = m1->getDataWeight(ds1recordbandindex, fftsubloop);
+                    weight2 = m2->getDataWeight(ds2recordbandindex, fftsubloop);
 
                     bweight = weight1*weight2;
 
@@ -1274,7 +1275,6 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex)) {
         freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
         //put autocorrs in resultsbuffer
-#warning "TODO: resultsindex not +=freqchannels but actually look up the correct index for the used frequency-->outputband placement"
         status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[resultindex], freqchannels);
         if(status != vecNoErr)
           csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << endl;
@@ -1288,7 +1288,6 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex)) {
           freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
-#warning "TODO: resultsindex not +=freqchannels but actually look up the correct index for the used frequency-->outputband placement"
           status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[resultindex], freqchannels);
           if(status != vecNoErr)
             csevere << startl << "Error copying cross-polar autocorrelations for datastream " << j << ", band " << k << endl;
@@ -1316,7 +1315,6 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
     {
       freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
       numrecordedbands = config->getDNumRecordedBands(procslots[index].configindex, j);
-#warning "TODO: isFrequencyOutput() instead of isFrequencyUsed(), and then pull together weights of each outputband from those of its constituent freq(s)"
       if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex))
       {
         if(k>=numrecordedbands)
@@ -1343,7 +1341,6 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
       {
         freqindex = config->getDTotalFreqIndex(procslots[index].configindex, j, k);
         numrecordedbands = config->getDNumRecordedBands(procslots[index].configindex, j);
-#warning "TODO: isFrequencyOutput() instead of isFrequencyUsed(), and then pull together weights of each outputband from those of its constituent freq(s)"
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex)) {
           if(k>=numrecordedbands)
           {
@@ -1603,7 +1600,7 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
 void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffset, double nswidth, threadscratchspace * scratchspace, int freqindex, int baseline)
 {
   int status, perr, threadbinloop, threadindex, threadstart, numstrides;
-  int localfreqindex, targetfreqindex, freqchannels, targetfreqchannels, coreindex, coreoffset, corebinloop, targetplacementchannel, channelinc, rotatorlength, dest;
+  int localfreqindex, targetfreqindex, freqchannels, targetfreqchannels, coreindex, coreoffset, corebinloop, channelinc, rotatorlength, dest;
   int antenna1index, antenna2index;
   int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, xmacstrideremain, stridestoaverage, averagesperstride, averagelength;
   double bandwidth, bandwidthoftarget, lofrequency, channelbandwidth, stepbandwidth;
@@ -1675,8 +1672,6 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   targetfreqindex = config->getBTargetFreqIndex(procslots[index].configindex, baseline, localfreqindex);
   targetfreqchannels = config->getFNumChannels(targetfreqindex);
   bandwidthoftarget = config->getFreqTableBandwidth(targetfreqindex);
-#warning "TODO: set targetfreqoffset to be the actual channel(bin)-count offset from start of targetfreq to where to place freqchannels; in 1-to-1 targetplacementchannel=0 and targetfreqchannels==freqchannels"
-  targetplacementchannel = 0; // TODO
   lofrequency = config->getFreqTableFreq(freqindex);
   stridestoaverage = channelinc/xmacstridelen;
   rotatesperstride = xmacstridelen/rotatestridelen;
@@ -1711,7 +1706,8 @@ assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
     }
   }
 
-  coreindex = config->getCoreResultBaselineOffset(procslots[index].configindex, targetfreqindex, baseline);
+  //coreindex = config->getCoreResultBaselineOffset(procslots[index].configindex, targetfreqindex, baseline);
+  coreindex = config->getCoreResultBaselineOffset(procslots[index].configindex, freqindex, baseline);
 
   //lock the mutex for this segment of the copying
   perr = pthread_mutex_lock(&(procslots[index].viscopylocks[targetfreqindex][baseline]));
@@ -1770,17 +1766,10 @@ assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
       {
         for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex);k++)
         {
-#warning "TODO: threadindex is ok, but coreoffset here is incorrect for placement into outputband"
-// specific
-//          if(corebinloop > 1)
-//            coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*freqchannels + x*xmacstridelen)/channelinc;
-//          else
-//            coreoffset = (k*freqchannels + x*xmacstridelen)/channelinc;
-// outputbands, generic ; note that for 1:1 (real:output) bands naturally have targetplacementchannel=0 targetfreqchannels==freqchannels since targetfreq==freq
           if(corebinloop > 1)
-             coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*targetfreqchannels + x*xmacstridelen + targetplacementchannel)/channelinc;
+             coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*targetfreqchannels + x*xmacstridelen)/channelinc;
           else
-            coreoffset = (k*targetfreqchannels + x*xmacstridelen + targetplacementchannel)/channelinc;
+            coreoffset = (k*targetfreqchannels + x*xmacstridelen)/channelinc;
           if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1 && fabs(applieddelay) > 1.0e-20)
           {
             if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
