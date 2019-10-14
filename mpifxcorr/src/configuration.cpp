@@ -2479,18 +2479,20 @@ bool Configuration::populateResultLengths()
             if(numblpolproducts<=0) {
               stringstream str;
               copy(inputfreqs.begin(), inputfreqs.end(), ostream_iterator<char>(str, " "));
-              cfatal << "Could not determine number of polarization products of target freq " << i << " from constituent freqs " << str.str() << " on baseline " << j << endl;
+              cfatal << startl << "Could not determine number of polarization products of target freq " << i << " from constituent freqs " << str.str() << " on baseline " << j << endl;
               return false;
             }
             configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
             coreresultindex += maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage;
           }
           // mark contributing band slices and their position in that region, all baselines
+          bool placementpossible = true;
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
             double fcurr=freqtable[*ifi].bandlowedgefreq();
             int choffset = ((fcurr-fref)/freqtable[i].bandwidth)*freqchans;
             if (choffset%chanstoaverage != 0) {
-              cerr << "Configuration: consituent band placement at bin " << choffset << " not divisible by freq avgeraging factor " << chanstoaverage << " -- TODO\n";
+              cfatal << startl << "consituent band placement at bin " << choffset << " not divisible by freq avgeraging factor " << chanstoaverage << " -- TODO" << endl;
+              placementpossible = false;
             }
             choffset = choffset/chanstoaverage;
             if(!configs[c].coreresultbaselineoffset[*ifi]) {
@@ -2502,6 +2504,9 @@ bool Configuration::populateResultLengths()
                 configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + choffset;
               }
             }
+          }
+          if(!placementpossible) {
+            return false;
           }
         }
       }
