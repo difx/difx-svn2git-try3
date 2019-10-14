@@ -177,6 +177,8 @@ public:
     { return telescopetable[datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].telescopeindex].name; }
   inline double getDTsys(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].tsys; }
+  inline double getDGainOffset(int configindex, int configdatastreamindex, int datastreamrecordedfreqindex) const
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].recordedfreqgainoffsets[datastreamrecordedfreqindex]; }
   inline float getDPhaseCalIntervalMHz(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].phasecalintervalmhz; }
   inline float getDPhaseCalBaseMHz(int configindex, int configdatastreamindex) const
@@ -905,6 +907,7 @@ private:
     double * recordedfreqclockoffsetsdelta;
     double * recordedfreqphaseoffset;
     double * recordedfreqlooffsets;
+    double * recordedfreqgainoffsets;
     int * zoomfreqpols;
     int * zoomfreqtableindices;
     int * zoomfreqparentdfreqindices;

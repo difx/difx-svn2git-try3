@@ -518,6 +518,26 @@ void Visibility::writedata()
                   modifier /= config->getDRecordedBandwidth(currentconfigindex, ds2, config->getDZoomFreqParentFreqIndex(currentconfigindex, ds2, localfreqindex));
                   scale *= sqrt(modifier);
                 }
+                //Adjust by gain offsets.
+                //TODO: Ideally, parent autocorrs (not manual gain offsets!) should take out any power differences across a combined band, avoiding power "steps" at joined band boundaries?
+                if(ds1bandindex >= config->getDNumRecordedBands(currentconfigindex, ds1))
+                  localfreqindex = config->getDZoomFreqParentFreqIndex(currentconfigindex, ds1, ds1bandindex-config->getDNumRecordedBands(currentconfigindex, ds1));
+                else
+                  localfreqindex = config->getDRecordedFreqIndex(currentconfigindex, ds1, ds1bandindex);
+                if (config->getDGainOffset(currentconfigindex, ds1, localfreqindex) != 0.0)
+                {
+                  double gainadj = 1.0 + config->getDGainOffset(currentconfigindex, ds1, localfreqindex);
+                  scale *= gainadj;
+                }
+                if(ds2bandindex >= config->getDNumRecordedBands(currentconfigindex, ds2))
+                  localfreqindex = config->getDZoomFreqParentFreqIndex(currentconfigindex, ds2, ds2bandindex-config->getDNumRecordedBands(currentconfigindex, ds2));
+                else
+                  localfreqindex = config->getDRecordedFreqIndex(currentconfigindex, ds2, ds2bandindex);
+                if (config->getDGainOffset(currentconfigindex, ds2, localfreqindex) != 0.0)
+                {
+                  double gainadj = 1.0 + config->getDGainOffset(currentconfigindex, ds2, localfreqindex);
+                  scale *= gainadj;
+                }
                 if(config->getDataFormat(currentconfigindex, ds1) == Configuration::LBASTD || config->getDataFormat(currentconfigindex, ds1) == Configuration::LBAVSOP)
                   scale *= 4.0;
                 if(config->getDataFormat(currentconfigindex, ds2) == Configuration::LBASTD || config->getDataFormat(currentconfigindex, ds2) == Configuration::LBAVSOP)

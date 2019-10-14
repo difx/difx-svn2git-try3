@@ -423,6 +423,7 @@ Configuration::~Configuration()
       delete [] datastreamtable[i].recordedfreqclockoffsetsdelta;
       delete [] datastreamtable[i].recordedfreqphaseoffset;
       delete [] datastreamtable[i].recordedfreqlooffsets;
+      delete [] datastreamtable[i].recordedfreqgainoffsets;
       delete [] datastreamtable[i].zoomfreqtableindices;
       delete [] datastreamtable[i].zoomfreqpols;
       delete [] datastreamtable[i].zoomfreqparentdfreqindices;
@@ -911,7 +912,7 @@ bool Configuration::stationUsed(int telescopeindex) const
 Mode* Configuration::getMode(int configindex, int datastreamindex)
 {
   configdata conf = configs[configindex];
-  datastreamdata stream = datastreamtable[conf.datastreamindices[datastreamindex]];
+  const datastreamdata& stream = datastreamtable[conf.datastreamindices[datastreamindex]];
   int framesamples, framebytes;
   int guardsamples = (int)(conf.guardns/(1000.0/(freqtable[stream.recordedfreqtableindices[0]].bandwidth*2.0)) + 0.5);
   int streamrecbandchan = freqtable[stream.recordedfreqtableindices[0]].numchannels;
@@ -1594,6 +1595,7 @@ bool Configuration::processDatastreamTable(istream * input)
     datastreamtable[i].recordedfreqclockoffsetsdelta = new double[datastreamtable[i].numrecordedfreqs]();
     datastreamtable[i].recordedfreqphaseoffset = new double[datastreamtable[i].numrecordedfreqs]();
     datastreamtable[i].recordedfreqlooffsets = new double[datastreamtable[i].numrecordedfreqs]();
+    datastreamtable[i].recordedfreqgainoffsets = new double[datastreamtable[i].numrecordedfreqs]();
     estimatedbytes += 8*datastreamtable[i].numrecordedfreqs*3;
     datastreamtable[i].numrecordedbands = 0;
     for(int j=0;j<datastreamtable[i].numrecordedfreqs;j++)
@@ -1630,6 +1632,8 @@ bool Configuration::processDatastreamTable(istream * input)
       getinputline(input, &line, "FREQ OFFSET ", j); //Freq offset is positive if recorded LO frequency was higher than the frequency in the frequency table
       datastreamtable[i].recordedfreqlooffsets[j] = atof(line.c_str());
       getinputline(input, &line, "GAIN OFFSET ", j); //Gain offset is non-zero if voltage spectra should be scaled, e.g. to amplitude-align frequency portions of outputbands
+      datastreamtable[i].recordedfreqgainoffsets[j] = atof(line.c_str());
+      // TODO?: same Offset:LcpOffset syntax for GAIN OFFSET as for CLK oFFSET?
       getinputline(input, &line, "NUM REC POLS ", j);
       datastreamtable[i].recordedfreqpols[j] = atoi(line.c_str());
       datastreamtable[i].numrecordedbands += datastreamtable[i].recordedfreqpols[j];
@@ -2610,9 +2614,6 @@ bool Configuration::populateResultLengths()
       maxthreadresultlength = configs[c].threadresultlength;
     if(configs[c].coreresultlength > maxcoreresultlength)
       maxcoreresultlength = configs[c].coreresultlength;
-    cinfo << startl << "populateResultLengths() for config " << c << " need coreresultlength=" << configs[c].coreresultlength
-      << ", " << total_threads << " threads each threadresultlength=" << configs[c].threadresultlength << " x cf32 (" 
-      << ( sizeof(cf32)*(configs[c].threadresultlength * total_threads + configs[c].coreresultlength)/1048576.0 ) << " MBbyte total)" << endl;
   }
 
   return true;
