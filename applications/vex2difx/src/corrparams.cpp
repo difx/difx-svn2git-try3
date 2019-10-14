@@ -1540,6 +1540,13 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 		ss >> d;
 		loOffsets.push_back(d);
 	}
+        else if(key == "gainOffsets")
+        {
+		double d;
+
+		ss >> d;
+		gainOffsets.push_back(d);
+        }
 	else if(key == "zoom")
 	{
 		if(!zoomFreqs.empty())

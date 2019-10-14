@@ -188,7 +188,7 @@ public:
 	std::vector<double> freqClockOffsDelta; // Clock offsets between pols for the individual frequencies
 	std::vector<double> freqPhaseDelta;	// Phase difference between pols for each frequency
 	std::vector<double> loOffsets;		// LO offsets for each individual frequency
-	std::vector<double> freqGains;		// Gains (V/V) for each individual frequency
+	std::vector<double> gainOffsets;	// Gains (V/V) for each individual frequency
 	VexClock clock;
 	double deltaClock;	// [sec]
 	double deltaClockRate;	// [sec/sec]
@@ -262,7 +262,7 @@ public:
 	int xmacLength;		// Number of channels to do at a time when xmac'ing
 	int numBufferedFFTs;	// Number of FFTs to do in Mode before XMAC'ing
 	std::set<int> freqIds;	// which bands to correlate
-	enum OutputBandwidthMode outputBandwidthMode;	// mode in which go choose/generate output bands
+	enum OutputBandwidthMode outputBandwidthMode;	// mode in which to choose/generate output bands
 	mutable AutoBands autobands; // generator for output bands
 	std::string binConfigFile;
 	std::string phasedArrayConfigFile;
