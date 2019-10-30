@@ -2487,30 +2487,31 @@ bool Configuration::populateResultLengths()
               return false;
             }
             configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
+if (mpiid == 10)
+cout << "coreresultbaselineoffset[OUT fq:" << i << "][bl:" << j << "] = " << coreresultindex << " ... + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage << endl; 
             coreresultindex += maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage;
           }
           // mark contributing band slices and their position in that region, all baselines
-          bool placementpossible = true;
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
             double fcurr=freqtable[*ifi].bandlowedgefreq();
             int choffset = ((fcurr-fref)/freqtable[i].bandwidth)*freqchans;
             if (choffset%chanstoaverage != 0) {
-              cfatal << startl << "consituent band placement at bin " << choffset << " not divisible by freq avgeraging factor " << chanstoaverage << " -- TODO" << endl;
-              placementpossible = false;
+              cinfo << startl << "consituent band placement at bin " << choffset << " not divisible by freq avgeraging factor " << chanstoaverage << " -- TODO: flag these channels" << endl;
             }
-            choffset = choffset/chanstoaverage;
             if(!configs[c].coreresultbaselineoffset[*ifi]) {
               configs[c].coreresultbaselineoffset[*ifi] = new int[numbaselines]();
             }
             for(int j=0;j<numbaselines;j++) {
               const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
               if(bldata.localfreqindices[*ifi] >= 0) {
-                configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + choffset;
+                int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
+                int blinechoffset = maxconfigphasecentres*binloop*numblpolproducts*choffset/chanstoaverage;
+                configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + blinechoffset;
+if (mpiid == 10)
+cout << "coreresultbaselineoffset[cst fq:" << *ifi << "][bl:" << j << "] = " << configs[c].coreresultbaselineoffset[i][j] << " + " << blinechoffset 
+  << " + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqtable[*ifi].numchannels/chanstoaverage << endl; 
               }
             }
-          }
-          if(!placementpossible) {
-            return false;
           }
         }
       }
