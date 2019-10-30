@@ -1602,7 +1602,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   int status, perr, threadbinloop, threadindex, threadstart, numstrides;
   int localfreqindex, targetfreqindex, freqchannels, targetfreqchannels, coreindex, coreoffset, corebinloop, channelinc, targetchannelinc, rotatorlength, dest;
   int antenna1index, antenna2index;
-  int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, xmacstrideremain, stridestoaverage, averagesperstride, averagelength;
+  int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, xmacstrideremain, stridestoaverage, averagesperstride, averagelength, outchannelplacementpreavg;
   double bandwidth, bandwidthoftarget, lofrequency, channelbandwidth, stepbandwidth;
   double applieddelay, applieddelay1, applieddelay2, turns, edgeturns;
   double delaywindow, maxphasechange, timesmeardecorr, delaydecorr;
@@ -1612,7 +1612,6 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   double ** phasecentredelay2 = 0;
   double ** differentialdelay = 0;
   cf32* srcpointer;
-  cf32 meanresult;
 
   delaywindow = config->getFNumChannels(freqindex)/(config->getFreqTableBandwidth(freqindex)); //max lag (plus and minus)
   localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, baseline, freqindex);
@@ -1684,6 +1683,9 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   averagelength = xmacstridelen/averagesperstride;
   numstrides = freqchannels/xmacstridelen;
   channelbandwidth = bandwidth/double(freqchannels);
+  outchannelplacementpreavg = fabs(config->getFreqTableFreqLowedge(freqindex) - config->getFreqTableFreqLowedge(targetfreqindex)) / channelbandwidth;
+  //if (mpiid == 10)
+  //  cout << "placement of fq " << freqindex << " into targetfq " << targetfreqindex << " is at virtual ch offset " << channelplacementoffset << " given FFT reso of " << channelbandwidth << " to be avgd by " << channelinc << ";" << targetchannelinc << std::endl;
 
   assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
   assert(targetchannelinc == channelinc); // required for the old striding logic to work out... TODO?: allow multi-stage averaging?
@@ -1760,6 +1762,10 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
 
     threadstart = config->getThreadResultFreqOffset(procslots[index].configindex, freqindex) + config->getThreadResultBaselineOffset(procslots[index].configindex, freqindex, baseline);
     //cout << "Threadstart is " << threadstart << " since threadresultfreqoffset is " << config->getThreadResultFreqOffset(procslots[index].configindex, freqindex) << endl;
+
+    // cout << "Core striding infos are: numXmac=" << config->getNumXmacStrides(procslots[index].configindex, freqindex) << " xmacLen=" << xmacstridelen << 
+    // ", first bin avgs " << outchannelplacementpreavg % averagelength << "/" << averagelength << " values" << endl;
+
     for(int x=0;x<config->getNumXmacStrides(procslots[index].configindex, freqindex);x++)
     {
       threadindex = threadstart+x*config->getCompleteStrideLength(procslots[index].configindex, freqindex);
@@ -1809,6 +1815,35 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
           }
           else //this frequency *is* averaged - deal with it
           {
+// -- modified averaging step
+//             works ok for 1:1 band mapping with avg 8, in this case xmacstrideremain=128 and avg=8
+//             autoband 58.0M for (N>1):1 band mapping : xmacstride=2 avg=2 : works fine
+//             autoband 58.0M for (N>1):1 band mapping : xmacstride=2 avg=4 : garbage, same result for original code
+#if 1
+            int placement = outchannelplacementpreavg + x*xmacstridelen;
+            if(mpiid == 10) {
+              //cout << "averaging " << xmacstrideremain << " channels of input to output [" << placement << "..." << (placement + xmacstrideremain) << "]/" << averagelength << endl;
+            }
+            const cf32* psrc = srcpointer;
+            const cf32* pend = psrc + xmacstrideremain;
+            dest = coreindex+coreoffset;
+            while (psrc < pend) {
+              int valuesinbin = placement % averagelength;
+              if(valuesinbin == 0) {
+                valuesinbin = averagelength;
+              } 
+              cf32 meanresult;
+	      status = vectorMean_cf32(psrc, valuesinbin, &meanresult, vecAlgHintFast);
+              if(status != vecNoErr)
+                cerror << startl << "Error trying to average frequency " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << endl;
+              procslots[index].results[dest].re += meanresult.re/stridestoaverage;
+              procslots[index].results[dest].im += meanresult.im/stridestoaverage;
+              psrc += valuesinbin;
+              placement += valuesinbin;
+              dest++;
+            }
+// -- original ; works okay for 1:1 band mapping with avg 8
+#else
             dest = coreindex+coreoffset;
             int averagesperstrideremain = xmacstrideremain/averagelength;
             if(averagesperstrideremain == 0)
@@ -1817,6 +1852,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
             {
               //status = vectorMean_cf32(srcpointer + l*channelinc, channelinc, &(scratchspace->channelsums[l]), vecAlgHintFast);
               //cout << "about to average from " << srcpointer[l*averagelength].re << " for length " << averagelength << endl;
+              cf32 meanresult;
               status = vectorMean_cf32(srcpointer + l*averagelength, averagelength, &meanresult, vecAlgHintFast);
               if(status != vecNoErr)
                 cerror << startl << "Error trying to average frequency " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << endl;
@@ -1824,6 +1860,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
               procslots[index].results[dest].im += meanresult.im/stridestoaverage;
               dest++;
             }
+#endif
           }
           threadindex += xmacstrideremain;
         }
