@@ -886,6 +886,9 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         {
           xmacstart = x*xmacstridelength;
           int xmacstrideremain = std::min(freqchannels-xmacstart, xmacstridelength);
+          if (xmacstrideremain <= 0) {
+            break;
+          }
 
           //do the cross multiplication - gets messy for the pulsar binning
           for(int j=0;j<numbaselines;j++)
@@ -967,10 +970,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                   }
                 }
               }
-	      if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
-	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*procslots[index].numpulsarbins*xmacstrideremain;
+              if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
+                resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*procslots[index].numpulsarbins*xmacstridelength;
               else
-	        resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*xmacstrideremain;
+                resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*xmacstridelength;
             }
           }
         }
@@ -1775,7 +1778,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
         for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex);k++)
         {
           if(corebinloop > 1)
-             coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*targetfreqchannels + x*xmacstridelen)/targetchannelinc;
+            coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*targetfreqchannels + x*xmacstridelen)/targetchannelinc;
           else
             coreoffset = (k*targetfreqchannels + x*xmacstridelen)/targetchannelinc;
           if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1 && fabs(applieddelay) > 1.0e-20)
@@ -1808,8 +1811,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
           //now average (or just copy) from the designated pointer to the main result buffer
           if(channelinc == 1) //this frequency is not averaged
           {
-            xmaccopylen = xmacstrideremain;
-            status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[coreindex+coreoffset]), xmaccopylen);
+            status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[coreindex+coreoffset]), xmacstrideremain);
             if(status != vecNoErr)
               cerror << startl << "Error trying to copy frequency index " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << " when not averaging in frequency" << endl;
           }
