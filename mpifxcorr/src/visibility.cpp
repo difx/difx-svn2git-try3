@@ -460,11 +460,12 @@ void Visibility::writedata()
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
           freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
-          targetfreqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+          if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
+            cout << "visbility.cpp " << __LINE__ << " fix me: autocorr nch " << config->getFNumChannels(freqindex) << " not divisible by " << config->getFChannelsToAverage(freqindex) << ", indexing?" << endl;
+          }
           status = vectorMean_cf32(&(results[resultindex]), freqchannels, &autocorrcalibs[i][k], vecAlgHintFast);
           if(status != vecNoErr)
             csevere << startl << "Error in getting average of autocorrelation!!!" << status << endl;
-// TODO: correct the stride
           resultindex += freqchannels;
         }
       }
@@ -481,6 +482,9 @@ void Visibility::writedata()
       targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
       resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+      if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
+        freqchannels++;
+      }
       for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
       {
         for(int b=0;b<binloop;b++)
@@ -562,8 +566,7 @@ void Visibility::writedata()
                 csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
             }
 
-// TODO: correct the stride
-            resultindex += freqchannels;
+            resultindex += targetfreqchannels;
           }
         }
       }
@@ -582,6 +585,9 @@ void Visibility::writedata()
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
             freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+            if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
+              cout << "visbility.cpp " << __LINE__ << " fix me: autocorr nch " << config->getFNumChannels(freqindex) << " not divisible by " << config->getFChannelsToAverage(freqindex) << ", indexing?" << endl;
+            }
             scale = 0.0;
             //calibrate the data
             if(config->getDTsys(currentconfigindex, i) > 0.0)
@@ -618,7 +624,6 @@ void Visibility::writedata()
               if(status != vecNoErr)
                 csevere << startl << "Error trying to amplitude calibrate the datastream data!!!" << endl;
             }
-// TODO: correct the stride
             resultindex += freqchannels*2;
           }
         }
@@ -637,6 +642,9 @@ void Visibility::writedata()
         localfreqindex = config->getDLocalRecordedFreqIndex(currentconfigindex, i, j);
         freqindex = config->getDRecordedFreqIndex(currentconfigindex, i, localfreqindex);
         freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+        if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
+          cout << "visbility.cpp " << __LINE__ << " fix me: autocorr nch " << config->getFNumChannels(freqindex) << " not divisible by " << config->getFChannelsToAverage(freqindex) << ", indexing?" << endl;
+        }
         // when in zoom mode w/ no matching autos, scale pcals by data contribution only
         acw = autocorrweights[i][0][j];
         if (acw == 0.0 && config->getDNumTotalBands(currentconfigindex, i) > config->getDNumRecordedBands(currentconfigindex, i))
@@ -737,7 +745,7 @@ void Visibility::writeascii(int dumpmjd, double dumpseconds)
         {
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
-	    stringstream fname;
+            stringstream fname;
             freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
             //write out to naive filename
             fname << "datastream_" << i << "_crosspolar_" << j << "_product_" << k << "_" << datetimestring << "_bin_" << 0 << ".output";
@@ -817,6 +825,9 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
       // source data location and size
       resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+      if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
+       cout << "visbility.cpp " << __LINE__ << " ERROR: outputband nch " << config->getFNumChannels(freqindex) << " not divisible by " << config->getFChannelsToAverage(freqindex) << endl;
+      }
       numpolproducts = config->getBNumPolProducts(currentconfigindex, i, baselinefreqindex);
       filecount = 0;
       for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
