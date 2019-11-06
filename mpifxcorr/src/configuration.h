@@ -335,6 +335,7 @@ public:
   inline int getGuardNS(int configindex) const { return configs[configindex].guardns; }
   inline int getFreqTableLength() const { return freqtablelength; }
   inline double getFreqTableFreq(int index) const { return freqtable[index].bandedgefreq; }
+  inline double getFreqTableFreqLowedge(int index) const { return freqtable[index].bandlowedgefreq(); }
   inline string getFreqTableRxName(int index) const { return freqtable[index].rxName; }
   inline double getFreqTableBandwidth(int index) const { return freqtable[index].bandwidth; }
   inline bool getFreqTableLowerSideband(int index) const { return freqtable[index].lowersideband; }
