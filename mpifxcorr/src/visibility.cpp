@@ -356,7 +356,7 @@ void Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
 void Visibility::writedata()
 {
   f32 scale, divisor, modifier;
-  int ds1, ds2, ds1bandindex, ds2bandindex, localfreqindex, freqindex, targetfreqindex, freqchannels;
+  int ds1, ds2, ds1bandindex, ds2bandindex, localfreqindex, freqindex, targetfreqindex, freqchannels, targetfreqchannels;
   int status, resultindex, binloop;
   int dumpmjd, intsec;
   double dumpseconds, acw;
@@ -460,9 +460,11 @@ void Visibility::writedata()
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
           freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+          targetfreqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
           status = vectorMean_cf32(&(results[resultindex]), freqchannels, &autocorrcalibs[i][k], vecAlgHintFast);
           if(status != vecNoErr)
             csevere << startl << "Error in getting average of autocorrelation!!!" << status << endl;
+// TODO: correct the stride
           resultindex += freqchannels;
         }
       }
@@ -559,6 +561,8 @@ void Visibility::writedata()
               if(status != vecNoErr)
                 csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
             }
+
+// TODO: correct the stride
             resultindex += freqchannels;
           }
         }
@@ -614,6 +618,7 @@ void Visibility::writedata()
               if(status != vecNoErr)
                 csevere << startl << "Error trying to amplitude calibrate the datastream data!!!" << endl;
             }
+// TODO: correct the stride
             resultindex += freqchannels*2;
           }
         }
