@@ -57,7 +57,7 @@ double AutoBands::Span::bandwidth() const
 
 bool AutoBands::Band::operator==(const freq& rhs) const
 {
-	return (rhs.fq == flow) && (rhs.bw == (fhigh-flow)) && (rhs.sideBand == 'U'); 
+	return (rhs.fq == flow) && (rhs.bw == (fhigh-flow)) && (rhs.sideBand == 'U');
 }
 
 bool AutoBands::Band::operator==(const Band& rhs) const
@@ -79,6 +79,16 @@ bool AutoBands::Outputband::operator==(const Outputband& rhs) const
 void AutoBands::Outputband::extend(double fstart, double bw)
 {
 	constituents.push_back(AutoBands::Band(fstart, fstart+bw, 0));
+}
+
+bool AutoBands::Outputband::complete() const
+{
+	double constituentbws = 0;
+	for(std::vector<AutoBands::Band>::const_iterator b = constituents.begin(); b != constituents.end(); ++b)
+	{
+		constituentbws += (*b).bandwidth();
+	}
+	return (constituentbws == bandwidth);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -494,6 +504,7 @@ int AutoBands::generateOutputbands(int Nant, double fstart_Hz)
 			if(bw_needed <= 0)
 			{
 				simplify(ob);
+				assert(ob.complete());
 				outputbands.push_back(ob);
 				foutstart += outputbandwidth;
 			}

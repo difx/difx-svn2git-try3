@@ -92,6 +92,7 @@ public:
 		}
 
 		void extend(double fstart, double bw);
+		bool complete() const;
 		bool operator==(const freq& rhs) const;
 		bool operator==(const Outputband& rhs) const;
 		Band& operator[] (int n) { return constituents[n]; }
