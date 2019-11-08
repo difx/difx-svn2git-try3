@@ -161,7 +161,7 @@ void deleteDifxBaselineArray(DifxBaseline *db, int nBaseline)
 
 void fprintDifxBaseline(FILE *fp, const DifxBaseline *db)
 {
-	int f;
+	int f, p;
 	
 	fprintf(fp, "  Difx Baseline : %p\n", db);
 	fprintf(fp, "    datastream indices = %d %d\n", db->dsA, db->dsB);
@@ -181,6 +181,48 @@ void fprintDifxBaseline(FILE *fp, const DifxBaseline *db)
 		for(f = 0; f < db->nFreq; f++)
 		{
 			fprintf(fp, " %d", db->nPolProd[f]);
+		}
+		fprintf(fp, "\n");
+	}
+	if(db->bandA)
+	{
+		fprintf(fp, "    bandA[freq][prod] =");
+		for(f = 0; f < db->nFreq; f++)
+		{
+			if(db->bandA[f])
+			{
+				fprintf(fp, " {", f);
+				for(p = 0; p < db->nPolProd[f]; p++)
+				{
+					fprintf(fp, "%d", db->bandA[f][p]);
+					if((p+1) < db->nPolProd[f])
+					{
+						fprintf(fp, " ");
+					}
+				}
+				fprintf(fp, "}");
+			}
+		}
+		fprintf(fp, "\n");
+	}
+	if(db->bandB)
+	{
+		fprintf(fp, "    bandB[freq][prod] =");
+		for(f = 0; f < db->nFreq; f++)
+		{
+			if(db->bandB[f])
+			{
+				fprintf(fp, " {", f);
+				for(p = 0; p < db->nPolProd[f]; p++)
+				{
+					fprintf(fp, "%d", db->bandB[f][p]);
+					if((p+1) < db->nPolProd[f])
+					{
+						fprintf(fp, " ");
+					}
+				}
+				fprintf(fp, "}");
+			}
 		}
 		fprintf(fp, "\n");
 	}
