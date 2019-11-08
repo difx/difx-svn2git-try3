@@ -1390,8 +1390,12 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 			free(clockOffStr);
 			r = DifxParametersfind1(ip, r+1, "FREQ OFFSET %d (Hz)", i);
 			D->datastream[e].freqOffset[i] = atof(DifxParametersvalue(ip, r));
-			r = DifxParametersfind1(ip, r+1, "GAIN OFFSET %d", i);
-			D->datastream[e].gainOffset[i] = atof(DifxParametersvalue(ip, r));
+			r2 = DifxParametersfind1(ip, r+1, "GAIN OFFSET %d", i);
+			if (r2 >= 0)
+			{
+				D->datastream[e].gainOffset[i] = atof(DifxParametersvalue(ip, r2));
+				r = r2;
+			}
 			r = DifxParametersfind1(ip, r+1, "NUM REC POLS %d", i);
 			D->datastream[e].nRecPol[i] = atoi(DifxParametersvalue(ip, r));
 			nRecBand += D->datastream[e].nRecPol[i];
@@ -1508,7 +1512,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 
 static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters *ip)
 {
-	int b, r;
+	int b, r, r2;
 	
 	if(!D || !ip)
 	{
@@ -1556,21 +1560,14 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 		
 		for(f = 0; f < D->baseline[b].nFreq; ++f)
 		{
-			int p, fq;
+			int p, fq = -1;
 
-			r = DifxParametersfind2(ip, r+1, "TARGET FREQ %d/%d", b, f);
-			if(r < 0)
+			r2 = DifxParametersfind2(ip, r+1, "TARGET FREQ %d/%d", b, f);
+			if(r2 >= 0)
 			{
-				fprintf(stderr, "TARGET FREQ %d/%d not found\n", b, f);
-			
-				return 0;
+				fq = atoi(DifxParametersvalue(ip, r2));
+				r = r2;
 			}
-
-			fq = atoi(DifxParametersvalue(ip, r));
-			D->baseline[b].destFq[f] = fq;
-			D->nInChan = D->freq[fq].nChan;
-			D->nOutChan = D->freq[fq].nChan/D->freq[fq].specAvg;
-
 			r = DifxParametersfind2(ip, r+1, "POL PRODUCTS %d/%d", b, f);
 			if(r < 0)
 			{
@@ -1598,7 +1595,19 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 					return 0;
 				}
 				D->baseline[b].bandB[f][p] = atoi(DifxParametersvalue(ip, r));
+
+				if(fq < 0)
+				{
+					// DiFX 2.5/2.6 has no explicit TARGET FREQ: for backwards compatibility,
+					// default to freq of band A as the TARGET freq, i.e., mapping of 1-to-1 (input band==output band)
+					fq = getDifxDatastreamBandFreqId(&D->datastream[D->baseline[b].dsA], D->baseline[b].bandA[f][p]);
+				}
 			}
+
+			D->baseline[b].destFq[f] = fq;
+			D->nInChan = D->freq[fq].nChan;
+			D->nOutChan = D->freq[fq].nChan/D->freq[fq].specAvg;
+
 		}
 	}
 
