@@ -40,7 +40,7 @@ defaultttl   = 3
 maxGenmachineFail = -1
 
 genmachines              = 'genmachines -v'
-defaultDelayModelProgram = 'calcif2'
+defaultDelayModelProgram = 'difxcalc'
 difx2fits                = 'difx2fits -v'
 mpiOptions               = '--mca mpi_yield_when_idle 1 --mca rmaps seq'
 agent                    = ''
@@ -81,7 +81,9 @@ def getUsage():
 	usage +=  'DIFX_CALC_PROGRAM can be used to change the delay model program\n'
         usage +=  '(the default is %s, but difxcalc can be used).\n' % defaultDelayModelProgram
 	usage +=  'DIFX_CALC_OPTIONS can be used to override options to the delay model program.\n'
-	return(usage)
+        usage +=  'For more details on how to set up startdifx look here:\n'
+        usage +=  'atnf.csiro.au/vlbi/dokuwiki/doku.php/difx/startdifx\n'
+        return(usage)
 
 class Parser:
 
