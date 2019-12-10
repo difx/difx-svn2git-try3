@@ -961,6 +961,10 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 									{
 										altFreqId = D->datastream[ds2].recFreqId[f2];
 										altlowedgefreq = D->freq[altFreqId].freq;
+										if(!blockedfreqids[a2].empty() && blockedfreqids[a2].find(altFreqId) != blockedfreqids[a2].end())
+										{
+											continue;
+										}
 										if(D->freq[altFreqId].sideband == 'L')
 										{
 											altlowedgefreq -= D->freq[altFreqId].bw;
@@ -978,6 +982,10 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 									for(int f2 = 0; f2 < D->datastream[ds2].nZoomFreq; ++f2)
 									{
 										altFreqId = D->datastream[ds2].zoomFreqId[f2];
+										if(!blockedfreqids[a2].empty() && blockedfreqids[a2].find(altFreqId) != blockedfreqids[a2].end())
+										{
+											continue;
+										}
 										if(D->freq[freqId].freq == D->freq[altFreqId].freq &&
 										   D->freq[freqId].bw   == D->freq[altFreqId].bw &&
 										   D->freq[freqId].sideband == D->freq[altFreqId].sideband)
@@ -994,6 +1002,10 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 									{
 										altFreqId = D->datastream[ds2].zoomFreqId[f2];
 										altlowedgefreq = D->freq[altFreqId].freq;
+										if(!blockedfreqids[a2].empty() && blockedfreqids[a2].find(altFreqId) != blockedfreqids[a2].end())
+										{
+											continue;
+										}
 										if(D->freq[altFreqId].sideband == 'L')
 										{
 											altlowedgefreq -= D->freq[altFreqId].bw;
@@ -1074,6 +1086,10 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 								for(int f2 = 0; f2 < D->datastream[ds2].nRecFreq; ++f2)
 								{
 									altFreqId = D->datastream[ds2].recFreqId[f2];
+									if(!blockedfreqids[a2].empty() && blockedfreqids[a2].find(altFreqId) != blockedfreqids[a2].end())
+									{
+										continue;
+									}
 									if(D->freq[freqId].freq == D->freq[altFreqId].freq &&
 									   D->freq[freqId].bw   == D->freq[altFreqId].bw &&
 									   D->freq[altFreqId].sideband == 'U')
@@ -1089,6 +1105,10 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 									{
 										altFreqId = D->datastream[ds2].recFreqId[f2];
 										altlowedgefreq = D->freq[altFreqId].freq;
+										if(!blockedfreqids[a2].empty() && blockedfreqids[a2].find(altFreqId) != blockedfreqids[a2].end())
+										{
+											continue;
+										}
 										if(D->freq[altFreqId].sideband == 'L')
 										{
 											altlowedgefreq -= D->freq[altFreqId].bw;
@@ -1115,6 +1135,10 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 									{
 										altFreqId = D->datastream[ds2].zoomFreqId[f2];
 										altlowedgefreq = D->freq[altFreqId].freq;
+										if(!blockedfreqids[a2].empty() && blockedfreqids[a2].find(altFreqId) != blockedfreqids[a2].end())
+										{
+											continue;
+										}
 										if(D->freq[altFreqId].sideband == 'L')
 										{
 											altlowedgefreq -= D->freq[altFreqId].bw;
@@ -1650,7 +1674,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 
 	D->antenna = makeDifxAntennas(J, V, P, &(D->nAntenna));
 	D->job = makeDifxJob(V->getDirectory(), J, D->nAntenna, V->getExper()->name, &(D->nJob), nDigit, ext, P);
-	
+
 	D->nScan = J.scans.size();
 	D->scan = newDifxScanArray(D->nScan);
 	D->nConfig = configSet.size();
@@ -2021,7 +2045,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 // TODO: possibly corrSetup->autobands.addUserOutputbands(...) for all freq[] where bandwidth == output bandwidth
 		}
 
-		// invoke AutoBand logic to generate additional 1:1 / N:1 / 1:N zooms that assemble into outputbands
+		// invoke AutoBand logic to generate additional '1:1 / N:1 / 1:N zooms that assemble into outputbands
 		if(corrSetup->outputBandwidthMode != OutputBandwidthOff)
 		{
 			double bw = 0;
@@ -2099,6 +2123,22 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 					antSetup->copyGlobalZoom(constituentzooms); // "copy()" but actually appends
 				}
 			}
+
+			// block all recorded frequencies that do not contribute to a zoom or to an outputband, otherwise
+			// these "unused" freqs would inadverently end up getting correlated and disrupt the uniform output bandwidth
+			for(int configds = 0; configds < config->nDatastream; ++configds)
+			{
+				const int dsid = config->datastreamId[configds];
+				const int antid = D->datastream[dsid].antennaId;
+				for(int fq = 0; fq < D->datastream[dsid].nRecFreq; ++fq)
+				{
+					const int fqId = D->datastream[dsid].recFreqId[fq];
+					if (corrSetup->autobands.lookupDestinationFreq(freqs[fqId], freqs) < 0)
+					{
+						blockedfreqids[antid].insert(fq);
+					}
+				}
+			}
 		}
 
 		// register explicit v2d user-specified Zooms into the autoband logic as output bands, if not yet present
@@ -2136,14 +2176,6 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 					dd = D->datastream + currDatastream;
 					dd->phaseCalIntervalMHz = setup.phaseCalIntervalMHz();
 					dd->tcalFrequency = antenna->tcalFrequency;
-
-					for(int i = 0; i < dd->nRecFreq; ++i)
-					{
-						if (dd->recFreqDestId[i] != dd->recFreqId[i])
-						{
-							blockedfreqids[dd->antennaId].insert(dd->recFreqId[i]);
-						}
-					}
 
 					// FIXME: eventually zoom bands will migrate to the VexMode/VexSetup infrastructure.  until then, use antenanSetup directly
 					if(antennaSetup)
