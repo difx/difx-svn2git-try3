@@ -38,23 +38,25 @@
 class ZoomFreq;
 class freq;
 
-#include "zoomfreq.h"	// class ZoomFreq
-#include "freq.h"	// class freq
+#include "zoomfreq.h"	// class ZoomFreq from vex2difx
+#include "freq.h"		// class freq from vex2difx
 
 class AutoBands
 {
 public:
-	//constructors
-	AutoBands(double outputbandwidth_Hz, int verbosity=0, bool permitgaps=false);
 	AutoBands() : outputbandwidth(32e6), verbosity(0), permitgaps(false) { }
+	AutoBands(double outputbandwidth_Hz, int verbosity=0, bool permitgaps=false);
 	~AutoBands();
 
-	//types
+public:
+
+	/// Helper class that describes a spectral region provided by one particular antenna,
+	/// this can be a recorded band or a zoom band or just a virtual band.
 	class Band {
 	public:
-		double flow;
-		double fhigh;
-		int antenna;
+		double flow;		///< Start frequency of the spectral region in Hz
+		double fhigh;		///< Stop frequency of the spectral in Hz
+		int antenna;		///< Arbitrary but unique antenna identifier
 
 		Band(double flow_, double fhigh_, int antenna_)
 			: flow(flow_),fhigh(fhigh_),antenna(antenna_) { }
@@ -65,13 +67,15 @@ public:
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Band &x);
 	};
 
+	/// Helper class that describes one continuous spectral region in sky frequency,
+	/// and holds the count of antenna-bands that can supply this spectral region
 	class Span {
 	public:
 		double flow;
 		double fhigh;
-		int antennacount;
-		int bandcount;
-		bool continued;
+		int antennacount;	///< Number of antennas that can provide this spectral region
+		int bandcount;		///< Number of bands that can provide this spectral region; can exceed 'antennacount'!
+		bool continued;		///< Flag, true if there exists (elsewhere) another Span such that this->fhigh == other->flow
 
 		Span(double flow_, double fhigh_, int antcount_, int bandcount_)
 			: flow(flow_),fhigh(fhigh_),antennacount(antcount_),bandcount(bandcount_),continued(false) { }
@@ -80,19 +84,30 @@ public:
 		friend std::ostream& operator << (std::ostream &os, const AutoBands::Span &x);
 	};
 
+	/// Class Outputband describes a spectral window intended for final visibility data output.
+	/// The class also holds a collection of Bands (zooms, recorded) that without overlap
+	/// nor gaps assemble together to fully cover the spectral window.
 	class Outputband {
 	public:
-		double fbandstart;
-		double bandwidth;
-		std::vector<Band> constituents;
+		double fbandstart;	///< Start frequency of spectral window in Hz
+		double bandwidth;	///< Total bandwidth of spectral window in Hz; the sum of bandwidth(s) of consituent band(s)
+		std::vector<Band> constituents;	///< Collection of bands that produce/cover the total 'bandwidth'
 
-		Outputband(double fbandstart_, double bandwidth_) : fbandstart(fbandstart_),bandwidth(bandwidth_)
+		/// C'stor, describe a spectral window and start from an initially empty list of constituents
+		Outputband(double fbandstart_Hz, double bandwidth_Hz) : fbandstart(fbandstart_Hz),bandwidth(bandwidth_Hz)
 		{
 			this->constituents.clear();
 		}
 
+		/// Grow the list of consituent bands by one
 		void extend(double fstart, double bw);
-		bool complete() const;
+
+		/// Grow the list of consituent bands by one
+		void extend(const Band& b) { this->extend(b.flow, b.bandwidth()); }
+
+		/// Check whether constituent band(s) fully cover the preset 'bandwidth' of the outputband
+		bool isComplete() const;
+
 		bool operator==(const freq& rhs) const;
 		bool operator==(const Outputband& rhs) const;
 		Band& operator[] (int n) { return constituents[n]; }
@@ -100,18 +115,33 @@ public:
 	};
 
 public:
-	//methods
+
+	/// Return automatically determined best-fit common bandwidth, or 0 on auto-detect failure
 	double autoBandwidth();
+
+	/// Set target bandwidth to be used when generating output bands, c.f. generateOutputbands()
 	void setBandwidth(double outputbandwidth_Hz);
 
+	/// Reinitialize
 	void clear();
+
+	/// Add information about the recorded bands of an antenna
 	void addRecbands(const std::vector<double>& fstart, const std::vector<double>& fstop, int antId = -1);
+
+	/// Add information about the recorded bands of an antenna
 	void addRecbands(const std::vector<freq>& freqs, int antId = -1);
 
+	/// Return the greatest-common-divisor of a list of frequencies
 	double getGranularity(const std::vector<double>& freqs) const;
 
+	/// Automatically build a set of outputbands and their constituent bands,
+	/// based upon previously registered (c.f. addRecbands()) recorded bands.
 	int generateOutputbands(int Nant=0, double fstart_Hz=0.0);
+
+	/// Add user-specified outputband with a single consituent equal to a vex2difx ZoomFreq
 	void addUserOutputbands(const std::vector<ZoomFreq>& zf);
+
+	/// Locate 'inputfreq' among consituents of iternal outputbands, then locate that outputband in 'allfreqs'.
 	int lookupDestinationFreq(const freq& inputfreq, const std::vector<freq>& allfreqs) const;
 
 	//variables
@@ -125,12 +155,18 @@ public:
 	bool permitgaps;
 
 private:
-	//methods
-	bool covered(double f0, double f1) const;
-	void analyze(int Nant=0);
-	void simplify(AutoBands::Outputband& mergeable);
 
-	double adjustStartFreq(double f0, double f1, double finitial, double df);
+	/// Check if freq range falls in its entirety inside any of the recorded bands, at *all* antennas
+	bool covered(double f0, double f1) const;
+
+	/// Determine frequency spans where at least Nant antennas overlap. Populates ::spans via ::bands.
+	void analyze(int Nant=0);
+
+	/// Simplify an outputband definition by merging its list of consituent bands where possible,
+	/// trimming away any overlapped portions of consituent bands.
+	void simplify(AutoBands::Outputband& mergeable) const;
+
+	//TODO: double adjustStartFreq(double f0, double f1, double finitial, double df);
 
 	void barchart(std::ostream& os,
 		const std::vector<double>& start,

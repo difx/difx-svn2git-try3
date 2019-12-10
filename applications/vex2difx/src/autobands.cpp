@@ -81,14 +81,16 @@ void AutoBands::Outputband::extend(double fstart, double bw)
 	constituents.push_back(AutoBands::Band(fstart, fstart+bw, 0));
 }
 
-bool AutoBands::Outputband::complete() const
+bool AutoBands::Outputband::isComplete() const
 {
 	double constituentbws = 0;
+	double constituentstart = std::numeric_limits<double>::infinity();
 	for(std::vector<AutoBands::Band>::const_iterator b = constituents.begin(); b != constituents.end(); ++b)
 	{
-		constituentbws += (*b).bandwidth();
+		constituentbws += b->bandwidth();
+		constituentstart = std::min(constituentstart, b->flow);
 	}
-	return (constituentbws == bandwidth);
+	return (constituentbws == bandwidth) && (constituentstart == fbandstart);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -169,7 +171,7 @@ void AutoBands::addRecbands(const std::vector<freq>& freqs, int antId)
 }
 
 /**
- * Return the greatest-common-divisor for list of frequencies
+ * Return the greatest-common-divisor of a list of frequencies
  */
 double AutoBands::getGranularity(const std::vector<double>& args) const
 {
@@ -250,9 +252,10 @@ bool AutoBands::covered(double f0, double f1) const
 }
 
 /**
- * Simplify an outputband definition by merging its list of input zooms as far as possible i.e. when zooms are from overlapped recorded bands.
+ * Simplify an outputband definition by merging its list of consituent bands where possible,
+ * trimming away any overlapped portions of consituent bands.
  */
-void AutoBands::simplify(AutoBands::Outputband& mergeable)
+void AutoBands::simplify(AutoBands::Outputband& mergeable) const
 {
 	assert(!mergeable.constituents.empty());
 
@@ -261,10 +264,10 @@ void AutoBands::simplify(AutoBands::Outputband& mergeable)
 	double f0 = mergeable.fbandstart;
 	double f1 = f0;
 
-	// Simplify bands in 'mergeable' into hopefully fewer bands in 'merged'
+	// Reduce bands of 'mergeable' into hopefully fewer bands in new 'merged'
 	for(std::vector<AutoBands::Band>::const_iterator bnext = (mergeable.constituents.begin()) + 1; bnext != mergeable.constituents.end(); ++bnext)
 	{
-		f1 = (*bnext).fhigh;
+		f1 = bnext->fhigh;
 		if(covered(f0, f1))
 		{
 			if(verbosity > 4)
@@ -278,8 +281,8 @@ void AutoBands::simplify(AutoBands::Outputband& mergeable)
 			{
 				printf("Autobands::outputbands_merge() no   cover %.6f--%.6f\n", f0*1e-6, f1*1e-6);
 			}
-			merged.extend(f0, (*bnext).flow - f0);
-			f0 = (*bnext).flow;
+			merged.extend(f0, bnext->flow - f0);
+			f0 = bnext->flow;
 			if((bnext + 1) != mergeable.constituents.end())
 			{
 				// set f1 ahead of exiting loop next
@@ -504,7 +507,7 @@ int AutoBands::generateOutputbands(int Nant, double fstart_Hz)
 			if(bw_needed <= 0)
 			{
 				simplify(ob);
-				assert(ob.complete());
+				assert(ob.isComplete());
 				outputbands.push_back(ob);
 				foutstart += outputbandwidth;
 			}
@@ -554,9 +557,9 @@ void AutoBands::addUserOutputbands(const std::vector<ZoomFreq>& bands)
 
 /**
  * Look through the internal list of output bands and search for the first
- * output band that contains 'freq' as one of its constituents.
+ * output band that contains 'inputfreq' as one of its constituents.
  *
- * Once the output band of 'freq' has been determined, looks through
+ * Once the output band of 'inputfreq' has been determined, looks through
  * the list of frequencies 'allfreqs' and locates a match for that output
  * band. Returns the index of that match is returned.
  *
