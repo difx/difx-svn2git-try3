@@ -32,6 +32,7 @@
 
 #include <string>
 #include <vector>
+#include <deque>
 #include <iostream>
 #include <limits>
 
@@ -143,6 +144,9 @@ public:
 
 	/// Locate 'inputfreq' among consituents of iternal outputbands, then locate that outputband in 'allfreqs'.
 	int lookupDestinationFreq(const freq& inputfreq, const std::vector<freq>& allfreqs) const;
+
+	/// Create a list of intra-outputband channels that contain no imaginary component (edge channels of consitituents)
+	int listEdgeChannels(const Outputband& band, std::deque<int>& channels, double fftSpecRes_Hz, double finalSpecRes_Hz, double maxFraction = 0) const;
 
 	//variables
 	std::vector<Band> bands;

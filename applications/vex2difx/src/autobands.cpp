@@ -633,6 +633,99 @@ int AutoBands::lookupDestinationFreq(const freq& inputfreq, const std::vector<fr
 	return -1;
 }
 
+/**
+ * Create a list of intra-outputband channels that contain no imaginary component (edge channels of consitituents).
+ *
+ * In case of spectral averaging (DFT bins -> final channels) the contribution of DFT bins from one of the
+ * constituent bands to the final channel may be negligible. In this case flagging is decided per maximum allowed
+ * contribution of the shorter constituent band to the total output channel.
+ * Example: bands a+b pre-avg input:[a18 a19 b0 b1 b2 b3 b4 b5]/avg=8 --> out:[ch0] has 'a' contribute 25% and 'b' 75%.
+ * Flagging of output ch0 can be omitted with maxFraction=0.25.
+ *
+ * \param channels Storage to fill out with channel numbers
+ * \param fftSpecRes_Hz Resolution of spectral channels across outputband during DiFX processing
+ * \param finalSpecRes_Hz Resolution of spectral channels across outputband after final spectral averaging in DiFX if any
+ * \param maxFraction Max fraction of allowed non-flaggable contribution of two constituents to one output channel; range [0; 1.0], default 0
+ * \return Number of edge channels detected, or -1 on error
+ */
+int AutoBands::listEdgeChannels(const AutoBands::Outputband& outputband, std::deque<int>& channels, double fftSpecRes_Hz, double finalSpecRes_Hz, double maxFraction) const
+{
+	const unsigned M = outputband.constituents.size();;
+	const int avg = finalSpecRes_Hz / fftSpecRes_Hz;
+
+	channels.clear();
+
+	if (verbosity > 2)
+	{
+		std::cout << "outputband with " << (int)std::floor(outputband.bandwidth/fftSpecRes_Hz) << "/" << avg << " FFT bins:\n";
+	}
+
+	if (std::fabs(std::fmod(finalSpecRes_Hz, fftSpecRes_Hz)) > 1e-6)
+	{
+		return -1;
+	}
+
+	for(unsigned m = 0; m < M; m++)
+	{
+		const AutoBands::Band& sub = outputband.constituents[m] ;
+		const double foffset = sub.flow - outputband.fbandstart;
+		if (foffset < 0)
+		{
+			std::cout << "AutoBands error: unexpected offset of " << foffset << " Hz for " << outputband << " constituent band " << sub << "\n";
+			return -1;
+		}
+
+		// Flag the first bin (DC) of all constituent bands except for the first band; DC bin is okay in first band
+		// Note: no need to flag the last N/2+1 bin (Nyquist) of consituent bands, since all Nyquist except the final end up automatically at DC-bin location of next band
+		if (m == 0)
+		{
+			if (verbosity > 2)
+			{
+				std::cout << "   constituent " << (m+1) << "/" << outputband.constituents.size() << " " << sub << " at : DC bin 0 of output band, no need to flag\n";
+			}
+		}
+		else
+		{
+			const int choffset_int = std::floor(foffset / fftSpecRes_Hz);
+			const int choffset_ext_subbin = choffset_int % avg;
+			const int choffset_ext = choffset_int / avg;
+
+			bool doFlag = false;
+			if (avg > 1 && maxFraction > 0)
+			{
+				const double fraction = choffset_ext_subbin / (double)avg;
+				doFlag = (fraction > maxFraction && fraction < (1 - maxFraction));
+			}
+			else
+			{
+				doFlag = true;
+			}
+
+			if (doFlag)
+			{
+				channels.push_back(choffset_ext);
+			}
+
+			if (verbosity > 2)
+			{
+				std::cout << "   constituent " << (m+1) << "/" << outputband.constituents.size() << " " << sub << " at : DC bin "
+					<< choffset_int << " falls into bin " << choffset_ext_subbin << " of " << avg << "-bin average, final output channel " << choffset_ext
+					<< " : flag=" << (doFlag ? "yes" : "no") << "\n";
+			}
+		}
+	}
+
+	if (verbosity > 2)
+	{
+		std::cout << "   flagged channels: ";
+		std::copy(channels.begin(), channels.end(), std::ostream_iterator<int>(std::cout, " "));
+		std::cout << "\n";
+	}
+
+	return channels.size();
+}
+
+
 void AutoBands::barchart(
 	std::ostream& os,
 	const std::vector<double>& start, const std::vector<double>& stop,
