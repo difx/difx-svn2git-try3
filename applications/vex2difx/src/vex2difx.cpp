@@ -27,6 +27,7 @@
  *
  *==========================================================================*/
 
+#include <algorithm>
 #include <cassert>
 #include <vector>
 #include <set>
@@ -35,7 +36,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <algorithm>
+#include <iterator>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <difxio/difx_input.h>
@@ -1584,7 +1585,91 @@ static bool matchingFreq(const ZoomFreq &zoomfreq, const DifxDatastream *dd, int
 		return false;
 	}
 
+	if (0)
+	{
+		std::cout << "matchingFreq() successful, freq " << dfreqIndex << " " << parent_bottom*1e-6 << "-" << parent_top*1e-6 << " MHz (bw " << (parent_top-parent_bottom)*1e-6 << " MHz) fits zoom "
+		<< zoomfreq.frequency*1e-6 << "-" << (zoomfreq.frequency+zoomfreq.bandwidth)*1e-6 << " MHz (bw " << zoomfreq.bandwidth*1e-6 << " MHz)" << std::endl;
+	}
+
 	return true;
+}
+
+/// For a zoom freq provideable by multiple recfreqs, return recfreq id for which the zoom is farthest from the edes, or return -1 on error/not-found
+static int bestMatchingFreq(const ZoomFreq &zoomfreq, const std::vector<int> matchingFreqs, const DifxDatastream *dd, const vector<freq> &freqs)
+{
+	const double upper_zoombandedge = zoomfreq.frequency + zoomfreq.bandwidth;
+	const double lower_zoombandedge = zoomfreq.frequency;
+
+	if(0)
+	{
+		std::cout << "lower_zoombandedge = " << lower_zoombandedge << std::endl;
+		std::cout << "upper_zoombandedge = " << upper_zoombandedge << std::endl;
+		std::cout << "bw_zoom  MHz       = " << (upper_zoombandedge-lower_zoombandedge)*1e-6 << std::endl;
+		std::cout << "matchingFreqs      = [";
+		std::copy(matchingFreqs.begin(), matchingFreqs.end(), std::ostream_iterator<int>(std::cout, " "));
+		std::cout << "], length " << matchingFreqs.size() << endl;
+	}
+
+	if(matchingFreqs.size() <= 0)
+	{
+		return -1;
+	}
+
+	if(matchingFreqs.size() == 1)
+	{
+		return matchingFreqs[0];
+	}
+
+// TODO: can simplify into a single-pass search
+	std::vector<freq> f_vec;
+	std::vector<double> input_bands_upper_edge;
+	std::vector<double> input_bands_lower_edge;
+	for(int ii=0; ii<matchingFreqs.size(); ++ii)
+	{
+		f_vec.push_back(freqs[dd->recFreqId[matchingFreqs[ii]]]);
+		if (f_vec[ii].sideBand == 'U')
+		{
+			input_bands_upper_edge.push_back(f_vec[ii].fq + f_vec[ii].bw);
+			input_bands_lower_edge.push_back(f_vec[ii].fq);
+		}
+		else if (f_vec[ii].sideBand == 'L')
+		{
+			input_bands_upper_edge.push_back(f_vec[ii].fq);
+			input_bands_lower_edge.push_back(f_vec[ii].fq - f_vec[ii].bw);
+		}
+	}
+
+	// Find the best matching input band by maximizing the overlapping area (assume all input bands have roughly the same sensitivity)
+	int best_input_band_index = 0;
+	double overlap_max = 0.0;
+	for(int jj=0; jj<matchingFreqs.size(); ++jj)
+	{
+		double overlap = min(input_bands_upper_edge[jj],upper_zoombandedge) - max(input_bands_lower_edge[jj],lower_zoombandedge);
+		if(0)
+		{
+			std::cout << "input_bands_lower_edge[" << jj << "] = " << input_bands_lower_edge[jj] << std::endl;
+			std::cout << "input_bands_upper_edge[" << jj  << "] = " << input_bands_upper_edge[jj] << std::endl;
+			std::cout << "overlap = " << overlap << std::endl;
+		}
+		if(0 == jj)
+		{
+			overlap_max = overlap;
+			best_input_band_index = matchingFreqs[jj];
+		}
+		else if(overlap > overlap_max)
+		{
+			overlap_max = overlap;
+			best_input_band_index = matchingFreqs[jj];
+		}
+	}
+
+	if(0)
+	{
+		std::cout << "overlap_max = " << overlap_max << std::endl;
+		std::cout << "best_input_band_index = " << best_input_band_index << std::endl;
+	}
+
+	return best_input_band_index;
 }
 
 static int prepareJobFreqs(const Job& J, const VexData *V, CorrParams *P, int verbose)
@@ -2198,14 +2283,16 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 							{
 								const ZoomFreq &zf = antennaSetup->zoomFreqs[i];
 
-								parentFreqIndices[nZoom] = -1;
+								std::vector<int> matchingFreqs;
 								for(int j = 0; j < dd->nRecFreq; ++j)
 								{
 									if(matchingFreq(zf, dd, j, freqs))
 									{
-										parentFreqIndices[nZoom] = j;
+										matchingFreqs.push_back(j); // multiple recfreqs can provide the same zoom when recfreqs overlap (ALMA)
 									}
 								}
+
+								parentFreqIndices[nZoom] = bestMatchingFreq(zf, matchingFreqs, dd, freqs);
 								if(parentFreqIndices[nZoom] < 0)
 								{
 									nZoomSkip++;
