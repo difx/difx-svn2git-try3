@@ -2001,10 +2001,9 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 	{
 		const VexMode *mode;
 		DifxConfig *config;
-		int nConfigDatastream;
 
 		config = D->config + configId;
-		nConfigDatastream = 0;
+		config->nDatastream = 0;
 
 		mode = V->getModeByDefName(configs[configId].first);
 		if(mode == 0)
@@ -2095,11 +2094,11 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			{
 				const VexStream &stream = setup.streams[ds];
 				setFormat(D, D->nDatastream, freqs, toneSets, mode, antName, startBand, setup, stream, corrSetup, P->v2dMode);
-                                if(stream.nRecordChan)
+				if(stream.nRecordChan)
 				{
-                                        config->datastreamId[nConfigDatastream] = D->nDatastream;
-                                        ++D->nDatastream;
-                                        ++nConfigDatastream;
+					config->datastreamId[config->nDatastream] = D->nDatastream;
+					++D->nDatastream;
+					++config->nDatastream;
 				}
 				startBand += stream.nRecordChan;
 			}
@@ -2425,24 +2424,24 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 							}
 						}
 
-                                                // TODO: consider specifying gainOffsets per datastream rather than per antenna
-                                                int nGainOffsets = antennaSetup->gainOffsets.size();
-                                                if(nGainOffsets > 0)
-                                                {
-                                                        if((startBand + D->datastream[currDatastream].nRecFreq) > nGainOffsets)
-                                                        {
-                                                                cerr << endl;
-                                                                cerr << "Error: AntennaSetup for " << antName << " has only " << nGainOffsets << " gainOffsets specified but " << (startBand + dd->nRecFreq) << " recorded frequencies needed." << endl;
-                                                                exit(EXIT_FAILURE);
-                                                        }
-                                                        for(int i = 0; i < D->datastream[currDatastream].nRecFreq; ++i)
-                                                        {
-                                                                double freqGain;
+						// TODO: consider specifying gainOffsets per datastream rather than per antenna
+						int nGainOffsets = antennaSetup->gainOffsets.size();
+						if(nGainOffsets > 0)
+						{
+							if((startBand + D->datastream[currDatastream].nRecFreq) > nGainOffsets)
+							{
+								cerr << endl;
+								cerr << "Error: AntennaSetup for " << antName << " has only " << nGainOffsets << " gainOffsets specified but " << (startBand + dd->nRecFreq) << " recorded frequencies needed." << endl;
+								exit(EXIT_FAILURE);
+							}
+							for(int i = 0; i < D->datastream[currDatastream].nRecFreq; ++i)
+							{
+								double freqGain;
 
-                                                                freqGain = (startBand + i < nLoOffsets) ? antennaSetup->gainOffsets.at(startBand + i) : 0.0;
-                                                                D->datastream[currDatastream].gainOffset[i] = freqGain;
-                                                        }
-                                                }
+								freqGain = (startBand + i < nLoOffsets) ? antennaSetup->gainOffsets.at(startBand + i) : 0.0;
+								D->datastream[currDatastream].gainOffset[i] = freqGain;
+							}
+						}
 					} // if antennaSetup
 					++currDatastream;
 				} // if valid format
@@ -2473,7 +2472,6 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 			}
 		    }
 		}
-		config->nDatastream = nConfigDatastream;
 	} // configId loop
 		
 	if(nPulsar != D->nPulsar)
