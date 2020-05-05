@@ -2487,8 +2487,8 @@ bool Configuration::populateResultLengths()
               return false;
             }
             configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
-if (mpiid == 10)
-cout << "coreresultbaselineoffset[OUT fq:" << i << "][bl:" << j << "] = " << coreresultindex << " ... + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage << endl; 
+//if (mpiid == 10)
+//cout << "coreresultbaselineoffset[OUT fq:" << i << "][bl:" << j << "] = " << coreresultindex << " ... + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage << endl; 
             coreresultindex += maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage;
           }
           // mark contributing band slices and their position in that region, all baselines
@@ -2507,9 +2507,9 @@ cout << "coreresultbaselineoffset[OUT fq:" << i << "][bl:" << j << "] = " << cor
                 int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
                 int blinechoffset = maxconfigphasecentres*binloop*numblpolproducts*choffset/chanstoaverage;
                 configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + blinechoffset;
-if (mpiid == 10)
-cout << "coreresultbaselineoffset[cst fq:" << *ifi << "][bl:" << j << "] = " << configs[c].coreresultbaselineoffset[i][j] << " + " << blinechoffset 
-  << " + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqtable[*ifi].numchannels/chanstoaverage << endl; 
+//if (mpiid == 10)
+//cout << "coreresultbaselineoffset[cst fq:" << *ifi << "][bl:" << j << "] = " << configs[c].coreresultbaselineoffset[i][j] << " + " << blinechoffset 
+//  << " + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqtable[*ifi].numchannels/chanstoaverage << endl; 
               }
             }
           }
