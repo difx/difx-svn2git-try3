@@ -2166,7 +2166,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				std::cout << corrSetup->autobands;
 			}
 
-			// register the outputbands so new freqId's are introduced where necessary,
+			// register the outputbands so new freqId's are introduced where necessary
 			std::vector<AutoBands::Outputband>::const_iterator itOb;
 			for(itOb = corrSetup->autobands.outputbands.begin(); itOb != corrSetup->autobands.outputbands.end(); ++itOb)
 			{
@@ -2227,7 +2227,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 					const int fqId = D->datastream[dsid].recFreqId[fq];
 					if (corrSetup->autobands.lookupDestinationFreq(freqs[fqId], freqs) < 0)
 					{
-						blockedfreqids[antid].insert(fq);
+						blockedfreqids[antid].insert(fqId);
 					}
 				}
 			}
