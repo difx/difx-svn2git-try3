@@ -405,7 +405,6 @@ void Visibility::writedata()
           if(freqindex != targetfreqindex) {
             baselineweights[i][targetfreqindex][b][k] += baselineweights[i][freqindex][b][k];
             baselineweightcounts[i][targetfreqindex][b][k]++;
-          } else {
           }
           resultindex++;
         }
@@ -422,7 +421,7 @@ void Visibility::writedata()
         for(int s=0;s<model->getNumPhaseCentres(currentscan);s++) {
           //its in units of integration width in ns, so scale to get something which is 1.0 for no decorrelation
           baselineshiftdecorrs[i][freqindex][s] = floatresults[resultindex]/(1000000000.0*config->getIntTime(currentconfigindex));
-	  //TODO: multiply-in? average? in case of multiple freqindex'es --> targetfreqindex
+//TODO: when targetfreq != freqindex, what to do, multiply-in/average to form decorr for N:1 freq:targetfreq case?
           baselineshiftdecorrs[i][targetfreqindex][s] = baselineshiftdecorrs[i][freqindex][s];
           resultindex++;
         }
@@ -482,6 +481,7 @@ void Visibility::writedata()
       targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
       resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
+      targetfreqchannels = config->getFNumChannels(targetfreqindex)/config->getFChannelsToAverage(targetfreqindex);
       if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
         freqchannels++;
       }
@@ -560,13 +560,13 @@ void Visibility::writedata()
             //amplitude calibrate the data
             if(scale > 0.0)
             {
-              //cout << "Scaling baseline (found at resultindex " << resultindex << ") by " << scale << ", before scaling the 6th re and im are " << floatresults[resultindex*2 + 12] << ", " << floatresults[resultindex*2 + 13] << endl;
+              //cout << "Scaling baseline (found at resultindex " << resultindex << ") by " << scale << ", freqchans=" << freqchannels << " targetfreqchans=" << targetfreqchannels << " before scaling the 6th re and im are " << floatresults[resultindex*2 + 12] << ", " << floatresults[resultindex*2 + 13] << endl;
               status = vectorMulC_f32_I(scale, &(floatresults[resultindex*2]), 2*freqchannels);
               if(status != vecNoErr)
                 csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
             }
 
-            resultindex += targetfreqchannels;
+            resultindex += freqchannels;
           }
         }
       }
@@ -713,10 +713,10 @@ void Visibility::writeascii(int dumpmjd, double dumpseconds)
         {
           for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++)
           {
-	    stringstream fname;
+            stringstream fname;
             //write out to a naive filename
 
-	    fname << "baseline_" << i << "_freq_" << j << "_product_" << k << "_" << datetimestring << "_source_" << s << "_bin_" << b << ".output";
+            fname << "baseline_" << i << "_freq_" << j << "_product_" << k << "_" << datetimestring << "_source_" << s << "_bin_" << b << ".output";
 
             //output.open(string(string("baseline_")+itoa(i,sbuf,10)+"_freq_"+char('0' + j)+"_product_"+char('0'+k)+"_"+datetimestring+"_source_"+char('0'+s)+"_bin_"+char('0'+b)+".output").c_str(), ios::out|ios::trunc);
             output.open(fname.str().c_str(), ios::out|ios::trunc);
@@ -854,6 +854,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
                 currentweight = baselineweights[i][freqindex][b][k]*baselineshiftdecorrs[i][freqindex][s] / baselineweightcounts[i][freqindex][b][k];
               else
                 currentweight = baselineweights[i][freqindex][b][k] / baselineweightcounts[i][freqindex][b][k];
+// TODO possibly: divide currentweight by size of vector getSortedInputfreqsOfTargetfreq()
               writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, currentweight, buvw, filecount);
 
               //close, reopen in binary and write the binary data, then close again
