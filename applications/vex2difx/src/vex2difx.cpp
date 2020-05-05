@@ -1639,37 +1639,45 @@ static int bestMatchingFreq(const ZoomFreq &zoomfreq, const std::vector<int> mat
 		}
 	}
 
-	// Find the best matching input band by maximizing the overlapping area (assume all input bands have roughly the same sensitivity)
+	// Find the best matching input band by maximizing the distance from a band edge
+	double edge_dist_l = 0.0;
+	double edge_dist_u = 0.0;
 	int best_input_band_index = 0;
-	double overlap_max = 0.0;
+	double ed_min = 0.0;
+	std::vector<double> ed1_vec;
+	std::vector<double> ed2_vec;
+	std::vector<double> input_center;
+	std::vector<double> input_centers;
 	for(int jj=0; jj<matchingFreqs.size(); ++jj)
 	{
-		double overlap = min(input_bands_upper_edge[jj],upper_zoombandedge) - max(input_bands_lower_edge[jj],lower_zoombandedge);
+		edge_dist_l = abs(lower_zoombandedge - input_bands_lower_edge[jj]);
+		edge_dist_u = abs(upper_zoombandedge - input_bands_upper_edge[jj]);
 		if(0)
 		{
 			std::cout << "input_bands_lower_edge[" << jj << "] = " << input_bands_lower_edge[jj] << std::endl;
 			std::cout << "input_bands_upper_edge[" << jj  << "] = " << input_bands_upper_edge[jj] << std::endl;
-			std::cout << "overlap = " << overlap << std::endl;
+			std::cout << "edge_dist_l = " << edge_dist_l << std::endl;
+			std::cout << "edge_dist_u = " << edge_dist_u << std::endl;
 		}
 		if(0 == jj)
 		{
-			overlap_max = overlap;
-			best_input_band_index = matchingFreqs[jj];
+			ed_min = min(edge_dist_l,edge_dist_u);
+			best_input_band_index = jj;
 		}
-		else if(overlap > overlap_max)
+		if (edge_dist_l > ed_min or edge_dist_u > ed_min)
 		{
-			overlap_max = overlap;
-			best_input_band_index = matchingFreqs[jj];
+			ed_min = min(edge_dist_l,edge_dist_u);
+			best_input_band_index = jj;
 		}
 	}
 
 	if(0)
 	{
-		std::cout << "overlap_max = " << overlap_max << std::endl;
-		std::cout << "best_input_band_index = " << best_input_band_index << std::endl;
+		std::cout << "ed_min = " << ed_min << std::endl;
+		std::cout << "best_input_band_index = " << best_input_band_index << " corresponding to freq = " << matchingFreqs[best_input_band_index] << std::endl;
 	}
 
-	return best_input_band_index;
+	return matchingFreqs[best_input_band_index];
 }
 
 static int prepareJobFreqs(const Job& J, const VexData *V, CorrParams *P, int verbose)
