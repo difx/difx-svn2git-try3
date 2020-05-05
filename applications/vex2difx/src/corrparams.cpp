@@ -2651,6 +2651,23 @@ int CorrParams::checkSetupValidity()
 		}
 	}
 
+	// automatically switch to exhaustiveAutocorrs if any corr setup uses the outputbands feature,
+	// this keeps the mpifxcorr implementation of outputbands simple i.e. autos need no special treatment
+	if(!exhaustiveAutocorrs)
+	{
+		for(std::vector<CorrSetup>::const_iterator c = corrSetups.begin(); c != corrSetups.end(); ++c)
+		{
+			if (c->outputBandwidthMode != OutputBandwidthOff)
+			{
+				exhaustiveAutocorrs = true;
+			}
+		}
+		if(exhaustiveAutocorrs)
+		{
+			std::cerr << "Note: SETUP with outputbands detected, but exhaustiveAutocorrs was not specified. Auto-enabling it." << std::endl;
+		}
+	}
+
 	// check that all setups are sensible
 	for(std::vector<CorrSetup>::const_iterator c = corrSetups.begin(); c != corrSetups.end(); ++c)
 	{
