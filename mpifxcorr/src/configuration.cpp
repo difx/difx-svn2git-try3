@@ -2480,7 +2480,8 @@ bool Configuration::populateResultLengths()
           for(int j=0;j<numbaselines;j++)
           {
             int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
-            if(numblpolproducts<=0) {
+            if(numblpolproducts<=0)
+            {
               stringstream str;
               copy(inputfreqs.begin(), inputfreqs.end(), ostream_iterator<char>(str, " "));
               cfatal << startl << "Could not determine number of polarization products of target freq " << i << " from constituent freqs " << str.str() << " on baseline " << j << endl;
@@ -2492,18 +2493,24 @@ bool Configuration::populateResultLengths()
             coreresultindex += maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage;
           }
           // mark contributing band slices and their position in that region, all baselines
-          for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi) {
+          for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi)
+          {
             double fcurr=freqtable[*ifi].bandlowedgefreq();
             int choffset = ((fcurr-fref)/freqtable[i].bandwidth)*freqchans;
-            if (choffset%chanstoaverage != 0) {
-              cinfo << startl << "consituent band placement at bin " << choffset << " not divisible by freq avgeraging factor " << chanstoaverage << " -- TODO: flag these channels" << endl;
+            if(choffset%chanstoaverage != 0)
+            {
+              if(mpiid == 0)
+                cinfo << startl << "placement of constituent freq " << *ifi << " into freq " << i << " at bin " << choffset << " not divisible by avg factor " << chanstoaverage << ", should flag output channel " << choffset/chanstoaverage << endl;
             }
-            if(!configs[c].coreresultbaselineoffset[*ifi]) {
+            if(!configs[c].coreresultbaselineoffset[*ifi])
+            {
               configs[c].coreresultbaselineoffset[*ifi] = new int[numbaselines]();
             }
-            for(int j=0;j<numbaselines;j++) {
+            for(int j=0;j<numbaselines;j++)
+            {
               const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
-              if(bldata.localfreqindices[*ifi] >= 0) {
+              if(bldata.localfreqindices[*ifi] >= 0)
+              {
                 int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
                 int blinechoffset = maxconfigphasecentres*binloop*numblpolproducts*choffset/chanstoaverage;
                 configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + blinechoffset;
@@ -2523,7 +2530,7 @@ bool Configuration::populateResultLengths()
           for(int j=0;j<numbaselines;j++)
           {
             const baselinedata& bldata = baselinetable[configs[c].baselineindices[j]];
-            if(!configs[c].frequsedbybaseline[i][j]) // could add this one, original code does not.
+            if(!configs[c].frequsedbybaseline[i][j]) // could add this one, original difx260/trunk code does not.
               continue;
             if(bldata.localfreqindices[i] >= 0)
             {

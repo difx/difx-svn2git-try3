@@ -1279,8 +1279,8 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
         freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
         //put autocorrs in resultsbuffer
         status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(false, k), &procslots[index].results[resultindex], freqchannels);
-        if(status != vecNoErr)
-          csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << endl;
+        if(status != vecNoErr && freqchannels > 0)
+          csevere << startl << "Error copying autocorrelations for datastream " << j << ", band " << k << ", num freqchannels " << freqchannels << endl;
         resultindex += freqchannels;
       }
     }
@@ -1292,7 +1292,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
         if(config->isFrequencyUsed(procslots[index].configindex, freqindex) || config->isEquivalentFrequencyUsed(procslots[index].configindex, freqindex)) {
           freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
           status = vectorAdd_cf32_I(modes[j]->getAutocorrelation(true, k), &procslots[index].results[resultindex], freqchannels);
-          if(status != vecNoErr)
+          if(status != vecNoErr && freqchannels > 0)
             csevere << startl << "Error copying cross-polar autocorrelations for datastream " << j << ", band " << k << endl;
           resultindex += freqchannels;
         }
