@@ -417,7 +417,7 @@ void Visibility::writedata()
       for(int j=0;j<config->getBNumFreqs(currentconfigindex,i);j++) {
         freqindex = config->getBFreqIndex(currentconfigindex, i, j);
         targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
-        resultindex = config->getCoreResultBShiftDecorrOffset(currentconfigindex, targetfreqindex, i)*2;
+        resultindex = config->getCoreResultBShiftDecorrOffset(currentconfigindex, freqindex, i)*2;
         for(int s=0;s<model->getNumPhaseCentres(currentscan);s++) {
           //its in units of integration width in ns, so scale to get something which is 1.0 for no decorrelation
           baselineshiftdecorrs[i][freqindex][s] = floatresults[resultindex]/(1000000000.0*config->getIntTime(currentconfigindex));
