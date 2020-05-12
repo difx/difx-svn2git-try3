@@ -45,7 +45,7 @@ class freq;
 class AutoBands
 {
 public:
-	AutoBands() : outputbandwidth(32e6), verbosity(0), permitgaps(false) { }
+	AutoBands() : outputbandwidth(-1), verbosity(0), permitgaps(false) { }
 	AutoBands(double outputbandwidth_Hz, int verbosity=0, bool permitgaps=false);
 	~AutoBands();
 
@@ -123,6 +123,9 @@ public:
 	/// Set target bandwidth to be used when generating output bands, c.f. generateOutputbands()
 	void setBandwidth(double outputbandwidth_Hz);
 
+	/// Get pre-set target bandwidth
+	double getBandwidth() const { return outputbandwidth; }
+
 	/// Reinitialize
 	void clear();
 
@@ -147,6 +150,9 @@ public:
 
 	/// Create a list of intra-outputband channels that contain no imaginary component (edge channels of consitituents)
 	int listEdgeChannels(const Outputband& band, std::deque<int>& channels, double fftSpecRes_Hz, double finalSpecRes_Hz, double maxFraction = 0) const;
+
+	int listEdgeChannels(const int bandIdx, std::deque<int>& channels, double fftSpecRes_Hz, double finalSpecRes_Hz, double maxFraction = 0) const
+	{ return listEdgeChannels(this->outputbands[bandIdx], channels, fftSpecRes_Hz, finalSpecRes_Hz, maxFraction); }
 
 	//variables
 	std::vector<Band> bands;

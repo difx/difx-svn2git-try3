@@ -2664,7 +2664,7 @@ int CorrParams::checkSetupValidity()
 		}
 		if(exhaustiveAutocorrs)
 		{
-			std::cerr << "Note: SETUP with outputbands detected, but exhaustiveAutocorrs was not specified. Auto-enabling it." << std::endl;
+			std::cerr << "Note: SETUP with outputBandwidth detected, but exhaustiveAutocorrs was not specified. Auto-enabling it." << std::endl;
 		}
 	}
 

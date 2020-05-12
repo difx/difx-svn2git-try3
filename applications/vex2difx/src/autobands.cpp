@@ -43,6 +43,8 @@
 #include "freq.h"       // class freq
 #include "zoomfreq.h"	// class ZoomFreq
 
+template class std::vector<AutoBands::Outputband>;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 double AutoBands::Band::bandwidth() const
@@ -484,7 +486,7 @@ int AutoBands::generateOutputbands(int Nant, double fstart_Hz)
 				slicestartfreq += bw_utilized;
 				span_bw_remain = f1 - slicestartfreq;
 
-				// If out of remaining bw in this span, overflow into the next span
+				// If out of remaining bw in this span, overflow into the next span if there is no gap
 				if(span_bw_remain <= 0)
 				{
 					if(!spans[span].continued)
@@ -515,7 +517,7 @@ int AutoBands::generateOutputbands(int Nant, double fstart_Hz)
 			{
 				if(verbosity > 1)
 				{
-					printf ("Autobands::outputbands()    dropping incomplete out fq %.6f MHz\n", foutstart*1e-6);
+					printf ("Autobands::outputbands()    dropping incomplete out fq %.6f MHz, was short by %.6f MHz\n", foutstart*1e-6, bw_needed*1e-6);
 				}
 				foutstart += bw_needed;
 				// span++; // perhaps?
@@ -709,7 +711,7 @@ int AutoBands::listEdgeChannels(const AutoBands::Outputband& outputband, std::de
 			if (verbosity > 2)
 			{
 				std::cout << "   constituent " << (m+1) << "/" << outputband.constituents.size() << " " << sub << " at : DC bin "
-					<< choffset_int << " falls into bin " << choffset_ext_subbin << " of " << avg << "-bin average, final output channel " << choffset_ext
+					<< choffset_int << " falls into bin " << (choffset_ext_subbin+1) << " of " << avg << "-bin average, final output channel " << choffset_ext
 					<< " : flag=" << (doFlag ? "yes" : "no") << "\n";
 			}
 		}

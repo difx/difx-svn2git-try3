@@ -1680,6 +1680,62 @@ static int bestMatchingFreq(const ZoomFreq &zoomfreq, const std::vector<int> mat
 	return matchingFreqs[best_input_band_index];
 }
 
+// Generate spectral channel flagging file for in-band edge channels.
+// Format of each line:
+//    <mjd start> <mjd stop> <difx freq id> <spectral channel start> <spectral channel stop>
+static void writeDifxChannelFlags(const DifxInput *D, const CorrSetup *corrSetup)
+{
+	char chflagFile[DIFXIO_FILENAME_LENGTH];
+	FILE *out;
+
+	if(corrSetup->outputBandwidthMode == OutputBandwidthOff)
+	{
+		return;
+	}
+
+	generateDifxJobFileBase(D->job, chflagFile);
+	strcat(chflagFile, ".channelflags");
+
+	out = fopen(chflagFile, "w");
+	if(!out)
+	{
+		cerr << "Error: cannot open " << chflagFile << " for write." << endl;
+		return;
+	}
+
+	for(int a = 0; a < D->nAntenna; a++)
+	{
+		for(int n = 0; n < corrSetup->autobands.outputbands.size(); n++)
+		{
+			// Locate DiFX freq Id
+			int outputFreqId = -1;
+			for(int f = 0; f < D->nFreq; ++f)
+			{
+				const DifxFreq *df = D->freq + f;
+				if(df->freq == corrSetup->autobands.outputbands[n].fbandstart*1e-6
+					&& df->bw == corrSetup->autobands.outputbands[n].bandwidth*1e-6
+					&& df->sideband == 'U')
+				{
+					outputFreqId = f;
+					break;
+				}
+			}
+
+			// Flag all in-band edge channels of that freq Id
+			// note1: due to FITS FL#1 table structure, only one channel is named per flag file entry
+			// note2: <job>.channelflags refers to full difxfreq table freq Ids, in contrast to existing <job>.flag referring to recBand ids!
+			std::deque<int> channels;
+			int nflaggable = corrSetup->autobands.listEdgeChannels(n, channels, corrSetup->FFTSpecRes, corrSetup->outputSpecRes);
+			for(int m = 0; m < channels.size(); m++)
+			{
+				fprintf(out, "%s %lf %lf %d %d %d\n", D->antenna[a].name, D->mjdStart, D->mjdStop, outputFreqId, channels[m], channels[m]);
+			}
+		}
+	}
+
+	fclose(out);
+}
+
 static int prepareJobFreqs(const Job& J, const VexData *V, CorrParams *P, int verbose)
 {
 	// TODO: placeholder for calling prior to writeJob(), relocate here the writeJob() parts regarding freq list and autobands extension of it
@@ -2184,7 +2240,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				}
 			}
 
-			// grab list of zoom bands needed for this antenna
+			// grab list of zoom bands needed for this antenna to cover the outputbands
 			GlobalZoom constituentzooms("temp");
 			for(itOb = corrSetup->autobands.outputbands.begin(); itOb != corrSetup->autobands.outputbands.end(); ++itOb)
 			{
@@ -2733,6 +2789,9 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 
 		// write flag file
 		J.generateFlagFile(*V, events, D->job->flagFile, P->invalidMask);
+
+		// write channel flagging file
+		writeDifxChannelFlags(D, corrSetup);
 
 		if(verbose > 2)
 		{
