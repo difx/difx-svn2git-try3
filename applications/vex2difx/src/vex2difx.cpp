@@ -1682,9 +1682,10 @@ static int bestMatchingFreq(const ZoomFreq &zoomfreq, const std::vector<int> mat
 
 // Generate spectral channel flagging file for in-band edge channels.
 // Format of each line:
-//    <mjd start> <mjd stop> <difx freq id> <spectral channel start> <spectral channel stop>
+//    <mjd start> <mjd stop> <difx freq id> <spectral channel start> <spectral channel stop> <flag reason string|'edge'>
 static void writeDifxChannelFlags(const DifxInput *D, const CorrSetup *corrSetup)
 {
+	const char *flagReason = "edge";
 	char chflagFile[DIFXIO_FILENAME_LENGTH];
 	FILE *out;
 
@@ -1728,7 +1729,7 @@ static void writeDifxChannelFlags(const DifxInput *D, const CorrSetup *corrSetup
 			int nflaggable = corrSetup->autobands.listEdgeChannels(n, channels, corrSetup->FFTSpecRes, corrSetup->outputSpecRes);
 			for(int m = 0; m < channels.size(); m++)
 			{
-				fprintf(out, "%s %lf %lf %d %d %d\n", D->antenna[a].name, D->mjdStart, D->mjdStop, outputFreqId, channels[m], channels[m]);
+				fprintf(out, "%s %lf %lf %d %d %d '%s'\n", D->antenna[a].name, D->mjdStart, D->mjdStop, outputFreqId, channels[m], channels[m], flagReason);
 			}
 		}
 	}
