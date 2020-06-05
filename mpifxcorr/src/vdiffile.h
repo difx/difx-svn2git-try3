@@ -130,6 +130,9 @@ protected:
   unsigned int endindex, muxindex;
   int readbufferwriteslot;
   bool readfail;
+
+  int nGapWarn;
+  int nExcessWarn;
 };
 
 #endif

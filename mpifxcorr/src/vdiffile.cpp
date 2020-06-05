@@ -73,6 +73,10 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	startOutputFrameNumber = -1;
 	memset(&vm, 0, sizeof(vm));
 
+	nGapWarn = 0;
+	nExcessWarn = 0;
+
+
 	// Make read buffer a bit bigger than a data segment size so extra bytes can be filtered out 
 	// The excess should be limited to avoid large memory moves of extra data
 	// But the amount of excess should be large enough to encompass all reasonable amounts of interloper data
@@ -136,7 +140,9 @@ VDIFDataStream::~VDIFDataStream()
 	readthreadstop = true;
 
 	/* barriers come in pairs to allow the read thread to always get first lock */
+cinfo << startl << "~: B1" << endl;
 	pthread_barrier_wait(&readthreadbarrier);
+cinfo << startl << "~: B2" << endl;
 	pthread_barrier_wait(&readthreadbarrier);
 
 	pthread_join(readthread, 0);
@@ -195,27 +201,39 @@ void VDIFDataStream::startReaderThread()
 		cfatal << startl << "Cannot create the file reader thread!" << endl;
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
+	else
+	{
+		cinfo << startl << "VDIFDataStream::startReaderThread() : starting VDIFDataStream::launchreadthreadfunction ." << endl;
+	}
 }
 
 void VDIFDataStream::readthreadfunction()
 {
 	int lockmod = readbufferslots-1;	// used to team up slots 0 and readbufferslots-1
 
+	cinfo << startl << "VDIFDataStream::readthreadfunction() starting." << endl;
+
 	for(;;)
 	{
 		// No locks shall be set at this point
 
 		/* First barrier is before the locking of slot number 1 */
+cinfo << startl << "RT1: B1" << endl;
 		pthread_barrier_wait(&readthreadbarrier);
 
 		readbufferwriteslot = 1;	// always
+cinfo << startl << "RT2: ML " << (readbufferwriteslot % lockmod) << endl;
 		pthread_mutex_lock(readthreadmutex + (readbufferwriteslot % lockmod));
 		if(readthreadstop)
 		{
 			cverbose << startl << "readthreadfunction: readthreadstop -> this thread will end." << endl;
 		}
 		/* Second barrier is after the locking of slot number 1 */
+cinfo << startl << "RT3: B2" << endl;
 		pthread_barrier_wait(&readthreadbarrier);
+
+		cinfo << startl << "VDIFDataStream::readthreadfunction() : about to enter while() loop." << endl;
+
 		while(!readthreadstop)
 		{
 			int bytes;
@@ -223,12 +241,14 @@ void VDIFDataStream::readthreadfunction()
 
 			if(input.eof())
 			{
+cinfo << startl << "RT4: EOF" << endl;
 				bytes = 0;
 			}
 			else
 			{
-				input.read(reinterpret_cast<char *>(readbuffer), bytes);
+				input.read(reinterpret_cast<char *>(readbuffer) + readbufferwriteslot*readbufferslotsize, readbufferslotsize);
 				bytes = input.gcount();
+cinfo << startl << "RT5: Read(" << readbufferslotsize << ") -> " << bytes << " into slot " << readbufferwriteslot << endl;
 			}
 
 			if(bytes < readbufferslotsize)
@@ -247,7 +267,9 @@ void VDIFDataStream::readthreadfunction()
 				// Note: we always save slot 0 for wrap-around
 				readbufferwriteslot = 1;
 			}
+cinfo << startl << "RT6: ML " << (readbufferwriteslot % lockmod) << endl;
 			pthread_mutex_lock(readthreadmutex + (readbufferwriteslot % lockmod));
+cinfo << startl << "RT7: MU " << (curslot % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (curslot % lockmod));
 
 			if(endofscan || !keepreading)
@@ -255,6 +277,7 @@ void VDIFDataStream::readthreadfunction()
 				break;
 			}
 		}
+cinfo << startl << "RT8: MU " << (readbufferwriteslot % lockmod) << endl;
 		pthread_mutex_unlock(readthreadmutex + (readbufferwriteslot % lockmod));
 		if(readthreadstop)
 		{
@@ -494,6 +517,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	}
 
 	/* Note: the following fanout concept is an explicit one and is not relevant to VDIF in any way */
+
 	fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, vm.outputFrameSize, config->getDDecimationFactor(configindex, streamnum), config->getDAlignmentSeconds(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
 	if(fanout != 1)
 	{
@@ -501,7 +525,7 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	cinfo << startl << "VDIFDataStream::initialiseFile format=" << formatname << endl;
+	cinfo << startl << "VDIFDataStream::initialiseFile post-vmux format=" << formatname << endl;
 
 	// Here we need to open the file, read the start time, jump if necessary, and if past end of file, dataremaining = false.  Then set readseconds...
 
@@ -570,6 +594,19 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 	{
 		cverbose << startl << "Not doing peek/seek on file due to setting of DIFX_FILE_CHECK_LEVEL env var." << endl;
 	}
+
+// CHECK THESE!
+
+	
+
+	lockstart = lockend = lastslot = -1;
+
+	// cause reading thread to go ahead and start filling buffers
+	// these barriers come in pairs...
+cinfo << startl << "IF: B1" << endl;
+	pthread_barrier_wait(&readthreadbarrier);
+cinfo << startl << "IF: B2" << endl;
+	pthread_barrier_wait(&readthreadbarrier);
 }
 
 int VDIFDataStream::testForSync(int configindex, int buffersegment)
@@ -593,6 +630,8 @@ int VDIFDataStream::dataRead(int buffersegment)
 	int lockmod = readbufferslots - 1;
 	int muxReturn;
 
+cinfo << startl << "dataRead(" << buffersegment << ")" << endl;
+
 	if(lockstart < -1)
 	{
 		csevere << startl << "dataRead lockstart=" << lockstart << " muxindex=" << muxindex << " readbufferslotsize=" << readbufferslotsize << " endindex=" << endindex << " lastslot=" << lastslot << endl;
@@ -601,14 +640,17 @@ int VDIFDataStream::dataRead(int buffersegment)
 	if(lockstart == -1)
 	{
 		// first decoding of scan
+cinfo << startl << "dataRead: scan start" << endl;
 		muxindex = readbufferslotsize;	// start at beginning of slot 1 (second slot)
 		lockstart = lockend = 1;
+cinfo << startl << "DR: ML " << (lockstart % lockmod) << endl;
 		pthread_mutex_lock(readthreadmutex + (lockstart % lockmod));
 		if(readfail)
 		{
 			cwarn << startl << "dataRead detected readfail. [1] Stopping." << endl;
 			dataremaining = false;
 			keepreading = false;
+cinfo << startl << "DR: MU " << (lockstart % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
 			cinfo << startl << "dataRead has unlocked slot " << lockstart << endl;
 			lockstart = lockend = -2;
@@ -638,15 +680,16 @@ int VDIFDataStream::dataRead(int buffersegment)
 	{
 		lockend = n2;
 		pthread_mutex_lock(readthreadmutex + (lockend % lockmod));
+cinfo << startl << "DR: ML " << (lockend % lockmod) << endl;
 		if(readfail)
 		{
 			cwarn << startl << "dataRead detected readfail. [2] Stopping." << endl;
 			dataremaining = false;
 			keepreading = false;
+cinfo << startl << "DR: MU " << (lockstart % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
-			cinfo << startl << "dataRead has unlocked slot " << (lockstart % lockmod) << endl;
+cinfo << startl << "DR: MU " << (lockend % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
-			cinfo << startl << "dataRead has unlocked slot " << (lockend % lockmod) << endl;
 			lockstart = lockend = -2;
 
 			return 0;
@@ -679,6 +722,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 	bytesvisible = muxend - muxindex;
 
 	// multiplex and corner turn the data
+cinfo << startl << "VMUX " << readbytes << " " << muxindex << " " << bytesvisible << " " << startOutputFrameNumber << endl;
 	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 
 	if(muxReturn <= 0)
@@ -689,6 +733,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 		if(muxReturn < 0)
 		{
+cinfo << startl << "DR: MU " << (lockend % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
 			cerror << startl << "vdifmux() failed with return code " << muxReturn << ", likely input buffer is too small!" << endl;
 		}
@@ -699,6 +744,8 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 		return 0;
 	}
+
+cinfo << startl << "VMUX Results: " << vstats.srcUsed << " " << vstats.destUsed << " " << vstats.nFillerFrame << " " << vstats.nPartialFrame << " " << vstats.nGoodFrame << " " << vstats.nValidFrame << " " << vstats.nInvalidFrame << endl;
 
 	bufferinfo[buffersegment].validbytes = vstats.destUsed;
 	bufferinfo[buffersegment].readto = true;
@@ -725,27 +772,24 @@ int VDIFDataStream::dataRead(int buffersegment)
 
 		// look at difference in data frames consumed and produced and proceed accordingly
 		int deltaDataFrames = vstats.srcUsed/(nthreads*inputframebytes) - vstats.destUsed/(nthreads*(inputframebytes-VDIF_HEADER_BYTES) + VDIF_HEADER_BYTES);
-		if(deltaDataFrames == 0)
+cinfo << startl << "DeltaDataFrames = " << deltaDataFrames << endl;
+		if(abs(deltaDataFrames) < vm.nSort)
 		{
 			// We should be able to preset startOutputFrameNumber.  Warning: early use of this was frought with peril but things seem OK now.
 			startOutputFrameNumber = vstats.startFrameNumber + vstats.nOutputFrame;
 		}
 		else
 		{
-			if(deltaDataFrames < -10)
+			if(deltaDataFrames < -(vm.nSort+10))
 			{
-				static int nGapWarn = 0;
-
 				++nGapWarn;
 				if( (nGapWarn & (nGapWarn - 1)) == 0)
 				{
 					cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nGapWarn << " deltaDataFrames=" << deltaDataFrames << endl;
 				}
 			}
-			else if(deltaDataFrames > 10)
+			else if(deltaDataFrames > (vm.nSort+10))
 			{
-				static int nExcessWarn = 0;
-
 				++nExcessWarn;
 				if( (nExcessWarn & (nExcessWarn - 1)) == 0)
 				{
@@ -767,9 +811,11 @@ int VDIFDataStream::dataRead(int buffersegment)
 		// end of useful data for this scan
 		cinfo << startl << "End of data for scan; bytesProcessed=" << vstats.bytesProcessed << " nGoodFrame=" << vstats.nGoodFrame << " nCall=" << vstats.nCall << endl;
 		dataremaining = false;
+cinfo << startl << "DR: MU " << (lockstart % lockmod) << endl;
 		pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
 		if(lockstart != lockend)
 		{
+cinfo << startl << "DR: MU " << (lockend % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
 		}
 		lockstart = lockend = -2;
@@ -782,11 +828,13 @@ int VDIFDataStream::dataRead(int buffersegment)
 		muxindex = readbufferslotsize;
 
 		// need to acquire lock for first slot
+cinfo << startl << "DR: ML " << 1 << endl;
 		pthread_mutex_lock(readthreadmutex + 1);
 
 		// unlock existing locks
 		while(lockstart < readbufferslots)
 		{
+cinfo << startl << "DR: MU " << (lockstart % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
 			++lockstart;
 		}
@@ -803,6 +851,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 		n3 = muxindex / readbufferslotsize;
 		while(lockstart < n3)
 		{
+cinfo << startl << "DR: MU " << (lockstart % lockmod) << endl;
 			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
 			++lockstart;
 		}
