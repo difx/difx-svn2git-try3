@@ -960,6 +960,37 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
               csevere << startl << "Error in LO offset addition (time domain, frac LO offset wallclock offset)" << status << endl;
           }
         }
+        if(0) { // WFB 20191127 -- not for general use!
+
+double rflo;
+double flo;
+
+rflo = -4.13*walltimesecs;
+flo = fabs(rflo) - int(fabs(rflo));
+if (rflo < 0)
+  flo = -flo;
+
+          status = vectorMulC_f64(subtoff, -rflo, subtval, arraystridelength);
+          if(status != vecNoErr)
+            csevere << startl << "Error in LO offset calculation (time domain, sub vector)" << status << endl;
+          status = vectorMulC_f64(steptoff, -rflo, steptval, numfrstrides);
+          if(status != vecNoErr)
+            csevere << startl << "Error in LO offset calculation (time domain, step vector)" << status << endl;
+          status = vectorAdd_f64_I(subtval, subphase, arraystridelength);
+          if(status != vecNoErr)
+            csevere << startl << "Error in LO offset addition (time domain, sub vector)" << status << endl;
+          status = vectorAdd_f64_I(steptval, stepphase, numfrstrides);
+          if(status != vecNoErr)
+            csevere << startl << "Error in LO offset addition (time domain, step vector)" << status << endl;
+          status = vectorAddC_f64_I(-rflo*fracwalltime, subphase, arraystridelength);
+          if(status != vecNoErr)
+            csevere << startl << "Error in LO offset addition (time domain, wallclock offset)" << status << endl;
+          if(isfraclooffset) {
+            status = vectorAddC_f64_I(-flo*intwalltime, subphase, arraystridelength);
+            if(status != vecNoErr)
+              csevere << startl << "Error in LO offset addition (time domain, frac LO offset wallclock offset)" << status << endl;
+          }
+        }
         for(int j=0;j<arraystridelength;j++) {
           subarg[j] = -TWO_PI*(subphase[j] - int(subphase[j]));
         }
