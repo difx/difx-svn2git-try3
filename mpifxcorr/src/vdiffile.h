@@ -94,10 +94,6 @@ protected:
 
   virtual int testForSync(int configindex, int buffersegment);
 
-  virtual void loopfileread();
-
-  int lastconfig;
-
   char formatname[64];
 
   unsigned char *readbuffer;

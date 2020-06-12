@@ -81,8 +81,7 @@ DataStream::DataStream(const Configuration * conf, int snum, int id, int ncores,
 
 DataStream::~DataStream()
 {
-  if(input.is_open())
-    input.close();
+  closefile();
   vectorFree(databuffer);
   for(int i=0;i<numdatasegments;i++)
   {
@@ -821,7 +820,7 @@ void DataStream::loopfileread()
   while(!dataremaining && keepreading) {
     openfile(bufferinfo[0].configindex, filesread[bufferinfo[0].configindex]++);
     if(!dataremaining)
-      input.close();
+      closefile();
   }
   if(keepreading) {
     if(datamuxer) {
@@ -887,7 +886,7 @@ void DataStream::loopfileread()
     }
     if(keepreading)
     {
-      input.close();
+      closefile();
       //if we need to, change the config
       int nextconfigindex = config->getScanConfigIndex(readscan);
       while(nextconfigindex < 0 && readscan < model->getNumScans()) {
@@ -925,8 +924,7 @@ void DataStream::loopfileread()
       }
     }
   }
-  if(input.is_open())
-    input.close();
+  closefile();
   if(numread > 0) {
     //cdebug << startl << "READTHREAD: loopfileread: Unlock buffer " << lastvalidsegment << endl; 
     perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));
