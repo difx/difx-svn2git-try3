@@ -175,6 +175,7 @@ VDIFDataStream::~VDIFDataStream()
 	}
 }
 
+// this function should not need to be rewritten for subclasses.
 void VDIFDataStream::startReaderThread()
 {
 	int perr;
@@ -244,7 +245,7 @@ void VDIFDataStream::readthreadfunction()
 	// No locks shall be set at this point
 }
 
-// this function should not need to be rewritten for subclasses.
+// this function needs to be rewritten for subclasses.
 void *VDIFDataStream::launchreadthreadfunction(void *self)
 {
 	VDIFDataStream *me = (VDIFDataStream *)self;

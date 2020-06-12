@@ -46,8 +46,8 @@ class VDIFMark5DataStream : public VDIFDataStream
 public:
 	VDIFMark5DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
 	virtual ~VDIFMark5DataStream();
-	virtual void startReaderThread();
 	virtual void initialiseFile(int configindex, int fileindex);
+	virtual void launchreadthreadfunction(void *self);
 	virtual void openfile(int configindex, int fileindex);
 	virtual int calculateControlParams(int scan, int offsetsec, int offsetns);
 	int sendMark5Status(enum Mk5State state, long long position, double dataMJD, float rate);
@@ -57,7 +57,6 @@ public:
 protected:
 #ifdef HAVE_XLRAPI_H
 	void setDiscModuleState(SSHANDLE xlrDevice, const char *newState);
-	static void *launchreadthreadfunction(void *self);
 	void readthreadfunction();
 	void servoMark5();
 	virtual void loopfileread();

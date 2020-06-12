@@ -53,28 +53,10 @@ VDIFMark5DataStream::~VDIFMark5DataStream()
 {
 }
 
-void VDIFMark5DataStream::startReaderThread()
-{
-	int perr;
-
-	pthread_attr_t attr;
-	pthread_attr_init(&attr);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-	perr = pthread_create(&readthread, &attr, VDIFMark5DataStream::launchreadthreadfunction, this);
-	pthread_attr_destroy(&attr);
-
-	if(perr)
-	{
-		cfatal << startl << "Cannot create the Mark5 reader thread!" << endl;
-		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
-}
-
 // this function implements the Mark5 module reader.  It is continuously either filling data into a ring buffer or waiting for a mutex to clear.
 // any serious problems are reported by setting readfail.  This will call the master thread to shut down.
 void VDIFMark5DataStream::readthreadfunction()
 {
-	int lockmod = readbufferslots-1;	// used to team up slots 0 and readbufferslots-1
 	int perr;
 
 	/* each data buffer segment contains an integer number of frames, 
@@ -123,21 +105,9 @@ void VDIFMark5DataStream::readthreadfunction()
 
 	for(;;)
 	{
-		// No locks shall be set at this point
+		// Lock for readbufferwriteslot = 1 shall be set at this point by startReaderThread()
 
-		/* First barrier is before the locking of slot number 1 */
-		pthread_barrier_wait(&readthreadbarrier);
-
-		readbufferwriteslot = 1;	// always 
-		pthread_mutex_lock(readthreadmutex + (readbufferwriteslot % lockmod));
-		if(readthreadstop)
-		{
-			cverbose << startl << "readthreadfunction: readthreadstop -> this thread will end." << endl;
-		}
-		/* Second barrier is after the locking of slot number 1 */
-		pthread_barrier_wait(&readthreadbarrier);
-
-		while(!readthreadstop)
+		while(keepreading)
 		{
 			int bytes;
 			XLR_RETURN_CODE xlrRC;
@@ -246,7 +216,7 @@ cinfo << startl << "lastslot=" << lastslot << " endindex=" << endindex << endl;
 			}
 		}
 		pthread_mutex_unlock(readthreadmutex + (readbufferwriteslot % lockmod));
-		if(readthreadstop)
+		if(!keepreading)
 		{
 			break;
 		}
@@ -620,7 +590,6 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 		readseconds = 0;
 		readnanoseconds = 0;
 		sendMark5Status(MARK5_STATE_NOMOREDATA, 0, 0.0, 0.0);
-		readthreadstop = true;
 
 		return;
         }
@@ -650,11 +619,6 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 
 	lockstart = lockend = lastslot = -1;
 
-	// cause Mark5 reading thread to go ahead and start filling buffers
-	// these barriers come in pairs...
-	pthread_barrier_wait(&readthreadbarrier);
-	pthread_barrier_wait(&readthreadbarrier);
-
 	if(readpointer >= 0)
 	{
 		cinfo << startl << "Scan " << (scanNum+1) <<" initialised" << endl;
@@ -663,6 +627,8 @@ void VDIFMark5DataStream::initialiseFile(int configindex, int fileindex)
 	{
 		cinfo << startl << "The read thread should die shortly" << endl;
 	}
+
+	startReaderThread();
 }
 
 void VDIFMark5DataStream::openfile(int configindex, int fileindex)
