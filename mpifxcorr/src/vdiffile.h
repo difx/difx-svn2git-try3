@@ -121,12 +121,7 @@ protected:
 
   pthread_t readthread;
   pthread_mutex_t *readthreadmutex;
-  bool readthreadstop;
-#ifdef __APPLE__
-#include "pthreadbarrier.h"
-#endif
-  pthread_barrier_t readthreadbarrier;
-  int lockstart, lockend, lastslot;
+  int lockstart, lockend, lastslot, lockmod;
   unsigned int endindex, muxindex;
   int readbufferwriteslot;
   bool readfail;
