@@ -198,6 +198,11 @@ protected:
   */
   virtual void openfile(int configindex, int fileindex);
 
+ /**
+  * Attempts to close the active file, if open
+  */
+  virtual void closefile();
+
  /** 
   * Attempts to open the specified file and peeks at what scan it belongs to
   * @param configindex The config index at the current time

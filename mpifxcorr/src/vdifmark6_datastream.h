@@ -55,21 +55,21 @@ public:
   VDIFMark6DataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
   virtual ~VDIFMark6DataStream();
   virtual void openfile(int configindex, int fileindex);
+  virtual void closefile();
   int sendMark6Activity(enum Mark6State mark6state, long long position, double dataMJD, float rate);
 
 protected:
+
+  virtual void readthreadfunction();
+
+  virtual void *launchreadthreadfunction(void *self);
+
  /** 
   * Reads in the header information from a Mk5 formatted file and sets the current segment time information accordingly
   * @param configindex The config index at the current time
   * @param fileindex The number of the file to be opened
   */
   virtual void initialiseFile(int configindex, int fileindex);
-
-  virtual int dataRead(int buffersegment);
-
-  virtual void mark6ToMemory(int buffersegment);
-
-  virtual void loopfileread();
 
 private:
   void closeMark6();

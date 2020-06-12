@@ -201,6 +201,7 @@ void VDIFDataStream::startReaderThread()
 	}
 }
 
+// This function is launched once per scan to read data and fill the read buffer.  Reading always begins into slot 1.
 void VDIFDataStream::readthreadfunction()
 {
 	bool endofscan = false;
@@ -943,7 +944,7 @@ void VDIFDataStream::loopfileread()
 		openfile(bufferinfo[0].configindex, filesread[bufferinfo[0].configindex]++);
 		if(!dataremaining)
 		{
-			input.close();
+			closefile();
 		}
 	}
 
@@ -1013,7 +1014,7 @@ void VDIFDataStream::loopfileread()
 		}
 		if(keepreading)
 		{
-			input.close();
+			closefile();
 
 			//if we need to, change the config
 			int nextconfigindex = config->getScanConfigIndex(readscan);
@@ -1060,10 +1061,7 @@ void VDIFDataStream::loopfileread()
 			}
 		}
 	}
-	if(input.is_open())
-	{
-		input.close();
-	}
+	closefile();
 	if(numread > 0)
 	{
 		perr = pthread_mutex_unlock(&(bufferlock[lastvalidsegment]));

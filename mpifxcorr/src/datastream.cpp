@@ -1779,6 +1779,14 @@ void DataStream::openfile(int configindex, int fileindex)
   initialiseFile(configindex, fileindex);
 }
 
+void DataStream::closefile()
+{
+  if(input.is_open())
+  {
+    input.close();
+  }
+}
+
 void DataStream::initialiseFile(int configindex, int fileindex)
 {
   string inputline;
