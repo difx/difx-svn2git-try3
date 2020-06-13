@@ -52,6 +52,8 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 {
 	int perr;
 
+	cinfo << startl << "Starting VDIF datastream." << endl;
+
 	// switched power output assigned a name based on the datastream number (MPIID-1)
 	int spf_Hz = conf->getDSwitchedPowerFrequency(id-1);
 	if(spf_Hz > 0)
@@ -80,8 +82,10 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	// Here we give 20% overhead plus 8 MB, just to be on the safe side...
 
 	readbufferslots = 8;
-	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*21LL/10LL;
-	readbufferslotsize -= (readbufferslotsize % 8); // make it a multiple of 8 bytes
+
+	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*27LL/10LL;
+//	readbufferslotsize -= (readbufferslotsize % 8); // make it a multiple of 8 bytes
+	readbufferslotsize -= (readbufferslotsize % conf->getFrameBytes(0, streamnum));
 	readbuffersize = readbufferslots * readbufferslotsize;
 	readbufferleftover = 0;
 	readbuffer = new unsigned char[readbuffersize];
@@ -172,7 +176,7 @@ VDIFDataStream::~VDIFDataStream()
 	}
 }
 
-// this function should not need to be rewritten for subclasses.
+// this function needs to be rewritten for subclasses.
 void VDIFDataStream::startReaderThread()
 {
 	int perr;
@@ -207,7 +211,7 @@ void VDIFDataStream::readthreadfunction()
 
 	while(keepreading && !endofscan)
 	{
-		int bytes;
+		int bytes, curslot;
 
 		if(input.eof())
 		{
@@ -227,7 +231,7 @@ void VDIFDataStream::readthreadfunction()
 			endofscan = true;
 		}
 		
-		int curslot = readbufferwriteslot;
+		curslot = readbufferwriteslot;
 
 		++readbufferwriteslot;
 		if(readbufferwriteslot >= readbufferslots)
@@ -247,6 +251,7 @@ void VDIFDataStream::readthreadfunction()
 void *VDIFDataStream::launchreadthreadfunction(void *self)
 {
 	VDIFDataStream *me = (VDIFDataStream *)self;
+cinfo << startl << "VDIFDataStream::launchreadthreadfunction" << endl;
 
 	me->readthreadfunction();
 
@@ -587,6 +592,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 		// first decoding of scan
 		muxindex = readbufferslotsize;	// start at beginning of slot 1 (second slot)
 		lockstart = lockend = 1;
+cinfo << startl << "dataRead() waiting for lock on " << lockstart << endl;
 		pthread_mutex_lock(readthreadmutex + (lockstart % lockmod));
 		if(readfail)
 		{
@@ -621,6 +627,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 	if(n2 > n1 && lockend != n2)
 	{
 		lockend = n2;
+cinfo << startl << "dataRead() waiting for lock on " << lockend << endl;
 		pthread_mutex_lock(readthreadmutex + (lockend % lockmod));
 		if(readfail)
 		{
@@ -628,7 +635,10 @@ int VDIFDataStream::dataRead(int buffersegment)
 			dataremaining = false;
 			keepreading = false;
 			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
-			pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
+			if(lockstart != lockend)
+			{
+				pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
+			}
 			lockstart = lockend = -2;
 
 			return 0;
@@ -661,6 +671,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 	bytesvisible = muxend - muxindex;
 
 	// multiplex and corner turn the data
+cinfo << startl << "VMUX " << readbytes << " " << muxindex << " " << bytesvisible << " " << startOutputFrameNumber << endl;
 	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 
 	if(muxReturn <= 0)
@@ -735,6 +746,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 	}
 	else
 	{
+		cwarn << startl << "validbytes == 0" << endl;
 		startOutputFrameNumber = -1;
 	}
 
@@ -760,6 +772,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 		muxindex = readbufferslotsize;
 
 		// need to acquire lock for first slot
+cinfo << startl << "dataRead() waiting for lock on " << 1 << endl;
 		pthread_mutex_lock(readthreadmutex + 1);
 
 		// unlock existing locks
@@ -797,6 +810,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 			lockstart = 0;
 
 			int newstart = muxindex % readbufferslotsize;
+cinfo << startl << "Memmove " << readbuffersize-muxindex << endl;
 			memmove(readbuffer + newstart, readbuffer + muxindex, readbuffersize-muxindex);
 			muxindex = newstart;
 

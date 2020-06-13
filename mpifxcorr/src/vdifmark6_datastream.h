@@ -60,9 +60,11 @@ public:
 
 protected:
 
+  virtual void startReaderThread();
+
   virtual void readthreadfunction();
 
-  virtual void *launchreadthreadfunction(void *self);
+  static void *launchreadthreadfunction(void *self);
 
  /** 
   * Reads in the header information from a Mk5 formatted file and sets the current segment time information accordingly

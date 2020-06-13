@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2016 by Adam Deller and Walter Brisken             *
+ *   Copyright (C) 2006-2020 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -79,7 +79,7 @@ void VDIFMark6DataStream::openfile(int configindex, int fileindex)
 {
 	closeMark6();
 
-	cverbose << startl << "Mark6 datastream " << mpiid << " is about to try and open file index " << fileindex << " of configindex " << configindex << endl;
+	cinfo << startl << "Mark6 datastream " << mpiid << " is about to try and open file index " << fileindex << " of configindex " << configindex << endl;
 	if(fileindex >= confignumfiles[configindex]) //run out of files - time to stop reading
 	{
 		dataremaining = false;
@@ -93,7 +93,7 @@ void VDIFMark6DataStream::openfile(int configindex, int fileindex)
 
 	mark6gather = openMark6GathererFromTemplate(datafilenames[configindex][fileindex].c_str());
 
-	cverbose << startl << "mark6gather is " << mark6gather << endl;
+	cinfo << startl << "mark6gather is " << mark6gather << endl;
 	if(mark6gather == 0)
 	{
 		cerror << startl << "Cannot open vdif mark6 data file " << datafilenames[configindex][fileindex] << endl;
@@ -129,6 +129,32 @@ void VDIFMark6DataStream::closefile()
 	{
 		closeMark6();
 	}
+cinfo << startl << "VDIFMark6DataStream::closefile()" << endl;
+}
+
+void VDIFMark6DataStream::startReaderThread()
+{
+	int perr;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+	/* get some things set up */
+	readbufferwriteslot = 1;
+	pthread_mutex_lock(readthreadmutex + readbufferwriteslot);
+
+	perr = pthread_create(&readthread, &attr, VDIFMark6DataStream::launchreadthreadfunction, this);
+	pthread_attr_destroy(&attr);
+
+	if(perr)
+	{
+		cfatal << startl << "Cannot create the Mark6 reader thread!" << endl;
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+	else
+	{
+		cinfo << startl << "VDIFMark6DataStream::startReaderThread() : starting VDIFMark6DataStream::launchreadthreadfunction ." << endl;
+	}
 }
 
 void VDIFMark6DataStream::readthreadfunction()
@@ -136,10 +162,11 @@ void VDIFMark6DataStream::readthreadfunction()
 	bool endofscan = false;
 
 	// Lock for readbufferweriteslot=1 shall be set at this point by startReaderThread()
+cinfo << startl << "Starting Mark6 read thread" << endl;
 
 	while(keepreading && !endofscan)
 	{
-		int bytes;
+		int bytes, curslot;
 
 		if(mark6eof)		// FIXME: look into use of mark6eof variable...
 		{
@@ -149,16 +176,17 @@ void VDIFMark6DataStream::readthreadfunction()
 		{
 			bytes = mark6Gather(mark6gather, reinterpret_cast<char *>(readbuffer) + readbufferwriteslot*readbufferslotsize, readbufferslotsize);
 		}
+cinfo << startl << "M6RT: " << bytes << " of " << readbufferslotsize << " read into slot " << readbufferwriteslot << endl;
 
 		if(bytes < readbufferslotsize)
 		{
 			lastslot = readbufferwriteslot;
 			endindex = lastslot*readbufferslotsize + bytes;	// No data in this slot from here to end
-			cverbose << startl << "At end of scan: shortening read to only " << bytes << " bytes " << "(was " << readbufferslotsize << ")" << endl;
+			cinfo << startl << "At end of scan: shortening Mark6 read to only " << bytes << " bytes " << "(was " << readbufferslotsize << ")" << endl;
 			endofscan = true;
 		}
 
-		int curslot = readbufferwriteslot;
+		curslot = readbufferwriteslot;
 
 		++readbufferwriteslot;
 		if(readbufferwriteslot >= readbufferslots)
@@ -166,16 +194,22 @@ void VDIFMark6DataStream::readthreadfunction()
 			// Note: we always save slot 0 for wrap-around
 			readbufferwriteslot = 1;
 		}
+cinfo << startl << "readthreadfunction() waiting for lock on " << readbufferwriteslot << endl;
+		pthread_mutex_lock(readthreadmutex + (readbufferwriteslot % lockmod));
+		pthread_mutex_unlock(readthreadmutex + (curslot % lockmod));
 	}
 	pthread_mutex_unlock(readthreadmutex + (readbufferwriteslot % lockmod));
 
 	// No locks shall be set at this point
+
+cinfo << startl << "Ending Mark6 read thread" << endl;
 }
 
 // this function needs to be rewritten for subclasses.
 void *VDIFMark6DataStream::launchreadthreadfunction(void *self)
 {
 	VDIFMark6DataStream *me = (VDIFMark6DataStream *)self;
+cinfo << startl << "VDIFMark6DataStream::launchreadthreadfunction()" << endl;
 
 	me->readthreadfunction();
 
@@ -280,11 +314,10 @@ void VDIFMark6DataStream::initialiseFile(int configindex, int fileindex)
 
 	// Here set readseconds to time since beginning of job
 	readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;
-    if (fileSummary.framesPerSecond == 0)
-        {
-        fileSummary.framesPerSecond = 31250;
-        cwarn << startl << "mk6 framesPerSecond is unknown, setting to 31250" << endl;
-        }
+	if(fileSummary.framesPerSecond == 0)
+	{
+		fileSummary.framesPerSecond = framespersecond;
+	}
 
 	readnanoseconds = vdiffilesummarygetstartns(&fileSummary);
 	currentdsseconds = activesec + model->getScanStartSec(activescan, config->getStartMJD(), config->getStartSeconds());
