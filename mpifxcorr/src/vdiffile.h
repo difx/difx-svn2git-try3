@@ -94,6 +94,10 @@ protected:
 
   virtual int testForSync(int configindex, int buffersegment);
 
+  void lockSlot(int slot, int processNum = 1);
+  void unlockSlot(int slot, int processNum = 1);
+  void unlockAllSlots(int processNum = 1);
+
   char formatname[64];
 
   unsigned char *readbuffer;
@@ -117,6 +121,7 @@ protected:
 
   pthread_t readthread;
   pthread_mutex_t *readthreadmutex;
+  int *slotMutexOwner;
   int lockstart, lockend, lastslot, lockmod;
   unsigned int endindex, muxindex;
   int readbufferwriteslot;

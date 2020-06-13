@@ -129,7 +129,6 @@ void VDIFMark6DataStream::closefile()
 	{
 		closeMark6();
 	}
-cinfo << startl << "VDIFMark6DataStream::closefile()" << endl;
 }
 
 void VDIFMark6DataStream::startReaderThread()
@@ -141,7 +140,7 @@ void VDIFMark6DataStream::startReaderThread()
 
 	/* get some things set up */
 	readbufferwriteslot = 1;
-	pthread_mutex_lock(readthreadmutex + readbufferwriteslot);
+	lockSlot(readbufferwriteslot, 2);
 
 	perr = pthread_create(&readthread, &attr, VDIFMark6DataStream::launchreadthreadfunction, this);
 	pthread_attr_destroy(&attr);
@@ -176,7 +175,6 @@ cinfo << startl << "Starting Mark6 read thread" << endl;
 		{
 			bytes = mark6Gather(mark6gather, reinterpret_cast<char *>(readbuffer) + readbufferwriteslot*readbufferslotsize, readbufferslotsize);
 		}
-cinfo << startl << "M6RT: " << bytes << " of " << readbufferslotsize << " read into slot " << readbufferwriteslot << endl;
 
 		if(bytes < readbufferslotsize)
 		{
@@ -194,22 +192,18 @@ cinfo << startl << "M6RT: " << bytes << " of " << readbufferslotsize << " read i
 			// Note: we always save slot 0 for wrap-around
 			readbufferwriteslot = 1;
 		}
-cinfo << startl << "readthreadfunction() waiting for lock on " << readbufferwriteslot << endl;
-		pthread_mutex_lock(readthreadmutex + (readbufferwriteslot % lockmod));
-		pthread_mutex_unlock(readthreadmutex + (curslot % lockmod));
+		lockSlot(readbufferwriteslot, 2);
+		unlockSlot(curslot, 2);
 	}
-	pthread_mutex_unlock(readthreadmutex + (readbufferwriteslot % lockmod));
+	unlockAllSlots(2);
 
 	// No locks shall be set at this point
-
-cinfo << startl << "Ending Mark6 read thread" << endl;
 }
 
 // this function needs to be rewritten for subclasses.
 void *VDIFMark6DataStream::launchreadthreadfunction(void *self)
 {
 	VDIFMark6DataStream *me = (VDIFMark6DataStream *)self;
-cinfo << startl << "VDIFMark6DataStream::launchreadthreadfunction()" << endl;
 
 	me->readthreadfunction();
 

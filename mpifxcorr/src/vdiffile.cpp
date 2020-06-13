@@ -39,6 +39,8 @@
 #include "vdiffile.h"
 #include "mode.h"
 
+// Uncomment below if the read buffer locks are to be debugged
+// #define DEBUGLOCKS
 
 /* TODO: 
    - make use of activesec and activescan
@@ -84,8 +86,7 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	readbufferslots = 8;
 
 	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*27LL/10LL;
-//	readbufferslotsize -= (readbufferslotsize % 8); // make it a multiple of 8 bytes
-	readbufferslotsize -= (readbufferslotsize % conf->getFrameBytes(0, streamnum));
+	readbufferslotsize -= (readbufferslotsize % conf->getFrameBytes(0, streamnum));	// always read in chunks of frame size
 	readbuffersize = readbufferslots * readbufferslotsize;
 	readbufferleftover = 0;
 	readbuffer = new unsigned char[readbuffersize];
@@ -118,6 +119,7 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	endindex = 0;
 
 	readthreadmutex = new pthread_mutex_t[readbufferslots];
+	slotMutexOwner = new int[readbufferslots];
 	perr = 0;
 	for(int m = 0; m < readbufferslots; ++m)
 	{
@@ -125,6 +127,7 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 		{
 			perr = pthread_mutex_init(readthreadmutex + m, 0);
 		}
+		slotMutexOwner[m] = 0;
 	}
 	if(perr != 0)
 	{
@@ -142,6 +145,7 @@ VDIFDataStream::~VDIFDataStream()
 		pthread_mutex_destroy(readthreadmutex + m);
 	}
 	delete [] readthreadmutex;
+	delete [] slotMutexOwner;
 
 	cinfo << startl << "VDIF multiplexing statistics: nValidFrame=" << vstats.nValidFrame << " nInvalidFrame=" << vstats.nInvalidFrame << " nDiscardedFrame=" << vstats.nDiscardedFrame << " nWrongThread=" << vstats.nWrongThread << " nSkippedByte=" << vstats.nSkippedByte << " nFillByte=" << vstats.nFillByte << " nDuplicateFrame=" << vstats.nDuplicateFrame << " bytesProcessed=" << vstats.bytesProcessed << " nGoodFrame=" << vstats.nGoodFrame << " nCall=" << vstats.nCall << endl;
 	if(vstats.nWrongThread > 0)
@@ -176,6 +180,100 @@ VDIFDataStream::~VDIFDataStream()
 	}
 }
 
+void VDIFDataStream::lockSlot(int slot, int processNum)
+{
+	int s = slot % lockmod;
+
+#ifdef DEBUGLOCKS
+	cinfo << startl << "lockSlot(" << slot << ", " << processNum << ") : lock status: ";
+	for(int i = 0; i < readbufferslots; ++i)
+	{
+		cinfo << slotMutexOwner[i];
+	}
+	cinfo << endl;
+#endif
+	if(slot < 0 || slot >= readbufferslots)
+	{
+		csevere << startl << "lockSlot(" << slot << ", " << processNum << ") : slot out of bounds; lockstart=" << lockstart << " lockend=" << lockend << endl;
+	}
+	if(slotMutexOwner[s] == processNum)
+	{
+		csevere << startl << "lockSlot(" << slot << ", " << processNum << ") : slot already owned by " << slotMutexOwner[s] << "; lockstart=" << lockstart << " lockend=" << lockend << endl;
+	}
+#ifdef DEBUGLOCKS
+	else if(slotMutexOwner[s] != 0)
+	{
+		cinfo << startl << "lockSlot(" << slot << ", " << processNum << ") : will wait for " << slotMutexOwner[s] << " to unlock" << endl;
+	}
+#endif
+
+	pthread_mutex_lock(readthreadmutex + s);
+
+	slotMutexOwner[s] = processNum;
+
+}
+
+void VDIFDataStream::unlockSlot(int slot, int processNum)
+{
+	int s = slot % lockmod;
+#ifdef DEBUGLOCKS
+	int nLeft = 0;
+
+	cinfo << startl << "unlockSlot(" << slot << ", " << processNum << ") : lock status: ";
+	for(int i = 0; i < readbufferslots; ++i)
+	{
+		cinfo << slotMutexOwner[i];
+		if(slotMutexOwner[i] == processNum && i != s)
+		{
+			++nLeft;
+		}
+	}
+	cinfo << endl;
+	if(nLeft == 0)
+	{
+		csevere << startl << "unlockSlot(" << slot << ", " << processNum << ") : process unlocking last lock; lockstart=" << lockstart << " lockend=" << lockend << endl;
+	}
+#endif
+	if(slot < 0 || slot >= readbufferslots)
+	{
+		csevere << startl << "unlockSlot(" << slot << ", " << processNum << ") : slot out of bounds; lockstart=" << lockstart << " lockend=" << lockend << endl;
+	}
+	if(slotMutexOwner[s] == 0)
+	{
+		csevere << startl << "unlockSlot(" << slot << ", " << processNum << ") : slot not locked; lockstart=" << lockstart << " lockend=" << lockend << endl;
+	}
+	else if(slotMutexOwner[s] != processNum)
+	{
+		csevere << startl << "unlockSlot(" << slot << ", " << processNum << ") : slot owned by " << slotMutexOwner[s] << "; lockstart=" << lockstart << " lockend=" << lockend << endl;
+	}
+
+	slotMutexOwner[s] = 0;
+
+	pthread_mutex_unlock(readthreadmutex + s);
+}
+
+void VDIFDataStream::unlockAllSlots(int processNum)
+{
+#ifdef DEBUGLOCKS
+	int n = 0;
+#endif
+
+	for(int i = 0; i < readbufferslots; ++i)
+	{
+		if(slotMutexOwner[i] == processNum)
+		{
+			slotMutexOwner[i] = 0;
+			pthread_mutex_unlock(readthreadmutex + i);
+#ifdef DEBUGLOCKS
+			++n;
+#endif
+		}
+	}
+#ifdef DEBUGLOCKS
+	cinfo << startl << "unlockAllSlots(" << processNum << ") : " << n << " slots unlocked" << endl;
+#endif
+}
+
 // this function needs to be rewritten for subclasses.
 void VDIFDataStream::startReaderThread()
 {
@@ -186,7 +284,7 @@ void VDIFDataStream::startReaderThread()
 
 	/* get some things set up */
 	readbufferwriteslot = 1;
-	pthread_mutex_lock(readthreadmutex + readbufferwriteslot);
+	lockSlot(readbufferwriteslot, 2);
 
 	perr = pthread_create(&readthread, &attr, VDIFDataStream::launchreadthreadfunction, this);
 	pthread_attr_destroy(&attr);
@@ -239,10 +337,10 @@ void VDIFDataStream::readthreadfunction()
 			// Note: we always save slot 0 for wrap-around
 			readbufferwriteslot = 1;
 		}
-		pthread_mutex_lock(readthreadmutex + (readbufferwriteslot % lockmod));
-		pthread_mutex_unlock(readthreadmutex + (curslot % lockmod));
+		lockSlot(readbufferwriteslot, 2);
+		unlockSlot(curslot, 2);
 	}
-	pthread_mutex_unlock(readthreadmutex + (readbufferwriteslot % lockmod));
+	unlockAllSlots(2);
 	
 	// No locks shall be set at this point
 }
@@ -592,14 +690,13 @@ int VDIFDataStream::dataRead(int buffersegment)
 		// first decoding of scan
 		muxindex = readbufferslotsize;	// start at beginning of slot 1 (second slot)
 		lockstart = lockend = 1;
-cinfo << startl << "dataRead() waiting for lock on " << lockstart << endl;
-		pthread_mutex_lock(readthreadmutex + (lockstart % lockmod));
+		lockSlot(lockstart);
 		if(readfail)
 		{
 			cwarn << startl << "dataRead detected readfail. [1] Stopping." << endl;
 			dataremaining = false;
 			keepreading = false;
-			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
+			unlockSlot(lockstart);
 			cinfo << startl << "dataRead has unlocked slot " << lockstart << endl;
 			lockstart = lockend = -2;
 
@@ -624,27 +721,29 @@ cinfo << startl << "dataRead() waiting for lock on " << lockstart << endl;
 		csevere << startl << "dataRead n2=" << n2 << " >= readbufferslots=" << readbufferslots << " muxindex=" << muxindex << " readbufferslotsize=" << readbufferslotsize << " n1=" << n1 << " n2=" << n2 << " endindex=" << endindex << " lastslot=" << lastslot << endl;
 	}
 
-	if(n2 > n1 && lockend != n2)
+	while(lockend < n2)
 	{
-		lockend = n2;
-cinfo << startl << "dataRead() waiting for lock on " << lockend << endl;
-		pthread_mutex_lock(readthreadmutex + (lockend % lockmod));
+		++lockend;
+		lockSlot(lockend);
+#if 0
 		if(readfail)
 		{
 			cwarn << startl << "dataRead detected readfail. [2] Stopping." << endl;
 			dataremaining = false;
 			keepreading = false;
-			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
+			unlockSlot(lockstart);
 			if(lockstart != lockend)
 			{
-				pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
+				unlockSlot(lockend);
 			}
 			lockstart = lockend = -2;
 
 			return 0;
 		}
+#endif
 	}
 	
+	// muxend contains the last valid buffer read index (minus 1)
 	if(lastslot == n2)
 	{
 		muxend = endindex;
@@ -671,7 +770,6 @@ cinfo << startl << "dataRead() waiting for lock on " << lockend << endl;
 	bytesvisible = muxend - muxindex;
 
 	// multiplex and corner turn the data
-cinfo << startl << "VMUX " << readbytes << " " << muxindex << " " << bytesvisible << " " << startOutputFrameNumber << endl;
 	muxReturn = vdifmux(destination, readbytes, readbuffer+muxindex, bytesvisible, &vm, startOutputFrameNumber, &vstats);
 
 	if(muxReturn <= 0)
@@ -682,7 +780,7 @@ cinfo << startl << "VMUX " << readbytes << " " << muxindex << " " << bytesvisibl
 
 		if(muxReturn < 0)
 		{
-			pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
+			unlockSlot(lockend);
 			cerror << startl << "vdifmux() failed with return code " << muxReturn << ", likely input buffer is too small!" << endl;
 		}
 		else
@@ -757,11 +855,7 @@ cinfo << startl << "VMUX " << readbytes << " " << muxindex << " " << bytesvisibl
 		// end of useful data for this scan
 		cinfo << startl << "End of data for scan; bytesProcessed=" << vstats.bytesProcessed << " nGoodFrame=" << vstats.nGoodFrame << " nCall=" << vstats.nCall << endl;
 		dataremaining = false;
-		pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
-		if(lockstart != lockend)
-		{
-			pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
-		}
+		unlockAllSlots();
 		lockstart = lockend = -2;
 	}
 	else if(muxindex == readbufferslotsize*readbufferslots) // special case where the buffer was used up exactly
@@ -772,13 +866,12 @@ cinfo << startl << "VMUX " << readbytes << " " << muxindex << " " << bytesvisibl
 		muxindex = readbufferslotsize;
 
 		// need to acquire lock for first slot
-cinfo << startl << "dataRead() waiting for lock on " << 1 << endl;
-		pthread_mutex_lock(readthreadmutex + 1);
+		lockSlot(1);
 
 		// unlock existing locks
 		while(lockstart < readbufferslots)
 		{
-			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
+			unlockSlot(lockstart);
 			++lockstart;
 		}
 
@@ -792,9 +885,9 @@ cinfo << startl << "dataRead() waiting for lock on " << 1 << endl;
 		// i.e., n3 >= n2 >= n1 and n3-n1 <= 1
 
 		n3 = muxindex / readbufferslotsize;
-		while(lockstart < n3)
+		while(lockstart < n3 && lockstart < lockend)
 		{
-			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
+			unlockSlot(lockstart);
 			++lockstart;
 		}
 
@@ -810,7 +903,6 @@ cinfo << startl << "dataRead() waiting for lock on " << 1 << endl;
 			lockstart = 0;
 
 			int newstart = muxindex % readbufferslotsize;
-cinfo << startl << "Memmove " << readbuffersize-muxindex << endl;
 			memmove(readbuffer + newstart, readbuffer + muxindex, readbuffersize-muxindex);
 			muxindex = newstart;
 
@@ -858,11 +950,7 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 
 		if(lockstart >= 0)
 		{
-			pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
-			if(lockstart != lockend)
-			{
-				pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
-			}
+			unlockAllSlots();
 			pthread_join(readthread, 0);
 			lockstart = lockend = -2;
 		}
@@ -897,11 +985,7 @@ void VDIFDataStream::diskToMemory(int buffersegment)
 			
 			if(lockstart >= 0)
 			{
-				pthread_mutex_unlock(readthreadmutex + (lockstart % lockmod));
-				if(lockstart != lockend)
-				{
-					pthread_mutex_unlock(readthreadmutex + (lockend % lockmod));
-				}
+				unlockAllSlots();
 				pthread_join(readthread, 0);
 				lockstart = lockend = -2;
 			}
