@@ -85,15 +85,13 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 
 	readbufferslots = 8;
 
-	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*27LL/10LL;
+	readbufferslotsize = (bufferfactor/numsegments)*conf->getMaxDataBytes(streamnum)*21LL/10LL;
 	readbufferslotsize -= (readbufferslotsize % conf->getFrameBytes(0, streamnum));	// always read in chunks of frame size
 	readbuffersize = readbufferslots * readbufferslotsize;
 	readbufferleftover = 0;
 	readbuffer = new unsigned char[readbuffersize];
 
 	estimatedbytes += readbuffersize;
-
-	readfail = false;
 
 	// Don't bother to do another read iteration just to salvage this many bytes at the end of a file/scan
 	minleftoverdata = 20000;
@@ -692,17 +690,6 @@ int VDIFDataStream::dataRead(int buffersegment)
 		muxindex = readbufferslotsize;	// start at beginning of slot 1 (second slot)
 		lockstart = lockend = 1;
 		lockSlot(lockstart);
-		if(readfail)
-		{
-			cwarn << startl << "dataRead detected readfail. [1] Stopping." << endl;
-			dataremaining = false;
-			keepreading = false;
-			unlockSlot(lockstart);
-			cinfo << startl << "dataRead has unlocked slot " << lockstart << endl;
-			lockstart = lockend = -2;
-
-			return 0;
-		}
 	}
 
 	n1 = muxindex / readbufferslotsize;
@@ -726,22 +713,6 @@ int VDIFDataStream::dataRead(int buffersegment)
 	{
 		++lockend;
 		lockSlot(lockend);
-#if 0
-		if(readfail)
-		{
-			cwarn << startl << "dataRead detected readfail. [2] Stopping." << endl;
-			dataremaining = false;
-			keepreading = false;
-			unlockSlot(lockstart);
-			if(lockstart != lockend)
-			{
-				unlockSlot(lockend);
-			}
-			lockstart = lockend = -2;
-
-			return 0;
-		}
-#endif
 	}
 	
 	// muxend contains the last valid buffer read index (minus 1)

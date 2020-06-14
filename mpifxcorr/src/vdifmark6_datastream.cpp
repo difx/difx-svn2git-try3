@@ -228,9 +228,9 @@ void VDIFMark6DataStream::initialiseFile(int configindex, int fileindex)
 	int muxFlags;
 	int rv;
 
-	long long dataoffset = 0;
+	off_t dataoffset = 0;
 	struct vdif_file_summary fileSummary;
-	int jumpseconds, currentdsseconds;
+	int currentdsseconds;
 
 	format = config->getDataFormat(configindex, streamnum);
 	sampling = config->getDSampling(configindex, streamnum);
@@ -327,6 +327,9 @@ void VDIFMark6DataStream::initialiseFile(int configindex, int fileindex)
 
 	if(currentdsseconds > readseconds+1)
 	{
+		int64_t jumpseconds;
+		int64_t n, d;	// numerator and demoninator of frame/payload size ratio
+
 		jumpseconds = currentdsseconds - readseconds;
 		if(activens < readnanoseconds)
 		{
@@ -335,11 +338,10 @@ void VDIFMark6DataStream::initialiseFile(int configindex, int fileindex)
 
 		// set byte offset to the requested time
 
-		int n, d;	// numerator and demoninator of frame/payload size ratio
 		n = fileSummary.frameSize;
 		d = fileSummary.frameSize - 32;
 
-		dataoffset = static_cast<long long>(jumpseconds*vdiffilesummarygetbytespersecond(&fileSummary)/d*n + 0.5);
+		dataoffset = static_cast<int64_t>(jumpseconds*vdiffilesummarygetbytespersecond(&fileSummary)/d) * n;
 
 		readseconds += jumpseconds;
 	}
@@ -347,19 +349,19 @@ void VDIFMark6DataStream::initialiseFile(int configindex, int fileindex)
 	// Now set readseconds to time since beginning of scan
 	readseconds = readseconds - model->getScanStartSec(readscan, corrstartday, corrstartseconds);
 	
-	// Advance into file if requested
 #if 0
+	// Seeking seems to work on the Mark6 side, but causes very long delay in DiFX getting started.  Not sure why.
 
-FIXME: get seeking working
-
-	if(fileSummary.firstFrameOffset + dataoffset > 0)
+	// Advance into file if requested
+	if(dataoffset > 0)
 	{
-		off_t seek_pos;
-		cverbose << startl << "Mark6 about to seek to byte " << fileSummary.firstFrameOffset << " plus jump " << dataoffset << " to get to the first wanted frame" << endl;
+		int rv;
 
-		seek_pos = mark6_sg_lseek(mark6gather, fileSummary.firstFrameOffset + dataoffset, SEEK_SET);
+		cinfo << startl << "Mark6 about to seek to byte " << dataoffset << " to get to the first wanted frame" << endl;
+		rv = seekMark6Gather(mark6gather, dataoffset);
+		cinfo << startl << "Mark6 seek finished with return value " << rv << endl;
 
-		if(seek_pos != fileSummary.firstFrameOffset + dataoffset)
+		if(rv < 0)
 		{
 			cinfo << startl << "File " << datafilenames[configindex][fileindex] << " ended before the currently desired time" << endl;
 			dataremaining = false;
