@@ -4,9 +4,6 @@ FixVMUX branch
 * Update File and Mark6 datastreams for interlaced VDIF to improve multiplexing
 * TODO
   - Set nGap to fraction of second rather than fixed number of frames?
-  - mark6eof -- what to do with this?
-  - readfail -- what to do with this?
-  - mark6 activity messages and setting of MJD
 
 Version 2.7
 ~~~~~~~~~~~
