@@ -79,12 +79,10 @@ private:
   DifxMessageMark6Activity mark6activity;
 
   Mark6Gatherer *mark6gather;  /* structure for Mark6 file gathering */
-  bool mark6eof;  /* if true, current file has been exhausted */
   long long bytecount;
   long long lastbytecount;
   time_t msgsenttime;
   float mbyterate;
-  double fmjd;
 };
 
 #endif

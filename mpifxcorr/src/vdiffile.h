@@ -126,6 +126,7 @@ protected:
   unsigned int endindex, muxindex;
   int readbufferwriteslot;
   bool readfail;
+  double vdifmjd;
 
   int nGapWarn;
   int nExcessWarn;

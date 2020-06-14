@@ -102,6 +102,7 @@ VDIFDataStream::VDIFDataStream(const Configuration * conf, int snum, int id, int
 	nthreads = 0; // no threads identified yet
 	threads = 0;  // null pointer indicating not yet initialized
 	invalidtime = 0;
+	vdifmjd = 0.0;
 
 	samplingtype = Configuration::REAL;
 	filecheck = Configuration::getFileCheckLevel();
@@ -796,6 +797,8 @@ int VDIFDataStream::dataRead(int buffersegment)
 	consumedbytes += vstats.srcUsed;
 	if(bufferinfo[buffersegment].validbytes > 0)
 	{
+		vdifmjd = getVDIFFrameDMJD((const vdif_header *)(readbuffer+muxindex), vm.inputFramesPerSecond);
+
 		// In the case of VDIF, we can get the time from the data, so use that just in case there was a jump
 		bufferinfo[buffersegment].scanns = ((vstats.startFrameNumber % framespersecond) * 1000000000LL) / framespersecond;
 		// FIXME: warning! here we are assuming no leap seconds since the epoch of the VDIF stream. FIXME

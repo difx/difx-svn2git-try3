@@ -55,7 +55,6 @@ VDIFMark6DataStream::VDIFMark6DataStream(const Configuration * conf, int snum, i
 {
 	cinfo << startl << "Starting VDIF Mark6 datastream." << endl;
 	mark6gather = 0;
-	mark6eof = false;
 }
 
 VDIFMark6DataStream::~VDIFMark6DataStream()
@@ -68,11 +67,10 @@ void VDIFMark6DataStream::closeMark6()
 {
 	if(mark6gather != 0)
 	{
-		sendMark6Activity(MARK6_STATE_CLOSE, bytecount, fmjd, mbyterate * 8.0);
+		sendMark6Activity(MARK6_STATE_CLOSE, bytecount, vdifmjd, mbyterate * 8.0);
 		closeMark6Gatherer(mark6gather);
 	}
 	mark6gather = 0;
-	mark6eof = false;
 }
 
 void VDIFMark6DataStream::openfile(int configindex, int fileindex)
@@ -167,14 +165,7 @@ cinfo << startl << "Starting Mark6 read thread" << endl;
 	{
 		int bytes, curslot;
 
-		if(mark6eof)		// FIXME: look into use of mark6eof variable...
-		{
-			bytes = 0;
-		}
-		else
-		{
-			bytes = mark6Gather(mark6gather, reinterpret_cast<char *>(readbuffer) + readbufferwriteslot*readbufferslotsize, readbufferslotsize);
-		}
+		bytes = mark6Gather(mark6gather, reinterpret_cast<char *>(readbuffer) + readbufferwriteslot*readbufferslotsize, readbufferslotsize);
 
 		if(bytes < readbufferslotsize)
 		{
@@ -182,6 +173,24 @@ cinfo << startl << "Starting Mark6 read thread" << endl;
 			endindex = lastslot*readbufferslotsize + bytes;	// No data in this slot from here to end
 			cinfo << startl << "At end of scan: shortening Mark6 read to only " << bytes << " bytes " << "(was " << readbufferslotsize << ")" << endl;
 			endofscan = true;
+		}
+
+		if(bytes > 0)
+		{
+			time_t now;
+			
+			bytecount += bytes;
+			now = time(0);
+			if(msgsenttime < now)
+			{
+				long long bytediff;
+
+				bytediff = bytecount - lastbytecount;
+				mbyterate = (float)bytediff / 1000000.0;
+				sendMark6Activity(MARK6_STATE_PLAY, bytecount, vdifmjd, mbyterate * 8.0);
+				msgsenttime = now;
+				lastbytecount = bytecount;
+			}
 		}
 
 		curslot = readbufferwriteslot;
