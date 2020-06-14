@@ -700,7 +700,7 @@ int VDIFDataStream::dataRead(int buffersegment)
 	}
 	else
 	{
-		n2 = (muxindex + readbytes - 1) / readbufferslotsize;
+		n2 = (muxindex + readbytes*2 - 1) / readbufferslotsize;
 	}
 
 	// note: it should be impossible for n2 >= readbufferslots because a previous memmove and slot shuffling should have prevented this.
