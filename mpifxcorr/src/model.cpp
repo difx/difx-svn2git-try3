@@ -795,6 +795,18 @@ bool Model::readPolynomialSamples(istream * calcinput)
             polyok = polyok && fillPolyRow(scantable[i].parang[j][k][l], line, polyorder+1);
             config->getinputkeyval(input, &key, &line);
           }
+          if(key.find("STA X") != string::npos) { //look for optional "STA X" station position in J2000
+            // Do nothing with it...
+            config->getinputkeyval(input, &key, &line);
+          }
+          if(key.find("STA Y") != string::npos) { //look for optional "STA Y" station position in J2000
+            // Do nothing with it...
+            config->getinputkeyval(input, &key, &line);
+          }
+          if(key.find("STA Z") != string::npos) { //look for optional "STA Z" station position in J2000
+            // Do nothing with it...
+            config->getinputkeyval(input, &key, &line);
+          }
           polyok = polyok && fillPolyRow(scantable[i].u[j][k][l], line, polyorder+1);
           config->getinputline(input, &line, "SRC ", k);
           polyok = polyok && fillPolyRow(scantable[i].v[j][k][l], line, polyorder+1);
