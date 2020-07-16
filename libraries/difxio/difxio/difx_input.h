@@ -526,6 +526,9 @@ typedef struct
 	double u[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
 	double v[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
 	double w[MAX_MODEL_ORDER+1];		/* (m/sec^n) */
+	double staX[MAX_MODEL_ORDER+1];		/* (m) J2000 antenna location X coordinate */
+	double staY[MAX_MODEL_ORDER+1];		/* (m) J2000 antenna location Y coordinate */
+	double staZ[MAX_MODEL_ORDER+1];		/* (m) J2000 antenna location Z coordinate */
 } DifxPolyModel;
 
 typedef struct
@@ -793,6 +796,7 @@ void DifxDatastreamAllocBands(DifxDatastream *dd, int nRecBand);
 void DifxDatastreamAllocZoomFreqs(DifxDatastream *dd, int nZoomFreq);
 void DifxDatastreamAllocZoomBands(DifxDatastream *dd, int nZoomBand);
 void DifxDatastreamAllocPhasecalTones(DifxDatastream *dd, int nTones);
+int DifxDatastreamGetPhasecalRange(const DifxDatastream *dd, const DifxFreq *df, double* lowest, double* highest);
 void DifxDatastreamCalculatePhasecalTones(DifxDatastream *dd, const DifxFreq *df);
 int DifxDatastreamGetPhasecalTones(double *toneFreq, const DifxDatastream *dd, const DifxFreq *df, int maxCount);
 void deleteDifxDatastreamInternals(DifxDatastream *dd);

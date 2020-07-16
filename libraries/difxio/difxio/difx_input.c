@@ -30,7 +30,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <libgen.h>
 #include "difxio/difx_input.h"
+#include "difxio/difx_options.h"
 #include "difxio/parsedifx.h"
 
 const int MaxFlags = 32000;
@@ -647,6 +650,71 @@ printf("IF #%d has freq id %d placement %.6f MHz bw %.6f MHz %d/%d channels\n", 
 	return 0;
 }
 
+/* This function checks whether a given file/directory is accessible directly,
+ * or if not accessible, whether the given file might instead be found under
+ * the directory that an .input file resides in.
+ *
+ * @param filename Name to check
+ * @param inputFileName Name and path of the reference .input file
+ * @param extension Optional; default extension with dot (for example .difx or .calc)
+ * @return Convenience pointer identical to 'filename' parameter
+ */
+static const char* locateAltFilename(char* filename, const char* inputFileName, const char* extension)
+{
+	char altName[DIFXIO_FILENAME_LENGTH];
+	char *altPath, *basefile;
+	int v;
+
+	/* Check arguments; auto-determine file extension for printout purposes if unspecified */
+	if(filename && !extension)
+	{
+		extension = strrchr(filename, '.');
+	}
+	if(!filename || !inputFileName || !extension)
+	{
+		return filename;
+	}
+
+	/* When 'filename' file or directory exists we are all good */
+	if(access(filename, F_OK) == 0)
+	{
+		return filename;
+	}
+
+	/* When 'filename' does NOT exist, try looking it up under <path> of <path/basename.input> */
+	altPath = dirname(strdup(inputFileName)); // TODO: strdup() -> free() later?
+	basefile = basename(strdup(filename));
+	v = snprintf(altName, DIFXIO_FILENAME_LENGTH, "%s/%s", altPath, basefile);
+	if(v >= DIFXIO_FILENAME_LENGTH)
+	{
+		return filename;
+	}
+	if(access(altName, F_OK) == 0)
+	{
+		if(difxioOptions.tryLocalDir)
+		{
+			/* Permitted to replace 'filename' by 'altname' */
+			if(difxioOptions.verbosity > 1)
+			{
+				fprintf(stderr, "Info: %s file %s inaccessible, using %s instead due to user option --localdir\n", extension, filename, altName);
+			}
+			strncpy(filename, altName, DIFXIO_FILENAME_LENGTH-1);
+		}
+		else
+		{
+			fprintf(stderr, "loadDifxInput: cannot find referenced %s file %s, but found %s. If the latter file is what you want, use option --localdir\n",
+			        extension, filename, altName);
+		}
+	}
+	else
+	{
+		/* Even 'altName' not found. Nothing to do. */
+	}
+
+	/* Return possibly updated 'filename' */
+	return filename;
+}
+
 static DifxInput *parseDifxInputCommonTable(DifxInput *D, const DifxParameters *ip)
 {
 	const char commonKeys[][MAX_DIFX_KEY_LEN] =
@@ -712,6 +780,19 @@ static DifxInput *parseDifxInputCommonTable(DifxInput *D, const DifxParameters *
 		return 0;
 	}
 
+	if(access(D->job->calcFile, F_OK) != 0)
+	{
+		locateAltFilename(D->job->calcFile, D->job->inputFile, ".calc");
+	}
+	if(access(D->job->threadsFile, F_OK) != 0)
+	{
+		locateAltFilename(D->job->threadsFile, D->job->inputFile, ".threads");
+	}
+	if(access(D->job->outputFile, F_OK) != 0)
+	{
+		locateAltFilename(D->job->outputFile, D->job->inputFile, ".difx");
+	}
+
 	return D;
 }	
 
@@ -764,7 +845,7 @@ int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 {
 	DifxParameters *pp;
 	DifxPulsar *dp;
-	int i, r;
+	int i, r, v;
 	int nPolycoFiles;
 
 	if (!D)
@@ -799,6 +880,8 @@ int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 
 	for(i = 0; i < nPolycoFiles; ++i)
 	{
+		char polycoFile[DIFXIO_FILENAME_LENGTH];
+
 		r = DifxParametersfind1(pp, r, "POLYCO FILE %d", i);
 		if(r < 0)
 		{
@@ -807,7 +890,21 @@ int loadPulsarConfigFile(DifxInput *D, const char *fileName)
 
 			return -1;
 		}
-		r = loadPulsarPolycoFile(&dp->polyco, &dp->nPolyco, DifxParametersvalue(pp, r));
+
+		v = snprintf(polycoFile, DIFXIO_FILENAME_LENGTH, "%s", DifxParametersvalue(pp, r));
+		if(v >= DIFXIO_FILENAME_LENGTH)
+		{
+			fprintf(stderr, "File %s POLYCO FILE name is too long (%d > %d)\n", fileName, v, DIFXIO_FILENAME_LENGTH-1);
+
+			return -1;
+		}
+
+		if(access(polycoFile, F_OK) != 0)
+		{
+			locateAltFilename(polycoFile, D->job->inputFile, ".polyco");
+		}
+
+		r = loadPulsarPolycoFile(&dp->polyco, &dp->nPolyco, polycoFile);
 		if(r < 0)
 		{
 			deleteDifxParameters(pp);
@@ -887,7 +984,7 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 		"PHASED ARRAY"
 	};
 	const int N_CONFIG_ROWS = sizeof(configKeys)/sizeof(configKeys[0]);
-	int configId, r;
+	int configId, r, v;
 	int rows[N_CONFIG_ROWS];
 
 	if(!D || !ip)
@@ -934,6 +1031,8 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 		/* pulsar stuff */
 		if(strcmp(DifxParametersvalue(ip, rows[9]), "TRUE") == 0)
 		{
+			char pulsarFile[DIFXIO_FILENAME_LENGTH];
+
 			r = DifxParametersfind(ip, rows[9], "PULSAR CONFIG FILE");
 			if(r <= 0)
 			{
@@ -941,7 +1040,21 @@ static DifxInput *parseDifxInputConfigurationTable(DifxInput *D, const DifxParam
 
 				return 0;
 			}
-			dc->pulsarId = loadPulsarConfigFile(D, DifxParametersvalue(ip, r));
+
+			v = snprintf(pulsarFile, DIFXIO_FILENAME_LENGTH, "%s", DifxParametersvalue(ip, r));
+			if(v >= DIFXIO_FILENAME_LENGTH)
+			{
+				fprintf(stderr, "File %s PULSAR CONFIG FILE name is too long (%d > %d)\n", D->job->inputFile, v, DIFXIO_FILENAME_LENGTH-1);
+
+				return 0;
+			}
+
+			if(access(pulsarFile, F_OK) != 0)
+			{
+				locateAltFilename(pulsarFile, D->job->inputFile, ".binconfig");
+			}
+
+			dc->pulsarId = loadPulsarConfigFile(D, pulsarFile);
 			if(dc->pulsarId < 0)
 			{
 				return 0;
@@ -1160,7 +1273,6 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 				D->freq[b].tone[t] = atoi(DifxParametersvalue(ip, r));
 			}
 		}
-
 	}
 	
 	return D;
@@ -2358,6 +2470,19 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 		D->job->flagFile[0] = 0;
 	}
 
+	if(access(D->job->vexFile, F_OK) != 0)
+	{
+		locateAltFilename(D->job->vexFile, D->job->inputFile, ".vex");
+	}
+	if(access(D->job->imFile, F_OK) != 0)
+	{
+		locateAltFilename(D->job->imFile, D->job->inputFile, ".im");
+	}
+	if(access(D->job->flagFile, F_OK) != 0)
+	{
+		locateAltFilename(D->job->flagFile, D->job->inputFile, ".flag");
+	}
+
 	return D;
 }
 
@@ -2487,7 +2612,7 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 	int order, interval;
 	enum AberCorr ac;
 	int *antennaMap;
-	const int smallRange = 20;
+	const int smallRange = 30;
 
 	if(!D)
 	{
@@ -2677,6 +2802,10 @@ static DifxInput *populateIM(DifxInput *D, DifxParameters *mp)
 					parsePoly1_limited(mp, r, smallRange, "SRC %d ANT %d EL CORR", src, t, scan->im[a][src][p].elcorr, order+1, 0);
 					parsePoly1_limited(mp, r, smallRange, "SRC %d ANT %d EL GEOM", src, t, scan->im[a][src][p].elgeom, order+1, 0);
 					parsePoly1_limited(mp, r, smallRange, "SRC %d ANT %d PAR ANGLE", src, t, scan->im[a][src][p].parangle, order+1, 0);
+					parsePoly1_limited(mp, r, smallRange, "SRC %d ANT %d STA X (m)", src, t, scan->im[a][src][p].staX, order+1, 1);
+					parsePoly1_limited(mp, r, smallRange, "SRC %d ANT %d STA Y (m)", src, t, scan->im[a][src][p].staY, order+1, 1);
+					parsePoly1_limited(mp, r, smallRange, "SRC %d ANT %d STA Z (m)", src, t, scan->im[a][src][p].staZ, order+1, 1);
+
 					/* the next three again are required */
 					r = parsePoly1(mp, r, "SRC %d ANT %d U (m)", src, t, scan->im[a][src][p].u, order+1);
 					if(r < 0)
@@ -3425,7 +3554,7 @@ DifxInput *loadDifxInput(const char *filePrefix)
 	DifxParameters *ip, *cp, *mp;
 	DifxInput *D, *DSave;
 	char inputFile[DIFXIO_FILENAME_LENGTH];
-	const char *calcFile;
+//	const char *calcFile;
 	int r, v, l;
 
 	l = strlen(filePrefix);
@@ -3448,22 +3577,6 @@ DifxInput *loadDifxInput(const char *filePrefix)
 		return 0;
 	}
 
-	/* get .calc filename and open it. */
-	r = DifxParametersfind(ip, 0, "CALC FILENAME");
-	if(r < 0)
-	{
-		return 0;
-	}
-	calcFile = DifxParametersvalue(ip, r);
-
-	cp = newDifxParametersfromfile(calcFile);
-	if(!cp)
-	{
-		deleteDifxParameters(ip);
-		
-		return 0;
-	}
-
 	D = DSave = newDifxInput();
 
 	/* When creating a DifxInput via this function, there will always
@@ -3471,7 +3584,6 @@ DifxInput *loadDifxInput(const char *filePrefix)
 	 */
 	D->job = newDifxJobArray(1);
 	D->nJob = 1;
-
 
 	v = snprintf(D->job->inputFile, DIFXIO_FILENAME_LENGTH, "%s", inputFile);
 	if(v >= DIFXIO_FILENAME_LENGTH)
@@ -3481,6 +3593,16 @@ DifxInput *loadDifxInput(const char *filePrefix)
 	}
 
 	D = populateInput(D, ip);
+
+	/* get .calc filename and open it. */
+	cp = newDifxParametersfromfile(D->job->calcFile);
+	if(!cp)
+	{
+		deleteDifxParameters(ip);
+
+		return 0;
+	}
+
 	D = populateCalc(D, cp);
 	if (D)
 	{

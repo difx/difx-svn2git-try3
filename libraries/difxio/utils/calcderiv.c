@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken                             *
+ *   Copyright (C) 2015-2019 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -38,9 +38,9 @@
 #define C_LIGHT	299792458.0
 
 const char program[] = "calcderiv";
-const char author[]  = "Walter Brisken <wbrisken@lbo.us>";
+const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
 const int version = 2;	/* for this program, must be an integer */
-const char verdate[] = "20170122";
+const char verdate[] = "20191110";
 
 void usage()
 {
@@ -247,7 +247,7 @@ int computeXYZDerivatives(DifxInput *D, double deltaXYZ, const char *calcProgram
 		/* run calc11 */
 		snprintf(command, CommandLength, "rm %s", D->job->imFile);
 		system(command);
-		snprintf(command, CommandLength, "%s %s", calcProgram, D->job->calcFile);
+		snprintf(command, CommandLength, "calcif2 %s", D->job->calcFile);
 		system(command);
 		/* FIXME: vex2difx should put calc version info in .calc file */
 		/* FIXME: option for calc 9 */

@@ -278,11 +278,80 @@ void DifxDatastreamAllocPhasecalTones(DifxDatastream *dd, int nTones)
 	}
 }
 
+int DifxDatastreamGetPhasecalRange(const DifxDatastream *dd, const DifxFreq *df, double* lowest, double* highest)
+{
+	double lowEdge;
+	double tonefreq;
+	int permitEdgeTone = 0;
+
+	if(lowest)
+	{
+		*lowest = 0;
+	}
+	if(highest)
+	{
+		*highest = 0;
+	}
+
+	if(dd->nRecFreq == 0 || dd->phaseCalIntervalMHz == 0)
+	{
+		/* Can't do anything... */
+		return 0;
+	}
+
+	/* find bottom end of baseband */
+	lowEdge = df->freq;
+	if(df->sideband == 'L')
+	{
+		lowEdge -= df->bw;
+		permitEdgeTone = 1; // Nyquist of LSB is allowed
+	}
+
+	/* lowest frequency pcal */
+	tonefreq = ((unsigned long)(lowEdge / dd->phaseCalIntervalMHz)) * dd->phaseCalIntervalMHz + dd->phaseCalBaseMHz;
+	if(tonefreq < lowEdge)
+	{
+		tonefreq += dd->phaseCalIntervalMHz;
+	}
+	if(!permitEdgeTone && fabs(tonefreq-lowEdge) < 1e-6)
+	{
+		//skip tone in DC bin
+		tonefreq += dd->phaseCalIntervalMHz;
+	}
+
+	/* calculate number of tones that fit the band */
+	int ntones = 0;
+	while (tonefreq + ntones * dd->phaseCalIntervalMHz < lowEdge + df->bw)
+	{
+		++ntones;
+	}
+
+	/* return the range (tone freqs in MHz) */
+	if(lowest && ntones)
+	{
+		*lowest = tonefreq;
+	}
+	if(highest && ntones)
+	{
+		*highest = tonefreq + (ntones - 1) * dd->phaseCalIntervalMHz;
+	}
+
+	if(0)
+	{
+		printf("full: band %.3f .. %.3f %cSB, pcal comb N*%.3f + %.3f\n", lowEdge, lowEdge + df->bw, df->sideband, dd->phaseCalIntervalMHz, dd->phaseCalBaseMHz);
+		printf("      first tone in band is %.3f\n", tonefreq);
+		printf("      final tone of band is %.3f\n", tonefreq + (ntones - 1) * dd->phaseCalIntervalMHz);
+		printf("      ntones is %d\n", ntones);
+	}
+
+	return ntones;
+}
+
 /* Must have rec band/freq and freq table filled in before calling this function */
 void DifxDatastreamCalculatePhasecalTones(DifxDatastream *dd, const DifxFreq *df)
 {
-	double lofreq;
-	int tonefreq, i;
+	double lowest, highest;
+	int i;
 
 	if(dd->nRecFreq == 0 || dd->phaseCalIntervalMHz == 0)
 	{
@@ -290,25 +359,8 @@ void DifxDatastreamCalculatePhasecalTones(DifxDatastream *dd, const DifxFreq *df
 		return;
 	}
 
-	/* find bottom end of baseband */
-	lofreq = df->freq;
-	if(df->sideband == 'L')
-	{
-		lofreq -= df->bw;
-	}
-
-	/* lowest frequency pcal */
-	tonefreq = (((int)lofreq) / dd->phaseCalIntervalMHz) * dd->phaseCalIntervalMHz;
-	if(tonefreq <= lofreq)
-	{
-		tonefreq += dd->phaseCalIntervalMHz;
-	}
-
-	/*calculate number of recorded tones*/
-	while(tonefreq + dd->nRecTone * dd->phaseCalIntervalMHz < lofreq + df->bw)
-	{
-		++dd->nRecTone;
-	}
+	/* Get number of tones, and lowest/highest in-band non-DC tone frequencies */
+	dd->nRecTone = DifxDatastreamGetPhasecalRange(dd, df, &lowest, &highest);
 
 	/* Allocate the tone frequency and on/off arrays */
 	DifxDatastreamAllocPhasecalTones(dd, dd->nRecTone);
@@ -318,7 +370,7 @@ void DifxDatastreamCalculatePhasecalTones(DifxDatastream *dd, const DifxFreq *df
 	{
 		int t;
 
-		dd->recToneFreq[i] = tonefreq + i * dd->phaseCalIntervalMHz;
+		dd->recToneFreq[i] = lowest + i * dd->phaseCalIntervalMHz;
 		for(t = 0; t < df->nTone; ++t)
 		{
 			if(df->tone[t] == i)
@@ -332,18 +384,22 @@ void DifxDatastreamCalculatePhasecalTones(DifxDatastream *dd, const DifxFreq *df
 
 /* Fills in provided array toneFreq[] (of max length maxCount)
  * with either -1, meaning don't process this tone, or a positive
- * number indicating the pulse cal tone frequency 
- * for LSBs the tones are returned descending in frequency.
+ * number indicating the pulse cal tone frequency.
+ * For LSBs the flags in toneFreq[] are returned descending in frequency.
  * This is the order in which they are written out by mpifxcorr in the pcal file.
  *
  * Return the number of tones extracted by DiFX.
  */
 int DifxDatastreamGetPhasecalTones(double *toneFreq, const DifxDatastream *dd, const DifxFreq *df, int maxCount)
 {
+	double lowest, highest;
 	int nRecTone=0;
-	int toneFreq0;
-	double loFreq;
 	int t;
+
+	for(t = 0; t < maxCount; ++t)
+	{
+		toneFreq[t] = -1.0;	/* flag as not used */
+	}
 
 	if(dd->nRecFreq == 0 || dd->phaseCalIntervalMHz == 0)
 	{
@@ -351,48 +407,26 @@ int DifxDatastreamGetPhasecalTones(double *toneFreq, const DifxDatastream *dd, c
 		return 0;
 	}
 
-	loFreq = df->freq;
+	/* Get number of tones, and lowest/highest in-band non-DC tone frequencies */
+	nRecTone = DifxDatastreamGetPhasecalRange(dd, df, &lowest, &highest);
 
-	for(t = 0; t < maxCount; ++t)
-	{
-		toneFreq[t] = -1.0;	/* flag as not used */
-	}
-
-	if(df->sideband == 'U')
-	{
-		toneFreq0 = (((int)(loFreq)) / dd->phaseCalIntervalMHz) * dd->phaseCalIntervalMHz;
-		if(toneFreq0 <= loFreq)
-		{
-			toneFreq0 += dd->phaseCalIntervalMHz;
-		}
-	}
-	else
-	{
-		toneFreq0 = (((int)(loFreq)) / dd->phaseCalIntervalMHz) * dd->phaseCalIntervalMHz;
-		if(toneFreq0 == loFreq)
-		{
-			toneFreq0 -= dd->phaseCalIntervalMHz;
-		}
-	}
-	nRecTone = (int) floor((df->bw - fabs(loFreq - toneFreq0))/dd->phaseCalIntervalMHz) + 1;
+	/* Fill in the tone frequencies and on/off values */
 	for(t = 0; t < df->nTone; ++t)
 	{
-		int i, j, k;
+		int i, j;
 
 		i = df->tone[t];
 		if(df->sideband == 'U')
 		{
 			j = i;
-			k = i;
 		}
 		else
 		{
 			j = nRecTone - 1 - i;	/* reverse order of LSB tones */
-			k = -j;			/* count down from toneFreq0 for LSB tones */
 		}
 		if(j >= 0 && j < maxCount)
 		{
-			toneFreq[j] = toneFreq0 + k*dd->phaseCalIntervalMHz;
+			toneFreq[j] = lowest + i*dd->phaseCalIntervalMHz;
 		}
 	}
 
