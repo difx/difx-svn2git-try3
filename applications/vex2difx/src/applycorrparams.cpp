@@ -30,7 +30,7 @@
 #include <cstdlib>
 #include "applycorrparams.h"
 
-int applyCorrParams(VexData *V, const CorrParams &params, int &nWarn, int &nError, std::set<std::string> &canonicalVDIFUsers)
+int applyCorrParams(VexData *V, const CorrParams &params, unsigned int &nWarn, unsigned int &nError, std::set<std::string> &canonicalVDIFUsers)
 {
 	VexStream tmpVS;	// used to hold output of format parsing
 
@@ -234,6 +234,11 @@ int applyCorrParams(VexData *V, const CorrParams &params, int &nWarn, int &nErro
 				if(DS.nBand > 0 || DS.startBand >= 0)
 				{
 					V->setStreamBands(M->defName, it->first, ds, DS.nBand, DS.startBand);
+				}
+
+				if(DS.frameSize > 0)
+				{
+					V->setStreamFrameSize(M->defName, it->first, ds, DS.frameSize);
 				}
 			}
 
@@ -471,9 +476,6 @@ int applyCorrParams(VexData *V, const CorrParams &params, int &nWarn, int &nErro
 			case DataSourceMark6:
 				V->setMark6Files(a, i, dss.basebandFiles);
 				break;
-			case DataSourceSharedMemory:
-#warning FIXME: Put code in here for shared memory casse
-				break;
 			case DataSourceUnspecified:
 				if(!A->vsns.empty())
 				{
@@ -483,6 +485,9 @@ int applyCorrParams(VexData *V, const CorrParams &params, int &nWarn, int &nErro
 			case NumDataSources:
 				std::cerr << "Developer error: mergeCorrParams: DataSource=NumDataSources encountered." << std::endl;
 				exit(EXIT_FAILURE);
+			default:
+				std::cerr << "Developer error: a data source type was encountered that is not supported." << std::endl;
+				break;
 			}
 
 			if(dss.dataSampling != NumSamplingTypes)

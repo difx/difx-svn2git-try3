@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2017 by Walter Brisken                             *
+ *   Copyright (C) 2009-2019 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -130,7 +130,8 @@ int loadBasebandFilelistOld(const std::string &fileName, std::vector<VexBaseband
 	return n;
 }
 
-int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandData> &basebandFiles)
+// Returns true on success
+bool loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandData> &basebandFiles)
 {
 	DirList D;
 	std::stringstream error;
@@ -146,9 +147,9 @@ int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandDat
 	{
 		if(e.getType() == DirListException::TypeCantOpen)
 		{
-			std::cerr << "Error: cannot open filelist file: " << fileName << std::endl;
+			std::cerr << "Note: cannot open filelist file: " << fileName << std::endl;
 
-			exit(EXIT_FAILURE);
+			return false;
 		}
 		else if(e.getType() == DirListException::TypeWrongIdentifier)
 		{
@@ -166,14 +167,14 @@ int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandDat
 			{
 				std::cerr << "Error: cannot get filelist data from " << fileName << ".  The file is not in a recognized format."  << std::endl;
 
-				exit(EXIT_FAILURE);
+				return false;
 			}
 		}
 		else
 		{
 			std::cerr << "Error: cannot get filelist data from " << fileName << ".  Error might be related to: " << error.str() << std::endl;
 
-			exit(EXIT_FAILURE);
+			return false;
 		}
 	}
 
@@ -208,7 +209,7 @@ int loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandDat
 		n = loadBasebandFilelistOld(fileName, basebandFiles);
 	}
 
-	return n;
+	return true;
 }
 
 CorrSetup::CorrSetup(const std::string &name) : corrSetupName(name)
@@ -805,6 +806,9 @@ DatastreamSetup::DatastreamSetup(const std::string &name) : difxName(name)
 	startBand = -1;
 	nBand = 0;				// Zero implies all.
 	tSys = 0.0;
+	frameSize = 0;
+
+	filelistReadFail = false;
 }
 
 
@@ -835,6 +839,10 @@ int DatastreamSetup::setkv(const std::string &key, const std::string &value)
 		}
 
 		format = s;
+	}
+	else if(key == "frameSize")
+	{
+		ss >> frameSize;
 	}
 	else if(key == "sampling")
 	{
@@ -874,7 +882,8 @@ int DatastreamSetup::setkv(const std::string &key, const std::string &value)
 			++nWarn;
 		}
 		dataSource = DataSourceFile;
-		loadBasebandFilelist(value, basebandFiles);
+		filelistFile = value;
+		filelistReadFail = !loadBasebandFilelist(value, basebandFiles);
 	}
 	else if(key == "mark6filelist")
 	{
@@ -884,7 +893,8 @@ int DatastreamSetup::setkv(const std::string &key, const std::string &value)
 			++nWarn;
 		}
 		dataSource = DataSourceMark6;
-		loadBasebandFilelist(value, basebandFiles);
+		filelistFile = value;
+		filelistReadFail = !loadBasebandFilelist(value, basebandFiles);
 	}
 	else if(key == "recorder")
 	{
@@ -1024,20 +1034,25 @@ int DatastreamSetup::merge(const DatastreamSetup *dss)
 	}
 	else if(format != dss->format && !dss->format.empty())
 	{
-		std::cerr << "Error: conflicting formats: " << format << " != " << format << std::endl;
+		std::cerr << "Error: conflicting formats: " << format << " != " << dss->format << std::endl;
 
 		return -2;
 	}
 
-	if(dataSampling < dss->dataSampling)
+	if(dataSampling != dss->dataSampling)
 	{
-		if(dataSampling != 0)
+		if(dataSampling != NumSamplingTypes && dss->dataSampling != NumSamplingTypes)
 		{
-			std::cerr << "Error: conflicting sampling types specified" << std::endl;
+			std::cerr << "Error: conflicting sampling types specified: "
+				<< dss->dataSampling << " (" << samplingTypeNames[dss->dataSampling] << ") while already configured for "
+				<< dataSampling << " (" << samplingTypeNames[dataSampling] << ")" << std::endl;
 
 			return -3;
 		}
-		dataSampling = dss->dataSampling;	
+		if(dss->dataSampling != NumSamplingTypes)
+		{
+			dataSampling = dss->dataSampling;
+		}
 	}
 
 	if(dataSource == DataSourceFile || dataSource == DataSourceMark6)
@@ -1108,6 +1123,11 @@ int DatastreamSetup::merge(const DatastreamSetup *dss)
 		}
 	}
 
+	if(frameSize == 0)
+	{
+		frameSize = dss->frameSize;
+	}
+
 	return 0;
 }
 
@@ -1136,6 +1156,8 @@ AntennaSetup::AntennaSetup(const std::string &name) : vexName(name), defaultData
 	// antenna is by default not constrained in start time
 	mjdStart = -1.0;
 	mjdStop = -1.0;
+
+	filelistReadFail = false;
 }
 
 int AntennaSetup::setkv(const std::string &key, const std::string &value)
@@ -1368,16 +1390,6 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 		defaultDatastreamSetup.dataSource = DataSourceMark6;
 		defaultDatastreamSetup.basebandFiles.push_back(VexBasebandData(value, 0, -1));
 	}
-	else if(key == "filelist")
-	{
-		if(defaultDatastreamSetup.dataSource != DataSourceFile && defaultDatastreamSetup.dataSource != DataSourceUnspecified)
-		{
-			std::cerr << "Warning: antenna " << vexName << " had at least two kinds of data sources!: " << dataSourceNames[defaultDatastreamSetup.dataSource] << " and " << dataSourceNames[DataSourceFile] << std::endl;
-			++nWarn;
-		}
-		defaultDatastreamSetup.dataSource = DataSourceFile;
-		loadBasebandFilelist(value, defaultDatastreamSetup.basebandFiles);
-	}
 	else if(key == "mark6filelist")
 	{
 		if(defaultDatastreamSetup.dataSource != DataSourceMark6 && defaultDatastreamSetup.dataSource != DataSourceUnspecified)
@@ -1386,7 +1398,8 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			++nWarn;
 		}
 		defaultDatastreamSetup.dataSource = DataSourceMark6;
-		loadBasebandFilelist(value, defaultDatastreamSetup.basebandFiles);
+		filelistFile = value;
+		filelistReadFail = !loadBasebandFilelist(value, defaultDatastreamSetup.basebandFiles);
 	}
 	else if(key == "networkPort")
 	{
@@ -1801,6 +1814,7 @@ void CorrParams::defaults()
 	tweakIntTime = false;
 	sortAntennas = true;
 	exhaustiveAutocorrs = false;
+	allowAllClockOffsets = false;
 }
 
 void pathify(std::string &filename)
@@ -1903,6 +1917,10 @@ int CorrParams::setkv(const std::string &key, const std::string &value)
 	else if(key == "exhaustiveAutocorrs")
 	{
 		exhaustiveAutocorrs = parseBoolean(value);
+	}
+	else if(key == "allowAllClockOffsets")
+	{
+		allowAllClockOffsets = parseBoolean(value);
 	}
 	else if(key == "maxLength")
 	{
@@ -2408,7 +2426,28 @@ int CorrParams::load(const std::string &fileName)
 				nWarn += datastreamSetup->setkv(key, value);
 				break;
 			case PARSE_MODE_ANTENNA:
-				nWarn += antennaSetup->setkv(key, value);
+				if(key == "filelist")
+				{
+					// This is a special case: single command that assigns a new datastream and associated filelist
+
+					std::string dsName("_" + antennaSetup->vexName + "_" + value);
+					if(getDatastreamSetup(dsName) != 0)
+					{
+						std::cerr << "Error: two DATASTREAM blocks named " << dsName << std::endl;
+
+						exit(EXIT_FAILURE);
+					}
+					datastreamSetups.push_back(DatastreamSetup(dsName));
+					datastreamSetup = &datastreamSetups.back();
+
+					antennaSetup->addDatastream(dsName);
+					
+					nWarn += datastreamSetup->setkv("filelist", value);
+				}
+				else
+				{
+					nWarn += antennaSetup->setkv(key, value);
+				}
 				break;
 			case PARSE_MODE_EOP:
 				nWarn += eop->setkv(key, value);
@@ -2770,8 +2809,7 @@ bool antennaMatch(const std::string &a1, const std::string &a2)
 
 bool baselineMatch(const std::pair<std::string,std::string> &bl, const std::string &ant1, const std::string &ant2)
 {
-	if(antennaMatch(bl.first, ant1) &&
-	   antennaMatch(bl.second, ant2) )
+	if(antennaMatch(bl.first, ant1) && antennaMatch(bl.second, ant2) )
 	{
 		return true;
 	}
@@ -3194,6 +3232,14 @@ std::ostream& operator << (std::ostream &os, const DatastreamSetup &x)
 	{
 		os << "  networkPort=" << x.networkPort << std::endl;
 		os << "  windowSize=" << x.windowSize << std::endl;
+	}
+	if(x.frameSize != 0)
+	{
+		os << "  frameSize=" << x.frameSize << std::endl;
+	}
+	if(!x.machine.empty())
+	{
+		os << "  machine=" << x.machine << std::endl;
 	}
 
 	os << "}" << std::endl;

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2019 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,6 +32,7 @@
 #include <vector>
 #include <set>
 #include <sstream>
+#include <iomanip>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -59,20 +60,20 @@ using namespace std;
 
 const string version(VERSION);
 const string program("vex2difx");
-const string verdate("20181015");
+const string verdate("20191112");
 const string author("Walter Brisken/Adam Deller");
 
 const int defaultMaxNSBetweenACAvg = 2000000;	// 2ms, good default for use with transient detection
 
 static int calculateWorstcaseGuardNS(double sampleRate, int subintNS, int nBit, int nSubband)
 {
-        double sampleTimeNS = 1.0e9/sampleRate;
+	double sampleTimeNS = 1.0e9/sampleRate;
 	double nsAccumulate = sampleTimeNS;
 	const double MaxEarthGeomSlipRate = 1600.0;	// ns/sec
 
 	while(fabs(nsAccumulate - round(nsAccumulate)) > 2.0e-11)
 	{
-	  nsAccumulate += sampleTimeNS;
+		nsAccumulate += sampleTimeNS;
 	}
 
 	if(nBit*nSubband < 8)
@@ -327,7 +328,6 @@ static DifxDatastream *makeDifxDatastreams(const Job& J, const VexData *V, const
 					snprintf(dd->networkPort, DIFXIO_ETH_DEV_SIZE, "%s", ant->ports[d].networkPort.c_str());
 					break;
 				case DataSourceFile:
-				case DataSourceMark6:
 					{
 						int nFile = ant->files.size();
 						int count = 0;
@@ -352,6 +352,53 @@ static DifxDatastream *makeDifxDatastreams(const Job& J, const VexData *V, const
 								++count;
 							}
 						}
+					}
+					break;
+				case DataSourceMark6: 
+					{
+						// mark6 has both files and vsns
+						int nFile = ant->files.size();
+						int count = 0;
+
+						for(int j = 0; j < nFile; ++j)
+						{
+							if(ant->files[j].streamId == d && J.overlap(ant->files[j]) > 0.0)
+							{
+								++count;
+							}
+						}
+
+						DifxDatastreamAllocFiles(dd, count);
+
+						count = 0;
+
+						for(int j = 0; j < nFile; ++j)
+						{
+							if(ant->files[j].streamId == d && J.overlap(ant->files[j]) > 0.0)
+							{
+								dd->file[count] = strdup(ant->files[j].filename.c_str());
+								++count;
+							}
+						}
+						
+						string sVSN;
+						int nVSN = ant->vsns.size();
+						count = 0;
+
+						for(int j = 0; j < nVSN; ++j)
+						{
+							if(ant->vsns[j].streamId == d && J.overlap(ant->vsns[j]) > 0.0)
+							{
+								sVSN = ant->vsns[j].filename;
+								++count;
+							}
+						}
+
+						if(!shelf.empty())
+						{
+							shelf += ",";
+						}
+						shelf += shelves.getShelf(sVSN);
 					}
 					break;
 				case DataSourceModule:
@@ -1221,13 +1268,13 @@ static double populateBaselineTable(DifxInput *D, const CorrParams *P, const Cor
 
 static void populateEOPTable(DifxInput *D, const vector<VexEOP>& E)
 {
-	int nEOP;
+	unsigned int nEOP;
 
 	nEOP = E.size();
 	D->nEOP = nEOP;
 	D->eop = newDifxEOPArray(D->nEOP);
 
-	for(int e = 0; e < nEOP; ++e)
+	for(unsigned int e = 0; e < nEOP; ++e)
 	{
 		D->eop[e].mjd = static_cast<int>(E[e].mjd);
 		D->eop[e].tai_utc = static_cast<int>(E[e].tai_utc);
@@ -2138,7 +2185,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 		{
 			const std::string &antName = it->first;
 			const VexSetup &setup = it->second;
-			int startBand;
+			unsigned int startBand;
 
 			// do some prodding, any antenna
 			for(unsigned int ds = 0, startBand = 0; ds < setup.nStream(); ++ds)
@@ -2306,7 +2353,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 		{
 			const std::string &antName = it->first;
 			const VexSetup &setup = it->second;
-			int startBand;
+			unsigned int startBand;
 			startBand = 0;
 
 			if(find(J.jobAntennas.begin(), J.jobAntennas.end(), antName) == J.jobAntennas.end())
@@ -2324,9 +2371,10 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				{
 					dd = D->datastream + currDatastream;
 					dd->phaseCalIntervalMHz = setup.phaseCalIntervalMHz();
+					dd->phaseCalBaseMHz = setup.phaseCalBaseMHz();
 					dd->tcalFrequency = antenna->tcalFrequency;
 
-					// FIXME: eventually zoom bands will migrate to the VexMode/VexSetup infrastructure.  until then, use antenanSetup directly
+					// FIXME: eventually zoom bands will migrate to the VexMode/VexSetup infrastructure.  until then, use antennaSetup directly
 					if(antennaSetup)
 					{
 
@@ -2360,7 +2408,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 								if(parentFreqIndices[nZoom] < 0)
 								{
 									nZoomSkip++;
-									cerr << "Warning: Cannot find a parent freq for zoom band " << i << " (" << zf.frequency << ") of datastream " << ds << " for antenna " << antName << endl;
+									cerr << "Warning: Cannot find a parent freq for zoom band " << i << " (" << std::fixed << std::setprecision(3) << zf.frequency << ") of datastream " << ds << " for antenna " << antName << endl;
 
 									continue;
 								}
@@ -2395,7 +2443,7 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 							{
 								cerr << "Warning: dropped " << nZoomSkip << " zoom bands, " << nZoom << " remain" << endl;
 							}
-                                                        dd->nZoomFreq = nZoom;
+							dd->nZoomFreq = nZoom;
 							DifxDatastreamAllocZoomBands(dd, nZoomBands);
 
 							nZoomBands = 0;
@@ -2432,9 +2480,9 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 							delete [] parentFreqIndices;
 						} // if zoom freqs
 
-						int nFreqClockOffsets = antennaSetup->freqClockOffs.size();
-						int nFreqClockOffsetsDelta = antennaSetup->freqClockOffsDelta.size();
-						int nFreqPhaseDelta = antennaSetup->freqPhaseDelta.size();
+						unsigned int nFreqClockOffsets = antennaSetup->freqClockOffs.size();
+						unsigned int nFreqClockOffsetsDelta = antennaSetup->freqClockOffsDelta.size();
+						unsigned int nFreqPhaseDelta = antennaSetup->freqPhaseDelta.size();
 						if(nFreqClockOffsets > 0)
 						{
 							if((startBand + D->datastream[currDatastream].nRecFreq) > nFreqClockOffsets ||
@@ -2450,10 +2498,18 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 							}
 							if(antennaSetup->freqClockOffs.front() != 0.0)
 							{
-								cerr << endl;
-								cerr << "Error: AntennaSetup for " << antName << " has a non-zero clock offset for the first" << " frequency offset. This is not allowed for model " << "accountability reasons." << endl;
+								if(P->allowAllClockOffsets)
+								{
+									cerr << endl;
+									cerr << "Warning: AntennaSetup for " << antName << " has a non-zero clock offset for the first" << " frequency offset - this can compromise model accountability," << " proceeding because allowAllClockOffsets = true." << endl;
+								}
+								else
+								{
+									cerr << endl;
+									cerr << "Error: AntennaSetup for " << antName << " has a non-zero clock offset for the first" << " frequency offset. This is not allowed for model " << "accountability reasons." << endl;
 
-								exit(EXIT_FAILURE);
+									exit(EXIT_FAILURE);
+								}
 							}
 							for(int i = 0; i < D->datastream[currDatastream].nRecFreq; ++i)
 							{
@@ -2471,13 +2527,14 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 						}
 
 						// TODO: consider specifying loOffsets per datastream rather than per antenna
-						int nLoOffsets = antennaSetup->loOffsets.size();
+						unsigned int nLoOffsets = antennaSetup->loOffsets.size();
 						if(nLoOffsets > 0)
 						{
 							if((startBand + D->datastream[currDatastream].nRecFreq) > nLoOffsets)
 							{
 								cerr << endl;
 								cerr << "Error: AntennaSetup for " << antName << " has only " << nLoOffsets << " loOffsets specified but " << (startBand + dd->nRecFreq) << " recorded frequencies needed." << endl;
+
 								exit(EXIT_FAILURE);
 							}
 							for(int i = 0; i < D->datastream[currDatastream].nRecFreq; ++i)
@@ -2519,26 +2576,26 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 				
 			exit(EXIT_FAILURE);
 		}
-		if (config->guardNS > 0)
+		if(config->guardNS > 0)
 		{
-		    worstcaseguardns = calculateWorstcaseGuardNS(mode->getLowestSampleRate(), config->subintNS, mode->getMinBits(), mode->getMinSubbands());
-		    if(config->guardNS < worstcaseguardns)
-		    {
-			cerr << "vex2difx calculates the worst-case guardNS as " << worstcaseguardns << ", but you have explicitly set " << config->guardNS << ". It is possible that mpifxcorr will refuse to run! Unless you know what you are doing, you should probably set guardNS to " << worstcaseguardns << " or above, or just leave it unset!" << endl;
-			if(strict)
+			worstcaseguardns = calculateWorstcaseGuardNS(mode->getLowestSampleRate(), config->subintNS, mode->getMinBits(), mode->getMinSubbands());
+			if(config->guardNS < worstcaseguardns)
 			{
-				cerr << "\nExiting since strict mode was enabled" << endl;
-				
-				exit(EXIT_FAILURE);
+				cerr << "vex2difx calculates the worst-case guardNS as " << worstcaseguardns << ", but you have explicitly set " << config->guardNS << ". It is possible that mpifxcorr will refuse to run! Unless you know what you are doing, you should probably set guardNS to " << worstcaseguardns << " or above, or just leave it unset!" << endl;
+				if(strict)
+				{
+					cerr << "\nExiting since strict mode was enabled" << endl;
+
+					exit(EXIT_FAILURE);
+				}
+				else
+				{
+					cerr << "\nContinuing since --force was specified" << endl;
+				}
 			}
-			else
-			{
-				cerr << "\nContinuing since --force was specified" << endl;
-			}
-		    }
 		}
 	} // configId loop
-		
+
 	if(nPulsar != D->nPulsar)
 	{
 		cerr << "Error: nPulsar=" << nPulsar << " != D->nPulsar=" << D->nPulsar << endl;
@@ -2927,7 +2984,7 @@ static void calculateScanSizes(VexData *V, const CorrParams &P)
 		const VexScan *scan;
 		const VexMode *mode;
 		const CorrSetup *setup;
-		int nSubband, nBaseline;
+		unsigned int nSubband, nBaseline;
 		
 		scan = V->getScan(s);
 		if (!scan)
@@ -3011,11 +3068,11 @@ int main(int argc, char **argv)
 	bool deleteOld = false;
 	bool strict = true;
 	bool mk6 = false;
-	int nWarn = 0;
-	int nError = 0;
-	int nSkip = 0;
-	int nDigit;
-	int nJob = 0;
+	unsigned int nWarn = 0;
+	unsigned int nError = 0;
+	unsigned int nSkip = 0;
+	unsigned int nDigit;
+	unsigned int nJob = 0;
 	std::list<std::pair<int,std::string> > removedAntennas;
 
 	if(argc < 2)
@@ -3227,7 +3284,7 @@ int main(int argc, char **argv)
 		const std::string &corrSetupName = P->findSetup(scan->defName, scan->sourceDefName, scan->modeDefName);
 		CorrSetup *corrSetup = P->getNonConstCorrSetup(corrSetupName);
 		const VexMode *mode = V->getModeByDefName(scan->modeDefName);
-		if (!mode)
+		if(!mode)
 		{
 			continue;
 		}
@@ -3267,6 +3324,11 @@ int main(int argc, char **argv)
 			{
 				antSetup->datastreamSetups[0].nBand = 0;
 				antSetup->datastreamSetups[0].startBand = 0;
+				if(antSetup->filelistReadFail)
+				{
+					cerr << "Error: file list for antenna " << ant->name << " (" << antSetup->filelistFile << ") could not be read." << endl;
+					++nError;
+				}
 			}
 			else
 			{
@@ -3282,6 +3344,11 @@ int main(int argc, char **argv)
 				chanCount = 0;
 				for(int ads = 0; ads < nads; ++ads)
 				{
+					if(antSetup->datastreamSetups[ads].filelistReadFail)
+					{
+						cerr << "Error: file list for datastream " << ads << " of antenna " << ant->name << " (" << antSetup->datastreamSetups[ads].filelistFile << ") could not be read." << endl;
+						++nError;
+					}
 					antSetup->datastreamSetups[ads].startBand = chanCount;
 					if(antSetup->datastreamSetups[ads].nBand == 0)
 					{

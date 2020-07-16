@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2019 by Walter Brisken and Jan Wagner              *
+ *   Copyright (C) 2009-2020 by Walter Brisken and Jan Wagner              *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -40,8 +40,8 @@
 #include <vexdatamodel.h>
 
 const std::string program("vexpeek");
-const std::string version("0.9");
-const std::string verdate("20190430");
+const std::string version("0.11");
+const std::string verdate("20200323");
 const std::string author("Walter Brisken");
 
 void usage(const char *pgm)
@@ -61,9 +61,10 @@ void usage(const char *pgm)
 	std::cout << "  -s or --scans : print list of scans and their stations" << std::endl;
 	std::cout << "  -u or --diskusage : print disk usage (GB)" << std::endl;
 	std::cout << "  -m or --modules : print disk modules used (from TAPELOG_OBS)" << std::endl;
+	std::cout << "  -c or --coords : print station coordinates" << std::endl;
 	std::cout << "  -a or --all : print summary, bands, scans, and modules" << std::endl;
 	std::cout << std::endl;
-	std::cout << "  -B, -S, and/or -M can be used to add one of these sections to the output." << std::endl;
+	std::cout << "  -B, -S, -M and/or -C can be used to add one of these sections to the output." << std::endl;
 	std::cout << std::endl;
 }
 
@@ -164,7 +165,7 @@ void antennaSummary(const VexData *V, int doFormat, int doUsage)
 		if(doUsage)
 		{
 			int p = std::cout.precision();
-			double drate, usage;
+			double drate=0.0, usage;
 			usage = totalDiskUsageGB(V, it->first, &drate);
 			std::cout.precision(3);
 			std::cout << std::fixed << " " << usage << " " << (int)drate;
@@ -280,6 +281,24 @@ void bandList(const VexData *V)
 	std::cout << std::endl;
 }
 
+void antCoords(const VexData *V)
+{
+	const double secPerYear = 86400.0*365.25;
+	int nAntenna = V->nAntenna();
+	int p = std::cout.precision();
+	std::cout.precision(6);
+	std::cout << std::fixed;
+
+	for(int a = 0; a < nAntenna; ++a)
+	{
+		const VexAntenna *A = V->getAntenna(a);
+		std::cout << A->name << " " << A->x << " " << A->y << " " << A->z << "  " << (A->dx*secPerYear) << " " << (A->dy*secPerYear) << " " << (A->dz*secPerYear) << "  " << A->posEpoch << std::endl;
+	}
+
+	std::cout.precision(p);
+	std::cout << std::scientific;
+}
+
 int testVex(const std::string &vexFile)
 {
 	const int MaxLineLength=128;
@@ -324,7 +343,7 @@ int main(int argc, char **argv)
 	VexData *V;
 	int v;
 	int doSummary = 1;
-	int nWarn = 0;
+	unsigned int nWarn = 0;
 	int verbose = 0;
 	int doBandList = 0;
 	int doScanList = 0;
@@ -332,6 +351,7 @@ int main(int argc, char **argv)
 	int doUsage = 0;
 	int doModules = 0;
 	int doTime = 0;
+	int doCoords = 0;
 	int a;
 	const char *fileName = 0;
 
@@ -382,6 +402,12 @@ int main(int argc, char **argv)
 			++doModules;
 			doSummary = 0;
 		}
+		else if(strcmp(argv[a], "-c") == 0 ||
+			strcmp(argv[a], "--coords") == 0)
+		{
+			++doCoords;
+			doSummary = 0;
+		}
 		else if(strcmp(argv[a], "-B") == 0 ||
 		        strcmp(argv[a], "--Bands") == 0)
 		{
@@ -397,12 +423,18 @@ int main(int argc, char **argv)
 		{
 			++doModules;
 		}
+		else if(strcmp(argv[a], "-C") == 0 ||
+			strcmp(argv[a], "--Coords") == 0)
+		{
+			++doCoords;
+		}
 		else if(strcmp(argv[a], "-a") == 0 ||
 		        strcmp(argv[a], "--all") == 0)
 		{
 			++doBandList;
 			++doScanList;
 			++doModules;
+			++doCoords;
 		}
 		else if(argv[a][0] == '-')
 		{
@@ -472,6 +504,10 @@ int main(int argc, char **argv)
 	if(doModules)
 	{
 		moduleSummary(V);
+	}
+	if(doCoords)
+	{
+		antCoords(V);
 	}
 
 	delete V;
