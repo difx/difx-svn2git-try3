@@ -82,29 +82,33 @@ void Mk5DataStream::initialise()
 
   syncteststream = 0;
   udp_offset = 0;
-  if (!readfromfile && !tcp) {
-    if (sizeof(long long)!=8) {
-      cfatal << startl << "DataStream assumes long long is 8 bytes, it is " << sizeof(long long) << " bytes - aborting!!!" << endl;
+  if (udp || raw) {
+
+    if (sizeof(vtp_psn64_t)!=8) {
+      cfatal << startl << "DataStream assumes uint64_t is 8 bytes, it is " << sizeof(vtp_psn64_t) << " bytes - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    udpsize = abs(tcpwindowsizebytes/1024)-20-2*4-sizeof(long long); // IP header is 20 bytes, UDP is 4x2 bytes
-    if (udpsize<=0) {
-      cfatal << startl << "Datastream " << mpiid << ":" << " implied UDP packet size is negative - aborting!!!" << endl;
+    if (sizeof(uint32_t)!=4) {
+      cfatal << startl << "DataStream assumes uint32_t is 4 bytes, it is " << sizeof(uint32_t) << " bytes - aborting!!!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
+
+    if (raw)
+      udpsize = abs(tcpwindowsizebytes/1024)-20-2*4-sizeof(vtp_psn64_t); // RAW socket! IP header is 20 bytes, UDP is 4x2 bytes, 64-bit PSN is 8 bytes, rest are payload
+    else
+      udpsize = abs(tcpwindowsizebytes/1024)-sizeof(vtp_psn64_t); // UDP socket; 64-bit PSN is 8 bytes, rest are payload
     udpsize &= ~ 0x7;  // Ensures udpsize multiple of 64 bits
+    if (udpsize<=0) {
+      cfatal << startl << "Datastream " << mpiid << ":" << " implied UDP packet size is zero or negative - aborting!!!" << endl;
+      MPI_Abort(MPI_COMM_WORLD, 1);
+    }
     packet_segmentstart = 0;
     packet_head = 0;
     udp_buf = new char[MAXPACKETSIZE];
     packets_arrived.resize(readbytes/udpsize+2);
 
-    if (sizeof(int)!=4) {
-      cfatal << startl << "DataStream assumes int is 4 bytes, it is " << sizeof(int) << " bytes - aborting!!!" << endl;
-      MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-
     invalid_buf = new char[udpsize];
-    unsigned int *tmp = (unsigned int*)invalid_buf;
+    uint32_t *tmp = (uint32_t*)invalid_buf;
     for (int i=0; i<udpsize/4; i++) {
       tmp[i] = FILL_PATTERN ;
     }
@@ -116,7 +120,7 @@ void Mk5DataStream::initialise()
     npacket = 0;
     packet_sum = 0;
     lasttime = 0.0;
-    
+
     udpstats_update = 0.0;
     char *udp_update_str= getenv("DIFX_UDP_UPDATE");
     if (udp_update_str!=0) {
@@ -286,25 +290,25 @@ void Mk5DataStream::updateConfig(int segmentindex)
 
 void Mk5DataStream::deriveFormatName(int configindex)
 {
-    int nbits, nrecordedbands, fanout, framebytes;
-    Configuration::dataformat format;
-    Configuration::datasampling sampling;
-    double bw;
+  int nbits, nrecordedbands, fanout, framebytes;
+  Configuration::dataformat format;
+  Configuration::datasampling sampling;
+  double bw;
 
-    format = config->getDataFormat(configindex, streamnum);
-    nbits = config->getDNumBits(configindex, streamnum);
-    sampling = config->getDSampling(configindex, streamnum);
-    nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
-    bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
-    framebytes = config->getFrameBytes(configindex, streamnum);
-    if(config->isDMuxed(configindex, streamnum)) {
-      framebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
-    }
-    fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDAlignmentSeconds(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
-    if (fanout < 0) {
-      cfatal << startl << "Fanout is " << fanout << ", which is impossible - no choice but to abort!" << endl;
-      MPI_Abort(MPI_COMM_WORLD, 1);
-    }
+  format = config->getDataFormat(configindex, streamnum);
+  nbits = config->getDNumBits(configindex, streamnum);
+  sampling = config->getDSampling(configindex, streamnum);
+  nrecordedbands = config->getDNumRecordedBands(configindex, streamnum);
+  bw = config->getDRecordedBandwidth(configindex, streamnum, 0);
+  framebytes = config->getFrameBytes(configindex, streamnum);
+  if(config->isDMuxed(configindex, streamnum)) {
+    framebytes = (framebytes-VDIF_HEADER_BYTES)*config->getDNumMuxThreads(configindex, streamnum) + VDIF_HEADER_BYTES;
+  }
+  fanout = config->genMk5FormatName(format, nrecordedbands, bw, nbits, sampling, framebytes, config->getDDecimationFactor(configindex, streamnum), config->getDAlignmentSeconds(configindex, streamnum), config->getDNumMuxThreads(configindex, streamnum), formatname);
+  if (fanout < 0) {
+    cfatal << startl << "Fanout is " << fanout << ", which is impossible - no choice but to abort!" << endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
 }
 
 void Mk5DataStream::initialiseFile(int configindex, int fileindex)
@@ -488,7 +492,7 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
       offset = mark5stream->frameoffset;
 
       // If offset is non-zero we need to shuffle the data in memory to align on a frame boundary
-      if (offset>0) { 
+      if (offset>0) {
         ptr = (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
 
         if (offset>bufferinfo[buffersegment].validbytes) {
@@ -541,8 +545,8 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
   return offset;
 }
 
-int Mk5DataStream::checkData(int buffersegment) 
-{ 
+int Mk5DataStream::checkData(int buffersegment)
+{
   int mjd, sec, corrday, status;
   double ns, nsperbyte; // Nanosec since 00:00 UTC 1 Jan 2000 - check enough precision
   uint64_t ns2000, endns2000;
@@ -571,7 +575,7 @@ int Mk5DataStream::checkData(int buffersegment)
 
   // Loops over frames looking times past the end of the expected segment end
   while (mark5_stream_next_frame(syncteststream)==0) {
-    
+
     mark5_stream_get_frame_time(syncteststream, &mjd, &sec, &ns);
     ns2000 = static_cast<uint64_t>(((mjd-51544)*24*60*60+sec)*1e9 + ns);
 
@@ -580,18 +584,18 @@ int Mk5DataStream::checkData(int buffersegment)
       // Mark buffer as smaller than expected
       goodbytes = syncteststream->frame - &databuffer[buffersegment*(bufferbytes/numdatasegments)];
       if (tempbuf==0) {
-	tempbuf = vectorAlloc_u8(bufferbytes/numdatasegments);
-	if (tempbuf==NULL) {
-	  cerror << startl << "Datastream " << mpiid << " could not allocate temporary buffer. Skipping bytes after data jump" << endl;
-	} else {
-	  tempbytes = bufferinfo[buffersegment].validbytes - goodbytes;
-	  status = vectorCopy_u8(&databuffer[buffersegment*(bufferbytes/numdatasegments)+goodbytes], tempbuf, tempbytes);
-	  if(status != vecNoErr) {
-	    cerror << startl << "Error copying in the DataStream data buffer!!!" << endl;
-	    tempbytes = 0;
-	  }
-	}
-	bufferinfo[buffersegment].validbytes = goodbytes;
+        tempbuf = vectorAlloc_u8(bufferbytes/numdatasegments);
+        if (tempbuf==NULL) {
+          cerror << startl << "Datastream " << mpiid << " could not allocate temporary buffer. Skipping bytes after data jump" << endl;
+        } else {
+          tempbytes = bufferinfo[buffersegment].validbytes - goodbytes;
+          status = vectorCopy_u8(&databuffer[buffersegment*(bufferbytes/numdatasegments)+goodbytes], tempbuf, tempbytes);
+          if(status != vecNoErr) {
+            cerror << startl << "Error copying in the DataStream data buffer!!!" << endl;
+            tempbytes = 0;
+          }
+        }
+        bufferinfo[buffersegment].validbytes = goodbytes;
       }
     }
 
@@ -637,14 +641,14 @@ void Mk5DataStream::fakeToMemory(int buffersegment)
     readto =  (char*)&databuffer[buffersegment*(bufferbytes/numdatasegments)];
     nbytes = readbytes;
   }
-  
+
   // Here we insert, as necessary, data framing to keep mk5mode happy
   ms = new_mark5_stream(new_mark5_stream_unpacker(1), new_mark5_format_generic_from_string(formatname) );
   if(ms == 0)
   {
     cerror << startl << "Could not create a mark5stream for frame generation! format=" << formatname << endl;
   }
-  else 
+  else
   {
     if(ms->genheaders != 0)
     {
@@ -656,10 +660,10 @@ void Mk5DataStream::fakeToMemory(int buffersegment)
 
 void Mk5DataStream::networkToMemory(int buffersegment, uint64_t & framebytesremaining)
 {
-  if (!tcp && udp_offset>readbytes) { // What does this do to networkToMemory - does packet head need updating
+  if ((udp || raw) && udp_offset>readbytes) { // What does this do to networkToMemory - does packet head need updating
     int skip = udp_offset-(udp_offset%readbytes);
     cinfo << startl << "DataStream " << mpiid << ": Skipping over " << skip/1024/1024 << " Mbytes" << endl;
-    if (skip > readbytes) 
+    if (skip > readbytes)
       cinfo << startl << "     " << skip/readbytes << " segments" << endl;
     packet_segmentstart += (skip-(udp_offset%udpsize))/udpsize;
     udp_offset %= readbytes;
@@ -675,10 +679,10 @@ void Mk5DataStream::networkToMemory(int buffersegment, uint64_t & framebytesrema
 
   // Print UDP packet statistics
 
-  if (!tcp && lasttime!=0.0) {
-    // Print statistics. 
+  if ((udp || raw) && lasttime!=0.0) {
+    // Print statistics.
     double delta, thistime;
-    float dropped, oo, dup, rate;
+    float dropped, oo, rate;
 
     thistime = tim();
     delta = thistime-lasttime;
@@ -687,19 +691,17 @@ void Mk5DataStream::networkToMemory(int buffersegment, uint64_t & framebytesrema
       lasttime = thistime;
 
       if (npacket==0) {
-	dropped = 0;
-	oo = 0;
-	dup = 0;
+        dropped = 0;
+        oo = 0;
       } else {
-	dropped = (float)packet_drop*100.0/(float)(npacket+packet_drop);
-	oo = (float)packet_oo*100.0/(float)npacket;
-	dup = (float)packet_duplicate*100.0/(float)npacket;
+        dropped = (float)packet_drop*100.0/(float)(npacket+packet_drop);
+        oo = (float)packet_oo*100.0/(float)npacket;
       }
       rate = packet_sum/delta*8/1e6;
-    
+
       cinfo << fixed << setprecision(2);
       cinfo << startl << "Packets=" << npacket << "  Dropped=" << dropped
-	    << "  Out-of-order=" << oo << "  Rate=" << rate << " Mbps" << endl;
+            << "  Out-of-order=" << oo << "  Rate=" << rate << " Mbps" << endl;
       // Should reset precision
 
       packet_drop = 0;
@@ -732,14 +734,14 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned in
 
   if (tcp) {
     DataStream::readnetwork(sock, ptr, bytestoread, nread);
-  } else { // UDP
+  } else { // UDP or Raw
     bool done, first;
-    unsigned int segmentsize;
-    long long packet_index, packet_segmentend, next_segmentstart=0, next_udpoffset=0;
-    unsigned long long sequence;
+    size_t segmentsize;
+    ssize_t packet_index, next_udpoffset=0;
+    vtp_psn64_t sequence, packet_segmentend, next_segmentstart=0;
     struct msghdr msg;
     struct iovec iov[2];
-    unsigned int headerpackets;
+//    unsigned int headerpackets;
 
     memset(&msg, 0, sizeof(msg));
     msg.msg_iov        = &iov[0];
@@ -749,17 +751,17 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned in
     iov[1].iov_base = udp_buf;
     iov[1].iov_len = MAXPACKETSIZE;
 
-    headerpackets = (10016*2-1)/udpsize+2;
+//    headerpackets = (10016*2-1)/udpsize+2;
 
     packet_segmentend = packet_segmentstart+(bytestoread-(udp_offset%udpsize)-1)/udpsize;
-    if (udp_offset>0 && udp_offset<bytestoread) packet_segmentend++; 
+    if (udp_offset>0 && udp_offset<bytestoread) packet_segmentend++;
     // Check above line is correct if udp_offset > udpsize
     segmentsize = packet_segmentend-packet_segmentstart+1;
 
     //cinfo << startl << "****** udpsize " << udpsize << "  bytestoread " << bytestoread << endl;
     //cinfo << startl << "****** udp_offset = " << udp_offset << endl;
     //cinfo << startl << "****** readnetwork will read packets " << packet_segmentstart << " to " << packet_segmentend << "(" << segmentsize << ")" << endl;
-    
+
     if (segmentsize>packets_arrived.size()) {
       cfatal << startl << "Mk5DataStream::readnetwork bytestoread too large (" << bytestoread << "/" << segmentsize << ")" << endl;
       cinfo << startl << "packet_segmentstart = " << packet_segmentstart << endl;
@@ -770,8 +772,8 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned in
       cinfo << startl << "packets_arrived.size() = " << packets_arrived.size() << endl;
 
       MPI_Abort(MPI_COMM_WORLD, 1);
-    } 
-    
+    }
+
     for (unsigned int i=0; i<segmentsize; i++) {
       packets_arrived[i] = false;
     }
@@ -783,184 +785,185 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned in
       packet_index = (udp_offset-1)/udpsize;
       udp_offset = (udp_offset-1)%udpsize+1;
       if (packet_index<segmentsize) // Check not out of range
-	packets_arrived[packet_index] = true;
+        packets_arrived[packet_index] = true;
 
       if (bytestoread<udp_offset+packet_index*udpsize) {
-	if (packet_index>=segmentsize) {
+        if (packet_index>=segmentsize) {
+          if (udp_offset==udpsize)
+            next_segmentstart = packet_segmentend+1;
+          else
+            next_segmentstart = packet_segmentend;
 
-	  if (udp_offset==udpsize) 
-	    next_segmentstart = packet_segmentend+1;
-	  else
-	    next_segmentstart = packet_segmentend;
+          next_udpoffset = udp_offset + packet_index*udpsize-bytestoread;
+          packet_drop+=segmentsize;
 
-	  next_udpoffset = udp_offset + packet_index*udpsize-bytestoread;
-	  packet_drop+=segmentsize;
+        } else if (packet_index==0) {
+          memcpy(ptr, udp_buf, bytestoread);
+          packet_sum += bytestoread;
+          npacket++;
+          udp_offset -= bytestoread;
+          if (udp_offset>0) {
+            memmove(udp_buf, udp_buf+bytestoread, udp_offset);
+            next_segmentstart = packet_segmentend;
+          } else {
+            next_segmentstart = packet_segmentend+1;
+          }
+          next_udpoffset = udp_offset;
 
-	} else if (packet_index==0) {
-	  memcpy(ptr, udp_buf, bytestoread);
-	  packet_sum += bytestoread;
-	  npacket++;
-	  udp_offset -= bytestoread;
-	  if (udp_offset>0) {
-	    memmove(udp_buf, udp_buf+bytestoread, udp_offset);
-	    next_segmentstart = packet_segmentend;
-	  } else {
-	    next_segmentstart = packet_segmentend+1;
-	  }
-	  next_udpoffset = udp_offset;
-
-	} else {
-	  int bytes = (bytestoread-udp_offset)%udpsize;
-	  memcpy(ptr+udp_offset+(packet_index-1)*udpsize, udp_buf, bytes);  
-	  packet_sum += bytes;
-	  npacket++;
-	  memmove(udp_buf,udp_buf+bytes, udpsize-bytes);
-	  udp_offset = udpsize-bytes;
-	  next_segmentstart = packet_head;  // CHECK THIS IS CORRECT
-	}
-	done = 1;
+        } else {
+          int bytes = (bytestoread-udp_offset)%udpsize;
+          memcpy(ptr+udp_offset+(packet_index-1)*udpsize, udp_buf, bytes);
+          packet_sum += bytes;
+          npacket++;
+          memmove(udp_buf,udp_buf+bytes, udpsize-bytes);
+          udp_offset = udpsize-bytes;
+          next_segmentstart = packet_head;  // CHECK THIS IS CORRECT
+        }
+        done = 1;
 #warning "WFB: The next statement is fishy to me.  Shouldn't this be the actual number of bytes memcpyed"
-	*nread = bytestoread;
+        *nread = bytestoread;
 
       } else {
-	if (packet_index==0) { // Partial packet
-	  memcpy(ptr, udp_buf, udp_offset);
-	  packet_sum += udp_offset;
-	  npacket++;
-	} else {
-	  memcpy(ptr+udp_offset+(packet_index-1)*udpsize, udp_buf, udpsize);
-	  npacket++;
-	  packet_sum += udpsize;
-	}
-      } 
+        if (packet_index==0) { // Partial packet
+          memcpy(ptr, udp_buf, udp_offset);
+          packet_sum += udp_offset;
+          npacket++;
+        } else {
+          memcpy(ptr+udp_offset+(packet_index-1)*udpsize, udp_buf, udpsize);
+          npacket++;
+          packet_sum += udpsize;
+        }
+      }
     } else {
       udp_offset = udpsize;
     }
 
     first = 1;
     while (!done) {
-      int expectedsize = udpsize+sizeof(long long);
+      int expectedsize = udpsize+sizeof(vtp_psn64_t);
       nr = recvmsg(sock,&msg,MSG_WAITALL);
       if (nr==-1) { // Error reading socket
-	if (errno == EINTR) continue;
-	return(nr);
+        if (errno == EINTR) continue;
+        return(nr);
       } else if (nr==0) {  // Socket closed remotely
-	cinfo << startl << "Datastream " << mpiid << ": Remote socket closed" << endl;
-	return(nr);
+        cinfo << startl << "Datastream " << mpiid << ": Remote socket closed" << endl;
+        return(nr);
       } else if (nr!=expectedsize) {
-	cfatal << startl << "DataStream " << mpiid << ": Expected " << expectedsize << " bytes, got " << nr << "bytes. Quiting" << endl;
+        cfatal << startl << "DataStream " << mpiid << ": Expected " << expectedsize << " bytes, got " << nr << "bytes. Quitting" << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
       } else {
-	if (packet_head==0 && sequence!=0) { // First packet!
-	  packet_head = sequence;
-	  cinfo << startl <<  "DataStream " << mpiid << ": First packet has sequence " << sequence << endl;
 
-	  packet_segmentstart = sequence;
-	  packet_segmentend = packet_segmentstart+(bytestoread-1)/udpsize;
-	}
+        if (packet_head==0 && sequence!=0) { // First packet!
+          packet_head = sequence;
+          cinfo << startl <<  "DataStream " << mpiid << ": First packet has sequence " << sequence << endl;
 
-	// Check this is a sensible packet
-	packet_index = sequence-packet_segmentstart;
-	if (packet_index<0) {
-	  // If this was much smaller we really should assume the sequence has got screwed up and 
-	  // Resync
-	  packet_oo++;  // This could be duplicate but we cannot tell
-	  // Probably should decrease packet dropped count, maybe (it was not counted after all)
-	} else if (static_cast<long long>(sequence)==packet_segmentend) { 
-	  //cinfo << startl << "**Segmentend " << packet_index << " (" << packet_segmentend << ")" << endl;
-	  int bytes;
-	  if (udp_offset==udpsize && segmentsize==1)
-	    bytes = bytestoread;
-          else 
+          packet_segmentstart = sequence;
+          packet_segmentend = packet_segmentstart+(bytestoread-1)/udpsize;
+        }
+
+        // Check this is a sensible packet
+        packet_index = sequence-packet_segmentstart;
+        if (packet_index<0) {
+          // If this was much smaller we really should assume the sequence has got screwed up and
+          // Resync
+          packet_oo++;  // This could be duplicate but we cannot tell
+          // Probably should decrease packet dropped count, maybe (it was not counted after all)
+        } else if (sequence==packet_segmentend) {
+          //cinfo << startl << "**Segmentend " << packet_index << " (" << packet_segmentend << ")" << endl;
+          int bytes;
+          if (udp_offset==udpsize && segmentsize==1)
+            bytes = bytestoread;
+          else
             bytes = (bytestoread-udp_offset-1)%udpsize+1;
-	  // Consistence check
-	  if (bytes<0) {
-	    cfatal << startl << "Datastream: Error read too many UDP packets!!" << endl;
-	    cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
-	    MPI_Abort(MPI_COMM_WORLD, 1);
-	  } else if (bytes > udpsize) {
-	    cfatal << startl << "Datastream: Error have not read enough UDP packets!!" << endl;
-	    cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
-	    MPI_Abort(MPI_COMM_WORLD, 1);
-	  }
-	  memcpy(ptr+udp_offset+(packet_index-1)*udpsize,udp_buf,bytes);
-	  packet_sum += bytes;
-	  memmove(udp_buf,udp_buf+bytes, udpsize-bytes);
-	  next_udpoffset = udpsize-bytes;
-	  if (next_udpoffset==0) {
-	    next_segmentstart = sequence+1; 
-	    npacket++;
-	  } else
-	    next_segmentstart = sequence; 
-	  packet_head = sequence;
+          // Consistence check
+          if (bytes<0) {
+            cfatal << startl << "Datastream: Error read too many UDP packets!!" << endl;
+            cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
+            MPI_Abort(MPI_COMM_WORLD, 1);
+          } else if (bytes > udpsize) {
+            cfatal << startl << "Datastream: Error have not read enough UDP packets!!" << endl;
+            cfatal << startl << "   " << bytestoread << " " << udp_offset << " " << bytes << endl;
+            MPI_Abort(MPI_COMM_WORLD, 1);
+          }
+          memcpy(ptr+udp_offset+(packet_index-1)*udpsize,udp_buf,bytes);
+          packet_sum += bytes;
+          memmove(udp_buf,udp_buf+bytes, udpsize-bytes);
+          next_udpoffset = udpsize-bytes;
+          if (next_udpoffset==0) {
+            next_segmentstart = sequence+1;
+            npacket++;
+          } else
+            next_segmentstart = sequence;
+          packet_head = sequence;
 #warning "WFB: This next statement is fishy to me: what if some leftover bytes were copied?  That count gets lost."
-	  *nread = bytestoread;
-	  packets_arrived[packet_index] = true;
-	  done = 1;
-	} else if (packet_index>=segmentsize) { 
-	  //cinfo << startl << "*********Past Segmentend " << sequence << endl;
+          *nread = bytestoread;
+          packets_arrived[packet_index] = true;
+          done = 1;
+        } else if (packet_index>=segmentsize) {
+          //cinfo << startl << "*********Past Segmentend " << sequence << endl;
 
-	  if (udp_offset==udpsize) 
-	    next_segmentstart = packet_segmentend+1;
-	  else
-	    next_segmentstart = packet_segmentend;
+          if (udp_offset==udpsize)
+            next_segmentstart = packet_segmentend+1;
+          else
+            next_segmentstart = packet_segmentend;
 
-	  next_udpoffset = udpsize-(bytestoread-udp_offset)%udpsize+udpsize*(sequence-packet_segmentend);
-	  //cinfo << startl << "**********udp_offset= " << next_udpoffset << endl;
-	  packet_head = sequence;
-	  *nread = bytestoread;
-	  done = 1;
-	} else if (packets_arrived[packet_index]) {
-	  //cinfo << startl << "**** Duplicate " << packet_index << endl;
-	  packet_duplicate++;
-	} else {
-	  // This must be good data finally!
-	  if (first) {
-	    first = false;
-	    //cinfo << startl << "**** First packet " << packet_index << endl;
-	  }
-	  packets_arrived[packet_index] = true;
-	  memcpy(ptr+udp_offset+(packet_index-1)*udpsize,udp_buf,udpsize);
-	  packet_sum += udpsize;
-	  *nread += udpsize;
-	  
-	  // Do packet statistics
-	  if (sequence<packet_head) { // Got a packet earlier than the head
-	    packet_oo++;
-	  } else {
-	    packet_head = sequence;
-	  }
-	  npacket++;
-	}
+          next_udpoffset = udpsize-(bytestoread-udp_offset)%udpsize+udpsize*(sequence-packet_segmentend);
+          //cinfo << startl << "**********udp_offset= " << next_udpoffset << endl;
+          packet_head = sequence;
+          *nread = bytestoread;
+          done = 1;
+        } else if (packets_arrived[packet_index]) {
+          //cinfo << startl << "**** Duplicate " << packet_index << endl;
+          packet_duplicate++;
+        } else {
+          // This must be good data finally!
+          if (first) {
+            first = false;
+            //cinfo << startl << "**** First packet " << packet_index << endl;
+          }
+          packets_arrived[packet_index] = true;
+          memcpy(ptr+udp_offset+(packet_index-1)*udpsize,udp_buf,udpsize);
+          packet_sum += udpsize;
+          *nread += udpsize;
+
+          // Do packet statistics
+          if (sequence<packet_head) { // Got a packet earlier than the head
+            packet_oo++;
+          } else {
+            packet_head = sequence;
+          }
+          npacket++;
+        }
       }
     }
 
     // Replace missing packets with fill data
-    bool headermissed = false;
+//    bool headermissed = false;
     for (unsigned int i=0; i<segmentsize; i++) {
       if (!packets_arrived[i]) {
-	//cinfo << startl << "***** Dropped " << packet_segmentstart+i << "(" << i << ")" << endl;
-	packet_drop++; // Will generally count dropped first packet twice
-	if (i==0) {
-	  memcpy(ptr, invalid_buf, udp_offset); // CHECK INITIAL FULL OR EMPTY BUFFER
-	} else if (i==packet_segmentend-packet_segmentstart) {
-          if (static_cast<int>(udp_offset+(i-1)*udpsize+(bytestoread-udp_offset)%udpsize) > bytestoread) 
+        //cinfo << startl << "***** Dropped " << packet_segmentstart+i << "(" << i << ")" << endl;
+        packet_drop++; // Will generally count dropped first packet twice
+        if (i==0) {
+          memcpy(ptr, invalid_buf, udp_offset); // CHECK INITIAL FULL OR EMPTY BUFFER
+        } else if (i==packet_segmentend-packet_segmentstart) {
+          if (static_cast<int>(udp_offset+(i-1)*udpsize+(bytestoread-udp_offset)%udpsize) > bytestoread)
             cwarn << startl << "Internal Error, trying to copy pass buffer size" << endl;
-	  else 
-	    memcpy(ptr+udp_offset+(i-1)*udpsize,invalid_buf,(bytestoread-udp_offset)%udpsize);
-	} else {
-	  memcpy(ptr+udp_offset+(i-1)*udpsize,invalid_buf,udpsize);	  
-	}
-	if (i<headerpackets) headermissed = true;
+          else
+            memcpy(ptr+udp_offset+(i-1)*udpsize,invalid_buf,(bytestoread-udp_offset)%udpsize);
+        } else {
+           memcpy(ptr+udp_offset+(i-1)*udpsize,invalid_buf,udpsize);
+        }
+//	if (i<headerpackets) headermissed = true;
       }
     }
-    /*    if (headermissed) {
-	  int i;
-	  for (i=1; i<segmentsize; i++) {
-	  if (packets_arrived[i]) break;
-	  }
-	  cverbose << startl << "Dropped  packets " << packet_segmentstart << " -- "  << packet_segmentstart+i-1 << endl;
-	  }
+    /*
+    if (headermissed) {
+       int i;
+       for (i=1; i<segmentsize; i++) {
+         if (packets_arrived[i]) break;
+       }
+       cverbose << startl << "Dropped  packets " << packet_segmentstart << " -- "  << packet_segmentstart+i-1 << endl;
+    }
     */
     packet_segmentstart = next_segmentstart;
     udp_offset = next_udpoffset;
@@ -971,7 +974,7 @@ int Mk5DataStream::readnetwork(int sock, char* ptr, int bytestoread, unsigned in
 
 uint64_t Mk5DataStream::openframe()
 {
-  // The number of segments per "frame" is arbitrary. Just set it to ~ 5sec 
+  // The number of segments per "frame" is arbitrary. Just set it to ~ 5sec
   int nsegment;
   nsegment = (int)(2.0e9/bufferinfo[0].nsinc+0.1);
 

@@ -66,7 +66,7 @@ public:
   enum dataformat {LBASTD, LBAVSOP, LBA8BIT, LBA16BIT, K5VSSP, K5VSSP32, MKIV, VLBA, MARK5B, VDIF, VDIFL, INTERLACEDVDIF, VLBN, KVN5B, CODIF};
 
   /// Supported sources of data
-  enum datasource {UNIXFILE, MK5MODULE, NETWORKSTREAM, FAKESTREAM, MK6MODULE, SHAREDMEMORYSTREAM};
+  enum datasource {UNIXFILE, MK5MODULE, NETWORKSTREAM, FAKESTREAM, MK6MODULE};
 
   /// Supported types of recorded data sampling types
   enum datasampling {REAL, COMPLEX};
@@ -369,6 +369,8 @@ public:
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].source != NETWORKSTREAM; }
   inline bool isFake(int configindex, int configdatastreamindex) const
     { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].source == FAKESTREAM; }
+  inline bool isNetwork(int configindex, int configdatastreamindex) const
+    { return datastreamtable[configs[configindex].datastreamindices[configdatastreamindex]].source == NETWORKSTREAM; }
   inline bool isMkV(int datastreamindex) const
   {
     dataformat f;
@@ -422,14 +424,6 @@ public:
     f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
     s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
     return (f == INTERLACEDVDIF && s == NETWORKSTREAM);
-  }
-  inline bool isVDIFSharedMemory(int datastreamindex) const
-  {
-    dataformat f;
-    datasource s;
-    f = datastreamtable[configs[0].datastreamindices[datastreamindex]].format;
-    s = datastreamtable[configs[0].datastreamindices[datastreamindex]].source;
-    return (f == INTERLACEDVDIF && s == SHAREDMEMORYSTREAM);
   }
   inline bool isMark5BFile(int datastreamindex) const
   {

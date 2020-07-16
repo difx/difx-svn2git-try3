@@ -1,16 +1,19 @@
 #ifndef _PCAL_H
 #define _PCAL_H
 /********************************************************************************************************
- * @file PCal.h
+ * @file PCal.cpp
  * Multi-tone Phase Cal Extraction
  *
  * @brief Extracts and integrates multi-tone phase calibration signal information from an input signal.
  *
  * The extractor factory chooses one out of three currently available methods for signal extraction.
  * The choice depends on the parameters which are:
- *   spacing: frequency step between one tone and the next
- *   offset:  frequency offset between the first tone and the band start at 0 Hz
- *            note that the first tone can be at DC; processing will discard it
+ *   spacing:   frequency step between one tone and the next
+ *   offset:    frequency offset between the first tone and the baseband signal start at 0 Hz
+ *              note that the first tone can be at DC; for real-valued signals that tone is discarded
+ *   data type: real-valued or complex-valued signal
+ *   band type: single sideband with LO at an edge, or double sideband with LO at the center
+ *   sideband:  only used for complex signals
  *
  * Spacing is assumed to be constant throughout the band.
  * A tone spacing is "integer" if it divides the sampling rate evenly
@@ -25,6 +28,13 @@
  *   the period (in N samples) of the lowest tone frequency. A r2c FFT of the time
  *   integrated segments gives the amplitude and phase of every tone. The 0th bin
  *   contains a tone but carries no phase information and is discarded.
+ *
+ * Shifting extractor:
+ *   When the offset is non-zero, the signal can be counter-rotated with a
+ *   precomputed complex sine to restore the offset back to zero. The basic
+ *   extractor is then applied.
+ *   After time integration a c2c FFT gives the amplitude and phase of every tone.
+ *   In this case the 0th bin contains meaningful phase info of the first shifted tone.
  *
  * Shifting extractor:
  *   When the offset is non-zero, the signal can be counter-rotated with a
@@ -54,12 +64,18 @@
  * @license  GNU GPL v3
  *
  * Changelog:
+ *   29jun2020 - extended the support for extraction from complex samples
+ *   18Mar2014 - added support for extraction from complex samples
+ *   27Mar2012 - better count of tones in band, added corner cases like no tones in band, zero spacing
  *   05Oct2009 - added support for arbitrary input segment lengths
- *   08oct2009 - added Briskens rotationless method
+ *   08Oct2009 - added Briskens rotationless method
+ *   02Nov2009 - added sub-subintegration sample offset, DFT for f-d results, tone bin copying to user buf
+ *   03Nov2009 - added unit test, included DFT in extractAndIntegrate_reference(), fix rotation direction
  *
  ********************************************************************************************************/
 
 #include "architecture.h"
+#include "configuration.h" // for enums datasampling, complextype
 #include <cstddef>
 #include <cassert>
 #include <stdint.h>
@@ -70,6 +86,7 @@ class PCalExtractorTrivial;
 class PCalExtractorShifting;
 class PCalExtractorImplicitShift;
 class PCalExtractorComplex;
+class PCalExtractorComplexImplicitShift;
 class PCalExtractorDummy; //NOTE added for testing
 class pcal_config_pimpl;
 
@@ -95,9 +112,11 @@ class PCal {
        * @param pcal_spacing_hz  Spacing of the PCal signal, comb spacing, typically 1e6 Hertz
        * @param pcal_offset_hz   Offset of the first PCal signal from 0Hz/DC, typically 10e3 Hertz
        * @param sampleoffset     Offset of the first sample as referenced to start of subintegration interval
-       * @return new PCal extractor class instance 
+       * @param data_type        COMPLEX or REAL
+       * @param band_type        SINGLE (single sideband) or DOUBLE (dual sideband)
+       * @return new PCal extractor class instance
        */
-      static PCal* getNew (double bandwidth_hz, double pcal_spacing_hz, int pcal_offset_hz, const size_t sampleoffset, int usecomplex, int lsb);
+      static PCal* getNew(double bandwidth_hz, double pcal_spacing_hz, int pcal_offset_hz, const size_t sampleoffset, Configuration::datasampling data_type, Configuration::complextype band_type);
 
      /**
       * Return number of tones that fit the band, including any
@@ -140,7 +159,7 @@ class PCal {
        * @param len     Length of the input signal chunk
        * @return true on success, false if results were frozen by calling getFinalPCal()
        */
-      virtual bool extractAndIntegrate   (f32 const* samples, const size_t len) = 0;
+      virtual bool extractAndIntegrate(f32 const* samples, const size_t len) = 0;
 
       /**
        * Get data-seconds contributing to the current PCal results.
@@ -181,7 +200,7 @@ class PCal {
        * for the PCalExtractorImplicitShift extractor type only.
        * @param spectral resolution in hertz
        */
-      static void setMinFrequencyResolution(double hz) { _min_freq_resolution_hz = hz; }
+      static void setMinFrequencyResolution(double hz) { PCal::_min_freq_resolution_hz = hz; }
 
       /**
        * Processes samples and accumulates the detected phase calibration tone vector.
@@ -212,7 +231,7 @@ class PCal {
       double _fs_hz;
       int _pcaloffset_hz;
       double _pcalspacing_hz;
-      int _lsb;
+      int _ssb;
       int _N_bins;
       int _N_tones;
       bool _finalized;
@@ -226,6 +245,7 @@ class PCal {
    friend class PCalExtractorShifting;
    friend class PCalExtractorImplicitShift;
    friend class PCalExtractorComplex;
+   friend class PCalExtractorComplexImplicitShift;
 
    //NOTE added for testing
    friend class PCalExtractorDummy;

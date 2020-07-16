@@ -182,9 +182,9 @@ private:
   void writedifx(int dumpmjd, double dumpseconds);
 
 /**
-  * Writes the ascii header for a visibility point in a DiFX format output file
+  * Forms binary header for a visibility point, inserts it to the end of Visibility::todiskbuffer[]
   */
-  void writeDiFXHeader(ofstream * output, int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, double buvw[3], int filecount);
+  void insertDiFXHeader(int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, double buvw[3], int filecount);
 
   Configuration * config;
   int visID, expermjd, experseconds, currentscan, currentstartseconds, currentstartns, offsetns, offsetnsperintegration, subintsthisintegration, subintns, numvisibilities, numdatastreams, numbaselines, currentsubints, resultlength, currentconfigindex, maxproducts, executeseconds, autocorrwidth, todiskbufferlength, maxfiles;

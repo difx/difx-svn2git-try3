@@ -30,6 +30,8 @@
 #include "alert.h"
 #include "config.h"
 
+//#include "D_janw.h" // DBG_TARGET_*
+
 Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
   : mpiid(id), config(conf), return_comm(rcomm)
 {
@@ -681,7 +683,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
   const Mode * m1, * m2;
   const cf32 * vis1;
   const cf32 * vis2;
-  uint64_t offsetsamples;
   double sampletimens;
   int starttimens;
   int fftsize;
@@ -698,6 +699,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     binloop = procslots[index].numpulsarbins;
   if(procslots[index].pulsarbin)
     binweights = currentpolyco->getBinWeights();
+  else
+    binweights = 0;
   numBufferedFFTs = config->getNumBufferedFFTs(procslots[index].configindex);
 
   //set up the mode objects that will do the station-based processing
@@ -724,8 +727,6 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       // Calculate the FFT size in number of samples.
       fftsize = 2*config->getFNumChannels(config->getDRecordedFreqIndex(procslots[index].configindex, j, 0));
       
-      // Calculate the number of offset samples. The modulo PCal bins is done in the pcal object!
-      offsetsamples = static_cast<uint64_t>(starttimens/sampletimens) + startblock*fftsize;	/* FIXME: This value is never used! */
       modes[j]->resetpcal();
     }
   }
@@ -804,8 +805,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       for(int fftsubloop=0;fftsubloop<numBufferedFFTs;fftsubloop++)
       {
         i = fftloop*numBufferedFFTs + fftsubloop + startblock;
-	if(i >= startblock+numblocks)
-	  break; //may not have to fully complete last fftloop
+        if(i >= startblock+numblocks)
+          break; //may not have to fully complete last fftloop
         modes[j]->process(i, fftsubloop);
         numfftsprocessed++;
       }
@@ -872,7 +873,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
               }
             }
           }
-          resultindex += freqchannels;
+          resultindex += freqchannels; // note: may be incorrect increment due to xmac, and due Configuration slicing threadcrosscorrs[] up in 'completestridelength[freq]*xmaclen' pieces (>= freqchannels!)
         }
       }
       else if(config->isFrequencyUsed(procslots[index].configindex, f)) //normal processing
@@ -886,9 +887,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         {
           xmacstart = x*xmacstridelength;
           int xmacstrideremain = std::min(freqchannels-xmacstart, xmacstridelength);
-          if (xmacstrideremain <= 0) {
-            break;
-          }
+          //if(xmacstrideremain <= 0)  // note: since getNumXmacStrides() is a rounded-up value, there may be {xmaclen x '0'} to be concatenated per baseline to keep consistent with Configuration-assigned offsets
+          //  break;
 
           //do the cross multiplication - gets messy for the pulsar binning
           for(int j=0;j<numbaselines;j++)
@@ -899,16 +899,16 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
             {
               //get the two modes that contribute to this baseline
               ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
-	      ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
-	      m1 = modes[ds1index];
-	      m2 = modes[ds2index];
+              ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
+              m1 = modes[ds1index];
+              m2 = modes[ds2index];
 
               //do the baseline-based processing for this batch of FFT chunks
               for(int fftsubloop=0;fftsubloop<numBufferedFFTs;fftsubloop++)
               {
-	        i = fftloop*numBufferedFFTs + fftsubloop + startblock;
-	        if(i >= startblock+numblocks)
-		  break; //may not have to fully complete last fftloop
+                i = fftloop*numBufferedFFTs + fftsubloop + startblock;
+                if(i >= startblock+numblocks)
+                  break; //may not have to fully complete last fftloop
 
                 //add the desired results into the resultsbuffer, for each polarisation pair [and pulsar bin]
                 //loop through each polarisation for this frequency
@@ -964,12 +964,15 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     //not pulsar binning, so this is nice and simple - just cross multiply accumulate
                     //baselineweight gets updated later
                     status = vectorAddProduct_cf32(vis1, vis2, &(scratchspace->threadcrosscorrs[resultindex+p*xmacstridelength]), xmacstrideremain);
-
                     if(status != vecNoErr)
                       csevere << startl << "Error trying to xmac baseline " << j << " frequency " << localfreqindex << " polarisation product " << p << ", status " << status << endl;
                   }
                 }
-              }
+              }//for(fftsubloops)
+              //advance output index to concatenate the xmac slice of the next baseline-polproducts
+              //notes: - when xmacstrideremain is shorter than xmacstridelength we will simply end up with a few padded zeroes in output array, no change in output array spacing,
+              //       - there may be *more* channels (zero pads) than 'numchannels' of the freq; it holds that "freqtable[i].numchannels <= completestridelength[freq]*xmaclen"
+              //       - zero padding is essentially required due Configuration::populateResultLengths() precomputed offsets into xmac output array
               if(procslots[index].pulsarbin && !procslots[index].scrunchoutput)
                 resultindex += config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex)*procslots[index].numpulsarbins*xmacstridelength;
               else
@@ -1014,16 +1017,16 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
           if(config->isFrequencyUsed(procslots[index].configindex, f))
           {
             for(int j=0;j<numbaselines;j++)
-	    {
-	      localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, j, f);
-	      if(localfreqindex >= 0)
-	      {
-	        ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
-	        ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
-	        m1 = modes[ds1index];
-	        m2 = modes[ds2index];
-	        for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex);p++)
-		{
+            {
+              localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, j, f);
+              if(localfreqindex >= 0)
+              {
+                ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
+                ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
+                m1 = modes[ds1index];
+                m2 = modes[ds2index];
+                for(int p=0;p<config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex);p++)
+                {
                   int ds1recordbandindex, ds2recordbandindex;
 
                   ds1recordbandindex = config->getBDataStream1RecordBandIndex(procslots[index].configindex, j, localfreqindex, p);
@@ -1042,10 +1045,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 
                     scratchspace->baselineweight[f][0][j][p] += bweight;
                   }
-		}
-	      }
-	    }
-	  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1603,7 +1606,7 @@ void Core::uvshiftAndAverage(int index, int threadid, double nsoffset, double ns
 void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffset, double nswidth, threadscratchspace * scratchspace, int freqindex, int baseline)
 {
   int status, perr, threadbinloop, threadindex, threadstart, numstrides;
-  int localfreqindex, targetfreqindex, freqchannels, targetfreqchannels, coreindex, coreoffset, corebinloop, channelinc, targetchannelinc, rotatorlength, dest;
+  int localfreqindex, targetfreqindex, freqchannels, targetfreqchannels, coreindex, coreoffset, corebinloop, channelinc, targetchannelinc, rotatorlength, coredest;
   int antenna1index, antenna2index;
   int rotatestridelen, rotatesperstride, xmacstridelen, xmaccopylen, xmacstrideremain, stridestoaverage, averagesperstride, averagelength, outchannelplacementpreavg;
   double bandwidth, bandwidthoftarget, lofrequency, channelbandwidth, stepbandwidth;
@@ -1616,6 +1619,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   double ** differentialdelay = 0;
   cf32* srcpointer;
 
+  applieddelay = 0.0;
   delaywindow = config->getFNumChannels(freqindex)/(config->getFreqTableBandwidth(freqindex)); //max lag (plus and minus)
   localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, baseline, freqindex);
   xmacstridelen = config->getXmacStrideLength(procslots[index].configindex);
@@ -1689,6 +1693,10 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
   outchannelplacementpreavg = fabs(config->getFreqTableFreqLowedge(freqindex) - config->getFreqTableFreqLowedge(targetfreqindex)) / channelbandwidth;
   //if (mpiid == 10)
   //  cout << "placement of fq " << freqindex << " into targetfq " << targetfreqindex << " is at virtual ch offset " << channelplacementoffset << " given FFT reso of " << channelbandwidth << " to be avgd by " << channelinc << ";" << targetchannelinc << std::endl;
+  //if(mpiid == 10 && channelinc!=averagelength)
+  //  cout << "info - Core::uvshiftAndAverageBaselineFreq() spec averaging factor channelinc=" << channelinc << " and averagelength=" << averagelength << " are not identical. Maybe spectral averaging will screw up!" << endl;
+  //if(mpiid == 10)
+  //  cout << "info - xmacstridelen=" << xmacstridelen << " channelinc=" << channelinc << " : averagesperstride=" << averagesperstride << " averagelength=" << averagelength << " numstrides=" <<numstrides<<endl;
 
   assert(channelbandwidth == bandwidthoftarget/double(targetfreqchannels));
   assert(targetchannelinc == channelinc); // required for the old striding logic to work out... TODO?: allow multi-stage averaging?
@@ -1715,14 +1723,15 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
     }
   }
 
-  coreindex = config->getCoreResultBaselineOffset(procslots[index].configindex, freqindex, baseline);
-
   //lock the mutex for this segment of the copying
   perr = pthread_mutex_lock(&(procslots[index].viscopylocks[freqindex][baseline]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << threadid << " error trying lock copy mutex for frequency table entry " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << "!!!" << endl;
 
-  //actually do the rotation (if necessary), averaging (if necessary) and copying
+  //get index into procslot::results[<out>] to concatenate spectra of phase centers, bins, and polzns there
+  coreindex = config->getCoreResultBaselineOffset(procslots[index].configindex, freqindex, baseline);
+
+  //collect spectra data from threadcrosscorrs etc, do the multi-phasecenter rotation (if necessary), spectral averaging (if necessary) and concatenation to Core procslot::results[]
   for(int s=0;s<model->getNumPhaseCentres(procslots[index].offsets[0]);s++)
   {
     if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1)
@@ -1768,11 +1777,12 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
 
     // cout << "Core striding infos are: numXmac=" << config->getNumXmacStrides(procslots[index].configindex, freqindex) << " xmacLen=" << xmacstridelen << 
     // ", first bin avgs " << outchannelplacementpreavg % averagelength << "/" << averagelength << " values" << endl;
-
     for(int x=0;x<config->getNumXmacStrides(procslots[index].configindex, freqindex);x++)
     {
       threadindex = threadstart+x*config->getCompleteStrideLength(procslots[index].configindex, freqindex);
       xmacstrideremain = std::min(freqchannels-x*xmacstridelen, xmacstridelen);
+      // if(xmacstrideremain <= 0) // note: since getNumXmacStrides() is a rounded-up value, there may be {xmaclen x '0'} to be concatenated per baseline to keep consistent with Configuration-assigned offsets
+      //    break;
       for(int b=0;b<threadbinloop;b++)
       {
         for(int k=0;k<config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex);k++)
@@ -1781,6 +1791,12 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
             coreoffset = ((b*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)+k)*targetfreqchannels + x*xmacstridelen)/targetchannelinc;
           else
             coreoffset = (k*targetfreqchannels + x*xmacstridelen)/targetchannelinc;
+// 'coreoffset' is index into Cross Corr Element block, ordered <phase center>|<pulsar bin>|<polpair>|[spectral data of len 'targetfreqchannels']
+//if (mpiid == 10 && threadid == 0 && (targetfreqindex==DBG_TARGET_FQ_NR && baseline>=DBG_TARGET_BLINE_START&& baseline<=DBG_TARGET_BLINE_STOP))
+//{
+//  cout << "uvShiftEtc coreindex[OUT fq:" << targetfreqindex << " memberFq: " << freqindex << "][bl:" << baseline << "] = " << coreindex 
+//       << " + coreoffset=" << coreoffset << " final results[@" << (coreindex+coreoffset) << "] for phasectr=" << s << " poln=" << k << " bin=" << b << " xmacBlk=" << x << " chremain=" << xmacstrideremain << " of len=" << xmacstridelen << " nch=" << freqchannels << endl;
+//}
           if(model->getNumPhaseCentres(procslots[index].offsets[0]) > 1 && fabs(applieddelay) > 1.0e-20)
           {
             if(procslots[index].pulsarbin && procslots[index].scrunchoutput)
@@ -1791,6 +1807,7 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
             for(int r=0;r<rotatesperstride;r++)
             {
               //atrotate = (r + x*rotatesperstride)*rotatestridelength;
+              //TODO: introduce rotatestridelenremain instead of rotatestridelen
               status = vectorMul_cf32(scratchspace->rotator, &(srcpointer[r*rotatestridelen]), &(scratchspace->rotated[r*rotatestridelen]), rotatestridelen);
               if(status != vecNoErr)
                 csevere << startl << "Error in phase shift, multiplication1!!!" << status << endl;
@@ -1808,10 +1825,11 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
               srcpointer = &(scratchspace->threadcrosscorrs[threadindex]);
           }
 
-          //now average (or just copy) from the designated pointer to the main result buffer
+          //spectrally average (or not) and accumulate from the designated pointer to the main result buffer
+          coredest = coreindex+coreoffset;
           if(channelinc == 1) //this frequency is not averaged
           {
-            status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[coreindex+coreoffset]), xmacstrideremain);
+            status = vectorAdd_cf32_I(srcpointer, &(procslots[index].results[coredest]), xmacstrideremain);
             if(status != vecNoErr)
               cerror << startl << "Error trying to copy frequency index " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << " when not averaging in frequency" << endl;
           }
@@ -1820,33 +1838,37 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
 // -- modified averaging step
 //             works ok for 1:1 band mapping with avg 8, in this case xmacstrideremain=128 and avg=8
 //             autoband 58.0M for (N>1):1 band mapping : xmacstride=2 avg=2 : works fine
-//             autoband 58.0M for (N>1):1 band mapping : xmacstride=2 avg=4 : garbage, same result for original code
+//             autoband 58.0M for (N>1):1 band mapping : xmacstride=2 avg=4 : garbage, same result for original code as well
 #if 1
-            int placement = outchannelplacementpreavg + x*xmacstridelen;
+            //determine pre-averaged bin location, it might not land at integer multiple of averagelength
+            outchannelplacementpreavg = fabs(config->getFreqTableFreqLowedge(freqindex) - config->getFreqTableFreqLowedge(targetfreqindex)) / channelbandwidth;
+            int virtualplacement = outchannelplacementpreavg + x*xmacstridelen;
             if(mpiid == 10) {
-              //cout << "averaging " << xmacstrideremain << " channels of input to output [" << placement << "..." << (placement + xmacstrideremain) << "]/" << averagelength << endl;
+//              cout << "averaging " << xmacstrideremain << " channels of input to output [" << virtualplacement << "..." << (virtualplacement + xmacstrideremain) << "]/" << averagelength << endl;
             }
             const cf32* psrc = srcpointer;
             const cf32* pend = psrc + xmacstrideremain;
-            dest = coreindex+coreoffset;
             while (psrc < pend) {
-              int valuesinbin = placement % averagelength;
+              int valuesinbin = virtualplacement % averagelength;
               if(valuesinbin == 0) {
                 valuesinbin = averagelength;
-              } 
+              }
+              if (valuesinbin > xmacstrideremain) {
+                valuesinbin = xmacstrideremain;
+              }
               cf32 meanresult;
-	      status = vectorMean_cf32(psrc, valuesinbin, &meanresult, vecAlgHintFast);
+              //status = vectorMean_cf32(psrc, valuesinbin, &meanresult, vecAlgHintFast);
+              status = vectorSum_cf32(psrc, valuesinbin, &meanresult, vecAlgHintFast); // Sum, not Mean, as several freqs may add their 'valuesinbin' for a later total of 'averagelength'
               if(status != vecNoErr)
                 cerror << startl << "Error trying to average frequency " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << endl;
-              procslots[index].results[dest].re += meanresult.re/stridestoaverage;
-              procslots[index].results[dest].im += meanresult.im/stridestoaverage;
+              procslots[index].results[coredest].re += meanresult.re/(stridestoaverage*averagelength);
+              procslots[index].results[coredest].im += meanresult.im/(stridestoaverage*averagelength);
               psrc += valuesinbin;
-              placement += valuesinbin;
-              dest++;
+              virtualplacement += valuesinbin;
+              coredest++;
             }
-// -- original ; works okay for 1:1 band mapping with avg 8
+// -- original ; works okay for 1:1 band mapping with avg 8, fails for N:1 mapping unless each of N bands has numchannels%averagelength==0
 #else
-            dest = coreindex+coreoffset;
             int averagesperstrideremain = xmacstrideremain/averagelength;
             if(averagesperstrideremain == 0)
               averagesperstrideremain = 1;
@@ -1858,16 +1880,18 @@ void Core::uvshiftAndAverageBaselineFreq(int index, int threadid, double nsoffse
               status = vectorMean_cf32(srcpointer + l*averagelength, averagelength, &meanresult, vecAlgHintFast);
               if(status != vecNoErr)
                 cerror << startl << "Error trying to average frequency " << freqindex << "-->" << targetfreqindex << ", baseline " << baseline << endl;
-              procslots[index].results[dest].re += meanresult.re/stridestoaverage;
-              procslots[index].results[dest].im += meanresult.im/stridestoaverage;
-              dest++;
+              procslots[index].results[coredest].re += meanresult.re/stridestoaverage;
+              procslots[index].results[coredest].im += meanresult.im/stridestoaverage;
+              coredest++;
             }
 #endif
           }
-          threadindex += xmacstrideremain;
-        }
-      }
-    }
+          //advance to next xmac channel group; note that the last one might have data zero padding to fill up xmacstrideremain..xmacstrideremain
+          threadindex += xmacstridelen;
+        }//for(getBNumPolProducts)
+      }//for(bin)
+    }//for(getNumXmacStrides)
+    //stride to next Phase Center output area; note we stride by 'targetfreqchannels'>='freqchannels' since current freq may be nested within wider freq
     coreindex += corebinloop*config->getBNumPolProducts(procslots[index].configindex,baseline,localfreqindex)*targetfreqchannels/targetchannelinc;
   }
 

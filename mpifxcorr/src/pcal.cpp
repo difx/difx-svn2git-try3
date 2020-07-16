@@ -6,9 +6,12 @@
  *
  * The extractor factory chooses one out of three currently available methods for signal extraction.
  * The choice depends on the parameters which are:
- *   spacing: frequency step between one tone and the next
- *   offset:  frequency offset between the first tone and the band start at 0 Hz
- *            note that the first tone can be at DC; processing will discard it
+ *   spacing:   frequency step between one tone and the next
+ *   offset:    frequency offset between the first tone and the baseband signal start at 0 Hz
+ *              note that the first tone can be at DC; for real-valued signals that tone is discarded
+ *   data type: real-valued or complex-valued signal
+ *   band type: single sideband with LO at an edge, or double sideband with LO at the center
+ *   sideband:  only used for complex signals
  *
  * Spacing is assumed to be constant throughout the band.
  * A tone spacing is "integer" if it divides the sampling rate evenly
@@ -52,6 +55,7 @@
  * @license  GNU GPL v3
  *
  * Changelog:
+ *   29jun2020 - extended the support for extraction from complex samples
  *   18Mar2014 - added support for extraction from complex samples
  *   27Mar2012 - better count of tones in band, added corner cases like no tones in band, zero spacing
  *   05Oct2009 - added support for arbitrary input segment lengths
@@ -128,17 +132,17 @@ double PCal::_min_freq_resolution_hz = 1e9;
  * @param pcal_spacing_hz  Spacing of the PCal signal, comb spacing, typically 1e6 Hertz.
  * @param pcal_offset_hz   Offset of the first PCal signal from 0Hz/DC, typically 10e3 Hertz
  * @param sampleoffset     Offset of the first sample as referenced to start of subintegration interval
- * @param usecomplex       true iff recorded band is complex
- * @param lsb              true iff recorded band is lower sideband
+ * @param data_type        COMPLEX or REAL
+ * @param band_type        SINGLE (single sideband) or DOUBLE (dual sideband)
  * @return new PCal extractor class instance
  */
 PCal* PCal::getNew(double bandwidth_hz, double pcal_spacing_hz, int pcal_offset_hz,
-                   const size_t sampleoffset, int usecomplex, int lsb)
+                   const size_t sampleoffset, Configuration::datasampling data_type, Configuration::complextype band_type)
 {
     int No, Np, Nt;
     double fs;
 
-    fs = usecomplex ? bandwidth_hz : 2.0 * bandwidth_hz;
+    fs = (data_type == Configuration::COMPLEX) ? bandwidth_hz : 2.0 * bandwidth_hz;
 
     if (pcal_offset_hz == -1)    // Test for flag value indicating no real tones
     {
@@ -150,6 +154,10 @@ PCal* PCal::getNew(double bandwidth_hz, double pcal_spacing_hz, int pcal_offset_
         No = (int)(fs / gcd(fs, (double)pcal_offset_hz));
         Np = (int)(fs / gcd(fs, pcal_spacing_hz));
         Nt = calcNumTones(bandwidth_hz, (double)pcal_offset_hz, pcal_spacing_hz);
+
+        // Consider user-specified minimum spectral resolution
+        while (fs/(2*No) > PCal::_min_freq_resolution_hz)
+            No *= 2;
     }
 
     if (PCAL_DEBUG)
@@ -164,8 +172,12 @@ PCal* PCal::getNew(double bandwidth_hz, double pcal_spacing_hz, int pcal_offset_
         return new PCalExtractorDummy(bandwidth_hz, pcal_spacing_hz, pcal_offset_hz, sampleoffset);
 
     // Currently only one extraction method implemented for complex data
-    if (usecomplex) {
-        return new PCalExtractorComplex (bandwidth_hz, pcal_spacing_hz, pcal_offset_hz, lsb);
+    if (data_type == Configuration::COMPLEX) {
+        //ToDo: could enable the implicit method soon:
+        //if ((No % Np) == 0)
+        //    return new PCalExtractorComplexImplicitShift(bandwidth_hz, pcal_spacing_hz, pcal_offset_hz, band_type);
+        //else
+        return new PCalExtractorComplex(bandwidth_hz, pcal_spacing_hz, pcal_offset_hz, band_type);
     }
 
     // First tone in DC bin: smallest footprint extractor
@@ -696,7 +708,7 @@ uint64_t PCalExtractorShifting::getFinalPCal(cf32* out)
 PCalExtractorComplex::PCalExtractorComplex(double bandwidth_hz,
                                            double pcal_spacing_hz,
                                            int pcal_offset_hz,
-                                           int lsb)
+                                           Configuration::complextype band_type)
 {
     pcal_spacing_hz = std::abs(pcal_spacing_hz);
 
@@ -704,10 +716,14 @@ PCalExtractorComplex::PCalExtractorComplex(double bandwidth_hz,
     _fs_hz           = bandwidth_hz;
     _pcaloffset_hz   = pcal_offset_hz;
     _pcalspacing_hz  = pcal_spacing_hz;
-    _lsb             = lsb;
+    _ssb             = (band_type == Configuration::SINGLE);
     _N_bins          = (int)(_fs_hz / gcd(_fs_hz, pcal_spacing_hz));
     _N_tones         = calcNumTones(bandwidth_hz, pcal_offset_hz, pcal_spacing_hz);
     _estimatedbytes  = 0;
+
+    // Try to meet minimum spectral resolution
+    while (_fs_hz/(2*_N_bins) > PCal::_min_freq_resolution_hz)
+        _N_bins *= 2;
 
     _cfg = new pcal_config_pimpl();
     _cfg->rotatorlen = (size_t)(_fs_hz / gcd(_fs_hz, _pcaloffset_hz));
@@ -737,9 +753,8 @@ PCalExtractorComplex::PCalExtractorComplex(double bandwidth_hz,
     _cfg->dphi = 2*M_PI * (-_pcaloffset_hz/_fs_hz);
     for (size_t n = 0; n < (2 * _cfg->rotatorlen); n++) {
         double arg = _cfg->dphi * double(n);
-                         // note that lsb rotator rotates in opposite sense
         _cfg->rotator[n].re = f32(cos(arg));
-        _cfg->rotator[n].im = lsb ? -f32(sin(arg)) : f32(sin(arg));
+        _cfg->rotator[n].im = f32(sin(arg));
     }
 
     if (PCAL_DEBUG)
@@ -880,6 +895,15 @@ uint64_t PCalExtractorComplex::getFinalPCal (cf32* out)
             csevere << startl << "Error in DFTFwd in PCalExtractorComplex::getFinalPCal " << vectorGetStatusString(s) << endl;
     }
 
+    /* For DSB, DC is in the center bin. Revert to USB/LSB-like spectrum by swapping spectral halves. */
+    if(!_ssb) {
+        for (size_t n=0; n<_N_bins/2; n++) {
+            cf32 tmp = _cfg->dft_out[n];
+            _cfg->dft_out[n] = _cfg->dft_out[_N_bins - n - 1];
+            _cfg->dft_out[_N_bins - n - 1] = tmp;
+        }
+    }
+
     // Copy only the interesting bins.
     // Note the "DC" bin has phase info in 1st shifted tone, do not discard.
     size_t step = (size_t)(std::floor(_N_bins*(_pcalspacing_hz/_fs_hz)));
@@ -887,19 +911,12 @@ uint64_t PCalExtractorComplex::getFinalPCal (cf32* out)
         size_t idx = n*step;
         if (idx >= (size_t)_N_bins)
             break;
-                                    // lsb tones come out in opposite
-                                    // order, and shifted by 1
-        if (_lsb)
-            {
-            int indlsb = (32 - idx) % 32;
-            out[n].re = _cfg->dft_out[indlsb].re;
-            out[n].im =-_cfg->dft_out[indlsb].im; // conjugate to get correct phase
-            }
-        else
-            {
-            out[n].re = _cfg->dft_out[idx].re;
-            out[n].im = _cfg->dft_out[idx].im;
-            }
+        out[n].re = _cfg->dft_out[idx].re;
+        out[n].im = _cfg->dft_out[idx].im;
+        // note: removed parts of r6027 here and in frequency shifter/mixer preparation,
+        // as parts of r6027 reversed (vs existing Real LSB extractors and mpifxcorr)
+        // the handedness of the -_pcaloffset_hz shift to clockwise, conjugated pcal values,
+        // and reversed the tone order, not producing PCal for actual Complex LSB datasets
     }
     return _samplecount;
 }
@@ -921,7 +938,7 @@ int pcal_offset_hz, const size_t sampleoffset)
     _estimatedbytes = 0;
 
     /* Try to meet minimum spectral resolution */
-    while (_fs_hz/(2*_N_bins) > _min_freq_resolution_hz)
+    while (_fs_hz/(2*_N_bins) > PCal::_min_freq_resolution_hz)
         _N_bins *= 2;
 
     /* Prep for FFT/DFT */
@@ -1079,6 +1096,192 @@ uint64_t PCalExtractorImplicitShift::getFinalPCal(cf32* out)
             out[n].re = _cfg->dft_out[idx].re;
             out[n].im = _cfg->dft_out[idx].im;
         }
+    }
+    return _samplecount;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////
+// DERIVED CLASS: extraction of PCal signals -
+//                complex samples with non-zero offset, FFT-implicit rotation possible
+//////////////////////////////////////////////////////////////////////////////////////
+
+PCalExtractorComplexImplicitShift::PCalExtractorComplexImplicitShift(
+    double bandwidth_hz,
+    double pcal_spacing_hz,
+    int pcal_offset_hz,
+    Configuration::complextype band_type)
+{
+    /* Derive config */
+    _fs_hz          = bandwidth_hz;
+    _pcalspacing_hz = pcal_spacing_hz;
+    _pcaloffset_hz  = pcal_offset_hz;
+    _ssb            = (band_type == Configuration::SINGLE);
+    _N_bins         = (int)(_fs_hz / gcd(_fs_hz, _pcaloffset_hz));
+    _N_tones        = calcNumTones(bandwidth_hz, _pcaloffset_hz, _pcalspacing_hz);
+    _estimatedbytes = 0;
+
+    _cfg = new pcal_config_pimpl();
+
+    /* Try to meet minimum spectral resolution */
+    while (_fs_hz/(2*_N_bins) > PCal::_min_freq_resolution_hz)
+        _N_bins *= 2;
+
+    /* Prep for FFT/DFT */
+    int wbufsize = 0;
+    vecStatus s;
+    s = vectorInitDFTC_cf32(&_cfg->dftspec, _N_bins, vecFFT_NoReNorm, vecAlgHintAccurate, &wbufsize,  &_cfg->dftworkbuf);
+    if (s != vecNoErr)
+        csevere << startl << "Error in DFTInitAlloc in PCalExtractorComplexImplicitShift::PCalExtractorComplexImplicitShift.  _N_bins="
+                << _N_bins << " Error " << vectorGetStatusString(s) << endl;
+    _estimatedbytes += wbufsize;
+
+    /* Allocate twice the amount strictly necessary */
+    _cfg->pcal_complex = vectorAlloc_cf32(_N_bins * 2);
+    _cfg->dft_out      = vectorAlloc_cf32(_N_bins * 1);
+    _estimatedbytes   += _N_bins*4*(4+2+2);
+    this->clear();
+
+    if (PCAL_DEBUG)
+        cdebug << startl << "PCalExtractorComplexImplicitShift: _Ntones = " << _N_tones << ", _N_bins = " << _N_bins << ", wbufsize = " << wbufsize << endl;
+}
+
+
+PCalExtractorComplexImplicitShift::~PCalExtractorComplexImplicitShift()
+{
+    vectorFree(_cfg->pcal_complex);
+    vectorFree(_cfg->dft_out);
+    vectorFreeDFTC_cf32(_cfg->dftspec);
+    vectorFree(_cfg->dftworkbuf);
+    delete _cfg;
+}
+
+/**
+ * Clear the extracted and accumulated PCal data by setting it to zero.
+ */
+void PCalExtractorComplexImplicitShift::clear()
+{
+    _samplecount = 0;
+    _finalized   = false;
+    vectorZero_cf32(_cfg->pcal_complex, _N_bins * 2);
+}
+
+/**
+ * Adjust the sample offset.
+ *
+ * The extractor needs a time-continuous input sample stream. Samples
+ * are numbered 0...N according to their offset from the start of the
+ * stream. The stream can be split into smaller chunks that
+ * are added individually through several extractAndIntegrate() calls.
+ *
+ * If for some reason two chunks are not continuous in time,
+ * some internal indices need to be corrected by calling this
+ * function and specifying at what sample number the next
+ * chunk passed to extractAndIntegrate() starts.
+ *
+ * @param sampleoffset sample offset of chunk passed to next extractAndIntegrate() call
+ */
+void PCalExtractorComplexImplicitShift::adjustSampleOffset(const size_t sampleoffset)
+{
+    _cfg->pcal_index = sampleoffset % _N_bins;
+}
+
+/**
+ * Process a new chunk of time-continuous single channel data.
+ * Time-integrates the data into the internal result buffer.
+ *
+ * If this function is called several times to integrate additional data
+ * and these multiple pieces of data are not continuous in time,
+ * please see adjustSampleOffset().
+ *
+ * @param samples Chunk of the input signal consisting of 'float' samples
+ * @param len     Length of the input signal chunk
+ * @return true on success, false if results were frozen by calling getFinalPCal()
+ */
+bool PCalExtractorComplexImplicitShift::extractAndIntegrate(f32 const* samples, const size_t len)
+{
+    if (_finalized) {
+        cerror << startl << "PCalExtractorComplexImplicitShift::extractAndIntegrate on finalized class!" << endl;
+        return false;
+    }
+
+    cf32 const* src = (cf32 const*) samples;
+    cf32* dst = &(_cfg->pcal_complex[_cfg->pcal_index]);
+    size_t tail = (len % _N_bins);
+    size_t end  = len - tail;
+
+    /* This method is from Walter Brisken, it works perfectly for smallish 'len'
+     * and when offset and tone spacing have suitable properties.
+     * Instead of rotating the input to counteract the offset, we bin
+     * into a long vector with size of the offset repeat length (again *2 to avoid
+     * buffer wraps). After long-term integration, we copy desired FFT bins
+     * into PCal. The time-domain PCal can be derived from inverse FFT.
+     */
+
+    /* Process the first part that fits perfectly */
+    for (size_t n = 0; n < end; n+=_N_bins, src+=_N_bins) {
+        vectorAdd_cf32_I(src, /*srcdst*/dst, _N_bins);
+    }
+
+    /* Handle any samples that didn't fit */
+    if (tail != 0) {
+        vectorAdd_cf32_I(src, /*srcdst*/dst, tail);
+        _cfg->pcal_index = (_cfg->pcal_index + tail) % _N_bins;
+    }
+
+    /* Done! */
+    _samplecount += len;
+    return true;
+}
+
+/**
+ * Computes the final extraction result. No more sample data can be added.
+ * The PCal extraction results are copied into the specified output array.
+ *
+ * @param out Pointer to user PCal array with getLength() values
+ * @return number of samples that were integrated for the result
+ */
+uint64_t PCalExtractorComplexImplicitShift::getFinalPCal(cf32* out)
+{
+   vecStatus s;
+   invariant();
+
+   if (!_finalized)
+   {
+        _finalized = true;
+        s = vectorDFT_CtoC_cf32(_cfg->pcal_complex, _cfg->dft_out, _cfg->dftspec, _cfg->dftworkbuf);
+        if (s != vecNoErr)
+            csevere << startl << "Error in DFTFwd in PCalExtractorComplexImplicitShift::getFinalPCal " << vectorGetStatusString(s) << endl;
+    }
+
+    // Show all bin phases
+    #ifdef VERBOSE_UNIT_TEST
+    cout << "PCalExtractorComplexImplicitShift::getFinalPCal phases are: ";
+    for (int i = 0; i < _N_bins; i++)
+    {
+        f32 phi = (180/M_PI)*std::atan2(_cfg->dft_out[i].im, _cfg->dft_out[i].re);
+        cout << "p[" << i << "]=" << phi << " ";
+    }
+    cout << "deg\n";
+    #endif
+
+    /* For DSB, DC is in the center bin. Revert to USB/LSB-like spectrum by swapping spectral halves. */
+    if(!_ssb) {
+        for (size_t n=0; n<_N_bins/2; n++) {
+            cf32 tmp = _cfg->dft_out[n];
+            _cfg->dft_out[n] = _cfg->dft_out[_N_bins - n - 1];
+            _cfg->dft_out[_N_bins - n - 1] = tmp;
+        }
+    }
+
+    /* Copy only the interesting bins */
+    size_t step = (size_t)(std::floor(double(_N_bins)*(_pcalspacing_hz/_fs_hz)));
+    size_t offset = (size_t)(std::floor(double(_N_bins)*(_pcaloffset_hz/_fs_hz)));
+    for (size_t n=0; n<(size_t)_N_tones; n++) {
+        ssize_t bin = offset + n*step;
+        if (bin >= _N_bins)
+            break;
+        out[n].re = _cfg->dft_out[bin].re;
+        out[n].im = _cfg->dft_out[bin].im;
     }
     return _samplecount;
 }
@@ -1361,7 +1564,6 @@ void test_pcal_case(long samplecount, long bandwidth, long offset, long spacing,
    bool skip_some_data = true;
    uint64_t usedsamplecount;
    int usecomplex = 0;  // real tests only for now
-   int lsb = 0;         // no tests for lsb as of yet
 
    const float tone_phase_start = -90.0f;
    const float tone_phase_slope = 5.0f;
@@ -1380,7 +1582,7 @@ void test_pcal_case(long samplecount, long bandwidth, long offset, long spacing,
       extractor = new PCalExtractorDummy(bandwidth, spacing, offset, sampleoffset);
    } else {
       cerr << "Using pcal extractor factory to select suitable extractor\n";
-      extractor = PCal::getNew(bandwidth, spacing, offset, sampleoffset, usecomplex, lsb);
+      extractor = PCal::getNew(bandwidth, spacing, offset, sampleoffset, usecomplex);
       using_auto = true;
    }
    if (!using_auto) {

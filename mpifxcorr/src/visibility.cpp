@@ -43,6 +43,8 @@
 #include <difxmessage.h>
 #include "alert.h"
 
+#include "D_janw.h"
+
 Visibility::Visibility(Configuration * conf, int id, int numvis, char * dbuffer, int dbufferlen, int eseconds, int scan, int scanstartsec, int startns, const string * pnames)
   : config(conf), visID(id), currentscan(scan), currentstartseconds(scanstartsec), currentstartns(startns), numvisibilities(numvis), executeseconds(eseconds), todiskbufferlength(dbufferlen), polnames(pnames), todiskbuffer(dbuffer)
 {
@@ -356,8 +358,8 @@ void Visibility::copyVisData(char **buf, int *bufsize, int *nbuf) {
 void Visibility::writedata()
 {
   f32 scale, divisor, modifier;
-  int ds1, ds2, ds1bandindex, ds2bandindex, localfreqindex, freqindex, targetfreqindex, freqchannels, targetfreqchannels;
-  int status, resultindex, binloop;
+  int ds1, ds2, ds1bandindex, ds2bandindex, localfreqindex, freqindex, targetfreqindex, freqchannels, targetfreqchannels, paddingchannels;
+  int status, resultindex, coreindex, coreoffset, binloop;
   int dumpmjd, intsec;
   double dumpseconds, acw;
 
@@ -479,11 +481,15 @@ void Visibility::writedata()
     {
       freqindex = config->getBFreqIndex(currentconfigindex, i, j);
       targetfreqindex = config->getBTargetFreqIndex(currentconfigindex, i, j);
-      resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
+      coreindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       targetfreqchannels = config->getFNumChannels(targetfreqindex)/config->getFChannelsToAverage(targetfreqindex);
+      paddingchannels = config->getFChannelsToAverage(freqindex) - config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex);
       if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
         freqchannels++;
+// TODO:  fractional sized post-avg channel(s) within spectrum, probably two inputbands contribute to a channel in the wider spectrum, scale somehow by both of them
+if (targetfreqindex==DBG_TARGET_FQ_NR && i>=DBG_TARGET_BLINE_START && i<=DBG_TARGET_BLINE_STOP)
+std::cout << "viz::writedata() fq:" << targetfreqindex << " memberFq:" << freqindex << " fqchans=" << (freqchannels-1) << " last ch pads " << paddingchannels << "/" << config->getFChannelsToAverage(freqindex) << " bins" <<endl;
       }
       for(int s=0;s<model->getNumPhaseCentres(currentscan);s++)
       {
@@ -557,18 +563,39 @@ void Visibility::writedata()
             if(model->getNumPhaseCentres(currentscan) > 1)
               scale /= baselineshiftdecorrs[i][freqindex][s];
 
+            //channels with partial occupancy of multiple recorded/zoom freqs
+            if(paddingchannels > 0)
+            {
+              // TODO: ? either go simply with flagging the boundary channel (could be lowest or highest ch of this freq), or attempt re-scaling that single bin,
+              // to avoid get it multiplied with 'scale' twice
+            }
+
+            // follow core.cpp indexing here; resultindex = coreindex + coreoffset
+            coreoffset = (b*config->getBNumPolProducts(currentconfigindex, i, j) + k)*targetfreqchannels;
+if (targetfreqindex==DBG_TARGET_FQ_NR && i>=DBG_TARGET_BLINE_START && i<=DBG_TARGET_BLINE_STOP)
+{
+std::cout << "viz::writedata() scale [OUT fq:" << targetfreqindex << " memberFq:" << freqindex << "][bl:" << i << "] phase="<<s<<" bin=" <<b << " pol="<<k<<" : dataindex=" << coreindex << " + " << coreoffset << " = " << coreindex+coreoffset << " scale=" << scale << " for " << freqchannels << "ch" << std::endl;
+}
+
             //amplitude calibrate the data
             if(scale > 0.0)
             {
-              //cout << "Scaling baseline (found at resultindex " << resultindex << ") by " << scale << ", freqchans=" << freqchannels << " targetfreqchans=" << targetfreqchannels << " before scaling the 6th re and im are " << floatresults[resultindex*2 + 12] << ", " << floatresults[resultindex*2 + 13] << endl;
-              status = vectorMulC_f32_I(scale, &(floatresults[resultindex*2]), 2*freqchannels);
+              //cout << "Scaling baseline (found at coreindex " << coreindex << ") by " << scale << ", freqchans=" << freqchannels << " targetfreqchans=" << targetfreqchannels << " before scaling the 6th re and im are " << floatresults[coreindex*2 + 12] << ", " << floatresults[coreindex*2 + 13] << endl;
+//              status = vectorMulC_f32_I(scale, &(floatresults[coreindex*2]), 2*freqchannels);
+              status = vectorMulC_f32_I(scale, &(floatresults[(coreindex + coreoffset)*2]), 2*freqchannels);
               if(status != vecNoErr)
                 csevere << startl << "Error trying to amplitude calibrate the baseline data!!!" << endl;
             }
 
-            resultindex += freqchannels;
-          }
-        }
+// output area; if not outputbands then can advance by 'freqchannels' always
+//          coreindex += freqchannels;
+// output area; more generic is to advaice by 'targetfreqchannels' (>=freqchannels)
+//          coreindex += targetfreqchannels;
+// also not good; (1) not guaranteed that member freqs are in actual order as in outputfreq! (2) phase center order gets flipped!?
+// follow what core.cpp does:  calc 'coreoffset' like above, shift 'coreindex' after each phase center completed
+          }//for(polproduct)
+        }//for(binloop)
+        coreindex += binloop*config->getBNumPolProducts(currentconfigindex, i, j)*targetfreqchannels;
       }
     }
   }
@@ -774,7 +801,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
   char pcalfilename[256];
   char pcalstr[256];
   string pcalline;
-  int binloop, freqindex, baselinefreqindex, numpolproducts, resultindex, freqchannels;
+  int binloop, freqindex, baselinefreqindex, numpolproducts, resultindex, coreindex, coreoffset, freqchannels;
   int year, month, day;
   int ant1index, ant2index, sourceindex, baselinenumber, numfiles, filecount;
   float tonefreq;
@@ -823,7 +850,8 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
       }
       assert(baselinefreqindex >= 0);
       // source data location and size
-      resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
+      coreindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i);
+resultindex = config->getCoreResultBaselineOffset(currentconfigindex, freqindex, i); // to print out comparison 'coreindex+coreoffset' vs 'resultindex, resultindex+=freqchannels'
       freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
       if(config->getFNumChannels(freqindex) % config->getFChannelsToAverage(freqindex) != 0) {
        cout << "visbility.cpp " << __LINE__ << " ERROR: outputband nch " << config->getFNumChannels(freqindex) << " not divisible by " << config->getFChannelsToAverage(freqindex) << endl;
@@ -846,16 +874,27 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
           {
             config->getBPolPair(currentconfigindex, i, baselinefreqindex, k, polpair);
 
+            // follow core.cpp indexing
+            coreoffset = (b*numpolproducts + k)*freqchannels;
+
+if (freqindex==DBG_TARGET_FQ_NR && i>=DBG_TARGET_BLINE_START && i<=DBG_TARGET_BLINE_STOP)
+{
+std::cout << "viz::writedata() todisk [OUT fq:" << freqindex << " blineFq:" << baselinefreqindex << "][bl:" << i << "] phase=" << s <<" bin=" << b << " pol=" << k
+    << " : dataindex=" << coreindex << " + " << coreoffset << " = " << coreindex+coreoffset
+    << " vs resultindex=" << resultindex << ", "
+    << freqchannels << "ch" << std::endl;
+}
+
             //open the file for appending in ascii and write the ascii header
             if(baselineweights[i][freqindex][b][k] > 0.0)
             {
-              //cout << "About to write out baseline[" << i << "][" << s << "][" << k << "] from resultindex " << resultindex << ", whose 6th vis is " << results[resultindex+6].re << " + " << results[resultindex+6].im << " i" << endl;
+              //cout << "About to write out baseline[" << i << "][" << s << "][" << k << "] from coreindex " << coreindex+coreoffset << ", whose 6th vis is " << results[coreindex+correoffset+6].re << " + " << results[coreindex+coreoffset+6].im << " i" << endl;
               if(model->getNumPhaseCentres(currentscan) > 1)
                 currentweight = baselineweights[i][freqindex][b][k]*baselineshiftdecorrs[i][freqindex][s] / baselineweightcounts[i][freqindex][b][k];
               else
                 currentweight = baselineweights[i][freqindex][b][k] / baselineweightcounts[i][freqindex][b][k];
 // TODO possibly: divide currentweight by size of vector getSortedInputfreqsOfTargetfreq()
-              writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, currentweight, buvw, filecount);
+              insertDiFXHeader(baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, b, 0, currentweight, buvw, filecount);
 
               //close, reopen in binary and write the binary data, then close again
               //For both USB and LSB data, the Nyquist channel has already been excised by Core. In
@@ -863,18 +902,20 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
               //Nyquist channels.  In any case, the numchannels that are written out represent the
               //the valid part of the, and run from lowest frequency to highest frequency.  For USB
               //data, the first channel is the DC - for LSB data, the last channel is the DC
-              //output.write((char*)(&(results[resultindex])), freqchannels*sizeof(cf32));
-              memcpy(&(todiskbuffer[todiskmemptrs[filecount]]), &(results[resultindex]), freqchannels*sizeof(cf32));
+              //output.write((char*)(&(results[coreindex])), freqchannels*sizeof(cf32));
+              memcpy(&(todiskbuffer[todiskmemptrs[filecount]]), &(results[coreindex+coreoffset]), freqchannels*sizeof(cf32));
               todiskmemptrs[filecount] += freqchannels*sizeof(cf32);
             }
 
+// need a different increment? otoh 'freqchannels' here === targetfreqchannels since this is a target freq
             resultindex += freqchannels;
-          }
+          }//for(numpoln)
           filecount++;
-        }
-      }
-    }
-  }
+        }//for(numbins)
+        coreindex += binloop*numpolproducts*freqchannels;
+      }//for(numphasectr)
+    }//for(freqs)
+  }//for(baselines)
 
   //now write all the different files out to disk, one hit per file
   filecount = 0;
@@ -934,7 +975,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
                 polpair[1] = polpair[0];
               else
                 polpair[1] = config->getOppositePol(polpair[0]);
-              writeDiFXHeader(&output, baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, 0, 0, autocorrweights[i][j][k], buvw, 0);
+              insertDiFXHeader(baselinenumber, dumpmjd, dumpseconds, currentconfigindex, sourceindex, freqindex, polpair, 0, 0, autocorrweights[i][j][k], buvw, 0);
 
               //open, write the binary data and close
               //see baseline writing section for description of treatment of USB/LSB data and the Nyquist channel
@@ -1115,61 +1156,9 @@ void Visibility::multicastweights()
 } 
 
 
-void Visibility::writeDiFXHeader(ofstream * output, int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, double buvw[3], int filecount)
+void Visibility::insertDiFXHeader(int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, double buvw[3], int filecount)
 {
   double dweight = weight;
-  /* *output << setprecision(15);
-  *output << "BASELINE NUM:       " << baselinenum << endl;
-  *output << "MJD:                " << dumpmjd << endl;
-  *output << "SECONDS:            " << dumpseconds << endl;
-  *output << "CONFIG INDEX:       " << configindex << endl;
-  *output << "SOURCE INDEX:       " << sourceindex << endl;
-  *output << "FREQ INDEX:         " << freqindex << endl;
-  *output << "POLARISATION PAIR:  " << polproduct[0] << polproduct[1] << endl;
-  *output << "PULSAR BIN:         " << pulsarbin << endl;
-  *output << "FLAGGED:            " << flag << endl;
-  *output << "DATA WEIGHT:        " << weight << endl;
-  *output << "U (METRES):         " << buvw[0] << endl;
-  *output << "V (METRES):         " << buvw[1] << endl;
-  *output << "W (METRES):         " << buvw[2] << endl;
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "BASELINE NUM:       %d\n", baselinenum);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "MJD:                %d\n", dumpmjd);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "SECONDS:            %15.9f\n", dumpseconds);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "CONFIG INDEX:       %d\n", configindex);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "SOURCE INDEX:       %d\n", sourceindex);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "FREQ INDEX:         %d\n", freqindex);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "POLARISATION PAIR:  %c%c\n", polproduct[0], polproduct[1]);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "PULSAR BIN:         %d\n", pulsarbin);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "FLAGGED:            %d\n", flag);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "DATA WEIGHT:        %.9f\n", weight);
-  todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  if(baselinenum % 257 > 0)
-  {
-    sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "U (METRES):         %.9f\n", buvw[0]);
-    todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-    sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "V (METRES):         %.9f\n", buvw[1]);
-    todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-    sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "W (METRES):         %.9f\n", buvw[2]);
-    todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  }
-  else
-  {
-    sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "U (METRES):         0.0\n");
-    todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-    sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "V (METRES):         0.0\n");
-    todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-    sprintf(&(todiskbuffer[todiskmemptrs[filecount]]), "W (METRES):         0.0\n");
-    todiskmemptrs[filecount] += strlen(&(todiskbuffer[todiskmemptrs[filecount]]));
-  }*/
   *((unsigned int*)(&(todiskbuffer[todiskmemptrs[filecount]]))) = SYNC_WORD;
   todiskmemptrs[filecount] += 4;
   *((int*)(&(todiskbuffer[todiskmemptrs[filecount]]))) = BINARY_HEADER_VERSION;

@@ -1,10 +1,21 @@
 Version 2.7
 ~~~~~~~~~~~
 * Fix problem with "Allow DifxParameter message to specify new stop time" that caused premature termination of the job.  Bug introduced in SVN commit 7910 on July 20, 2017
-  - Will put patch into the 2.6 branch.
+  - Put patch into the 2.6 branch.
 * Support IPP 2019 series
 * Fix native mk5 issue where buffer locks would be ignored on a long-ish timeout that can happen on start-up.
-  - Will put patch into the 2.6 branch.
+  - Put patch into the 2.6 branch.
+* * Fix bug affecting data weights when nBufferedFFTs > 1 and datastreams weight < 1
+  - Put patch into 2.6 branch
+* Added support for CODIF format
+* Correctly set CODIF format name, bug fix int framespersecond
+* Caught case where complex data is set to use zeroth order fringe rotation (which isn't implemented)
+* startdifx, genmachines: increase multicast receive buffer size to 8000
+* python3: joblist, jobdisks, jobstatus, startdifx, stopmpifxcorr
+* move stopmpifxcorr from scripts/ to utils/ ; get rid of scripts dir
+* can compile again without mark6 libraries
+* Remove experimental support for shared memory datastream -- it never worked
+* startdifx: add --wait option to wait until job start time before beginning
 * Post DiFX-2.6
 
 Version 2.6

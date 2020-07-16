@@ -213,7 +213,7 @@ protected:
   virtual uint64_t openframe();
 
  /** 
-  * Attempts to open a network socket to read data from
+  * Attempts to open a TCP or UDP network socket to read data from
   * @param portnumber The port to read from
   * @param tcpwindowsize The size of the packets to receive, in KB
   */
@@ -336,7 +336,7 @@ protected:
   int * confignumfiles;
   double a, b, c;
   long long consumedbytes, lastconsumedbytes;
-  bool readthreadstarted, keepreading, readfromfile, isfake, tcp, isnewfile;
+  bool readthreadstarted, keepreading, readfromfile, isfake, isnetwork, tcp, udp, raw, isnewfile;
   u8 * databuffer, *tempbuf;
   BUFOFFSET_T tempbytes;
   pthread_t readerthread;

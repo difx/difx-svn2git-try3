@@ -408,6 +408,7 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     kscratch = 0;
   }
   // Phase cal stuff
+  PCal::setMinFrequencyResolution(1e6);
   if(config->getDPhaseCalIntervalMHz(configindex, datastreamindex))
   {
     pcalresults = new cf32*[numrecordedbands];
@@ -415,29 +416,18 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     pcalnbins = new int[numrecordedbands];
     for(int i=0;i<numrecordedbands;i++)
     {
-      int pcalOffset,
-          lsb;
-      
       localfreqindex = conf->getDLocalRecordedFreqIndex(confindex, dsindex, i);
-
       pcalresults[i] = new cf32[conf->getDRecordedFreqNumPCalTones(configindex, dsindex, localfreqindex)];
-
-      pcalOffset = config->getDRecordedFreqPCalOffsetsHz(configindex, dsindex, localfreqindex);
-
-      lsb = config->getDRecordedLowerSideband(configindex, datastreamindex, localfreqindex);
-
-      PCal::setMinFrequencyResolution(1e6);
-      extractor[i] = PCal::getNew(1e6*recordedbandwidth, 
+      extractor[i] = PCal::getNew(1e6*recordedbandwidth,
                                   1e6*config->getDPhaseCalIntervalMHz(configindex, datastreamindex),
-                                      pcalOffset, 0, usecomplex, lsb);
-
-      estimatedbytes += extractor[i]->getEstimatedBytes();
-
+                                  config->getDRecordedFreqPCalOffsetsHz(configindex, dsindex, localfreqindex), 0,
+                                  sampling, tcomplex);
       if (extractor[i]->getLength() != conf->getDRecordedFreqNumPCalTones(configindex, dsindex, localfreqindex))
         csevere << startl << "Developer Error: configuration.cpp and pcal.cpp do not agree on the number of tones: " << extractor[i]->getLength() << " != " << conf->getDRecordedFreqNumPCalTones(configindex, dsindex, localfreqindex) << " ." << endl;
+      estimatedbytes += extractor[i]->getEstimatedBytes();
       pcalnbins[i] = extractor[i]->getNBins();
-      if (pcalOffset>=0)
-        cverbose << startl << "PCal extractor internally uses " << pcalnbins[i] << " spectral channels (" << (long)(1e3*recordedbandwidth/pcalnbins[i]) << " kHz/channel)" << endl;
+//      if (pcalOffset>=0)
+//        cverbose << startl << "PCal extractor internally uses " << pcalnbins[i] << " spectral channels (" << (long)(1e3*recordedbandwidth/pcalnbins[i]) << " kHz/channel)" << endl;
     }
   }
 
@@ -472,8 +462,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
 
 Mode::~Mode()
 {
-  int status;
-
   if(perbandweights)
   {
     for(int i=0;i<config->getNumBufferedFFTs(configindex);++i)
@@ -542,25 +530,17 @@ Mode::~Mode()
       vectorFree(fftd);
       if(isfft) {
 	vectorFreeFFTC_cf32(pFFTSpecC);
-        if (status != vecNoErr)
-          csevere << startl << "Error in freeing FFT spec!!!" << status << endl;
       }
       else{
 	vectorFreeDFTC_cf32(pDFTSpecC);
-        if (status != vecNoErr)
-          csevere << startl << "Error in freeing DFT spec!!!" << status << endl;
       }
       break;
     case 0: //zeroth order interpolation, "post-F"
       if(isfft) {
 	vectorFreeFFTR_f32(pFFTSpecR);
-        if (status != vecNoErr)
-          csevere << startl << "Error in freeing FFT spec!!!" << status << endl;
       }
       else{
 	vectorFreeDFTR_f32(pDFTSpecR);
-        if (status != vecNoErr)
-          csevere << startl << "Error in freeing DFT spec!!!" << status << endl;
       }
       break;
   }
@@ -908,15 +888,18 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
     if (usecomplex && usedouble)
     {
       if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-	lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
+        lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       } else {
-	lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
+        lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
       }
-    }
-
-    // For lower sideband complex data, the effective LO is at negative frequency, not positive
-    if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-      lofreq = -lofreq;
+      // For lower sideband complex data, the effective LO is at negative frequency, not positive
+      if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+        lofreq = -lofreq;
+      }
+    } else if(usecomplex) {
+      if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
+        lofreq = -lofreq;
+      }
     }
 
     switch(fringerotationorder) {
@@ -1226,27 +1209,33 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
               // All lower sideband bands need to be conjugated (achieved by taking the second half of the band for real-valued inputs)
               // Additionally for the complex-valued inputs, the order of the frequency channels is reversed so they need to be flipped
               // (for the double sideband case, in two halves, for the regular case, the whole thing)
-	      if (usecomplex) {
-		if (usedouble) {
-		  status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
-		  status = vectorConjFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
-		} 
-                else {
+              if (usecomplex) {
+                if (usedouble) {
+                  status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
+                  status = vectorConjFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
+                } else {
                   status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
+                  // note: using vectorConjFlip_cf32() -lofreq breaks Complex LSB (non-DSB!) fringes for VGOS *assuming* VGOS RDBE-G indeed LSB like memos claim
+                  // fix?: LSB fringes are restored at least for a synthetic fully correlated data set of Complex USB and Complex LSB data.
+                  //       The reversal has to be changed as below to retain DC in bin 0, producing not [ch1 ch2 ch3 ... DC] but instead [DC ch1 ch2 ch3 ...]
+                  // todo: validate fix on real world definitely-known-LSB data (evidenced by pcal tone positions etc), then uncomment the next lines:
+                  //status = vectorConjFlip_cf32(fftd+1, fftoutputs[j][subloopindex]+1, recordedbandchannels-1);
+                  //fftoutputs[j][subloopindex][0] = fftd[0];
                 }
-	      } 
+              }
               else {
-		status = vectorCopy_cf32(&(fftd[recordedbandchannels]), fftoutputs[j][subloopindex], recordedbandchannels);
-	      }
+                status = vectorCopy_cf32(&(fftd[recordedbandchannels]), fftoutputs[j][subloopindex], recordedbandchannels);
+              }
             }
             else {
               // For upper sideband bands, normally just need to copy the fftd channels.
               // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
-	      if (usecomplex && usedouble) {
-		status = vectorCopy_cf32(fftd, &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels/2);
-		status = vectorCopy_cf32(&fftd[recordedbandchannels/2], fftoutputs[j][subloopindex], recordedbandchannels/2);
-	      } else 
-		status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
+              if (usecomplex && usedouble) {
+                status = vectorCopy_cf32(fftd, &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels/2);
+                status = vectorCopy_cf32(&fftd[recordedbandchannels/2], fftoutputs[j][subloopindex], recordedbandchannels/2);
+              } else {
+                status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
+              }
             }
             if(status != vecNoErr)
               csevere << startl << "Error copying FFT results!!!" << endl;
@@ -1258,6 +1247,7 @@ void Mode::process(int index, int subloopindex)  //frac sample error is in micro
 	// 1. The zero element corresponds to the lowest sky frequency.  That is:
 	//    fftoutputs[j][0] = Local Oscillator Frequency              (for Upper Sideband)
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Lower Sideband)
+	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Complex Lower Sideband)
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Upper Sideband)
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Lower Sideband)
 	// 

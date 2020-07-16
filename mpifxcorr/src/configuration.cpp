@@ -61,7 +61,7 @@ static unsigned int calcstridelength(unsigned int arraylength)
 }
 
 Configuration::Configuration(const char * configfile, int id, MPI_Comm& comm, double restartsec)
-  : jobname("na"), mpiid(id), consistencyok(true), restartseconds(restartsec), enableMpi(true)
+  : mpiid(id), enableMpi(true), consistencyok(true), restartseconds(restartsec), jobname("na")
 {
   commonread = false;
   datastreamread = false;
@@ -105,7 +105,7 @@ Configuration::Configuration(const char * configfile, int id, MPI_Comm& comm, do
 
 
 Configuration::Configuration(const char * configfile, int id, double restartsec)
-  : jobname("na"), mpiid(id), consistencyok(true), restartseconds(restartsec), enableMpi(false)
+  : mpiid(id), enableMpi(false), consistencyok(true), restartseconds(restartsec), jobname("na")
 {
   commonread = false;
   datastreamread = false;
@@ -1525,8 +1525,6 @@ bool Configuration::processDatastreamTable(istream * input)
       datastreamtable[i].source = MK5MODULE;
     else if(line == "MARK6")
       datastreamtable[i].source = MK6MODULE;
-    else if(line == "SHAREDMEMORY")
-      datastreamtable[i].source = SHAREDMEMORYSTREAM;
     else if(line == "NETWORK")
       datastreamtable[i].source = NETWORKSTREAM;
     else if(line == "FAKE")
@@ -2434,10 +2432,9 @@ bool Configuration::populateResultLengths()
       threadfindex = 0;
       for(int i=0;i<freqtablelength;i++)
       {
-        if(configs[c].frequsedbysomebaseline[i])
+        if(isFrequencyUsed(c,i))
         {
           configs[c].threadresultfreqoffset[i] = threadfindex;
-          freqchans = freqtable[i].numchannels;
           //configs[c].numxmacstrides[i] = freqtable[i].numchannels/xmacstridelen;
           configs[c].numxmacstrides[i] = (freqtable[i].numchannels+xmacstridelen-1)/xmacstridelen; // round up
           configs[c].threadresultbaselineoffset[i] = new int[numbaselines]();
@@ -2469,38 +2466,43 @@ bool Configuration::populateResultLengths()
       coreresultindex = 0; // current tail of coreresults array
       for(int i=0;i<freqtablelength;i++) //first the cross-correlations
       {
-        if(configs[c].freqoutputbysomebaseline[i])
+        if(isFrequencyOutput(c,i))
         {
-          double fref=freqtable[i].bandlowedgefreq();
-          vector<int> inputfreqs=getSortedInputfreqsOfTargetfreq(c,i);
-          // add a complete output data region
-          freqchans = freqtable[i].numchannels;
-          chanstoaverage = freqtable[i].channelstoaverage;
+          vector<int> inputfreqs = getSortedInputfreqsOfTargetfreq(c, i);
+          // concatenate a complete output data region to the flat results array
           configs[c].coreresultbaselineoffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
           {
+            if(!isFrequencyOutput(c,j,i))
+              continue;
             int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
             if(numblpolproducts<=0)
             {
               stringstream str;
               copy(inputfreqs.begin(), inputfreqs.end(), ostream_iterator<char>(str, " "));
-              cfatal << startl << "Could not determine number of polarization products of target freq " << i << " from constituent freqs " << str.str() << " on baseline " << j << endl;
+              cfatal << startl << "Could not determine polproducts of target fq " << i << " from freqs [" << str.str() << "] on baseline " << j << endl;
               return false;
             }
             configs[c].coreresultbaselineoffset[i][j] = coreresultindex;
-//if (mpiid == 10)
-//cout << "coreresultbaselineoffset[OUT fq:" << i << "][bl:" << j << "] = " << coreresultindex << " ... + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage << endl; 
-            coreresultindex += maxconfigphasecentres*binloop*numblpolproducts*freqchans/chanstoaverage;
+            const int coreresultblocksize = maxconfigphasecentres*binloop*numblpolproducts*((freqtable[i].numchannels+freqtable[i].channelstoaverage-1)/freqtable[i].channelstoaverage); // round up
+            if (mpiid == 10) {
+              cout << "coreresultbaselineoffset[OUT fq:" << i << "][bl:" << j << "] = " << numblpolproducts << "Pol x " << maxconfigphasecentres << "PC x " << binloop << "Bin = " << configs[c].coreresultbaselineoffset[i][j] << " ... + len=" << coreresultblocksize 
+              << " (nchan=" << freqtable[i].numchannels << ", chavg=" << freqtable[i].channelstoaverage << ")"
+              << endl;
+            }
+            coreresultindex += coreresultblocksize;
           }
-          // mark contributing band slices and their position in that region, all baselines
+          // output data region members: point contributing band slices into spots of first spectrum, all baselines
+          double fref = freqtable[i].bandlowedgefreq();
           for(vector<int>::const_iterator ifi=inputfreqs.begin();ifi!=inputfreqs.end();++ifi)
           {
-            double fcurr=freqtable[*ifi].bandlowedgefreq();
-            int choffset = ((fcurr-fref)/freqtable[i].bandwidth)*freqchans;
-            if(choffset%chanstoaverage != 0)
+            double fcurr = freqtable[*ifi].bandlowedgefreq();
+//TODO: choffset in case of LSB:LSB bands might need to be different?
+            int choffset = ((fcurr-fref)/freqtable[i].bandwidth)*freqtable[i].numchannels;
+            if(choffset % freqtable[i].channelstoaverage != 0)
             {
               if(mpiid == 0)
-                cinfo << startl << "placement of constituent freq " << *ifi << " into freq " << i << " at bin " << choffset << " not divisible by avg factor " << chanstoaverage << ", should flag output channel " << choffset/chanstoaverage << endl;
+                cinfo << startl << "placement of constituent freq " << *ifi << " into freq " << i << " at bin " << choffset << " not divisible by avg factor " << freqtable[i].channelstoaverage << "; .channelflags hopefully flags channel " << choffset/freqtable[i].channelstoaverage << endl;
             }
             if(!configs[c].coreresultbaselineoffset[*ifi])
             {
@@ -2512,19 +2514,19 @@ bool Configuration::populateResultLengths()
               if(bldata.localfreqindices[*ifi] >= 0)
               {
                 int numblpolproducts = getBNumPolproductsOfFreqs(inputfreqs, baselinetable[configs[c].baselineindices[j]]);
-                int blinechoffset = maxconfigphasecentres*binloop*numblpolproducts*choffset/chanstoaverage;
+//                int blinechoffset = maxconfigphasecentres*binloop*numblpolproducts*choffset/freqtable[i].channelstoaverage; // assumed one data layout, apparently wrong when phasecenters!=1 and-or bins!=1
+                int blinechoffset = choffset/freqtable[i].channelstoaverage; // more likely the actual output data layout
                 configs[c].coreresultbaselineoffset[*ifi][j] = configs[c].coreresultbaselineoffset[i][j] + blinechoffset;
-//if (mpiid == 10)
-//cout << "coreresultbaselineoffset[cst fq:" << *ifi << "][bl:" << j << "] = " << configs[c].coreresultbaselineoffset[i][j] << " + " << blinechoffset 
-//  << " + len=" << maxconfigphasecentres*binloop*numblpolproducts*freqtable[*ifi].numchannels/chanstoaverage << endl; 
+                if (mpiid == 10)
+                  cout << "coreresultbaselineoffset[OUT fq:" << i << " memberFq:" << *ifi << "][bl:" << j << "] = " << configs[c].coreresultbaselineoffset[i][j] << " + " << blinechoffset << endl;
               }
             }
           }
-        }
+        }//if(freq is output)
       }
       for(int i=0;i<freqtablelength;i++) //then append the baseline weights
       {
-        if(configs[c].frequsedbysomebaseline[i])
+        if(isFrequencyUsed(c,i))
         {
           configs[c].coreresultbweightoffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)
@@ -2545,7 +2547,7 @@ bool Configuration::populateResultLengths()
       }
       for(int i=0;i<freqtablelength;i++) //then append the shift decorrelation factors (multi-field only)
       {
-        if(configs[c].frequsedbysomebaseline[i])
+        if(isFrequencyUsed(c,i))
         {
           configs[c].coreresultbshiftdecorroffset[i] = new int[numbaselines]();
           for(int j=0;j<numbaselines;j++)

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2018 by Adam Deller                                *
+ *   Copyright (C) 2006-2019 by Adam Deller                                *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -42,13 +42,14 @@
 #include "nativemk5.h"
 #include "mark5bfile.h"
 #include "mark5bmark5.h"
-#include "mark5bmark6_datastream.h"
 #include "vdiffile.h"
 #include "vdifnetwork.h"
 #include "vdiffake.h"
 #include "vdifmark5.h"
+#ifdef HAVE_MARK6SG
+#include "mark5bmark6_datastream.h"
 #include "vdifmark6_datastream.h"
-#include "vdifsharedmemory.h"
+#endif
 #include <sys/utsname.h>
 //includes for socket stuff - for monitoring
 #include "string.h"
@@ -268,6 +269,7 @@ int main(int argc, char *argv[])
   int * coreids;
   int * datastreamids;
   bool monitor = false;
+  bool nocommandthread = false;
   string monitoropt;
   pthread_t commandthread;
   //pthread_attr_t attr;
@@ -291,9 +293,9 @@ int main(int argc, char *argv[])
   MPI_Comm_dup(world, &return_comm);
   MPI_Get_processor_name(processor_name, &namelen);
 
-  if(argc < 2 || argc > 4)
+  if(argc < 2 || argc > 5)
   {
-    cerr << "Error: invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]] [-rNewStartSec]" << endl;
+    cerr << "Error: invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]] [-rNewStartSec] [--nocommandthread]" << endl;
     MPI_Barrier(world);
     MPI_Finalize();
     return EXIT_FAILURE;
@@ -305,7 +307,7 @@ int main(int argc, char *argv[])
   difxMessageSetInputFilename(argv[1]);
   if(myID == 0)
   {
-    if(isDifxMessageInUse())
+    if(isDifxMessageInUse() && !nocommandthread)
     {
       cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!" << endl;
     }
@@ -338,9 +340,13 @@ int main(int argc, char *argv[])
     {
       restartseconds = atof(argv[i] + 2);
     }
+    else if(strcmp(argv[i], "--nocommandthread") == 0)
+    {
+      nocommandthread = true;
+    }
     else
     {
-      cfatal << startl << "Invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]]" << endl;
+      cfatal << startl << "Invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]] [-rNewStartSec] [--nocommandthread]" << endl;
       MPI_Barrier(world);
       MPI_Finalize();
       return EXIT_FAILURE;
@@ -363,7 +369,7 @@ int main(int argc, char *argv[])
   }
 
   //handle difxmessage setup for sending and receiving
-  if (isDifxMessageInUse()) { 
+  if (isDifxMessageInUse() && !nocommandthread) { 
     // CJP - PTHREAD_CREATE_JOINABLE is the default
     //pthread_attr_init(&attr);
     //pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -427,18 +433,17 @@ int main(int argc, char *argv[])
       if(config->isVDIFFile(datastreamnum)) {
         stream = new VDIFDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening VDIFDataStream" << endl;
+#ifdef HAVE_MARK6SG
       } else if(config->isVDIFMark6(datastreamnum)) {
         stream = new VDIFMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening VDIFMark6DataStream" << endl;
       } else if(config->isMark5BMark6(datastreamnum)) {
         stream = new Mark5BMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening Mark5BMark6DataStream" << endl;
+#endif
       } else if(config->isVDIFMark5(datastreamnum)) {
         stream = new VDIFMark5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening VDIFMark5DataStream" << endl;
-      } else if(config->isVDIFSharedMemory(datastreamnum)) {
-        stream = new VDIFSharedMemoryDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
-        cverbose << startl << "Opening VDIFSharedMemoryDataStream" << endl;
       } else if(config->isVDIFNetwork(datastreamnum)) {
         stream = new VDIFNetworkDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening VDIFNetworkDataStream" << endl;
@@ -487,7 +492,7 @@ int main(int argc, char *argv[])
 
   MPI_Finalize();
 
-  if (isDifxMessageInUse()) {
+  if (isDifxMessageInUse() && !nocommandthread) {
     if(myID == 0) difxMessageSendDifxParameter("keepacting", "false", DIFX_MESSAGE_ALLMPIFXCORR);
     //sleep(1); // Give threads a chance to quit
     perc = pthread_cancel(commandthread);
